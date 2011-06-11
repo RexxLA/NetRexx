@@ -1,0 +1,201 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagMinor                                                          */
+/*                                                                    */
+/*   An object that tests some Minor class workings                   */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1998.03.31 Initial                                                 */
+/* 1998.10.08 Test Numeric and Trace settings in minors               */
+/* 2000.02.05 Catch explicit-import nasty                             */
+/* 2000.02.09 Static reference in super(); check parent.super() is OK */
+/* 2000.03.12 Check superclass casts and references                   */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+import javax.swing.event.HyperlinkEvent
+import javax.swing.event.HyperlinkEvent.EventType
+options binary strictargs trace1
+
+-- trace results
+
+-- DiagMinor is the test runner
+class DiagMinor implements DiagMinor3.doable
+
+ properties private unused
+  loc=DiagMinor.child()       -- check minor class properties
+  ext=HyperlinkEvent.EventType null -- same, external
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagMinor
+  ok='OK'; flag=boolean 1
+  flag=flag & DiagMinor2()=="DM2Made"
+
+  flag=flag & DiagMinor2().Foo()=="FooMade"
+
+  flag=flag & DiagMinor3.doable.VALUE=19
+  flag=flag & DiagMinor3.constants.TWO=2
+  DM3c=DiagMinor3.child()
+  flag=flag & DM3c.doit()=19
+
+  flag=flag & this.widget()=17
+
+  DM3s=DiagMinor3.sep(DiagMinor2())
+  flag=flag & DM3s.doit()=73
+
+  DM2m=DiagMinor2().Mad()
+  flag=flag & DM2m.doit()=76
+
+  DM2m2=DiagMinor2().Mad(69)
+  flag=flag & DM2m2.doit()=69
+
+  DM2m3=DiagMinor2().Mad(Rexx(101))
+  flag=flag & DM2m3.doit()=101
+
+  if \flag then signal DiagX('DiagMinor main')
+  say 'DiagMinor:' ok
+
+ method widget returns int
+  return 17
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagMinor()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage()'"' Rexx(s)
+  end
+
+class DiagMinor.child public
+ method foo
+  say 'This just ensures we can have public minors'
+
+/* DiagMinor2 has dependents */
+class DiagMinor2 extends Rexx
+ properties static
+  anum=int 81
+  aFoo=Foo null
+  aBar=Foo.Bar null
+
+ method DiagMinor2
+  super('DM2Made')
+  if this.toString()\=='DM2Made' then signal DiagX('DiagMinor2: DM2Make first')
+  if Foo()\=="FooMade" then signal DiagX('DiagMinor2: FooMake')
+  -- if Foo.Bar()\=="BarMade" then signal DiagX('DiagMinor2: F.BarMake')
+  -- if DiagMinor2.Foo.Bar()\=="BarMade" then signal DiagX('DiagMinor2: D.F.BarMake')
+  -- say 'DM2 constructed'
+ method DiagMinor2(data)
+  super(data)
+ method doit returns int
+  return 3
+
+class DiagMinor2.Foo dependent extends Rexx
+ bnum=int 97
+ cons='33'+'1'           -- ensure constants not static
+ numeric digits 9        -- ensure numeric initializer not static
+-- trace off             -- ensure trace setting initializer not static
+
+ method aString() returns String
+  return 'aStr'
+
+ method Foo()            -- constructor
+  super('FooMade')       -- use method
+  if cons\==34 then signal DiagX('DiagMinor2: cons')
+  p=parent
+  if p.anum\==81 then signal DiagX('DiagMinor2: parent')
+  if parent.anum\==81 then signal DiagX('DiagMinor2: parent.')
+  if DiagMinor2.this.anum\==81 then signal DiagX('DiagMinor2: .this')
+  if aString()\=='aStr' then signal DiagX('DiagMinor2: meth()')
+
+ method Foo(data)        -- constructor
+  super(data)            -- use arg variable
+
+ method doit returns int
+  x=Bar('5')
+  x=DiagMinor2.Foo.Bar('5')
+  return x.toint()
+
+class DiagMinor2.Foo.Bar dependent extends Rexx
+ cnum=int 101
+ method Bar()            -- constructor
+  super("BarMade")
+  if DiagMinor2.this.anum\==81 then signal DiagX('DiagMinor2: .this 2')
+  if Foo.this.bnum\==97 then signal DiagX('DiagMinor2: .this 3')
+ method Bar(data)        -- constructor
+  super(data)
+ method doit returns int
+  z=DiagMinor2('1')      -- construct parent of parent
+  y=Foo('4').OpAdd(null, Rexx DiagMinor2('2'))  -- => 6
+  y=z.OpAdd(null, Rexx y)                       -- => 7
+  return y.toint()
+
+-- subclass of dependent sibling
+class DiagMinor2.Mad dependent extends DiagMinor2.Foo
+  madvar=int
+ method Mad
+   parent.super()             -- qualify by parent
+   madvar=76
+
+ method Mad(i=int)
+   DiagMinor2.this.super()    -- precall Xxx.this
+   madvar=i
+
+ method Mad(r=Rexx)
+   COM.ibm.netrexx.diag.DiagMinor2.this.super()    -- fully qualified
+   madvar=r
+
+ method doit returns int
+   return madvar
+
+
+/* DiagMinor3 is statics all the way down */
+class DiagMinor3
+
+class DiagMinor3.doable interface
+ VALUE=19
+ method widget returns int
+
+class DiagMinor3.constants
+ properties constant
+   ONE=1
+   TWO=2
+   test2=DiagMinor2.Foo null
+
+class DiagMinor3.child   -- Nested constructable class
+ method child()
+ method child(s=String)  -- for subclass test
+   if s='boing' then say 'Most odd'
+ method doit returns int
+   atwo=DiagMinor2()     -- make a parent
+   afoo=atwo.Foo()       -- make a child
+   abar=afoo.Bar()       -- make a grandchild
+   if abar.cnum\==101 then signal DiagX('DiagMinor3: cnum')
+   return 19
+
+-- Nested constructable class, deeper
+class DiagMinor3.child.bee extends DiagMinor3.child -- odd extend :-)
+ method aStatic() returns String static
+   return 'child-maid'
+ method bee
+   super(aStatic())      -- make sure not qualified by .this
+
+class DiagMinor3.sep extends DiagMinor2.Foo -- subclass of dependent
+ myvar=int
+ method sep(par=DiagMinor2)
+  par.super()            -- qualified call to super(), using explicit argument
+  myvar=73
+ method doit returns int
+  -- try an existing inner class reference
+  if HyperlinkEvent.EventType.ACTIVATED.toString()\=='ACTIVATED' then
+    signal DiagX('DiagMinor4: acti')
+  return myvar
+
+

@@ -1,0 +1,58 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagMutual [1 of 4]                                                */
+/*                                                                    */
+/*   A quad of objects that are mutually interdependent and in        */
+/*   separate programs.                                               */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1997.05.01 Initial                                                 */
+/* 1997.06.21 Add SHARED keywords to make sure compiler recognizes    */
+/* 1997.11.23 Add STRICTCASE in just one to test lookup mixes         */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+options binary   strictcase   -- 'strictcase' mixes these options
+import java.rmi               -- [test package import]
+
+class DiagMutual extends DiagMutual4
+
+ properties shared
+  barprop=11
+  footprint=String
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagMutual
+  ok='OK'
+  that=DiagMutual2(this)
+  if that.ok-
+   & super.pubprop=44-
+   & this.barprop=11-
+   & that.barprop=22-
+   & this.barmeth='1'-
+   & that.barmeth='2'
+    then ok=ok '!' 'Mutual'
+    else signal DiagX('Mutual')
+  say 'DiagMutual:' ok
+
+ method DiagMutual(s=String)
+  footprint=s
+
+ method barmeth returns char shared
+  return '1'
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagMutual()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage'"'
+  end

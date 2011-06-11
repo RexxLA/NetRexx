@@ -1,0 +1,125 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagForward                                                        */
+/*                                                                    */
+/*   An object that tests forward references.                         */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.08.13 Initial                                                 */
+/* 1996.11.06 Properties and method interactions [compile-time tests] */
+/* 1997.06.11 Property and method with same name                      */
+/* 2000.03.10 Property and method call on subclass instance           */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+import java.lang.String
+import java.lang.Object
+options binary
+
+-- Forward reference, and extends and implements package-private classes
+-- Access to external (compiled) private interface is tricky for interpreter
+class DiagForward public extends DiagForward3 implements DiagInterface
+
+  foo=DiagForward2
+
+ properties static
+  varstat=int 3
+  wow=methstat()
+  pub=sun.tools.java.Constants.M_PUBLIC
+
+ properties public
+  joe=int 13+1
+  bar=methfoo()
+  joe2=int 13+1+(7+2)+joe
+  tent=methfoo('12', '3456')            -- void on pass1
+  iob=java.awt.image.ImageObserver      -- check compiler resolution
+  ioc=ImageObserver
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagForward signals DiagForward4
+  ok='OK'
+  myinit=this.bar        -- this also ensures registered
+  foo=DiagForward2()
+  if foo.bar=1-
+   & wow=21-
+   & pub=1-
+   & myinit=='methfoo 15 0'-
+   & tent  =='methfoo 12 3456'-
+   & foo.green=='envy'-
+   & foo.getGreen=='envy'-
+   & DiagForward3.green=='envy'-
+   & DiagForward3.green()==303
+    then ok=ok '!' 'Forward'
+    else signal DiagX('Forward')
+  say 'DiagForward:' ok
+  if 0 then signal DiagForward4
+
+ -- In this next, JOE will have had 14, JOE2 will still be 0
+ method methfoo(x=joe+1, y=joe2) returns Rexx
+  return 'methfoo' x y
+
+ method methstat static returns int
+  return 7*varstat
+
+ method musthave(j=int 7) 
+  say j multiarg(6)       -- [note optional argument adds complexity]
+
+ -- This one tests array override check
+ -- [IFB piggie 1999/07]
+ method retarray returns Object[]
+  oa=Object[3]
+  return oa
+
+ method multiarg(a, b=a+2) static -- test code generation and opt->req
+  return a+b
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagForward()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage'"'
+  end
+
+class DiagForward2 extends DiagForward3  -- class forward reference
+
+  foo=DiagForward
+  bar=int 0
+  along=long 0
+
+  method DiagForward2
+    bar=letterspage()-100
+    along=longy()                  -- test for long return
+
+  method letterspage returns int
+    return 101
+
+  method longy returns long
+    return 123456789
+
+
+class DiagForward3
+  properties constant
+    green=String 'envy'
+  -- NB constructor is synthetic
+  method letterspage returns int
+    return 202
+  method green returns int static
+    return 303
+  method getGreen returns String
+    return green
+
+/* Create a forward reference where the superclass matters */
+class DiagForward4 extends Exception
+  method DiagForward4
+   return
+
+

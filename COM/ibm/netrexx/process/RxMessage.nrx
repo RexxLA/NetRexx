@@ -1,0 +1,120 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 1998.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxMessage                                                          */
+/*                                                                    */
+/*   Display an error/warning message.                                */
+/*   When an RxMessage is constructed, a message is displayed.        */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.18 Initial (from old signal RxQuit)                        */
+/* 1996.10.30 Additions to handle expanded messages from file         */
+/* 1997.02.08 Localize the properties file input stream               */
+/* 1997.04.23 Defer (queue) messages until pass2                      */
+/* 1997.06.29 Use ResourceBundle for messages, from RxTranslator      */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+class RxMessage
+
+ properties public constant
+  INFO   =int 0               -- informational
+  WARN   =int 1               -- warning
+  ERROR  =int 2               -- error (compilation will fail)
+  SEVERE =int 3               -- cannot procede
+
+ properties private constant
+  eyecatch='+'.copies(3)      -- [avoid three plusses in a row]
+
+ properties private
+  rxt=RxTranslator            -- the boss
+  program=RxProgram           -- the program
+
+ /* RxMessage -- construct and display an error message [etc.]
+    Arg1 is program context
+    Arg2 is level (see constants)
+    Arg3 is token context (null if unknown)
+    Arg4 is message identifier (name)
+    Arg5 - Arg8 are optional inserts
+    */
+ method RxMessage(newprog=RxProgram, level=int, tok=RxToken, id=String,-
+                  i1=Rexx "", i2=Rexx "", i3=Rexx "", i4=Rexx "")
+  /* trace off */
+  program=newprog
+  rxt=newprog.translator
+  head        =String[4]
+  head[INFO]  ='Information'
+  head[WARN]  ='Warning'
+  head[ERROR] ='Error'
+  head[SEVERE]='Severe Error'
+
+  /* Build the message */
+  message=rxt.makemessage(id, i1, i2, i3, i4)
+  if message=='' then do
+    if i1\=='' then i1='['i1']'
+    if i2\=='' then i2='['i2']'
+    if i3\=='' then i3='['i3']'
+    if i4\=='' then i4='['i4']'
+    message=id '(sorry, full message unavailable)' (i1 i2 i3 i4).space
+    end
+
+  /* Now display or queue either compact or full message */
+  if program.flag.compact then do
+    if program.source=null then filespec=''
+     else do
+      filespec=program.source.getName
+      filepath=program.source.getPath
+      if filepath\=null then filespec=filepath||filespec
+      end
+    if filespec=='' then filespec='?'        -- always non-empty
+    filespec=filespec.replace(' ', '\0')     -- blanks to nulls
+    if tok=null then errspec='0 0 0'         -- always three numbers
+     else errspec=tok.line tok.pos tok.len   -- ..
+    out('['filespec errspec']' head[level]':' message)
+    end
+
+   else /* not compact */ do
+    if program.source=null then numwidth=0
+     else numwidth=String.valueOf(program.source.getLineCount).length()+1
+    pad=' '.copies(numwidth)
+    if tok\=null then if tok.line>0 then do label haveline
+      line=program.source.getLine(tok.line)
+      /* edit control characters */
+      loop i=0 to line.length-1
+        if line[i]<' ' then do
+          if line[i]='\t' then line[i]=' '   -- so '^' will line up
+                          else line[i]='?'
+          end
+        end i
+      out(Rexx(tok.line).right(numwidth) eyecatch line)
+      start=tok.pos
+      if start>0 & start<=line.length+1 then do
+        if tok.len<1 then len=1; else len=tok.len
+        out(pad eyecatch||Rexx(' ').copies(start)Rexx('^').copies(len))
+        end
+      end haveline
+    out(pad eyecatch head[level]':' message)
+    end
+
+ /* out -- say or queue a message
+    Arg1 is the message string
+
+    If we are not in pass 2 then the message is queued until pass2
+    (unless diag is set, when also we want it to appear at the moment
+    of detection).
+    */
+ method out(message=Rexx) private
+  if rxt.pass>=2 then rxt.say(message)
+   else do -- not pass2 or interpret; enqueue the message
+    if program.flag.diag then say'#pend#' message -- show at place of error
+    program.pendings.addElement(message)
+    end
+  return

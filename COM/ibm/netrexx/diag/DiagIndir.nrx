@@ -1,0 +1,104 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagIndir                                                          */
+/*                                                                    */
+/*   An object that tests Indirect properties                         */
+/*                                                                    */
+/*   This tests some basic Indirect properties, and some interactions */
+/*   between manual and automatic methods.                            */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1997.02.13 Initial                                                 */
+/* 1998.03.08 Use this for testing dollar in symbols too              */
+/* 1999.05.27 Test UNUSED attribute, too                              */
+/* 2000.04.06 Add a this() call                                       */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+options binary strictargs
+
+class DiagIndir
+
+ properties indirect
+
+   indbool     =boolean 1
+   indboolarray=boolean[]
+   indstring   =String
+   indsarray   =String[]
+   indcarray   =char[]
+
+ properties constant indirect
+   indfixed    =int 77
+
+ properties shared
+   a$dollarone=1
+   $dollartwo=2
+   $3=3
+
+ properties constant unused private
+  copyright=' Copyright (c) IBM Corporation 1996, 2000.  All rights reserved. '
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagIndir
+  this(1)                -- try one of these...
+
+ method DiagIndir(b=boolean)
+  ok='OK'; flag=b
+
+  /* First some boolean shenanigans */
+  flag = flag & isindbool()
+  setindbool(0)
+  flag = flag & \isindbool()
+  indboolarray=boolean[3]
+  indboolarray[0]=1; indboolarray[1]=0; indboolarray[2]=1
+  flag = flag & getindboolarray().length==3
+  flag = flag & isindboolarray(0)
+  $flag = flag & \isindboolarray(1)
+  flag$ = $flag & isindboolarray(2)
+  flag  = flag$
+  if \flag then signal DiagX('BoolIndir')
+
+  /* More primitives */
+  flag=flag & getindfixed()==77
+  setindstring('foo blah')
+  flag=flag & getindstring()=='foo blah'
+  indcarray=char[] getindstring()
+  flag = flag & getindcarray(0)=='f'
+  flag = flag & getindcarray(3)==' '
+  flag = flag & getindcarray(4)=='b'
+  setindcarray(3,'-')
+  flag=flag & indcarray=='foo-blah'
+
+
+  /* And a classy set */
+  indsarray=String[5]
+  setindsarray(4, 'acrAaL')
+  flag=flag & getindsarray(4).charAt(4)=='a'
+  flag=flag & getindsarray(2)==null
+  flag=flag & getindsarray().length==5
+
+  if flag then ok=ok '!' 'Indir'
+          else signal DiagX('Indir')
+  say 'DiagIndir:' ok
+
+ method isIndbool returns boolean; return indbool
+
+ method getIndsarray(i=int) returns String
+   return indsarray[i]
+
+/* +++ To add: test for an indirect (not) hidden by superclass */
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagIndir()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage()'"' Rexx(s)
+  end

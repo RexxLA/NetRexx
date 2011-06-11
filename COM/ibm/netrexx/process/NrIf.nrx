@@ -1,0 +1,172 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrIf                                                               */
+/*                                                                    */
+/*   An object that represents a parsed If clause.                    */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.10 Initial                                                 */
+/* 2000.02.07 Allow IF expr, expr using conditional OR                */
+/* 2000.02.12 Ensure expression parsing is in scan, not generate      */
+/* 2000.02.24 Add interpretation                                      */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+/**   An object that represents a parsed If clause.                    */
+class NrIf implements RxClauseParser uses RxExpr
+ properties shared
+  thenclause=RxClause                   -- location of our THEN
+  elseclause=RxClause                   -- location of our ELSE [null if none]
+  nextclause=RxClause                   -- location of clause after construct
+
+ properties private
+  rxt       =RxTranslator               -- root
+  parser    =RxParser                   -- local reference
+  pcursor   =RxCursor                   -- local reference
+  tokens    =RxToken[]                  -- local reference
+  converter =RxConverter                -- local reference
+  encapsule =boolean 0                  -- need outer wrapper
+  exprs     =Vector(3)                  -- list of expressions [RxExpr]
+
+ properties private constant
+  endit=[RxToken.COMMA]
+
+ /** Construct an object from the current clause */
+ method NrIf(newrxt=RxTranslator)
+  rxt       =newrxt                     -- the boss
+  parser    =rxt.program.parser         -- our parser
+  pcursor   =parser.cursor              -- our parsing cursor
+  tokens    =pcursor.curclause.tokens   -- local reference
+  converter =rxt.converter              -- spin doctor
+
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrIf', pass)
+  -- update state before potential error signal
+  parser.pushlevel('IF')                -- new level
+  parser.thislevel.ifstate=NrLevel.IF_THENEXP
+
+  /** Parse the expression(s) */
+  if tokens[1].type=RxToken.SP then begin=2; else begin=1
+
+  loop label exprs forever
+    item=rxt.eparser.parseexpr(pcursor, 0, begin, endit, null) -- evaluate expression
+    expr=RxExpr(rxt, pcursor, IF_EXPR, item)
+
+    -- check/coerce to boolean
+    conv=converter.assigncost(pcursor, rxt.booltype, item.type)
+    if conv.cost>rxt.program.flag.maxassign then
+     signal RxError(rxt, tokens[begin], 'if.needs.boolean.type',-
+                    rxt.program.babel.typeString(item.type))
+    converter.convertcode(pcursor, rxt.booltype, conv.proc, item)
+    expr.type=rxt.booltype
+    expr.conv=conv
+    exprs.addElement(expr)
+
+    begin=item.endoff+1
+    if tokens[begin].type=RxToken.END then leave exprs
+    -- we're at comma; step over it and go look for another expression
+    begin=begin+1
+    end exprs
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  /* Now, if we follow a WHEN...THEN then we must encapsulate the IF
+     construct, to protect the ELSE of the following WHEN or OTHERWISE.
+     (We don't need to do this for all THENs, as Java binding rules are
+     the same as NetRexx.)
+     */
+  if parser.thislevel.prev.key=='SELECT' then do
+    if parser.thislevel.prev.selstate=NrLevel.SEL_ALLOK then do
+      encapsule=1
+      rxt.program.streamer.outpart('{')
+      end
+    end
+
+  /* If we are (or may be) tracing, then we need to wrap the target
+     blocks, as the single-statement units may become doubles
+     (traceclause instructions added) */
+  parser.thislevel.innerwraps=(pcursor.curmethod.methodmaxtrace\=RexxTrace.OFF)
+  if parser.thislevel.innerwraps then start='{'
+                                 else start=' '   -- cosmetic space
+
+  /* Assemble the code for the expressions, combining with shortcut OR
+     if more than one */
+  loop i=0 for exprs.size
+    expr=RxExpr exprs.elementAt(i)
+    item=expr.code
+    if i=0 then code=item          -- first expression is easy
+     else /* second or subsequent expression */ do
+      -- We can manually adjust wrapping, here, as we know we can
+      --   generate a linear series of wrapped expressions
+      -- new code is the special OR of the code and item
+      code=rxt.eparser.codeop(pcursor, '?', tokens[item.begoff], code, item)
+      end
+    end i
+
+  rxt.program.streamer.out('if ('code.javacode')'start)
+  return
+
+ /* endif -- RxParser has determined that the IF is complete
+    Arg1 is the next 'real' clause, null if it's not a method body clause
+    */
+ method endif(endclause=RxClause)
+  -- find and record the real ender for the IF.  This includes any
+  -- comment clauses preceding the clause that triggered the endif
+  nextclause=endclause                       -- default ender
+  loop while endclause\=null
+    endclause=endclause.last
+    if endclause=null then leave
+    if endclause.tokens[0].type\=RxToken.SP then leave
+    nextclause=endclause
+    end
+
+  if rxt.program.flag.java then do label endifgen
+    if parser.thislevel.innerwraps then      -- we have an inner wrapper
+      rxt.program.streamer.out('}', 1)
+    if encapsule then do                     -- we have an outer wrapper
+      parser.indention=parser.indention-1
+      rxt.program.streamer.out('}', 1)
+      parser.indention=parser.indention+1
+      end
+    end endifgen
+  parser.poplevel                            -- done with IF
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  rxt.interpreter.pushlevel(cursor)     -- down a level
+
+  -- evaluate the expressions, with shortcut exit if any gives 1
+  loop i=0 for exprs.size
+    expr=RxExpr exprs.elementAt(i)
+    item=expr.evaluate(cursor)
+    final=item.isOne
+    if final then leave  -- shortcut
+   catch e=NullPointerException
+    signal RxSignal(cursor, e, expr.firsttoken)
+    end i
+  -- final is now result of final expression evaluated
+
+  if final then nop                     -- [simple drop through to THEN]
+   else do
+    if elseclause\=null then cursor.curjump=elseclause
+     else do
+      -- no ELSE path to execute, so we're done with the IF
+      cursor.curjump=nextclause
+      rxt.interpreter.poplevel(cursor)
+      end
+    end
+

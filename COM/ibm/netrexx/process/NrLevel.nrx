@@ -1,0 +1,118 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrLevel                                                            */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see NrLanguage for master change list)                */
+/* 1996.05.24 Initial                                                 */
+/* 1996.08.29 Add SIGNALs vectors                                     */
+/* 1996.08.31 Dropouts                                                */
+/* 1997.07.17 Record the clause that started the level                */
+/* 1998.04.25 Renamed from RxLevel                                    */
+/* 2000.02.24 Updates for interpretation (lightweight constructor)    */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+/**   Parsing or interpretation state for a nesting level.            */
+/*                                                                    */
+/*   NrLevel objects form a traversable stack.                        */
+/*                                                                    */
+/*   During parsing, levels exist for all states (program, class,     */
+/*   method, and lower constructs).  Routines in RxParser are used    */
+/*   for manipulating the stack.                                      */
+/*                                                                    */
+/*   During interpretation, levels are only used for methods and the  */
+/*   constructs within methods; routines in RxInterpreter are used    */
+/*   for manipulating the stack.                                      */
+/*                                                                    */
+class NrLevel
+ properties public constant
+  /* State constants */
+  IF_THENEXP =1          -- THEN expected
+  IF_THEN    =2          -- THEN block
+  IF_ELSEOK  =3          -- ELSE allowed/expected
+  IF_ELSE    =4          -- ELSE block
+  IF_DONE    =5          -- IF complete (transient state)
+
+  SEL_WHENEXP=0          -- WHEN expected
+  SEL_THENEXP=1          -- THEN expected
+  SEL_THEN   =2          -- THEN block expected
+  SEL_ALLOK  =3          -- WHEN or OTHERWISE or END allowed/expected
+  SEL_OTHER  =4          -- OTHERWISE block
+
+  TRY_INIT   =0          -- TRY initial state (main block)
+  TRY_CATCH  =1          -- CATCH seen
+  TRY_FINAL  =2          -- FINALLY seen
+
+ properties public
+  prev       =NrLevel    -- to previous NrLevel (for PopLevel and scans)
+  clause     =RxClause   -- the clause that started the level [null if PROGRAM]
+  trystate   =TRY_INIT   -- TRY (exception catcher) state [TRY_xxx]
+
+  -- The following are only used during parsing
+  key        =Rexx       -- Keyword, uppercased
+  keytoken   =RxToken    -- .. and where to find it
+  ifstate    =int        -- IF state [IF_xxx]
+  selstate   =int        -- SELECT state [SEL_xxx]
+  trychunk   =int        -- Where to place 'try' for this level, if needed
+  tryadded   =boolean    -- 1 once trychunk added
+  loopvarname=Rexx       -- Loop control variable name for block at this level
+  blocklabel =Rexx       -- Label for block at this level
+  javalabel  =Rexx       -- Label (javaized) for block at this level
+  needend    =boolean    -- Block needs END (and allows CATCH and FINALLY)
+  innerwraps =boolean    -- Block needs inner wrappers
+  terminal   =boolean    -- Following clauses are unreachable [dynamic]
+  lastterm   =boolean    -- Last active clause was a terminal
+  dropout    =boolean    -- Possible to drop out of level
+                         -- [e.g., due to a leave, or last clause non-terminal]
+  -- The next two hold lists of RxExceptions
+  signals    =Vector     -- Signals thrown in block/level, not yet caught
+  caught     =Vector     -- Exceptions listed in CATCH clauses, so far
+
+  -- The following are only used during interpretation
+  nextone    =boolean    -- Next clause is target of THEN or ELSE
+  thisone    =boolean    -- This clause is target of THEN or ELSE
+  forcount   =int        -- LOOP FOR counter [counts down to 0, -1 if none]
+  tocode     =RxCode     -- TO value for this instance of the loop
+  bycode     =RxCode     -- BY value for this instance of the loop
+  compop     =Rexx       -- comparison operation to use for LOOP ('>' or '<')
+  casecode   =RxCode     -- case expression value after SELECT
+  oversnap   =Vector     -- the collection snapshot within an OVER loop
+  loopvar    =RxVariable -- control variable (X= or X OVER)
+
+ /** Standard parsing constructor */
+ method NrLevel(newkey=Rexx, newkeyclause=RxClause)
+  key=newkey.upper       -- always save in uppercase
+  select
+    when key=='DO'     then needend=1
+    when key=='LOOP'   then needend=1
+    when key=='SELECT' then needend=1
+    otherwise needend=0
+    end
+  clause=newkeyclause               -- whereabouts [may be null]
+  if clause\=null then keytoken=clause.tokens[0]  -- ..
+  -- non-default initializations only needed for parsing
+  trychunk=0
+  loopvarname=''
+  blocklabel=''
+  javalabel=''
+
+ /** Lightweight interpretation constructor */
+ method NrLevel(newkeyclause=RxClause)
+  clause=newkeyclause               -- whereabouts [always non null]
+
+
+ /** TOSTRING */
+ method toString returns String
+   if key=null then name='[null]'; else name=key
+   if clause=null then add='[null]'; else add=clause.toString
+   return 'NrLevel:' name trystate add
+

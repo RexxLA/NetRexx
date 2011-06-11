@@ -1,0 +1,72 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrOptions                                                          */
+/*                                                                    */
+/*   An object that represents a parsed Options instruction.          */
+/*   Errors herein are terminal as critical flags may be involved.    */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.28 Initial                                                 */
+/* 1997.06.27 UTF8 can no longer be changed by OPTIONS [Java 1.1]     */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+/**   An object that represents a parsed Options instruction.          */
+/*   Errors herein are terminal as critical flags may be involved.    */
+
+class NrOptions implements RxClauseParser
+ properties private
+  rxt    =RxTranslator                            -- root
+  parser =RxParser                                -- local reference
+  tokens =RxToken[]                               -- local reference
+
+ /** Construct from the current clause */
+ method NrOptions(newrxt=RxTranslator)
+  rxt    =newrxt                   -- the boss
+  parser =rxt.program.parser       -- our parser
+  tokens =parser.cursor.curclause.tokens -- local reference
+
+  if parser.cursor.curclass\=null then signal RxQuit(rxt, tokens[0], 'options.after.class')
+
+  if \rxt.pass0 then return        -- handled in pass 0
+  scan(0)
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass>0 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrOptions: 1')
+  if tokens[1].type=RxToken.END then signal RxQuit(rxt, tokens[1], 'option.word.expected')
+  if tokens[1].type=RxToken.SP then n=1; else n=0
+  oldutf8=rxt.program.flag.utf8    -- we won't allow this to change
+  loop forever
+    n=n+1; tok=tokens[n]; t=tok.type
+    if t<>RxToken.SYM then signal RxQuit(rxt, tok, 'option.word.expected')
+    rxt.program.flag.setFlag(tok.value)      -- unknown options are quietly ignored
+    if rxt.program.flag.utf8\=oldutf8 then do
+      rxt.program.flag.utf8=oldutf8          -- restore
+      signal RxQuit(rxt, tok, 'cannot.change.flag', 'UTF8')
+      end
+    n=n+1; tok=tokens[n]; t=tok.type
+    if t=RxToken.END then leave /* done */
+    if t<>RxToken.SP then signal RxQuit(rxt, tok, 'blank.expected')
+    end /* processing options */
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation */
+ method generate
+  signal RxQuit(rxt, tokens[0], 'internal.error', 'NrOptions: 2')
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  signal RxQuit(rxt, tokens[0], 'internal.error', 'NrOptions: 3')

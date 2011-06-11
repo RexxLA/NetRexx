@@ -1,0 +1,260 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrWhen                                                             */
+/*                                                                    */
+/*   An object that represents a parsed When clause.                  */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.10 Initial                                                 */
+/* 1998.12.21 Add CASE processing                                     */
+/* 1999.09.11 Add switch{} generation code                            */
+/* 1999.09.19 Allow WHEN expr, expr                                   */
+/* 1999.11.10 Make WHEN expr, expr use conditional OR                 */
+/* 2000.02.12 Ensure expression parsing is in scan, not generate      */
+/* ------------------------------------------------------------------ */
+-- Inadvisable to use SELECT in non-interpretive areas of this code :-)
+
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+/**   An object that represents a parsed When clause.                  */
+class NrWhen implements RxClauseParser uses RxExpr
+ properties private
+  rxt      =RxTranslator                -- root
+  parser   =RxParser                    -- local reference
+  tokens   =RxToken[]                   -- local reference
+  startselc=RxClause                    -- containing SELECT clause
+  startsel =NrSelect                    -- containing SELECT
+  selcase  =boolean 0                   -- .. has CASE
+  whenoff  =int                         -- our offset into the WHENs list
+  exprs    =Vector(3)                   -- list of expressions [RxExpr]
+  currselstate=int                      -- initial state saver
+
+ properties private constant
+  endit=[RxToken.COMMA]
+
+ /** Construct an object from the current clause */
+ method NrWhen(newrxt=RxTranslator)
+  rxt      =newrxt                      -- the boss
+  parser   =rxt.program.parser          -- our parser
+  tokens   =parser.cursor.curclause.tokens -- local reference
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrWhen', pass)
+
+  expected=boolean 0
+  if parser.thislevel.key=='SELECT' then
+   if parser.thislevel.selstate=NrLevel.SEL_WHENEXP,-
+      parser.thislevel.selstate=NrLevel.SEL_ALLOK then do
+    -- update state before potential error exits
+    currselstate=parser.thislevel.selstate        -- save for use below
+    parser.thislevel.selstate=NrLevel.SEL_THENEXP
+    startselc=RxClause parser.thislevel.clause         -- locate SELECT clause
+    startsel=NrSelect startselc.lookaside              -- locate SELECT
+    startsel.whens.addElement(parser.cursor.curclause) -- tell it about us
+    whenoff=startsel.whens.size-1                      -- which one we are
+    if startsel.casevarcode\=null then selcase=1       -- note we have CASE
+    expected=1
+    end
+  if \expected then signal RxError(rxt, tokens[0], 'unexpected.when')
+  -- We know we are expected if we get here
+
+  converter=rxt.converter               -- spin doctor
+  mayswitch=startsel.mayswitch          -- local copy
+
+  if tokens[1].type=RxToken.SP then begin=2; else begin=1
+
+  loop label exprs forever
+    item=rxt.eparser.parseexpr(parser.cursor, 0, begin, endit, null)
+    expr=RxExpr(rxt, parser.cursor, WHEN_EXPR, item)
+
+    /* Give a warning (and disable SWITCH) if code is a duplicate of
+       another WHEN's code (probably copy error) */
+    -- if the code is a compile-time constant, and of type Rexx (e.g., a
+    -- primitive) do the check on the value not on the code itself...
+    key=item.javacode
+    if item.constant then do
+      skey=rxt.interpreter.stringValue(item)
+      if skey=null then key='null'
+                   else key=Rexx(skey)
+      end
+    -- say '>>' item.constant key
+    if startsel.dupcheck[key] then do
+      if item.constant then RxWarn(rxt, tokens[begin], 'duplicate.when.value')
+                       else RxWarn(rxt, tokens[begin], 'duplicate.when')
+      if mayswitch then startsel.noswitch=1
+      end
+     else startsel.dupcheck[key]='1'
+
+    /* Convert to either boolean or the type of the CASE expression */
+    if selcase then do label havecase
+      casetype=startsel.casevarcode.type
+      conv=converter.assigncost(parser.cursor, casetype, item.type)
+      if conv.cost>rxt.program.flag.maxassign then
+        signal RxQuit(rxt, tokens[begin], 'when.needs.case.type',-
+                      rxt.program.babel.typeString(item.type),-
+                      rxt.program.babel.typeString(casetype))
+      converter.convertcode(parser.cursor, casetype, conv.proc, item)
+      expr.type=casetype      -- save the conversion
+      end havecase
+     else do label noncase
+      conv=converter.assigncost(parser.cursor, rxt.booltype, item.type)
+      if conv.cost>rxt.program.flag.maxassign then
+        signal RxQuit(rxt, tokens[begin], 'when.needs.boolean.type',-
+                      rxt.program.babel.typeString(item.type))
+      converter.convertcode(parser.cursor, rxt.booltype, conv.proc, item)
+      expr.type=rxt.booltype  -- save the conversion
+      end noncase
+
+    expr.conv=conv
+    exprs.addElement(expr)
+
+    begin=item.endoff+1
+    if tokens[begin].type=RxToken.END then leave exprs
+    -- we're at comma; step over it and go look for another expression
+    begin=begin+1
+    end exprs
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  -- The extra '{' we generate for each WHEN is there to accomodate
+  -- tracing of the WHEN clause.  We remove it if tracing is OFF.
+  -- This either outputs code (or queues up Pending pieces)
+  streamer=rxt.program.streamer
+  mayswitch=startsel.mayswitch                         -- local copy
+  parser.indention=parser.indention-1
+
+  /* Assemble the code for the expressions, combining with shortcuts if
+    more than one, and also making alternative switch/non-switch
+    versions */
+
+  loop i=0 for exprs.size
+    expr=RxExpr exprs.elementAt(i)
+    item=expr.code
+    swcode=''                      -- switch version for this item
+    if selcase then do label havecase
+      -- handle potential switch-generating code (second test here is just
+      -- an optimization)
+      if mayswitch then if \startsel.noswitch then do
+        /* check assignable and constant -- if it's not, we cannot use switch */
+        -- note we disallow char --> int conversion
+        if expr.conv.cost>5 | \item.constant
+         then startsel.noswitch=1
+         else swcode='case' item.javacode':'
+        end
+      -- make the if-code
+      item=rxt.eparser.codeop(parser.cursor, '==', tokens[item.begoff],-
+                              startsel.casevarcode, item)
+      -- [note this loses begoff/endoff at present]
+      end havecase
+
+    if i=0 then do                 -- first expression
+      code=item
+      casescode=swcode
+      end
+     else /* second or subsequent expression */ do
+      -- We can manually adjust wrapping, here, as we know we can
+      --   generate a linear series of wrapped expressions
+      -- new code is the special OR of the code and item
+      code=rxt.eparser.codeop(parser.cursor, '?', tokens[item.begoff], code, item)
+      code.wrapped=1
+      -- switch version is easy
+      casescode=casescode swcode   -- cases are simply listed
+      end
+    end i
+  -- here code is the code to use, with alternative javacode for
+  -- switch{} in casescode
+
+  if parser.thislevel.lastterm then br=''
+                               else br='break;'
+  if parser.thislevel.innerwraps then do
+    if currselstate\=NrLevel.SEL_WHENEXP then do       -- not first when
+      if mayswitch then do
+        startsel.Pending(streamer.chunks, '', br)
+        streamer.out('')
+        end
+      elcode='}else{'
+      if mayswitch then startsel.Pending(streamer.chunks, elcode, '')
+                   else streamer.outpart(elcode)
+      end
+     else do
+      if mayswitch then streamer.out('')
+      end
+    rxt.program.tracer.traceclause(parser.cursor.curclause) -- add trace code if needed
+    ifcode='if ('code.javacode'){'
+    end
+
+   else do
+    if currselstate\=NrLevel.SEL_WHENEXP then do       -- not first when
+      if mayswitch then do
+        startsel.Pending(streamer.chunks, '', br)
+        streamer.out('')
+        end
+      elcode='else '
+      if mayswitch then startsel.Pending(streamer.chunks, elcode, '')
+                   else streamer.outpart(elcode)
+      end
+     else do
+      if mayswitch then streamer.out('')
+      end
+    -- tracing only possible if inner wraps are there
+    ifcode='if ('code.javacode')'
+    end
+
+  if mayswitch
+   then startsel.Pending(streamer.chunks, ifcode, casescode)
+   else streamer.out(ifcode)
+
+  parser.indention=parser.indention+1
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  -- WHENs cannot next directly, so don't need a Level
+
+  -- evaluate the expressions, with shortcut exit if any gives 1.
+  -- This is either direct, or after == operation if SELECT CASE
+  loop i=0 for exprs.size
+    expr=RxExpr exprs.elementAt(i)
+    item=expr.evaluate(cursor)
+    -- evaluate the '==' comparison ourselves, for speed [it's not traced]
+    if selcase then do
+      ccode=cursor.curlevel.casecode
+      if item.type.isprimitive,-
+         item.type=NrBabel.rexxtype,-
+         item.type=rxt.stringtype,-
+         item.type=rxt.chararraytype,-
+         item.type=rxt.chartype then
+        final=item.value.equals(ccode.value)
+       else
+        final=item.value==ccode.value
+      end
+     else final=item.isOne    -- it will have been boolean [non-case]
+    if final then leave       -- shortcut
+   catch e=NullPointerException
+    signal RxSignal(cursor, e, expr.firsttoken)
+    end i
+  -- final is now result of final expression evaluated
+
+  if final then nop           -- [simple drop through to THEN]
+   else do
+    -- drop through to next WHEN or OTHERWISE, or error if none
+    if whenoff+1<startsel.whens.size then
+      cursor.curjump=RxClause startsel.whens.elementAt(whenoff+1)
+     else if startsel.other\=null then
+      cursor.curjump=startsel.other
+     else
+      signal RxSignal(cursor, NoOtherwiseException(),-
+                      startsel.endclause.tokens[0])
+    end

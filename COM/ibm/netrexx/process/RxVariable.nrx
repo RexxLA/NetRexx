@@ -1,0 +1,217 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxVariable                                                         */
+/*                                                                    */
+/*   An object that represents a variable (local to a class).         */
+/*                                                                    */
+/*   varspell is how variable is spelled to Java (that is, the mixed  */
+/*   case first used, and with '$' prefix for method variables if     */
+/*   needed).  See RxVarpool for more details                         */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.31 Initial                                                 */
+/* 1996.06.16 Add cross-reference list                                */
+/* 1996.10.07 Record if in abstract method (only one ref expected)    */
+/* 1997.01.29 Expanded variable types                                 */
+/* 1997.02.09 Flagged variable types                                  */
+/* 1997.05.31 Add Deprecated type                                     */
+/* 1999.05.27 Add Unused attribute (for properties)                   */
+/* 1999.09.12 Add Value                                               */
+/* 2000.04.05 Add Field lookaside for properties                      */
+/* 2000.04.06 Add getValue                                            */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+class RxVariable uses RxField
+
+properties public constant
+  VAR_ARG       = int   0x000001   -- argument       )
+  VAR_LOCAL     = int   0x000002   -- local variable ) one always set
+  VAR_PROP      = int   0x000004   -- property       )
+
+  VAR_PUBLIC    = int   0x000010   -- visibility
+  VAR_INHERIT   = int   0x000020   -- ..
+  VAR_PRIVATE   = int   0x000040   -- ..
+  VAR_INDIRECT  = int   0x000080   -- ..
+  VAR_SHARED    = int   0x002000   -- ..
+
+  VAR_CONSTANT  = int   0x000100   -- modifier
+  VAR_STATIC    = int   0x000200   -- ..
+  VAR_TRANSIENT = int   0x000400   -- ..
+  VAR_VOLATILE  = int   0x000800   -- ..
+
+  VAR_DEPRECATED= int   0x001000   -- property is deprecated
+  --                    0x002000      [used above]
+  VAR_OPTIONAL  = int   0x004000   -- VAR_ARG is optional
+  VAR_READONLY  = int   0x008000   -- Indirect 'constant'
+
+  VAR_UNUSED    = int   0x010000   -- property is unused
+  VAR_LIT       = int   0x020000   -- property is constant assigned a literal
+
+properties public
+  varname =Rexx          -- original spelling of the variable name
+  varspell=Rexx          -- Java spelling of the variable reference
+  vartoken=RxToken       -- token of first occurrence (for sort, message)
+  varatts =int           -- attributes (see constants)
+  vartype =RxType        -- type of the variable
+  varctype=Rexx          -- concise type of the variable [set/used in xref only]
+  varfield=RxField       -- associated field (iff isproperty)
+  varrefs =StringBuffer  -- list of cross-references
+  varabstract=boolean    -- variable is abstract declaration (also native)
+  varseen    =boolean 0  -- variable has been referenced as well as set
+  varmain    =boolean 0  -- this is the 'arg' variable; special rules apply
+  varvalue   =Object     -- value, if known [wrapped RxCode-style]
+
+ /* This constructor lets the object be set up in an inline call */
+ method RxVariable(newname=Rexx, newspell=Rexx, newtok=RxToken, newatts=int,-
+                   newtype=RxType, newabstract=boolean)
+  varname=newname; varspell=newspell; vartoken=newtok; varatts=newatts
+  vartype=newtype; varabstract=newabstract
+
+ /* Test if variable is a local
+    Returns 1 if it is, 0 otherwise */
+ method islocal returns boolean
+  return varatts=VAR_LOCAL
+
+ /* Test if variable is an argument
+    Returns 1 if it is, 0 otherwise */
+ method isargument returns boolean
+  return (varatts & VAR_ARG)\=0
+
+ /* Test if variable is an abstract argument
+    Returns 1 if it is, 0 otherwise */
+ method isabstractargument returns boolean
+  if (varatts & VAR_ARG)\=0 then if varabstract then return 1
+  return 0
+
+ /* Test if variable is a property.
+    Returns 1 if it is, 0 otherwise */
+ method isproperty returns boolean
+  return (varatts & VAR_PROP)\=0
+
+ /* Test if variable is an indirect property.
+    Returns 1 if it is, 0 otherwise */
+ method isindirect returns boolean
+  return (varatts & VAR_INDIRECT)\=0
+
+ /* Test if variable is a read-only indirect property.
+    Returns 1 if it is, 0 otherwise */
+ method isreadonly returns boolean
+  return (varatts & VAR_READONLY)\=0
+
+ /* Test if variable is flagged as unused.
+    Returns 1 if it is, 0 otherwise */
+ method isunused returns boolean
+  return (varatts & VAR_UNUSED)\=0
+
+ /* Test if variable is a constant property.
+    Returns 1 if it is, 0 otherwise */
+ method isconstant returns boolean
+  return (varatts & VAR_CONSTANT)\=0
+
+ /* Test if variable is a constant property literal.
+    Returns 1 if it is, 0 otherwise */
+ method islit returns boolean
+  return (varatts & VAR_LIT)\=0
+
+ /* Test if variable is a private property.
+    Returns 1 if it is, 0 otherwise */
+ method isprivateprop returns boolean
+  if (varatts & VAR_PRIVATE)\=0 then
+   if (varatts & VAR_PROP)\=0 then return 1
+  return 0
+
+ /* Test if variable is a static property.
+    Returns 1 if it is, 0 otherwise */
+ method isstaticprop returns boolean
+  if (varatts & VAR_PROP)\=0 then
+   if (varatts & (VAR_CONSTANT+VAR_STATIC))\=0 then
+    return 1
+  return 0
+
+ /* Test if variable is a non-static property.
+    Returns 1 if it is, 0 otherwise */
+ method isnonstaticprop returns boolean
+  return isproperty & \isstaticprop
+
+ /* Test if variable is an array.
+    Returns 1 if it is, 0 otherwise */
+ method isarray returns boolean
+  return vartype.isarray
+
+ /* Test if variable is deprecated.
+    Returns 1 if it is, 0 otherwise */
+ method isdeprecated returns boolean
+  return (varatts & VAR_DEPRECATED)\=0
+
+ /* Indicate variable is a literal constant */
+ method setlit
+  varatts=varatts | VAR_LIT
+
+ /* Return tracetag for this variable */
+ method tracetag returns char
+  if (varatts & VAR_LOCAL)\=0 then return 'v'
+  if (varatts & VAR_ARG)\=0   then return 'a'
+  return 'p' -- property
+
+ /* Return the Java modifiers for this variable */
+ method javamodifiers returns Rexx
+  if \isproperty then return ''
+  mods=Rexx
+  select
+    when (varatts & VAR_PUBLIC)  \=0 then mods='public'
+    when (varatts & VAR_INHERIT) \=0 then mods='protected'
+    when (varatts & VAR_SHARED)  \=0 then mods=''           -- default access
+    when (varatts & VAR_PRIVATE) \=0 then mods='private'
+    when (varatts & VAR_INDIRECT)\=0 then mods='private'
+    -- otherwise internal error
+    end
+  select
+    when (varatts & VAR_CONSTANT) \=0 then mods=mods 'static final'
+    when (varatts & VAR_STATIC)   \=0 then mods=mods 'static'
+    when (varatts & VAR_TRANSIENT)\=0 then mods=mods 'transient'
+    when (varatts & VAR_VOLATILE) \=0 then mods=mods 'volatile'
+    otherwise /* no modifiers */ nop
+    end
+  return mods.space
+
+ /* Return the field visibility for this variable */
+ method visibility returns int
+  if \isproperty then return VIS_UNKNOWN
+  select
+    when (varatts & VAR_PUBLIC)  \=0 then vis=VIS_PUB
+    when (varatts & VAR_INHERIT) \=0 then vis=VIS_INHER
+    when (varatts & VAR_SHARED)  \=0 then vis=VIS_SHAR
+    when (varatts & VAR_PRIVATE) \=0 then vis=VIS_PRIV
+    when (varatts & VAR_INDIRECT)\=0 then vis=VIS_PRIV
+    -- otherwise internal error
+    end
+  return vis
+
+ /* Return the field attributes for this variable */
+ method attributes returns int
+  if \isproperty then return ATT_NONE
+  select
+    when (varatts & VAR_CONSTANT) \=0 then atts=ATT_FINAL | ATT_STATIC
+    when (varatts & VAR_STATIC)   \=0 then atts=ATT_STATIC
+    when (varatts & VAR_TRANSIENT)\=0 then atts=ATT_TRANSIENT
+    when (varatts & VAR_VOLATILE) \=0 then atts=ATT_VOLATILE
+    otherwise /* no modifiers */ nop
+    end
+  return atts
+
+ /* Return a copy of the variable, with null value and without
+    crossreference data */
+ method copy returns RxVariable
+  copyvar=RxVariable(varname, varspell, vartoken, varatts, vartype, varabstract)
+  copyvar.varmain=this.varmain     -- this does need to propagate
+  return copyvar
+

@@ -1,0 +1,90 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* netrexx.lang.RexxSet -- Rexx context settings                      */
+/* ------------------------------------------------------------------ */
+/* Copyright IBM Corporation, 1996, 1997.  All Rights Reserved.       */
+/* Author    Mike Cowlishaw                                           */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 96.02.23 Initial version                                           */
+/* 97.07.18 Add setDigits and setForm for checking                    */
+package netrexx.lang
+options binary strictargs nodecimal
+
+/**
+   This defines settings to be used by the Rexx class for NetRexx.  A
+   RexxSet object is passed to operation methods in the Rexx class,
+   along with the usual arguments, in order to influence the operations
+   in various ways -- for example, the precision of arithmetic, and
+   other variable settings.
+
+   Note that null can be passed for 'all default' settings.
+
+   The properties are public (so they remain accessible to NetRexx 1.0
+   programs), but should only be changed through the setXxxxx methods.
+   Later they could become shared.
+
+    */
+
+class RexxSet final
+
+  /* ----- Properties ----- */
+  properties public constant
+    SCIENTIFIC=byte 0
+    ENGINEERING=byte 1
+    PLAIN=byte 2              -- only used internally
+    DEFAULT_FORM=SCIENTIFIC
+    DEFAULT_DIGITS=int 9
+
+  properties public
+    /** The DIGITS setting  */
+    digits=int DEFAULT_DIGITS
+    /** The FORM setting  */
+    form  =byte DEFAULT_FORM
+
+  /* ----- Constructors ----- */
+  /** Build a default Rexx settings context  */
+  method RexxSet() returns RexxSet
+    super(); return this
+
+  /** Build a Rexx settings context with given DIGITS  */
+  method RexxSet(newdigits=int) returns RexxSet
+    this(); digits=newdigits; return this
+
+  /** Build a Rexx settings context with given DIGITS and FORM
+       */
+  method RexxSet(newdigits=int, newform=byte) returns RexxSet
+    this(); digits=newdigits; form=newform; return this
+
+  /** Clone a Rexx settings context  */
+  method RexxSet(old=RexxSet)
+    this(); digits=old.digits; form=old.form
+    return
+
+  /** Check and set digits */
+  method setDigits(d=Rexx)
+    r=d.OpPlus(this)               -- round under current setting
+    if r.ind=Rexx.ispos then       -- must be >0
+     if r.datatype('w')=='1' then  -- .. and whole
+     if r.mant.length+r.exp<=9 then do  -- .. and not too big
+      digits=r.toint()
+      return
+      end
+    signal BadNumericException(d)  -- not good
+
+  /** Check and set form */
+  method setForm(f=Rexx)
+    select
+      when f.OpEq(null, 'engineering') then form=ENGINEERING
+      when f.OpEq(null, 'scientific')  then form=SCIENTIFIC
+      otherwise signal BadNumericException(f)     -- unexpected
+      end
+
+  /** Return a word for the form setting */
+  method formword returns Rexx
+    if form=SCIENTIFIC then return "scientific"
+    return "engineering"

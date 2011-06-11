@@ -1,0 +1,117 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagStems                                                          */
+/*                                                                    */
+/*   An object that tests Indexed Arrays (stems).                     */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.23 Initial                                                 */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+-- options binary        -- we want strings to be Rexx strings
+options nobinary decimal
+class DiagStems
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagStems
+  ok='OK'
+
+  /*-- A R R A Y  I N I T --------------------------------------------*/
+  temp='I'
+  a='A.'
+  a[temp]='x'; a[2]='y'; a[4]='4'
+  p='P.'
+  p[1]=1; p[2]=2; p[3]=3
+  i=2; ii=3
+  if a[ii]='A.' & a[2]=='y' & a[temp]=='x' -
+   & a[4]='4' & p[i]=='2' & p[1]='1' & p[3]='3'
+           then ok=ok '!' 'Stems 1'
+           else signal DiagX('Stems 1')
+
+  /* More stem initialisation etc... */
+  flag=1
+  a=7; bbb=999
+  flag=flag & a[1]==7
+  flag=flag & a['uu']==7
+  flag=flag & bbb[8]==999
+  bbb[8]='New'
+  flag=flag & bbb[8]=='New'
+  bbb[8]='Foo'
+  flag=flag & bbb[8]=='Foo'
+  bbb='xxx'
+  flag=flag & bbb[8]=='xxx'
+  if flag then ok=ok '!' 'Stem init'
+          else signal DiagX('Stem init')
+
+  /* Check exists() and that assigning null drops the entry */
+  flag=1
+
+  droppy='mfc'
+  flag=flag & droppy.exists('2')==0
+  droppy[2]='abc'
+  flag=flag & droppy[2]=='abc'
+  flag=flag & droppy.exists('2')==1
+  droppy[2]=null
+  flag=flag & droppy[2]=='mfc'          -- reverts to default
+  flag=flag & droppy.exists('2')==0
+  /* and repeat the cycle */
+  droppy[2]='abc'
+  flag=flag & droppy[2]=='abc'
+  flag=flag & droppy.exists('2')==1
+  droppy[2]=null
+  flag=flag & droppy[2]=='mfc'          -- reverts to default
+  flag=flag & droppy.exists('2')==0
+  /* and ensure exact match doesn't count as \exists */
+  droppy[2]='mfc'
+  flag=flag & droppy.exists('2')==1
+
+  /* And more (multiple and null index, etc.) */
+  a='A'; null=''
+  n='K'
+  n[null]='xxabcxx'.substr(3,3)
+  a[null]='xxxdef'.right(3)
+  kitt='ghi'
+  a[1]='a'
+  a[2]='b'
+  a[3]='c'
+  i=3; j=2; k=1
+  a[2,3]=n[null] a[null] kitt[null] a[i] a[j] a[k] a[3] a[4]
+  flag=flag & a[j,i]=='abc def ghi c b a c A'
+  a[2,3,1]=9; a[2,2]=99; a[1,2]=999
+  flag=flag& a[j,i]=='abc def ghi c b a c A'  -- interference?
+  flag=flag & (a[2,3,1] a[2,2] a[1,2])=='9 99 999'
+
+  /* this one's from NRL (and extended): */
+  x='?'
+  x['foo', 'bar']='OK'
+  x1=x['foo', 'bar']
+  y=x['foo']
+  x2=y['bar']
+  x3=x['foo', 'baa']
+  flag=flag & x1=='OK' & x2='OK' & x3='?'
+
+  if flag then ok=ok '! Indexed Vars'
+          else signal DiagX('Indexed')
+
+  -- see also DiagLoop for LOOP OVER a stem
+
+  /*--------------------------------------------------------------------*/
+
+  say 'DiagStems:' ok
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagStems()
+  catch e=DiagX
+    say 'Failed: "'e.getMessage'"'
+  end

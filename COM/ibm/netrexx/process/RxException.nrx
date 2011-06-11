@@ -1,0 +1,79 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxException                                                        */
+/*                                                                    */
+/*   An object that represents an exception reference (pending or     */
+/*   caught).                                                         */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.08.29 Initial                                                 */
+/* 1997.07.22 Include RxClassInfo for the exception                   */
+/* 1999.09.12 Exception reverts to hard exception                     */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+class RxException
+ properties public
+  excepinfo=RxClassInfo  -- the exception class
+  exceptok=RxToken       -- where signalled or caught
+  excephard=boolean      -- 1 if checkable, 0 otherwise
+
+ properties private
+  rxt=RxTranslator       -- root
+
+ properties private constant
+  runextype=RxType('java.lang', 'RuntimeException', 0)
+  errortype=RxType('java.lang', 'Error', 0)
+
+ /* This constructor lets the object be set up in an inline call */
+ method RxException(cursor=RxCursor, info=RxClassInfo, tok=RxToken)
+  rxt=cursor.curprogram.translator
+  excepinfo=info
+  exceptok=tok
+
+  /* Now set the hard/soft flag */
+  classer=rxt.classer
+  select
+    when classer.issubclass(cursor, info, runextype, tok)
+     then excephard=0
+    when classer.issubclass(cursor, info, errortype, tok)
+     then excephard=0
+    -- Exception and Throwable are soft, as they catch RunTimeException
+    -- 1999.09.12 revert these to Hard, as javac expects them to be checked
+    -- when info.type=RxType('java.lang', 'Throwable', 0) then excephard=0 -- special case
+    -- when info.type=RxType('java.lang', 'Exception', 0) then excephard=0 -- special case
+    when classer.issubclass(cursor, info, rxt.throwabletype, tok)
+     then excephard=1
+    otherwise
+     signal RxError(rxt, tok, 'type.not.exception', info.type.classname)
+    end
+
+ /* Search for an exception in a vector or array of exceptions
+    Arg1 is the vector or array, may be null
+    Returns the first exception in the vector that has the same
+      signature as the current exception.  If none match, null is returned.
+    [1997.07.22] Used to require exact match, now allows sub/superclass too
+    [1997.08.30] Back to requiring exact match
+    */
+ method find(v=Vector) returns RxException
+  if v=null then return null
+  list=RxException[v.size]; v.copyInto(list) -- make array
+  return find(list)
+
+ method find(list=RxException[]) returns RxException
+  if list=null then return null
+  mytype=excepinfo.type
+  loop i=0 for list.length
+    if mytype=list[i].excepinfo.type then return list[i]
+    end i
+  return null
+

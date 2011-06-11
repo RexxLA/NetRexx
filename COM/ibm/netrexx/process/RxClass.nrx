@@ -1,0 +1,1272 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2004.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxClass                                                            */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.27 Initial                                                 */
+/* 1996.08.24 Class USES                                              */
+/* 1996.11.12 Restore Interface handling of EXTENDS/IMPLEMENTS        */
+/* 1997.02.13 Indirect access method registration and generation      */
+/* 1997.05.31 Add Deprecated option                                   */
+/* 1997.07.01 General rework of options handling for better messages  */
+/* 1997.07.01 Add Adapter modifier                                    */
+/* 1997.07.16 Major reorganization for RxClauseParser                 */
+/* 1997.07.22 Pass 0.5 for cleaner superclass prediction              */
+/* 1997.07.28 Pass 1.5 for cleaner generated methods and checking     */
+/* 1997.07.30 Add SHARED keyword (= PRIVATE)                          */
+/* 1998.03.15 Minor classes support                                   */
+/* 1998.03.31 Dependent keyword                                       */
+/* 1998.05.24 Handle deferred TRACE instructions                      */
+/* 1999.10.19 Add class body clause list [used iff exec]              */
+/* 2000.02.11 Deferred NUMERIC and TRACE re-timed scan and generate   */
+/* 2000.02.18 Move to parsing-cursor-based                            */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+/**   An object that represents a Class parse unit (local class)       */
+/*                                                                    */
+/*   Errors during class start are all Quits, as if the class isn't   */
+/*   set up correctly then the rest of the program is likely to be    */
+/*   meaningless.                                                     */
+/*                                                                    */
+/*   The properties in this class are only those which are unique to  */
+/*   the processing for compilation.  Attributes that are shared with */
+/*   other classes reside in the RxClassInfo object for the class.    */
+
+class RxClass implements RxClauseParser
+
+ properties private constant
+  sourcenamevar='$0'          -- name of variable naming sourcefile
+
+ properties shared
+  -- fixed or parse-time attributes of a class (others must be in cursor)
+  classname=Rexx              -- name of this class (fully qualified)
+  classinfo=RxClassInfo       -- public (non-parsing) class information
+  classusei=RxClassInfo[]     -- USES class list, as array of RxClassInfos
+  classprogram=RxProgram      -- the program we belong to
+  classnum =int               -- class sequence in program [first=1]
+  constant=int                -- count of $0xxx constants
+  constantchunk=0             -- where constants will go
+  constants=Rexx              -- known constants dictionary
+  uniques=int                 -- count of unique identifiers
+                              -- [$0 prefix is reserved for constants]
+  classbinary=boolean 0       -- class is binary (inherited or explicit)
+  classset=String             -- RexxSet object name for this class
+  classtrace=String           -- RexxTrace object name for this class
+  classtracevars=Rexx 0       -- dictionary of class-level TRACE VAR names
+  classpropatts=int           -- initial class property attributes
+  tracelevel=RexxTrace.OFF    -- initial trace level (for methods)
+  constructors=int            -- count of constructors
+  nonstatics=int              -- count of non-statics [methods or properties]
+  classmethods=Vector         -- list of user methods in this class [RxMethod]
+  props=int 0                 -- count of properties
+  methods=int 0               -- count of all methods (including generated)
+  abstracts=int 0             -- count of abstract methods
+  hadtrace=boolean 0          -- class has had a non-VAR TRACE instruction
+
+  classprotopool=Hashtable    -- prototype instance variables pool
+  curcpool=Hashtable          -- the class variables pool
+  varlist=Vector              -- a list of all variables seen, used for cross-
+                              --   referencing during pass2 only.
+  varindirs=Vector            -- a list of all indirect properties seen
+
+  -- The following are used for interpretation only
+  classclauses=RxClause       -- -> list of prologue clauses
+  classrunnumer=RexxSet       -- numeric setting after initialization
+  classruntrace=RexxTrace     -- trace setting after initialization
+
+ properties private
+  rxt    =RxTranslator        -- the boss
+  parser =RxParser            -- our parser
+  pooler =RxVarpool           -- our variables manager
+  pcursor=RxCursor            -- our parsing cursor
+  classer=RxClasser           -- class manager
+  tokens =RxToken[]           -- local reference
+  objectinfo=RxClassInfo      -- local reference to Object class
+  classtoken=RxToken          -- class name token
+  getclassnext=int            -- side-effect from GETCLASS
+  parentinfo=RxClassInfo null -- reference to parent class [null if none]
+  packassumed=Rexx            -- assumed package (for warning)
+
+  extend   =Rexx null         -- extends class name [if explicit]
+  exttok   =RxToken null      -- extends name token
+  pubtok   =RxToken null      -- public token
+  deptok   =RxToken null      -- dependent token
+  implist  =Vector(5)         -- list of implements class names [Rexx]
+  imptoks  =Vector(5)         -- list of implements class name tokens [RxToken]
+  uselist  =Vector(5)         -- list of uses class names [Rexx]
+  usetoks  =Vector(5)         -- list of uses class name tokens [RxToken]
+
+  dummies  =Vector(5)         -- list of plain methods to generate [RxField]
+  implerror=Vector(5)         -- list of errors to defer [RxField[]]
+
+ /** Construct a class environment from the current clause */
+ /* [PARSECLASS, in prototype] */
+ method RxClass(newrxt=RxTranslator)
+  rxt    =newrxt                        -- the boss
+  classer=rxt.classer                   -- class manager
+  classprogram=rxt.program              -- our program
+  parser =classprogram.parser           -- our parser
+  pooler =classprogram.pooler           -- our variables manager
+  pcursor=parser.cursor                 -- our parsing cursor
+  tokens =pcursor.curclause.tokens      -- local reference
+  classusei=RxClassInfo[0]              -- always a USES list, please
+  classnum=classprogram.classes.size+1  -- index of this class
+  classbinary=classprogram.flag.binary  -- inherit from options
+
+  /* This is the earliest that we can check the output file, and check
+     we have a package */
+  if classnum=1 then do                 -- very first call
+    rxt.program.streamer.checkoutfile
+
+    /* If no explicit package given, then take current directory as
+       package, and hence import classes from current directory */
+    if rxt.program.packagename=null then do -- no package supplied
+      package=''
+      /** disabled -- wrong assumption for some...
+      package=classer.currpackage         -- are we on classpath?
+      if package\=='' then do
+        rxt.program.packagename=package
+        packassumed=package
+        package=package'.'                -- import all
+        end
+      **/
+      classer.importclasses(package)      -- package or current directory
+      end
+    end
+
+ /** ----------------------------------------------------------------- */
+ /* Pass processing                                                   */
+ /* ----------------------------------------------------------------- */
+ method scan(pass=int)
+  beginclass(tokens[0], pass) -- initialize for new pass
+  select
+    when pass=0 then scan0
+    when pass=1 then scan1
+    when pass=2 then scan2
+    end
+  beginclass2(pass)
+
+ /** ----------------------------------------------------------------- */
+ /* Pass0 checking                                                    */
+ /* ----------------------------------------------------------------- */
+ method scan0
+
+  if tokens[1].type\=RxToken.SP  then signal RxQuit(rxt, tokens[1], 'class.name.expected')
+
+  /* Now collect the name */
+  classtoken=tokens[2]
+
+  fullname=Rexx ''
+  depth=0                               -- number of parents
+  loop begin=2 by 1
+    tok=tokens[begin]; t=tok.type
+    if t\=RxToken.SYM then signal RxQuit(rxt, tok, 'class.name.expected')
+    shortname=Rexx tok.value            -- will be final part
+    fullname=fullname||shortname
+    nametok=tok                         -- save for error locations
+    begin=begin+1                       -- token after symbol
+    tok=tokens[begin]; t=tok.type
+    if t\=RxToken.DOT then leave        -- got to end of name
+    depth=depth+1
+    parents=fullname                    -- remember parents so far
+    fullname=fullname'.'
+    end
+  /* check validity of classname */
+  -- first check no repeat
+  loop n=2 to begin-3 by 2
+    if tokens[n].value==shortname then
+      signal RxQuit(rxt, tokens[begin-1], 'class.name.repeat')
+    end
+  -- check correctly positioned relative to previous class, and save the
+  -- parent info reference
+  if depth>0 then do label checklast
+    if parser.lastclass=null then
+      signal RxQuit(rxt, tokens[2], 'minor.cannot.be.first')
+    -- previous class must be parent or sibling, or share common parent
+    lastinfo=parser.lastclass.classinfo
+    lastfull=lastinfo.fullname
+    lastdepth=lastinfo.parents
+    if lastdepth<depth-1 then
+      signal RxQuit(rxt, tokens[2], 'minor.must.follow.parent', lastfull)
+    if lastdepth=depth-1 then do   -- parent expected
+      if lastfull'.'shortname==fullname then do
+        parentinfo=lastinfo        -- easy, common, case
+        leave checklast
+        end
+      signal RxQuit(rxt, tokens[2], 'minor.must.follow.parent', lastfull)
+      end
+    if lastdepth=depth then do     -- sibling expected
+      ld=lastfull.lastIndexOf(int(char '.')) -- find parents
+      lastparents=lastfull.substring(0, ld)  -- ..
+      if parents==lastparents then leave checklast
+      end
+    if lastdepth>depth then do     -- sibling's child expected
+      -- our parent must be a parent of the previous class too
+      parlen=parents.length.toint
+      if lastfull.length>parlen then
+       if lastfull.substring(0, parlen+1)== parents'.' then
+        leave checklast
+      end
+    signal RxQuit(rxt, tokens[2], 'minor.in.wrong.place', lastfull)
+    end checklast
+
+  if parentinfo=null then
+   if depth>0 then do
+    if rxt.program.packagename\=null then
+      parentname=rxt.program.packagename'.'parents
+     else parentname=parents
+    parentinfo=classer.findclass(pcursor, parentname, tokens[2], 1)
+    if parentinfo=null then signal RxQuit(rxt, tokens[2], 'internal.error', 'RxClass: parent')
+    end
+
+  if rxt.program.packagename\=null then
+    classname=rxt.program.packagename'.'fullname
+   else classname=fullname
+
+  /* Now collect optional keywords.  Note that we don't check validity
+     of classes referenced in EXTENDS (etc.) until pass1, so we can have
+     forward references to other classes in the same program. */
+  access    =Rexx ''
+  modifier  =Rexx ''
+  abstract  =boolean 0
+  adapter   =boolean 0
+  final     =boolean 0
+  interface =boolean 0
+  binary    =boolean 0
+  deprecated=boolean 0
+  dependent =boolean 0
+  loop n=begin by 1
+    tok=tokens[n]; t=tok.type
+    if t=RxToken.SP  then iterate
+    if t=RxToken.END then leave         -- done
+    if t<>RxToken.SYM then signal RxQuit(rxt, tok, 'keyword.expected')
+    select
+      when parser.iskey(tok.value, 'EXTENDS') then do
+        if extend\=null then signal RxQuit(rxt, tok, 'duplicate.keyword')
+        n=n+1; tok=tokens[n]
+        if tok.type<>RxToken.SP then signal RxQuit(rxt, tok, 'blank.expected')
+        n=n+1; exttok=tokens[n]
+        extend=getclass(n)              -- get a name [syntax is checked]
+        n=getclassnext-1                -- will be bumped
+        end
+      when parser.iskey(tok.value, 'IMPLEMENTS') then do
+        if implist.size>0 then signal RxQuit(rxt, tok, 'duplicate.keyword')
+        n=n+1; tok=tokens[n]
+        if tok.type<>RxToken.SP then signal RxQuit(rxt, tok, 'blank.expected')
+        n=n+1
+        loop forever                    -- collect the list
+          name=getclass(n)              -- get a name [syntax is checked]
+          implist.addElement(name)      -- save
+          imptoks.addElement(tokens[n]) -- ..
+          n=getclassnext
+          if tokens[n].type<>RxToken.COMMA then leave
+          n=n+1
+          end /* collecting implemented interface classes */
+        n=n-1                           -- will be bumped
+        end
+      when parser.iskey(tok.value, 'USES') then do
+        if uselist.size>0 then signal RxQuit(rxt, tok, 'duplicate.keyword')
+        usestok=tok                     -- save for later check
+        n=n+1; tok=tokens[n]
+        if tok.type<>RxToken.SP then signal RxQuit(rxt, tok, 'blank.expected')
+        n=n+1
+        loop forever                    -- collect the list
+          name=getclass(n)              -- get a name [syntax is checked]
+          uselist.addElement(name)      -- save
+          usetoks.addElement(tokens[n]) -- ..
+          n=getclassnext
+          if tokens[n].type<>RxToken.COMMA then leave
+          n=n+1
+          end /* collecting use classes */
+        n=n-1                           -- will be bumped
+        end
+      when parser.iskey(tok.value, 'PUBLIC') then do
+        if access\=='' then signal RxQuit(rxt, tok, 'duplicate.visibility', access)
+        -- JavaC claims/claimed to enforce this next check, but doesn't
+        -- if rxt.program.packagename=null then signal RxQuit(rxt, tok, 'public.needs.package')
+        access='public'
+        pubtok=tok                      -- for better message later
+        end
+      when parser.iskey(tok.value, 'SHARED') then do
+        if access\=='' then signal RxQuit(rxt, tok, 'duplicate.visibility', access)
+        access='shared'
+        end
+      when parser.iskey(tok.value, 'PRIVATE') then do
+        -- note: PRIVATE == SHARED == \PUBLIC
+        if access\=='' then signal RxQuit(rxt, tok, 'duplicate.visibility', access)
+        access='private'
+        end
+      when parser.iskey(tok.value, 'ABSTRACT') then do
+        if modifier\=='' then signal RxQuit(rxt, tok, 'duplicate.modifier', modifier)
+        modifier='abstract'
+        abstract=1
+        end
+      when parser.iskey(tok.value, 'ADAPTER') then do
+        if modifier\=='' then signal RxQuit(rxt, tok, 'duplicate.modifier', modifier)
+        modifier='adapter'
+        adapter=1
+        end
+      when parser.iskey(tok.value, 'FINAL') then do
+        if modifier\=='' then signal RxQuit(rxt, tok, 'duplicate.modifier', modifier)
+        modifier='final'
+        final=1
+        end
+      when parser.iskey(tok.value, 'INTERFACE') then do
+        if modifier\=='' then signal RxQuit(rxt, tok, 'duplicate.modifier', modifier)
+        modifier='interface'
+        interface=1
+        end
+      when parser.iskey(tok.value, 'BINARY') then do
+        if binary then signal RxQuit(rxt, tok, 'duplicate.keyword')
+        binary=1
+        end
+      when parser.iskey(tok.value, 'DEPENDENT') then do
+        if dependent then signal RxQuit(rxt, tok, 'duplicate.keyword')
+        if depth=0   then signal RxQuit(rxt, tok, 'dependent.needs.parent')
+        deptok=tok
+        dependent=1
+        end
+      when parser.iskey(tok.value, 'DEPRECATED') then do
+        if deprecated then signal RxQuit(rxt, tok, 'duplicate.keyword')
+        -- We cannot safely add /** @deprecated */ later if comments pass through
+        if rxt.program.flag.comments then RxWarn(rxt, tok, 'deprecated.not.available')
+         else deprecated=1
+        end
+      otherwise signal RxQuit(rxt, tok, 'not.a.keyword')
+      end
+    end n
+
+  /* Instruction parsed; process and check what we got */
+  if interface then do
+    if uselist.size>0 then
+      signal RxQuit(rxt, usestok, 'interface.class.cannot.use')
+    if dependent then
+      signal RxQuit(rxt, deptok, 'interface.class.cannot.be.dependent')
+    end
+
+  if binary then classbinary=1                    -- merge binary setting
+
+  /* Visibility checking */
+  if access=='private' then access='shared'       -- new spelling [1997.07.30]
+   else if access=='' then do                     -- no explicit access
+    if classnum=1 then access='public'            -- first
+     else /* not first class in program */ do
+      if interface then if depth=0 then
+       signal RxQuit(rxt, classtoken, 'interface.class.must.be.first')
+      access='shared'                             -- subsequent
+      end
+    end
+
+  if access=='public' then do label publicclass        -- we're public
+    /* If we are a minor class then check that our parent is public */
+    if depth>0 then do
+      -- [pubtok will be non-null as 'public' must have been explicit]
+      if \parentinfo.ispublic then
+        signal RxQuit(rxt, pubtok, 'parent.not.public')
+      -- no other public class checks needed..
+      leave publicclass
+      end /* minors */
+    /* Java requires <sigh> that the shortname of the public class
+     * matches the .java name.
+     * We could compare with output filename, but probably makes more
+     * sense to check against input file name, as the output file name is
+     * not usually exposed.
+     * Any change here is accompanied by a warning.
+     */
+    requiredname=rxt.program.source.getShortName
+    select
+      when shortname==requiredname then nop            -- looks good
+      when shortname.OpEq(null,requiredname) then do   -- differ only in case
+        shortname=requiredname
+        RxWarn(rxt, classtoken, 'class.name.set.to.sourcename', requiredname)
+        if rxt.program.packagename\=null then
+          classname=rxt.program.packagename'.'shortname
+         else classname=shortname
+        end
+      otherwise
+        signal RxQuit(rxt, classtoken, 'class.name.not.sourcename', requiredname)
+      end
+    /* Now check and record public class */
+    if parser.publicclass\=null then
+      signal RxQuit(rxt, classtoken, 'multiple.public.classes')
+    parser.publicclass=classname        -- and save
+    end publicclass
+
+  /* Only now do we know the class name for sure. */
+  /* Register the class [marks it as loaded, too], and save it */
+  if rxt.program.packagename\=null then pack=rxt.program.packagename
+                                   else pack=''
+  classinfo=classer.registerlocalclass(pack, shortname, fullname, nametok)
+  if parentinfo\=null then do
+    -- initialize Vector if we are the first-born
+    if parentinfo.children=null then parentinfo.children=Vector(5)
+    parentinfo.minors=parentinfo.minors+1      -- bump count
+    parentinfo.children.addElement(classinfo)  -- add reference to us
+    end
+  classinfo.localclass  =this                  -- back link
+  classinfo.parentinfo  =parentinfo
+  classinfo.ispublic    =(access=='public')
+  classinfo.isabstract  =abstract
+  classinfo.isadapter   =adapter
+  classinfo.isfinal     =final
+  classinfo.isinterface =interface
+  classinfo.isdeprecated=deprecated
+  classinfo.isdependent =dependent
+  /* We tentatively assign Object as the superclass.
+     This will be correct if there is no explicit EXTENDS. */
+  if classname\==rxt.objectclass then classinfo.superinfo=objectinfo
+  /* 'scan05' will be called for all classes at the end of pass0 (when
+     all class names are known).  It will determine the true superclass
+     (and check other referenced classes). */
+
+ /** ----------------------------------------------------------------- */
+ /* Pass0.5 checking                                                  */
+ /* This is called at the end of Pass 0 for all classes, when we know */
+ /*  the names of all the classes, so methods and properties can make */
+ /*  forward references to the superclasses of local classes -- for   */
+ /*  example, for Exceptions (in SIGNALS).                            */
+ /* ----------------------------------------------------------------- */
+ method scan05
+  /* Check the classes referred to on the instruction.
+     [We don't check from left-to-right, but any failure is disasterous
+     anyway.] */
+
+  /* --- extends name --- */
+  if extend\=null then do label extcheck
+    extendinfo=checkclass(extend, exttok)
+    exttype=extendinfo.type
+    if exttype.isprimitive then
+      signal RxQuit(rxt, exttok, 'cannot.extend.primitive')
+    if exttype=classinfo.type then
+      signal RxQuit(rxt, exttok, 'cannot.extend.self')
+    if extendinfo.isfinal then
+      signal RxQuit(rxt, exttok, 'cannot.extend.final.class')
+    -- so far, so good...
+    if classinfo.isinterface then do
+      if extendinfo.type\=rxt.objecttype then do
+        RxWarn(rxt, exttok, 'interface.class.must.extend.object', extend)
+        implist.addElement(extend)      -- add to implements list instead
+        imptoks.addElement(exttok)      -- ..
+        extend=rxt.objectclass          -- for code generator
+        extendinfo=objectinfo           -- .. and matching RxClassInfo
+        end
+      end
+     else /* not interface */ do
+      if extendinfo.isinterface then
+        signal RxQuit(rxt, exttok, 'class.cannot.extend.interface')
+      end
+    classinfo.superinfo=extendinfo
+    /* Check for cycles by seeing if we are subclass of Object
+       [issubclass will issue the message]
+       We could wait until we have the implements list too, but this
+       will identify the superclass cycle first.
+       */
+    if extendinfo.type\=rxt.objecttype then do
+      iss=classer.issubclass(pcursor, classinfo, rxt.objecttype, exttok)
+      -- Didn't find Object is bad news...
+      if \iss then signal RxQuit(rxt, exttok, 'internal.error', 'RxClass: hierarchy')
+      end
+    end extcheck
+  -- else [no explicit extends] the default set in scan0 is correct
+  -- superclass is now known and resolved [or null if we are Object]
+
+  /* --- implements list --- */
+  if implist.size>0 then do label impcheck
+    /* Build up array of Infos for the classes, checking as we go */
+    count=implist.size
+    infolist=RxClassInfo[count]
+    loop index=0 for count
+      name=Rexx   implist.elementAt(index)
+      tok=RxToken imptoks.elementAt(index)
+      if index=0 then imptok=tok             -- first in list
+      info=checkclass(name, tok)             -- get the classinfo
+      itype=info.type
+      if itype.isprimitive then
+        signal RxQuit(rxt, tok, 'cannot.implement.primitive')
+      if itype=classinfo.type then
+        signal RxQuit(rxt, tok, 'cannot.implement.self')
+      if classinfo.superinfo\=null then
+       if itype=classinfo.superinfo.type then
+        signal RxQuit(rxt, tok, 'cannot.implement.superclass',-
+                      classinfo.superinfo.type.classname)
+      if \info.isinterface then
+        signal RxQuit(rxt, tok, 'class.is.not.interface')
+      -- check for duplicates
+      loop i=0 for index
+        if infolist[i].type.classname==info.type.classname then
+          Signal RxQuit(rxt, tok, 'duplicate.interface', info.type.classname)
+        end i
+      -- The class is valid; add it to the array
+      infolist[index]=info
+      if rxt.program.flag.diag then say '# classimplements:' itype.toSig
+      end index
+
+    classinfo.impinfos=infolist              -- and save
+    classinfo.impnames=null                  -- clear
+
+    /* Check for cycles in the implements chain by seeing if we are
+       subclass of Object, as before
+       [issubclass will issue the message] */
+    iss=classer.issubclass(pcursor, classinfo, rxt.objecttype, imptok)
+    -- Didn't find Object is bad news
+    if \iss then signal RxQuit(rxt, imptok, 'internal.error', 'RxClass: hierarchy 2')
+    end impcheck
+
+  /* --- uses list --- */
+  if uselist.size>0 then do label usecheck
+    /* Build up array of Infos for the classes, checking as we go */
+    count=uselist.size
+    infolist=RxClassInfo[count]              -- this will go, later
+    loop index=0 for count
+      name=Rexx   uselist.elementAt(index)
+      tok=RxToken usetoks.elementAt(index)
+      info=checkclass(name, tok)             -- get the classinfo
+      utype=info.type
+      if utype.isprimitive then
+        signal RxQuit(rxt, tok, 'cannot.use.primitive')
+      if utype=classinfo.type then
+        signal RxQuit(rxt, tok, 'cannot.use.self')
+      -- Restriction removed 1997.11.23
+      -- if info.isabstract then
+      --   signal RxQuit(rxt, tok, 'cannot.use.abstract')
+      -- check for duplicates
+      loop i=0 for index
+        if infolist[i].type.classname==info.type.classname then
+          Signal RxQuit(rxt, tok, 'duplicate.uses', info.type.classname)
+        end i
+      -- The class is valid; add it to the array
+      infolist[index]=info
+      if rxt.program.flag.diag then say '# classuses:' utype.toSig
+      end index
+    classusei=infolist                       -- save
+    end usecheck
+
+ /** ----------------------------------------------------------------- */
+ /* Pass1 checking                                                    */
+ /* ----------------------------------------------------------------- */
+ method scan1
+  if rxt.program.flag.verbose>3 then do
+    if classnum>1 then rxt.say                         -- space
+    rxt.say('  === class' classname '=== [pass 1]')
+    end
+   else if rxt.program.flag.diag then
+    say '# === class' classname
+
+  /* [more-interesting things happen during endclass] */
+
+ /** ----------------------------------------------------------------- */
+ /* Pass1.5 checking                                                  */
+ /* This is called at the end of Pass 1 for all classes, when we know */
+ /*  the names of all the methods, so methods and properties can make */
+ /*  forward references to fields of local classes for checking, for  */
+ /*  example, for implemented methods                                 */
+ /* ----------------------------------------------------------------- */
+ method scan15
+  /* Test for unimplemented methods if we're a non-interface class.
+     If an adapter or an abstract class we will be generating real or
+     abstract methods so we need to do this on pass1 (to register them);
+     the fields are saved for pass2 in the DUMMIES list.
+
+     If we get an error, we improve human factors by deferring the
+     message until pass2 endclass, so endmethod processing can report
+     any method/prototype mismatches that may have caused the error. The
+     error messages are queued in 'implerror' vector, each item being an
+     array of one or two RxFields that define the error.
+
+     Currently this reports an 'unimplemented' error if a subclass is
+     compiled before its superclass and the latter generates methods
+     (e.g., an adapter class).  This is because the superclass's
+     generated fields won't be registered yet.  This could be rectified
+     by splitting this into two checks:
+
+       a) Generate any methods in pass 1.5
+       b) Carry out the 'unimplemented' checks in pass 2 (endclass)
+
+     For now, we document as a compiler restriction.
+     */
+
+  if \classinfo.isinterface then do label checkabstract
+    /* Check abstractness of methods match class requirements */
+    if abstracts>0 then if \classinfo.isabstract then
+      signal RxQuit(rxt, classtoken, 'class.must.be.abstract')
+
+    /* Check that we implement all the methods that we are supposed to */
+    impvect=Vector(10)                       -- collect classinfos here
+    -- collect implements for us and our superclasses
+    -- and also add any abstract superclasses
+    workinfo=classinfo
+    loop until workinfo=null
+      if workinfo.isabstract then
+        impvect.addElement(workinfo)
+      addimplements(impvect, workinfo)
+      workinfo=workinfo.superinfo            -- up a level
+      end
+
+    -- implements is now a vector of RxClassInfo objects.
+    -- We keep a list of fields which we have processed, so only one
+    -- action per signature.  (For example if the same method
+    -- signature appears in a class as an abstract method and also in a
+    -- class that it implements.)  The return type also matters.
+    seenfields=Vector(10)               -- Fields we've acted upon
+    -- process last first so get highest unimplemented reported
+    loop classi=impvect.size-1 to 0 by -1
+      checkinfo=RxClassInfo impvect.elementAt(classi)
+      -- Check that all the methods in checkinfo class are implemented
+      -- [unimplemented reports lookup errors directly]
+      unfields=classer.unimplemented(pcursor, classinfo, checkinfo)
+      -- unfields now lists any unimplemented fields
+      loop nonimp=0 for unfields.size
+        field=RxField unfields.elementAt(nonimp)
+
+        -- if we have already processed a method with the same
+        -- signature and returns, then no error or generation needed
+        fieldcs=field.toConciseString(classprogram, 1)
+        loop oldie=0 for seenfields.size
+          oldfield=RxField seenfields.elementAt(oldie)
+          if oldfield.toConciseString(classprogram, 1)==fieldcs then
+           if oldfield.fieldtype=field.fieldtype then iterate nonimp
+          end oldie
+        seenfields.addElement(field)
+
+        -- if this is an adapter or an abstract class then we are
+        -- generating methods, otherwise an error
+        if \classinfo.isadapter & \classinfo.isabstract
+         then do label queueerror
+          -- single field defines the error for 'does.not.implement'
+          item=RxField[1]
+          item[0]=field
+          implerror.addElement(item)
+          iterate nonimp
+          end queueerror
+
+        -- ensure that we don't have a return-type clash
+        newfield=classer.findfield(pcursor, 1, 1, 0, 0, classinfo,-
+                                   field.fieldname, field.fieldargtypes, null)
+
+        if newfield\=null then do label queueerror2
+          -- [if the field is identical, it must be the same thing and be
+          -- abstract and so not an error]
+          if newfield==field then iterate nonimp
+          -- confirm that the field is an exact match, not a best-cost lookup
+          loop i=0 for field.fieldargtypes.length
+            if field.fieldargtypes[i].classname-
+             \==newfield.fieldargtypes[i].classname then leave queueerror2
+            end i
+          -- if the field was found, it could be abstract in which case
+          -- not an error, and nothing need be generated (provided that
+          -- the return types are the same)
+          if newfield.isAbstract then
+           if newfield.fieldtype=field.fieldtype then
+            iterate nonimp
+          -- must be differing in returns
+          -- two fields define the error for 'cannot.implement'
+          item=RxField[2]
+          item[0]=field
+          item[1]=newfield
+          implerror.addElement(item)
+          iterate nonimp
+          end queueerror2
+
+        /* Time to define a real or abstract method */
+        methods=methods+1             -- this may affect constructors
+        nonstatics=nonstatics+1       -- ..
+
+        /* register the (new) field, derived from the prototype */
+        -- attributes as prototype, without ABSTRACT
+        newatts=field.fieldatts-RxField.ATT_ABSTRACT
+        -- add abstract if class is abstract
+        if classinfo.isabstract then newatts=newatts | RxField.ATT_ABSTRACT
+        -- and note it's synthetic
+        newatts=newatts | RxField.ATT_SYNTHETIC
+        localmeth=RxMethod(rxt)         -- create ..
+        dfield=classer.registerfield(null, classinfo, field.fieldname,-
+                                     field.fieldtype, field.fieldvisib,-
+                                     newatts, field.fieldargtypes,-
+                                     field.fieldexcep, localmeth)
+        localmeth.synthetic(rxt.pass, dfield, RxMethod.SYN_EMPTY, null)
+        dummies.addElement(dfield)      -- save for pass2 code generation
+        end nonimp
+      end classi
+    end checkabstract
+
+ /** ----------------------------------------------------------------- */
+ /* Pass2 checking                                                    */
+ /* ----------------------------------------------------------------- */
+ method scan2
+  if rxt.program.flag.verbose>1 then do
+    if classnum>1 then rxt.say()             -- space
+    rxt.say('  === class' classname '===')
+    end
+  /* Check parent of dependent class can be constructed */
+  if classinfo.isdependent then do
+    havecons=boolean 0
+    confields=classinfo.parentinfo.getfieldarray(-
+                Rexx(classinfo.parentinfo.shortname).lower.toString)
+    if confields\=null then
+     loop i=0 for confields.length
+      confield=confields[i]
+      if \confield.isConstructor then iterate i
+      -- have a constructor [unless it's private]
+      if confield.fieldvisib\==RxField.VIS_PRIV then do
+        havecons=1
+        leave i
+        end
+      end i
+    if parentinfo.isabstract | parentinfo.isinterface | \havecons then
+      signal RxQuit(rxt, deptok, 'parent.cannot.be.constructed')
+    end
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** ----------------------------------------------------------------- */
+ /* Pass2 code generation                                             */
+ /* ----------------------------------------------------------------- */
+ method generate
+
+  -- generate code to close any open classes
+  closeclasses(classinfo.parents)
+
+  -- collect the implements list into a string with commas
+  implements=Rexx ''
+  if classinfo.impinfos\=null then
+   loop i=0 for classinfo.impinfos.length
+    if i>0 then implements=implements','
+    implements=implements||classinfo.impinfos[i].type.classname
+    end i
+
+  -- decide what we extend [leave empty if Object or no superclass]
+  select
+    when classinfo.superinfo=null then extends=Rexx ''
+    when classinfo.superinfo.type=rxt.objecttype then extends=''
+    otherwise extends=classinfo.superinfo.type.classname
+    end
+
+  if \classinfo.isinterface
+   then do
+    verb='class'
+    end
+   else /* is interface */ do
+    verb='interface'
+    -- Java expects the implements list to be called Extends <sigh>
+    if implements\=='' then do
+      extends=implements      -- will have been empty
+      implements=''
+      end
+    end
+  if classinfo.ispublic then javaaccess='public'
+                        else javaaccess=''
+  select
+    when classinfo.isabstract then javamodifier='abstract'
+    when classinfo.isfinal    then javamodifier='final'
+    otherwise javamodifier=''
+    end
+
+  if classinfo.parents>0 then
+   if \classinfo.isdependent then
+    javamodifier='static' javamodifier
+
+  if extends\==''    then extends='extends' extends
+  if implements\=='' then implements='implements' implements
+
+  statement=(javaaccess javamodifier verb classinfo.shortname-
+             extends implements).space'{'
+  if \rxt.program.flag.comments then do
+    if classinfo.isdeprecated then rxt.program.streamer.out('/** @deprecated */')
+    end
+  rxt.program.streamer.out(null)             -- cosmetic empty line
+  rxt.program.streamer.out(statement)
+
+  /* remember where constants will go */
+  constantchunk=rxt.program.streamer.chunks
+
+ /** closeclasses -- add '}' for any classes we end */
+ method closeclasses(newdepth=int)
+  if parser.lastclass=null then olddepth=-1
+   else olddepth=parser.lastclass.classinfo.parents
+  -- now add closings, if required
+  loop i=newdepth to olddepth
+    if i=olddepth then rxt.program.streamer.out('}', 1)
+                  else rxt.program.streamer.outpart('}', 1)
+    end
+  parser.indention=0               -- reset indention
+  return
+
+ /** ----------------------------------------------------------------- */
+ /* Construct a default class environment for 'main' program          */
+ /* [DEFCLASSSTART, in prototype]                                     */
+ /* ----------------------------------------------------------------- */
+ /* This method replaces the usual 'scan' method calls for a default  */
+ /* method generation (where there is no clause to scan).  It sets    */
+ /* up the properties as though a clause had been scanned.            */
+ /* The 'generate' method is called, as usual, to generate code.      */
+ /* This should be called on all passes, for beginclass/2 setup.      */
+ method defaultscan(pass=int)
+  beginclass(null, pass)
+  if pass=0 then do
+    classtoken=null
+    shortname=rxt.program.source.getShortName -- name from source
+    if rxt.program.packagename\=null then do
+      pack=rxt.program.packagename
+      classname=pack'.'shortname
+      end
+     else do
+      pack=''
+      classname=shortname
+      end
+    /* Register/find the class */
+    classinfo=classer.registerlocalclass(pack, shortname, shortname, null)
+    if classname\==rxt.objectclass then
+     classinfo.superinfo=objectinfo
+    classinfo.ispublic=1
+    classinfo.localclass=this                -- back link
+    end
+  beginclass2(pass)
+
+ /** ----------------------------------------------------------------- */
+ /* Initialize variables -- called by all scans                       */
+ /*   Arg1 is token for start of class [may be null]                  */
+ /*   Arg2 is pass                                                    */
+ /* ----------------------------------------------------------------- */
+ method beginclass(tok=RxToken, pass=int)
+
+  constant=0                  -- count of constants identifiers
+  constants=''                -- constants dictionary
+  constantchunk=0             -- where constants will go
+  uniques=0                   -- count of unique identifiers
+  classset='null'             -- initial RexxSet for this class
+  classtrace='null'           -- initial RexxTrace for this class
+  constructors=0              -- count of constructors
+  nonstatics=0                -- count of non-statics [methods or properties]
+  methods=0                   -- count of methods
+  classmethods=Vector(10)     -- new list of methods [RxMethod]
+  props=0                     -- count of properties
+  abstracts=0                 -- count of abstract methods
+
+  curcpool=HashTable(10)           -- make the class variables pool
+  varindirs=Vector(10)               -- housekeeping list
+  if pass=2 then varlist=Vector(200) -- housekeeping list, needed pass2 only
+  pcursor.curbinary=classbinary    -- propagate binary setting
+  pcursor.curstatic=0              -- properties start off non-static
+
+  /* Find the Object class.  Note that we couldn't do this earlier
+     in case of an OPTIONS STRICTCASE, and (for safety) cursor.curclass
+     must have a value. */
+  if objectinfo=null then do  -- very first call
+    objectinfo=classer.findclass(pcursor, rxt.objectclass, null, 0)
+    -- [this is also a sanity check on CLASSPATH, etc.]
+    if objectinfo=null then signal RxQuit(rxt, null, 'class.not.found', rxt.objectclass)
+    end
+
+  /* Warn if package assumed */
+  if packassumed\=null then
+   if pass=2 then
+    RxWarn(rxt, tok, 'package.assumed', packassumed)
+
+ /** ----------------------------------------------------------------- */
+ /* Shared class initialization [after name, etc., determined]        */
+ /*   Class start has been written (on pass 2)                        */
+ /* ----------------------------------------------------------------- */
+ method beginclass2(pass=int)
+
+  parser.pushlevel('CLASS')             -- new structural level now
+
+  -- Record and set the default PROPERTIES [different for interface classes]
+  if classinfo.isinterface then
+    classpropatts=RxVariable.VAR_PROP+RxVariable.VAR_PUBLIC+RxVariable.VAR_CONSTANT
+   else
+    classpropatts=RxVariable.VAR_PROP+RxVariable.VAR_INHERIT
+  pcursor.curpropatts=classpropatts
+
+
+ /** ----------------------------------------------------------------- */
+ /* ENDCLASS -- processing and clean-up at end of class.              */
+ /* ----------------------------------------------------------------- */
+ /* This must run to completion or signal RxQuit [no signal RxError]  */
+ /* Generated code should be NOLINE so is not attached to CLASS.      */
+ method endclass
+
+ -- This intermediate 'private' method is a workaround for a bug in the
+ -- Java 1.1.1 beta JIT for OS/2; it should be removed later...
+  endclassx
+ method endclassx private
+
+  if parser.level>=2 then pcursor.curmethod.endmethod
+  parser.checknest                      -- redundant [at present]
+
+  loop while parser.level>0             -- back to level 0
+    parser.poplevel
+    end
+
+  /* Check for Exceptions raised while initializing properties */
+  signals=parser.thislevel.signals
+  if signals\=null then do              -- [only in pass1]
+    parser.thislevel.signals=null       -- they'll be handled, now
+    nump=signals.size; pend=RxException[nump]; signals.copyInto(pend)
+    loop i=0 for nump
+      e=pend[i]
+      -- if rxt.program.flag.diag then
+      --   say '# pending:' e.excephard e.excepinfo.type.toSig
+      if \e.excephard then iterate i    -- ignore softies
+      RxError(rxt, e.exceptok, 'exception.cannot.be.caught',-
+              e.excepinfo.type.classname)
+      end i
+    end
+
+  /* Report any deferred does.not.implement/cannot.implement errors */
+  loop errnum=0 for implerror.size
+    fields=RxField[] implerror.elementAt(errnum)
+    -- first element is field describing unimplemented method
+    field=fields[0]
+    badinfo=field.fieldinfo
+    if badinfo.isabstract then classtype='abstract'
+                          else classtype='interface'
+    fieldcs=field.toConciseString(classprogram, 1)
+    if field.fieldtype=rxt.voidtype then meth=fieldcs
+     else meth=fieldcs 'returns' rxt.program.babel.typeString(field.fieldtype)
+    -- second element, if present, is local method that clashes
+    if fields.length=1 then do
+      -- We can improve the message if the method would have to be a
+      -- constructor to match
+      if field.fieldname==classinfo.shortname
+       then RxError(rxt, classtoken, 'cannot.implement.with.constructor',-
+                    meth, badinfo.type.classname, classtype)
+       else RxError(rxt, classtoken, 'does.not.implement',-
+                    meth, badinfo.type.classname, classtype)
+      end
+     else do
+      newfield=fields[1]
+      if newfield.fieldtype=rxt.voidtype then newmeth=fieldcs
+       else newmeth=fieldcs 'returns' rxt.program.babel.typeString(newfield.fieldtype)
+      RxError(rxt, classtoken, 'cannot.implement',-
+              meth, badinfo.type.classname, classtype, newmeth)
+      end
+    end errnum
+
+  parser.indention=1                    -- cosmetic for pass 2 code generation
+
+  /* If pass2, generate the methods from the DUMMIES list unless errors.
+     */
+  if rxt.pass2 then if rxt.program.errorcount=0 then do label dummiesout
+    loop fieldnum=0 for dummies.size
+      field=RxField dummies.elementAt(fieldnum)
+      -- tell the user if requested
+      if rxt.program.flag.verbose>1 then    -- display as local
+        rxt.say('    method' field.toConciseString(classprogram, 1))
+      -- add the code
+      rxt.program.streamer.out('', 1)       -- blank line ahead in output
+      mods=RxField.visibilityToJava(field.fieldvisib) -- we drop 'abstract' etc.
+      if field.isAbstract then              -- .. except if
+        mods=mods 'abstract'                -- .. abstract
+      rxt.program.streamer.outpart((mods field.fieldtype.toJava).space-
+                                   field.fieldname'(', 1)
+      -- the arguments need variable names, so we cannot use:
+      --   RxType.toJavaString(rxt, field.fieldargtypes)
+      sigs=''
+      loop a=0 for field.fieldargtypes.length
+        if a>0 then sigs=sigs','
+        uniques=uniques+1
+        sigs=sigs||field.fieldargtypes[a].toJava '$'uniques
+        end a
+      rxt.program.streamer.outpart(sigs')', 1)
+      -- add exceptions list
+      if field.fieldexcep\=null then
+        rxt.program.streamer.outpart(' throws' field.fieldexcep, 1)
+
+      if field.isAbstract then body=';'
+       else do
+        -- decide what to return ('0', 'false', 'null', or nothing)
+        select
+          when field.fieldtype=rxt.voidtype then ret=''
+          when field.fieldtype=rxt.booltype then ret=' false'
+          when field.fieldtype.isprimitive  then ret=' 0'
+          otherwise                              ret=' null'
+          end
+        body='{return'ret';}'
+        end
+      rxt.program.streamer.out(body, 1)
+      end fieldnum
+    end dummiesout
+
+  /* Register or generate access methods for any Indirect properties */
+  if \rxt.pass0 then if rxt.program.errorcount=0 then do
+    list=pooler.getindirects(pcursor)   -- get relevant RxVariables
+    loop b=0 for list.length
+      item=list[b]                      -- we know it's an indirect
+      /* Make a list of methods that we might generate for this item */
+      /* There are three arrays here:
+           names -- hold the method names
+           rets  -- holds return types
+           args  -- holds arguments type arrays
+         Note that names have their first character (after the
+           is/get/set) uppercased <sigh>.
+         */
+      names=Rexx[4]
+      rets=RxType[4]
+      args=Object[4]
+      gen=0                   -- count of methods to generate
+      type=item.vartype
+      if type.dimension>1 then iterate b     -- will have been error
+      itemvar=item.varspell                  -- get variable name
+      -- maybe a warning if next line makes a change?
+      itemvar=itemvar.upper(1,1)             -- spelling to use
+      -- Always a getXxx (called isXxx if simple boolean)
+      if type=rxt.booltype then prefix='is'
+                           else prefix='get'
+      names[gen]=prefix||itemvar
+      rets[gen] =type
+      args[gen] =rxt.emptytypes
+      gen=gen+1
+      -- Unless read-only, we also need a setXXX
+      if \item.isreadonly then do
+        names[gen]='set'itemvar
+        rets[gen] =rxt.voidtype
+        args[gen] =[type]
+        gen=gen+1
+        end
+      -- If an array, we may need indexed access methods too
+      if item.isarray then do
+        artype=type.basetype            -- drop dimension
+        -- always try for getXXX
+        if artype=rxt.booltype then prefix='is'
+                               else prefix='get'
+        names[gen]=prefix||itemvar
+        rets[gen] =artype
+        args[gen] =[rxt.inttype]
+        gen=gen+1
+        -- and at setXXX, unless read-only
+        if \item.isreadonly then do
+          names[gen]='set'itemvar
+          rets[gen] =rxt.voidtype
+          args[gen] =[rxt.inttype, artype]
+          gen=gen+1
+          end
+        end
+
+      /* Now for each field, either register it or generate code, as
+         needed (i.e., if not supplied manually in the current class).
+         1998.03.07 -- No longer skip if in superclass. */
+      loop p=0 for gen
+        methname=names[p]
+        rettype=rets[p]
+        argtypes=RxType[] args[p]
+        -- find the Field (may already exist manually, or from pass1)
+        -- only local class is relevant
+        field=classer.findfield(pcursor, 1, 1, 0, 0, classinfo, methname,-
+                                argtypes, null)
+        select
+          when field=null        then needfield=boolean 1
+          when field.isSynthetic then needfield=1
+          otherwise needfield=0
+          end
+        if needfield then do label additemfield
+          methods=methods+1             -- this may affect constructors
+          nonstatics=nonstatics+1       -- ..
+          if rxt.pass1 then do
+            -- if any of the arguments are void, then we have an
+            -- undefined right-hand-side case; cannot register
+            -- [in practice, only the 1-argument case need be checked]
+            if argtypes.length=1 then
+             if argtypes[0]=rxt.voidtype then
+              RxError(rxt, item.vartoken, 'undefined.type')
+
+            localmeth=RxMethod(rxt)               -- create ..
+            field=classer.registerfield(null, classinfo, methname, rettype,-
+                                        RxField.VIS_PUB, RxField.ATT_SYNTHETIC,-
+                                        argtypes, null, localmeth)
+            localmeth.synthetic(rxt.pass, field, RxMethod.SYN_INDIRECT,-
+                                item.varname)
+            end
+           else /* pass2 */ do
+            item.varseen=1              -- property is referenced after all
+            -- tell the user if requested
+            if rxt.program.flag.verbose>1 then
+              rxt.say('    method' field.toConciseString(classprogram, 1))
+            -- add the code
+            rxt.program.streamer.out('', 1)  -- blank line ahead in output
+            rxt.program.streamer.outpart('public' rettype.toJava methname'(', 1)
+            if rettype\=rxt.voidtype then do label getter
+              if argtypes.length=0
+               then rxt.program.streamer.outpart('){return' item.varspell';', 1)
+               else /* indexed */ do
+                uniques=uniques+1; argname='$'uniques
+                rxt.program.streamer.outpart('int' argname'){return'-
+                                     item.varspell'['argname'];', 1)
+                end
+              end getter
+             else do label setter
+              uniques=uniques+1; argname='$'uniques
+              if argtypes.length=1 then
+                rxt.program.streamer.outpart(argtypes[0].toJava argname'){'-
+                                   ||item.varspell'='argname';return;', 1)
+               else do label indexed -- first will be int
+                uniques=uniques+1; argname2='$'uniques
+                rxt.program.streamer.outpart('int' argname-
+                     ||','argtypes[1].toJava argname2'){'-
+                     ||item.varspell'['argname']='argname2';return;', 1)
+                end indexed
+              end setter
+            rxt.program.streamer.out('}', 1)
+            end
+          end additemfield
+        end
+      end b
+    end
+
+  /* If there are no constructors for the class, and it's suitable,
+     add a public implicit constructor, and register it.
+     If the class has statics only, then the constructor is private,
+     which prevents anyone from trying to instantiate the class. */
+  if \rxt.pass0 then if rxt.program.errorcount=0 then
+   if constructors=0 then
+   if \classinfo.isinterface then do label defcon
+    -- superclass can never be an interface
+    constrname=classinfo.shortname
+    -- decide the access type
+
+    -- if rxt.program.flag.diag then say '# >EOCM>' methods props nonstatics
+
+    select
+      when methods+props=0 then access='public'   -- empty class
+      when nonstatics=0    then access='private'  -- prevent instantiation
+      otherwise                 access='public'   -- default constructor, please
+      end
+    /* Adding a default constructor implies that the superclass had
+       better have one, too.  This could fail, not in error, in pass1 if
+       a local forward reference. */
+    /* Find the unqualified bit (method name) in just the one class */
+    if classinfo.superinfo=null
+     then supmethname=''
+     else supmethname=classinfo.superinfo.shortname
+    tsfield=classer.findfield(pcursor, 1, 1, 0, 0, classinfo.superinfo,-
+                              supmethname, RxType[] null, null)
+    if rxt.pass1 then do                          -- register it on pass 1
+      /* (Not on pass 0.) */
+      -- don't register/create the private case; it's not really there,
+      -- and nothing will try and invoke it [the code is only added to
+      -- defeat javac's odd behaviour]
+      if access\=='private' then do
+        -- [probably more sense to RxQuit if tsfield=null, i.e., do code
+        -- below]
+        if tsfield\=null then excep=tsfield.fieldexcep
+                         else excep=null
+        localmeth=RxMethod(rxt)                   -- create ..
+        field=classer.registerfield(null, classinfo, constrname, classinfo.type,-
+                                    RxField.VIS_PUB, RxField.ATT_SYNTHETIC,-
+                                    rxt.emptytypes, excep, localmeth)
+        localmeth.synthetic(rxt.pass, field, RxMethod.SYN_DEFCON, null)
+        field.fieldspecial=tsfield           -- lookaside to super()
+        end
+      end
+     else /* rxt.pass2 */ do                 -- generate code on pass2
+      if tsfield=null then do
+        -- retry, for better error message
+        field=classer.findfield(pcursor, 1, 1, 0, 0, classinfo.superinfo,-
+                                supmethname, RxType[] null, null, 0)
+        if field=null then
+          RxError(rxt, classtoken, 'default.constructor.not.found',-
+                  constrname'()')
+         else
+          RxError(rxt, classtoken, 'default.constructor.not.accessible',-
+                  constrname'()', field.toConciseString(classprogram))
+        end
+       else do
+        -- constructor can raise exceptions...
+        parser.addexceptions(1, tsfield.fieldexcep, tokens[0])
+        -- add the code
+        rxt.program.streamer.out('', 1)      -- blank line ahead in output
+        rxt.program.streamer.out(access constrname'(){return;}', 1)
+        end
+      end
+    end defcon
+
+  if rxt.pass2 then do label pass2check
+    pooler.checkclassunused(pcursor)         -- warn of unused private properties
+    -- now check for unused private methods
+    enum=classmethods.elements               -- enumerate the methods
+    loop while enum.hasMoreElements          -- while some left
+      localmeth=RxMethod enum.nextElement    -- get next
+      localmeth.checkprivaterefs             -- and check it
+      end
+
+    /* Ensure there's a constant with the true source file name, so the
+       true source can be identified.  Make it transient if not final,
+       if allowed, so it won't be serialized. */
+    if classinfo.parents=0 then code='static final'
+     else if classinfo.isinterface then code='final'
+     else code='final transient' -- minors can't have statics
+    code=code rxt.stringclass sourcenamevar'="'rxt.program.source.getName'";'
+    if \classinfo.isinterface then code='private' code    -- sigh
+    rxt.program.streamer.outinsert(code, constantchunk, 1)-- insert it
+    -- [the ending '}' is generated by closeclasses]
+    -- Now write the cross-reference file
+    -- [not if any errors, as it may be incomplete or misleading]
+    if rxt.program.flag.crossref then
+     if rxt.program.errorcount=0 then pooler.showxref(pcursor)
+    end pass2check
+  parser.lastclass=parser.cursor.curclass    -- save for follower
+  pcursor.curclass=null                      -- no valid class anymore
+
+ /** ADDIMPLEMENTS -- accumulate Implements list
+    Arg1 is the vector to add interface classinfos to
+    Arg2 is the class to process
+    */
+ method addimplements(v=Vector, workinfo=RxClassInfo)
+  -- For each class in implements list, add it to vector and then
+  --   call ourselves recursively
+  -- First resolve the interface names, if needed
+  if workinfo.impinfos=null then classer.findimps(pcursor, workinfo, null)
+  -- go from right to left as later reversal
+  loop i=workinfo.impinfos.length-1 to 0 by -1
+    checkinfo=workinfo.impinfos[i]
+    v.addElement(checkinfo)
+    addimplements(v, checkinfo)    -- recurse
+    end
+  return
+
+ /** GETCLASS -- parse a simple class type
+    Arg1 is the token number of the first token in expected type
+    returns the the found class name (error if invalid)
+    Checks the class exists (unless pass0 -- allow forward references)
+    Sets GETCLASSNEXT to the token following the recognized sequence
+    */
+ method getclass(n=int) private returns Rexx
+  tok=tokens[n]
+  if tok.type<>RxToken.SYM then signal RxQuit(rxt, tok, 'class.expected')
+  /* Build the name */
+  name=Rexx(tok.value)
+  loop while tokens[n+1].type=RxToken.DOT
+    n=n+2
+    if tokens[n].type<>RxToken.SYM then signal RxQuit(rxt, tok, 'class.part.expected')
+    name=name'.'tokens[n].value
+    end
+  if tokens[n+1].type=RxToken.LBRK then
+    signal RxQuit(rxt, tokens[n+1], 'cannot.have.dimension')
+  getclassnext=n+1
+  return name
+
+ /** CHECKCLASS -- check class exists during parsing
+    Arg1 is the name of the class [optionally qualified]
+    Arg2 is the token for the start of the class name
+    Returns the RxClassInfo object for the found class
+    Error if class not found
+    */
+ method checkclass(name=Rexx, tok=RxToken) private returns RxClassInfo
+  info=classer.findanyclass(parser.cursor, name, tok)
+  if info=null then signal RxQuit(rxt, tok, 'class.not.found', name)
+  return info
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  signal RxQuit(rxt, tokens[0], 'internal.error', 'RxClass: interpret')

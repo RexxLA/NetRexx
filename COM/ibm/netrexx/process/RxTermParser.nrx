@@ -1,0 +1,2430 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxTermParser                                                       */
+/*                                                                    */
+/*   Parses a term and constructs the corresponding RxCode object.    */
+/*   [Due for a re-work and simplification; perhaps a LHS term        */
+/*   should have separate processing.]                                */
+/*                                                                    */
+/*   This may be used                                                 */
+/*     -- in pass1, for properties                                    */
+/*     -- in pass2, for properties and in method bodies               */
+/*     -- in pass3, for interpretation (use evalterm)                 */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.05.25 Initial [as RxTerm]                                     */
+/* 1996.07.04 Handle constants properly (long, float, double)         */
+/* 1996.07.04 Allow strings to start compound terms (and stand-alone) */
+/* 1996.07.04 Allow sub-expressions similarly.                        */
+/* 1996.07.08 Constructor for fabricated (U) terms added.             */
+/* 1996.08.07 Tracing added.                                          */
+/* 1996.08.23 Caseless field lookup, static testing, CLASS USES       */
+/* 1996.08.29 Accumulate exceptions                                   */
+/* 1996.09.01 Shortref checking                                       */
+/* 1996.09.28 Source and Version now always Rexx                      */
+/* 1997.01.02 Improved ambiguity handling/messages                    */
+/* 1997.04.10 Rework with no non-reporting alternative                */
+/* 1997.04.12 Improved crossref and checking of inheritable fields    */
+/* 1997.04.17 Fastpath constructor replaces old pseudo-constructor    */
+/* 1997.05.31 Warn of deprecated methods                              */
+/* 1997.06.16 Add array initializer stub                              */
+/* 1997.07.19 New this()/super() processing                           */
+/* 1997.08.04 Move early chunks to separate methods                   */
+/* 1997.08.04 Return P/F/M to replace TERMMETH/TERMFINAL              */
+/* 1997.08.07 Rework into RxTermParser factory                        */
+/* 1998.03.31 Changes for minor class references                      */
+/* 1998.04.02 Extend type matching for children references            */
+/* 1998.04.04 Add parent[.], .this, obj.construct()                   */
+/* 1998.04.10 Dependent constructor specials: foo.this(), foo.super() */
+/* 1998.04.28 Change from Signature to Type                           */
+/* 1998.05.18 Move deprecation checks to RxClasser                    */
+/* 1999.04.06 Strictprops checking                                    */
+/* 1999.09.12 Calculate compile-time constants                        */
+/* 1999.09.16 Start extending for interpret-time evaluation           */
+/* 1999.10.20 Make cursor-based                                       */
+/* 2000.02.05 Protect floating-point literals against over/underflow  */
+/* 2000.02.21 Class had some local instance variables (incorrect)     */
+/* 2000.02.23 Save penultimate type and value in compound terms, etc. */
+/* 2000.02.26 Add evalterm [wraps exceptions]                         */
+/* 2000.04.04 Precall signal after collecting this()/super() args     */
+/* 2000.04.11 .. extended precall for dependent constructors          */
+/* ------------------------------------------------------------------ */
+-- Needs analysis to reduce duplication of code.
+
+-- Interpret stub to-dos
+--   .. special word: super .. issue with what it really means
+
+-- lots of checks don't need to be done (repeated) if exec is set.
+-- some variable lookups for crossrefs also unneeded [but safe] check pass2?
+-- [or move to part-compilation]
+
+
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+class RxTermParser uses RxCode
+
+ properties shared
+  copyright =RxProcessor.copyright
+
+ properties private
+  rxt        =RxTranslator    -- the boss
+  classer    =RxClasser       -- class manager
+  converter  =RxConverter     -- spin doctor
+  interpreter=RxInterpreter   -- as needed
+
+  -- No locals here, as this factory may be called recursively
+
+ properties private constant
+  specialwords   =Rexx 'null ask this super parent version source sourceline'-
+                       'digits form trace'
+
+ /* Construct the factory
+    Arg1 is translator */
+ method RxTermParser(newrxt=RxTranslator)
+  super()
+  rxt      =newrxt                      -- the boss
+  classer  =rxt.classer                 -- class manager
+  converter=rxt.converter               -- conversions
+  interpreter=rxt.interpreter           -- executions
+
+ /* parsesymbol - Construct a code object from the value of a symbol
+   Arg1 is the context cursor
+   Arg2 is number of the token of the symbol we are to process
+        [currently always 0]
+
+   The token will be a symbol which will potentially be a simple
+     variable or property name (on LHS) or keyword.
+   This is a fastpath used for properties setup, keyword processing, and
+     simple assignments (i.e., most common LHS cases).
+   This has a parallel section of code in the 'full' parseterm(), so
+     changes here may need to be reflected below.
+   */
+
+ method parsesymbol(cursor=RxCursor, n=int) returns RxCode
+
+  code=RxCode()
+  code.begclause=cursor.curclause
+  code.endclause=cursor.curclause
+  code.begoff=n
+  code.endoff=n                         -- is just the one token
+  code.wrapped=1                        -- terms are atomic [unless
+                                        -- indicated below]
+  tokstart=cursor.curclause.tokens[n]
+  /* We are on LHS, so no cross-reference .. Assign will do it. */
+  bitvar=cursor.curprogram.pooler.findvar(cursor, tokstart.value, tokstart, 0, 1, 1)
+  if bitvar\=null then do
+    badstatic(cursor, bitvar, tokstart) -- check
+    code.javacode=bitvar.varspell
+    code.type=bitvar.vartype
+    code.constant=bitvar.islit
+    if \cursor.curexec then code.value=bitvar.varvalue
+     else code.value=interpreter.getVar(cursor, bitvar, tokstart)
+    code.group=S_VAR                    -- known variable
+    return code
+    end
+  -- currently unknown
+  code.javacode=tokstart.value          -- special-case [even in pass1]
+  -- [later use begclause/begoff to find this, not javacode]
+  code.type=rxt.voidtype                -- type of the term
+  code.group=T_UNKNOWN                  -- group tbd
+  return code
+
+ /* evalterm - Evaluate a term from current clause
+    This takes the same arguments as parseterm (see below); it is a
+    wrapper whose function is to convert evaluation exceptions into
+    RxSignals.  Already-wrapped exceptions are passed on as-is [in fact,
+    this should be all or almost all]. */
+ method evalterm(cursor=RxCursor, n=int, onrhs=boolean) returns RxCode
+  -- we could duplicate a severely-cut-down version of parseterm into here
+  do
+    return parseterm(cursor, n, onrhs)
+  catch e=RuntimeException
+    if \(e<=RxSignal) then do
+      if cursor.curprogram.flag.diag then do
+        say '# TP unwrapped exception' e
+        e.printStackTrace
+        end
+      e=RxSignal(cursor, e, null)
+      end
+    signal e
+  end
+
+ /* parseterm - Construct a code object by parsing a term from current clause
+    Arg1 is the context cursor
+    Arg2 is start of term (token index of term start), origin 0
+    Arg3 is 1 if on right-hand side (Types and special words allowed)
+         [this should be reviewed .. currently possibly overloaded; we
+         could do better error messages, for example.]
+
+    If parsing completes normally, so no error was signalled, then a
+    RxCode object is returned describing the parsed term.
+
+    Special words and fields from USES classes are possible if the
+    'onrhs' flag is set, or if the stub is qualified.
+    */
+ method parseterm(cursor=RxCursor, n=int, onrhs=boolean) returns RxCode
+  exec=cursor.curexec                   -- active?
+
+  code=RxCode()
+  code.begclause=cursor.curclause
+  code.endclause=cursor.curclause
+  -- NB: could now set begoff here, as before, as subexpressions are clean
+
+  classinfo=cursor.curclass.classinfo   -- our class
+  classusei=cursor.curclass.classusei   -- local reference to uses array
+  tokens   =cursor.curclause.tokens     -- local reference
+
+
+  /* ---------------------------------------------------------------- */
+  /* Collect a starter object (stub+)                                 */
+  /* ---------------------------------------------------------------- */
+  termstart=n                           -- index of term start
+  code.javacode=''                      -- code, so far
+  tok=tokens[n]                         -- get first token
+
+  loop label stub
+    partstart=n                         -- index of part start
+    tokstart=tok                        -- token at start of part
+    /* Here we can only accept:
+         a numeric symbol (if first part)
+         a string (if first part)
+         a sub-expression (if first part)
+         an array initializer (if first part)
+         a symbol */
+
+    /* --- Literal numbers --- */
+    if tok.type=RxToken.NUM then do label number
+      code.javacode=tok.value
+      /* Next test should be unnecessary now RxClauser does a full check
+         .. but datatype('n') is extremely fast, so worthwhile */
+      if \code.javacode.datatype('n') then
+        signal RxError(rxt, tok, 'not.a.number')
+
+      if partstart\=termstart then
+        signal RxError(rxt, tok, 'number.must.start.term')
+
+      /* If we are qualified (followed by '.') then it's easy, we are
+         a string of type Rexx */
+      tokq=tokens[n+1]
+      if tokq.type=RxToken.DOT then do
+        -- We can make it a constant, as we know it's qualified.
+        code.javacode='"'tok.value'"'
+        code.value=String(tok.value)
+        code.type=rxt.stringtype
+        converter.torexx(cursor, code, 1)
+        code.group=S_EXPR
+        n=n+1; tok=tokens[n]
+        leave stub                 -- go and collect the rest
+        end
+
+      /* Free-standing number (simple term) -- determine its signature etc. */
+      code.constant=1
+      numbertype(code)             -- [local method; checks type and sets value]
+      code.group=S_LIT             -- is a literal
+      code.begoff=termstart
+      code.endoff=n
+      return code                  -- code is complete
+      end number
+
+    /* --- Literal string --- */
+    if tok.type=RxToken.STR then do label literal
+      if partstart\=termstart then
+        signal RxError(rxt, tok, 'string.must.start.term')
+
+      /* Transmute escapes, escape double-quote, set values, etc. */
+      massagestring(tok, code)     -- [private method]
+
+      /* If free-standing, we're done */
+      n=n+1; tok=tokens[n]
+      if tok.type\=RxToken.DOT then do
+        code.group=S_LIT           -- is truly a literal
+        code.begoff=termstart
+        code.endoff=n-1
+        return code
+        end
+      /* We're starting a term -- so it's always a Rexx string */
+      /* We can make it a constant, as we know it's qualified. */
+      converter.torexx(cursor, code, 1)
+      code.group=S_EXPR
+      leave stub                   -- go and collect the rest
+      end literal
+
+    /* --- Sub-expression --- */
+    if tok.type=RxToken.LPAR then do label subexpr
+      if partstart\=termstart then
+        signal RxError(rxt, tok, 'subexpression.must.start.term')
+      n=n+1                             -- to start of expression
+      -- [we used to say code=, here, but that confused early JITs]
+      subcode=rxt.eparser.parseexpr(cursor, 0, n, RxToken.RPAR, null,-
+                                    '\0') -- [don't trace]
+      n=subcode.endoff+1
+      tok=tokens[n]
+      if tok.type\=RxToken.RPAR then
+        signal RxError(rxt, tok, 'right.parenthesis.expected')
+      -- copy results back to 'our' code
+      code.javacode='('subcode.javacode')'   -- propagate and make safe
+      code.value=subcode.value               -- copy value
+      code.type=subcode.type                 -- .. and its type
+      code.exceptions=subcode.exceptions
+      -- now local considerations
+      code.group=S_EXPR                 -- is subexpression
+      n=n+1; tok=tokens[n]
+      if tok.type=RxToken.DOT then leave stub -- go and collect the rest
+      code.begoff=termstart
+      code.endoff=n-1                   -- term includes the ')' but not ;
+      return code                       -- stand-alone sub-expression
+      end subexpr
+
+    /* --- Array initializer --- */
+    if tok.type=RxToken.LBRK then do label arrayinit
+      if partstart\=termstart then
+        signal RxError(rxt, tok, 'array.must.start.term')
+      if exec then items=Vector(10)     -- collect for evaluation
+      code.javacode='new'               -- start building
+      loop count=1 by 1
+        n=n+1                           -- to start of expression
+        tok=tokens[n]
+        -- Get the expression; pure type not allowed, may end in ',' or ']'
+        ends=RxToken.COMMA||RxToken.RBRK
+        item=rxt.eparser.parseexpr(cursor, 0, n, ends, null, '\0') -- [don't trace]
+        if exec then items.addElement(item)
+        if count=1 then do              -- first expression
+          if item.group=S_LIT then      -- literals are pending type
+            item=converter.litexpr(cursor, item) -- we choose type
+          code.javacode=code.javacode-
+              item.type.toJava'[]{'-    -- add constructor to code
+            ||item.javacode             -- and first expression
+          arraytype=item.type           -- all elements must be assignable to this
+          end
+         else do                        -- second or subsequent
+          conv=converter.assigncost(cursor, arraytype, item.type)
+          if conv.cost>cursor.curprogram.flag.maxassign then
+            signal RxError(rxt, tok, 'array.element.cannot.assign',-
+                   cursor.curprogram.babel.typeString(arraytype),-
+                   cursor.curprogram.babel.typeString(item.type))
+          converter.convertcode(cursor, arraytype, conv.proc, item)
+          code.javacode=code.javacode','item.javacode
+          end
+        n=item.endoff+1
+        tok=tokens[n]
+        if tok.type\==RxToken.COMMA then leave count   -- end of initializer (or clause)
+        end count
+      if tok.type\=RxToken.RBRK then
+        signal RxError(rxt, tokstart, 'array.initializer.incomplete')
+      /* looks good */
+      code.javacode=code.javacode'}'    -- complete the code
+      code.wrapped=0                    -- needs wrapper if used further
+      -- signature is one dimension more than single element signature
+      code.type=arraytype.basetype(arraytype.dimension+1)
+      code.group=S_EXPR                 -- array initializer is an expression
+
+      -- if evaluating, make an array of the appropriate size and shape
+      -- and initialize the elements [there wil be at least one]
+      if exec then do label doit
+        itemlist=RxCode[count]
+        items.copyInto(itemlist)
+        first=itemlist[0]
+        aclass=first.type.getClassObject(rxt.loader)
+        -- aclass is the Class of each object in the array
+        -- make the array
+        newarray=java.lang.reflect.Array.newInstance(aclass, count)
+        -- initialize the elements
+        loop i=0 for count
+          if first.type.isprimitive then select
+            when first.type=rxt.inttype then
+              java.lang.reflect.Array.setInt(newarray, i,-
+                (Number itemlist[i].value).intValue)
+            when first.type=rxt.longtype then
+              java.lang.reflect.Array.setLong(newarray, i,-
+                (Number itemlist[i].value).longValue)
+            when first.type=rxt.shorttype then
+              java.lang.reflect.Array.setShort(newarray, i,-
+                (Number itemlist[i].value).shortValue)
+            when first.type=rxt.bytetype then
+              java.lang.reflect.Array.setByte(newarray, i,-
+                (Number itemlist[i].value).byteValue)
+            when first.type=rxt.floattype then
+              java.lang.reflect.Array.setFloat(newarray, i,-
+                (Number itemlist[i].value).floatValue)
+            when first.type=rxt.doubletype then
+              java.lang.reflect.Array.setDouble(newarray, i,-
+                (Number itemlist[i].value).doubleValue)
+            when first.type=rxt.booltype then
+              java.lang.reflect.Array.setBoolean(newarray, i,-
+                (Number itemlist[i].value).intValue=1)
+            when first.type=rxt.chartype then
+              java.lang.reflect.Array.setChar(newarray, i,-
+                (Rexx itemlist[i].value).toChar)
+            end
+           else java.lang.reflect.Array.set(newarray, i, itemlist[i].value)
+          end i
+        code.value=newarray
+        end doit
+
+      n=n+1; tok=tokens[n]
+      if tok.type=RxToken.DOT then do        -- go and collect the rest
+        code.javacode='('code.javacode')'    -- wrap the whole
+        leave stub
+        end
+      -- stand-alone initializer
+      code.begoff=termstart
+      code.endoff=n-1
+      return code
+      end arrayinit
+
+    /* Not a number, string, sub-expression, or array initializer
+       .. so it must start with a symbol */
+    if tok.type<>RxToken.SYM then do
+      -- give message as useful as possible
+      if partstart=termstart then do
+        if termstart=0 then signal RxError(rxt, tok, 'bad.clause.start')
+        signal RxError(rxt, tok, 'bad.term.start')
+        end
+       else /* could only be a symbol */
+        signal RxError(rxt, tok, 'term.part.not.symbol')
+      end
+    termbit=Rexx tok.value
+    n=n+1; tok=tokens[n]
+    select
+      /* ----------------------------------------------------------- */
+      /* Term stub with [                                            */
+      /* ----------------------------------------------------------- */
+      when tok.type=RxToken.LBRK then do label sqstub
+        code.javacode=code.javacode||termbit
+        /* First see if what we have is a known variable -- if so, we
+           may be dealing with a Stem.
+           This can only be so if first part of term.
+            */
+        if partstart=termstart then /* first part */ do
+          /* check for variable [don't set cross-reference yet] */
+          bitvar=cursor.curprogram.pooler.findvar(cursor, tokstart.value,-
+                                                  tokstart, 0, 0, 1)
+          if bitvar\=null then do
+            -- check for indexed strings (type Rexx)
+            if bitvar.vartype=NrBabel.rexxtype then do
+              badstatic(cursor, bitvar, tokstart)
+              /* Class of variable is exactly Rexx with no hard dimensions */
+              stem=parsestem(cursor, n)
+              -- syntax OK, arraynext->']'+1
+              next=stem.arraynext
+              code.type=NrBabel.rexxtype     -- dimensions vanish
+              code.javacode=bitvar.varspell||stem.arraygen
+              code.constant=0      -- it's mutable...
+              code.array=stem      -- [gets cleared below if not last in term]
+              code.group=S_VAR     -- treat as a variable
+              n=next; tok=tokens[n]
+
+              if exec then do label doit
+                -- if we are alone on LHS then we're an LVALUE thing, so we
+                -- don't need to get the element's value, and instead return
+                -- the variable's value (the stem)
+                bitvarvalue=interpreter.getVar(cursor, bitvar, tokstart)
+                if onrhs, tok.type=RxToken.DOT then do
+                  code.value=interpreter.getStemElementValue(cursor,-
+                                                             Rexx bitvarvalue,-
+                                                             stem, tokstart)
+                  end
+                 else code.value=bitvarvalue
+                end doit
+
+              /* Set cross-reference now; unless we are alone on LHS (in
+                 which case it will be set by Assign) */
+              if onrhs | tok.type=RxToken.DOT then
+                cursor.curprogram.pooler.findvar(cursor, tokstart.value, tokstart,-
+                                                 1, 0, 0)
+              if tok.type=RxToken.DOT then leave stub -- we have more to come
+              code.isstem=1             -- the term is a stem reference
+              code.begoff=termstart
+              code.endoff=n-1
+              return code
+              end /* stem reference */
+            if \bitvar.isarray then signal RxError(rxt, tokstart, 'not.an.array')
+            badstatic(cursor, bitvar, tokstart)
+            end /* is variable */
+          end /* first part */
+
+        /* we expect a VAR[xxx] or TYPE[] kind of thing */
+        array=parsearray(cursor, n)     -- collect the contents of the []
+        -- syntax OK, arraynext->']'+1
+        next=array.arraynext
+
+        if bitvar\=null then do         -- it's a local
+          /* here for 'VAR[...]' .. bitvar is valid */
+          if array.arraydef then signal RxError(rxt, tok, 'array.needs.index')
+          /* Now adjust the dimensions according to how many we used */
+          vardim=bitvar.vartype.dimension
+          if vardim<array.arraydim then /* over-dimensioned */
+            signal RxError(rxt, tokstart, 'too.many.indexes')
+          code.type=bitvar.vartype.basetype(vardim-array.arraydim)
+          code.javacode=bitvar.varspell||array.arraygen
+          code.constant=0          -- even if the var itself is
+          code.group=S_VAR         -- it's a Variable
+          code.array=array         -- [gets cleared below if not last in term]
+
+          n=next; tok=tokens[n]    -- bump to next token
+
+          if exec then do label doit
+            -- if we are alone on LHS then we're an LVALUE thing, so we
+            -- don't need to get the element's value, and instead return
+            -- the variable's value (the array)
+            bitvarvalue=interpreter.getVar(cursor, bitvar, tokstart)
+            if onrhs, tok.type=RxToken.DOT then
+              code.value=interpreter.getArrayElementValue(cursor, bitvarvalue,-
+                                                          bitvar.vartype,-
+                                                          array, tokstart)
+             else code.value=bitvarvalue
+            end doit
+          /* Set cross-reference now; unless we are alone on LHS (in
+             which case it will be set by Assign) */
+          if onrhs, tok.type=RxToken.DOT then
+            cursor.curprogram.pooler.findvar(cursor, tokstart.value, tokstart,-
+                                             1, 0, 0)
+          if tok.type=RxToken.DOT then leave stub -- we have an object, and more to come
+          code.begoff=termstart
+          code.endoff=n-1
+          return code
+          end
+
+        /* If first part, try for a static property from USES list */
+        if partstart=termstart then loop u=0 to classusei.length-1
+          field=classer.findfield(cursor, 0, 0, 1, 1, classusei[u],-
+                                  tokstart.value, RxType[] null, tokstart)
+          if field\=null then do
+            /* will have found a static property */
+            if field.fieldambig then
+              signal RxError(rxt, tokstart, 'ambiguous.property.reference',-
+                             classusei[u].type.classname'.'tokstart.value)
+            if field.fieldtype=rxt.voidtype then if onrhs then
+              signal RxError(rxt, tokstart, 'undefined.property.reference',-
+                             field.toString(cursor.curprogram))
+            if field.fieldtype=NrBabel.rexxtype then do
+              /* Class of property is exactly Rexx with no hard dimensions */
+              stem=parsestem(cursor, n)
+              -- syntax OK, arraynext->']'+1
+              next=stem.arraynext
+              code.type=NrBabel.rexxtype          -- dimensions vanish
+              code.javacode=classusei[u].type.classname'.'field.fieldname||stem.arraygen
+              code.array=stem      -- [gets cleared below if not last in term]
+
+              if exec then do label doit
+                -- get the stem object
+                code.value=interpreter.getProperty(null, field, tokstart)
+                -- if we are alone on LHS then we're an LVALUE thing, so we
+                -- don't need to get the element's value, and instead return
+                -- just the variable's value (the stem)
+                if onrhs, tok.type=RxToken.DOT then do
+                  code.value=interpreter.getStemElementValue(cursor,-
+                                                             Rexx code.value,-
+                                                             stem, tokstart)
+                  end
+                end doit
+              end
+             else /* not a stem but a fixed array property, it seems */ do
+              /* we expect a VAR[xxx] kind of thing */
+              if \field.fieldtype.isarray then
+                signal RxError(rxt, tokstart, 'not.an.array')
+              /* array indexes already parsed */
+              if array.arraydef then
+                signal RxError(rxt, tokstart, 'array.needs.index')
+              /* check dimensions match */
+              /* Now adjust the dimensions according to how many we used */
+              /* (this code the same as that elsewhere .. scope for collapsing) */
+              vardim=field.fieldtype.dimension
+              if vardim<array.arraydim then /* over-dimensioned */
+                signal RxError(rxt, tokstart, 'too.many.indexes')
+              code.type=field.fieldtype.basetype(vardim-array.arraydim)
+              code.javacode=classusei[u].type.classname'.'field.fieldname||array.arraygen
+              if exec then do label doit
+                -- get the array object
+                code.value=interpreter.getProperty(null, field, tokstart)
+                -- if we are alone on LHS then we're an LVALUE thing, so we
+                -- don't need to get the array element's value [see NrAssign]
+                if onrhs, tok.type=RxToken.DOT then do
+                  -- now haul the element out of the array
+                  code.value=interpreter.getArrayElementValue(cursor,-
+                                                              code.value,-
+                                                              field.fieldtype,-
+                                                              array, tokstart)
+                  end
+                end doit
+              end /* fixed array */
+            -- it's a property reference
+            if field.isFinal then code.group=S_FINAL
+                             else code.group=S_PROP
+            n=next; tok=tokens[n]
+            if tok.type=RxToken.DOT then leave stub /* we have an object, and more to come */
+            code.constant=field.isKnownValue
+            code.begoff=termstart
+            code.endoff=n-1
+            return code
+            end /* found */
+          end u /* uses list */
+
+        /* Not a var of any kind -- should be typedef or constructor
+           e.g., Object[30] or String[] */
+        info=classer.findanyclass(cursor, code.javacode, tokstart)
+        if info=null then
+          signal RxError(rxt, tokens[termstart], 'variable.or.type.expected')
+        code.type=info.type.basetype(array.arraydim)
+        infoname=shortestname(cursor, info)
+        code.javacode=infoname||array.arraygen
+        if array.arraydef then /* definer */ do
+          code.group=S_TYPE
+          /* Remember if a short reference */
+          if termstart=partstart then classer.addshortref(info)
+          -- types have no value
+          end
+         else /* array constructor */ do
+          code.group=S_EXPR
+          code.javacode='new' code.javacode
+          if exec then do label doit
+            -- convert the array of dimension values to an array of ints
+            lens=int[array.arraydim]
+            loop i=0 for array.arraydim
+              lens[i]=(Integer array.arraycode[i].value).intValue
+              end i
+            -- construct the array, made of the base type class elements
+            aclass=code.type.basetype.getClassObject(rxt.loader)
+            code.value=java.lang.reflect.Array.newInstance(aclass, lens)
+            end doit
+          end
+        n=next; tok=tokens[n]
+        if tok.type=RxToken.DOT then do
+          if code.group\=S_TYPE then
+            code.javacode='('code.javacode')'     -- wrap the 'new'
+          leave stub     -- we have an object, and more to come
+          end
+        code.begoff=termstart
+        code.endoff=n-1
+        return code
+        end sqstub
+
+      /* ----------------------------------------------------------- */
+      /* Term stub with (                                            */
+      /* ----------------------------------------------------------- */
+      when tok.type=RxToken.LPAR then do
+        /* search order is now:
+           1. if first part then:
+              1a. this()/super() (iff already detected)
+              1b. local method
+              1c. superclass method
+              1d. static method from a USES class (or superclass)
+           2. constructor [independent]
+           3. primitive constructor
+
+           Note: qualified method (e.g., java.lang.Float.toString(f))
+                 would have dropped out of stub when class recognized.
+         */
+        code.javacode=code.javacode||termbit -- accumulate
+
+        /* Now get the arguments and determine their signature */
+        argcodes=parsemethargs(cursor, n)
+        if argcodes.length=0 then next=n+2
+         else next=argcodes[argcodes.length-1].endoff+2
+        argtypes=codetypes(argcodes)
+
+        /* Try for local and superclass methods before (other) constructors */
+        special=boolean 0          -- 1 if a special method
+        if partstart=termstart then do label firstpart
+          methname=termbit
+          -- Check for specials, by testing methodconstructor and no instance
+          -- [see also similar code below for dependent constructors]
+          if cursor.curmethod\=null then
+           if cursor.curmethod.methodconstructor then
+           if cursor.curthis=null then do label trythissuper
+            -- This is first set if RxParser has already determined
+            --   that we have a this(..) or super(..) call in the right place.
+            -- However, we can also get here recursively when processing
+            --   the arguments to this() or super().  We can quickly
+            --   check for this by seeing if we are at the clause start.
+            if termstart\=0 then leave trythissuper    -- no chance
+            -- For this() and super(), we set up to use general
+            -- constructor code below.  Sanity check the names explicitly.
+            if cursor.curprogram.flag.strictcase then specialname=methname
+                                                 else specialname=methname.lower
+            select
+              when specialname=='super' then do
+                superinfo=classinfo.superinfo
+                if superinfo=null then
+                  signal RxQuit(rxt, tokstart, 'super.does.not.exist')
+                code.javacode=superinfo.type.classname
+                end
+              when specialname=='this' then
+                code.javacode=cursor.curclass.classname
+              otherwise
+                signal RxQuit(rxt, tokstart, 'internal.error', 'RxTermParser: mni:' methname)
+              end
+            -- evaluation is handled by the usual constructor code, below
+            cursor.curmethod.methodhadthissuper=1 -- record that we found it
+            -- if we're doing an execution precall we can 'return' now,
+            -- as we have collected the argument values, though we must
+            -- still apply conversions to match the target.
+            -- [similar code below for dependent super() calls]
+            if exec then if cursor.curprecall then do
+              field=cursor.curmethod.getfield().fieldspecial
+              convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
+              -- we only want the values from the codes
+              args=Object[argcodes.length]
+              loop i=0 for argcodes.length
+                args[i]=argcodes[i].value
+                end i
+              if cursor.curprogram.flag.diag then say '# precall signal...'
+              signal RxSignal(cursor, args, tokstart)
+              end
+            special=1
+            leave firstpart
+            end trythissuper
+
+          /* Now check for constructor or method in the current (local)
+             class (or a superclass) */
+          field=classer.findfield(cursor, 0, 1, 0, 0, classinfo,-
+                                  methname, argtypes, tokstart)
+          if field\=null then /* found method */ do
+            if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+
+            -- [convertargs checks for ambiguity and void result]
+            termargs=convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
+            if field.isConstructor then do
+              if classinfo.isabstract then   -- unlikely
+                signal RxError(rxt, tokstart,-
+                              'abstract.class.cannot.be.constructed')
+              code.group=S_CONSTR       -- it's a constructor
+              code.javacode='new' field.fieldinfo.type.classname||termargs
+              end
+             else do
+              /* not a constructor, so check staticality */
+              badstatic(cursor, field, tokstart)
+              code.group=S_METHOD       -- it's a method term
+              code.javacode=field.fieldname||termargs
+              -- 1999.07.28 special case workaround for javac error;
+              -- unadorned inherited methods need 'this.' prefix, which
+              -- we can safely add for all cases.
+              -- 2000.02.08 No, not all cases .. the method might be static
+              if classinfo.parents>0 then do
+                if field.isStatic then prefix=classinfo.shortname
+                                  else prefix='this'
+                code.javacode=prefix'.'code.javacode
+                end
+              end
+            if exec then do
+              code.value=interpreter.callMethod(cursor.curthis, field,-
+                                                argcodes, tokstart)
+              end
+            field.fieldref2=rxt.pass2
+            code.type=field.fieldtype        -- [B&B?] is now one of these
+            n=next; tok=tokens[n]
+            if tok.type=RxToken.DOT then do
+              if code.group=S_CONSTR then
+                code.javacode='('code.javacode')'   -- wrap the whole
+              leave stub -- we have an object, and more to come
+              end
+            code.begoff=termstart
+            code.endoff=n-1
+            return code
+            end /* found field */
+
+          /* Try for a static method from USES list */
+          /* (If on LHS alone, will be caught later.) */
+          loop u=0 to classusei.length-1
+            field=classer.findfield(cursor, 0, 1, 0, 1, classusei[u],-
+                                    methname, argtypes, tokstart)
+            if field\=null then do
+              /* will have found a static non-constructor */
+              field.fieldref2=rxt.pass2
+              if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+              -- [convertargs checks for ambiguity and void result]
+              code.javacode=classusei[u].type.classname'.'field.fieldname-
+                ||convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
+              code.group=S_METHOD            -- it's a method term
+              code.type=field.fieldtype      -- is now one of these
+              n=next; tok=tokens[n]
+              if exec then
+                code.value=interpreter.callMethod(null, field,-
+                                                  argcodes, tokstart)
+              if tok.type=RxToken.DOT then leave stub /* we have an object, and more to come */
+              code.begoff=termstart
+              code.endoff=n-1
+              return code
+              end /* found */
+            end u
+          end firstpart
+
+        /* only plain constructor or primitive constructor now possible
+           [foo.lang.classname.mname() would have dropped out earlier]
+           If it's this or super we would have handled it already (and
+           translated the special words to class names), so we can give
+           a helpful message now.  This is efficient as 'this' and
+           'super' can't sensibly be class names, as Java users could
+           not access them.
+         */
+        info=classer.findanyclass(cursor, code.javacode, tokstart)
+        if info=null then do
+          if cursor.curprogram.flag.strictcase then name=code.javacode
+                                               else name=code.javacode.lower
+          if name=='this' | name=='super' then
+              signal RxError(rxt, tokstart, 'unexpected.method.special', name)
+          signal RxError(rxt, tokens[termstart], 'method.not.found',-
+                  code.javacode'('codestypeString(cursor, argcodes)')',-
+                  classinfo.type.classname)
+          end
+        /* could be a primitive constructor */
+        infotype=info.type
+        if infotype.isprimitive then /* hopeful */ do
+          /* We must have just one argument, a primitive */
+          if argcodes.length\=1 then
+            signal RxError(rxt, tokstart,-
+                           'primitive.constructor.needs.one.argument')
+          argcode=argcodes[0]
+          if \argcode.type.isprimitive then
+            signal RxError(rxt, tokstart, 'bad.primitive.constructor.argument',-
+                           cursor.curprogram.babel.typeString(argcode.type))
+          /* remember it's a short reference */
+          if termstart=partstart then classer.addshortref(info)
+          /* valid primitive constructor found; becomes simply a cast,
+             unless boolean source or target [use RxConverter for latter].
+             We also go through converter if running, to ensure value
+             has correct wrapper, and to handle char<==>int.
+             */
+          select label primcons
+            when infotype=argcode.type then do    -- super-easy
+              code.javacode=argcode.javacode
+              code.value=argcode.value
+              end
+            when exec then do
+              lhstype=infotype
+              rhstype=argcode.type
+              select label execprimcons
+                when lhstype=rxt.chartype then do
+                  -- try and convert RHS value from encoding to char via int
+                  conv=converter.assigncost(cursor, rxt.inttype, argcode.type)
+                  converter.convertcode(cursor, rxt.inttype, conv.proc, argcode)
+                  -- OK, RHS is now an int; make it a char [may decapitate]
+                  c=char((Integer argcode.value).intValue)
+                  code.value=Rexx(c)
+                  end
+                when rhstype=rxt.chartype then do
+                  -- try and convert RHS value from char to int encoding
+                  i=int((Rexx argcode.value).tochar)
+                  argcode.value=Integer(i)
+                  argcode.type=rxt.inttype
+                  -- OK, RHS is now an int; convert it as needed for LHS
+                  conv=converter.assigncost(cursor, infotype, argcode.type)
+                  converter.convertcode(cursor, infotype, conv.proc, argcode)
+                  code.value=argcode.value
+                  end
+                otherwise -- no char around
+                  conv=converter.assigncost(cursor, infotype, argcode.type)
+                  converter.convertcode(cursor, infotype, conv.proc, argcode)
+                  code.value=argcode.value
+                catch e=RuntimeException
+                  signal RxSignal(cursor, e, tokstart)
+                end execprimcons
+              end
+            when infotype=rxt.booltype then do
+              conv=converter.assigncost(cursor, infotype, argcode.type)
+              converter.convertcode(cursor, infotype, conv.proc, argcode)
+              code.javacode=argcode.javacode
+              code.value=argcode.value
+              end
+            otherwise /* straight cast possible */
+              if argcode.type=rxt.booltype then
+                argcode.javacode='('argcode.javacode')?1:0'
+              code.javacode='('infotype.classname')('argcode.javacode')'
+            end primcons
+          code.wrapped=0                -- needs wrapper if used further
+          code.type=infotype
+          code.group=S_CONSTR -- is a sort of constructor (but not a method)
+          code.begoff=termstart
+          code.endoff=next-1
+          return code         -- cannot be qualified
+          end /* looks like a primitive */
+
+        /* We have a class constructor */
+        -- Class is OK, now see if have the specific constructor
+        methname=info.shortname
+        field=classer.findfield(cursor, 1, 1, 0, 0, info, methname, argtypes, tokstart)
+        if field=null then do
+          /* try again without access check for better message */
+          field=classer.findfield(cursor, 1, 1, 0, 0, info, methname,-
+                                  argtypes, tokstart, 0)
+          if field=null then
+            signal RxError(rxt, tokstart, 'constructor.not.found',-
+                           methname'('codestypeString(cursor, argcodes)')',-
+                           cursor.curprogram.babel.typeString(info.type))
+           else
+            signal RxError(rxt, tokstart, 'constructor.not.accessible',-
+                           field.toConciseString(cursor.curprogram),-
+                           cursor.curprogram.babel.typeString(field.fieldhidden.type))
+          end
+        /* Check the class isn't abstract [unless calling super] */
+        /* [This doesn't check 'this', which will fail later.] */
+        if \special then
+         if field.fieldinfo.isabstract then
+          signal RxError(rxt, tokstart, 'abstract.class.cannot.be.constructed')
+
+        /* If the target class is dependent [needs parent] then check we
+           can find one */
+        if info.isdependent then do label dependcheck
+          /* this is OK if it is any parent or an immediate child */
+          thisinfo=cursor.curclass.classinfo
+          -- test if we are the parent (and not in static code)
+          if \cursor.curstatic then
+           if thisinfo.type=info.parentinfo.type then leave dependcheck
+          -- test if it is our parent
+          loop while thisinfo.parentinfo\=null
+            if info.type=thisinfo.parentinfo.type then leave dependcheck
+            thisinfo=thisinfo.parentinfo
+            end
+          -- Also this() doesn't need parent, as we'll eventually get to
+          -- a parent.super()
+          if special then if specialname=='this' then leave dependcheck
+
+          signal RxError(rxt, tokstart, 'constructor.needs.parent',-
+                         field.toString(cursor.curprogram),-
+                         info.parentinfo.type.classname)
+          end dependcheck
+
+        /* No badstatic check: constructors are never static */
+        field.fieldref2=rxt.pass2
+        if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+        -- [convertargs checks for ambiguity or void result]
+
+        -- If special then save the field so we can find it quickly later
+        if special then cursor.curmethod.getfield().fieldspecial=field
+
+        /* Add 'new' (if needed) and converted arguments */
+        if special then what=termbit.lower
+                   else what='new' shortestname(cursor, info)
+        code.javacode=what-
+          ||convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
+        /* remember it's a short reference */
+        if termstart=partstart then classer.addshortref(info)
+        code.type=field.fieldtype            -- get actual signature
+
+        if exec then do label doit
+          if info.isdependent then do label findparent
+            -- spin up the parents to find the one we need for this constructor
+            -- [This partly duplicates work we did in dependcheck above]
+            instinfo=cursor.curclass.classinfo
+            inst=cursor.curthis
+            loop while instinfo.type\=field.fieldinfo.parentinfo.type
+              inst=getParent(cursor, inst, instinfo, tokstart)
+              instinfo=instinfo.parentinfo
+              end
+            end findparent
+           else inst=null                    -- no parent needed
+          code.value=interpreter.callMethod(inst, field, argcodes, tokstart)
+          end doit
+
+        n=next; tok=tokens[n]
+        code.group=S_CONSTR                  -- is simply constructor
+        if tok.type=RxToken.DOT then do
+          code.javacode='('code.javacode')'  -- wrap the whole
+          leave stub -- we have an object, and more to come
+          end
+        code.begoff=termstart
+        code.endoff=n-1
+        return code
+        end
+
+      /* ----------------------------------------------------------- */
+      /* Term stub with .                                            */
+      /* ----------------------------------------------------------- */
+      when tok.type=RxToken.DOT then do
+        /* (much of this is common with ending case) */
+        code.javacode=code.javacode||termbit
+        if termstart=partstart then /* first segment */ do
+          /* Try for a local */
+          bitvar=cursor.curprogram.pooler.findvar(cursor, tokstart.value, tokstart,-
+                                                  1, 0, 1)
+          if bitvar\=null then /* is a variable */ do
+            badstatic(cursor, bitvar, tokstart)
+            code.javacode=bitvar.varspell
+            code.type=bitvar.vartype
+            code.constant=bitvar.islit
+            if \exec then code.value=bitvar.varvalue
+                     else code.value=interpreter.getVar(cursor, bitvar, tokstart)
+            code.group=S_VAR
+            leave stub  /* we have a VAR object */
+            end
+          /* Note we must not try for a property in a superclass,
+             as superclass properties would then override locals(!) */
+          /* Try for a method -- local or super non-constructor allowed.
+             Note we are first segment. */
+          if \cursor.curprogram.flag.strictargs then do /* allowed to try for a method */
+            field=classer.findfield(cursor, 0, 1, 0, 0, classinfo,-
+                                    termbit, RxType[] null, tokstart)
+            if field\=null then
+             if \field.isConstructor /* not constructor */ then do
+              badstatic(cursor, field, tokstart)
+              if field.fieldambig then
+                signal RxError(rxt, tokstart, 'ambiguous.method.reference',-
+                               field.fieldinfo.type.classname'.'termbit'()')
+              if field.fieldtype=rxt.voidtype then if onrhs then
+                signal RxError(rxt, tokstart, 'undefined.method.reference',-
+                               field.toString(cursor.curprogram))
+              field.fieldref2=rxt.pass2
+              if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+              code.javacode=field.fieldname'()'
+              code.type=field.fieldtype
+              code.group=S_METHOD
+              if exec then do
+                code.value=interpreter.callMethod(cursor.curthis, field,-
+                                                  RxCode[0], tokstart)
+                end
+              leave stub
+              end
+            end /* empty args OK */
+
+          /* Try for a static property or method from USES list */
+          loop u=0 to classusei.length-1
+            field=classer.findfield(cursor, 0, \cursor.curprogram.flag.strictargs,-
+                                    1, 1, classusei[u], termbit,-
+                                    RxType[] null, tokstart)
+            if field\=null then do
+              /* we have found a static non-constructor */
+              if field.fieldambig then do
+                if field.isMethod
+                 then signal RxError(rxt, tokstart, 'ambiguous.method.reference',-
+                                     classusei[u].type.classname'.'termbit'()')
+                 else signal RxError(rxt, tokstart, 'ambiguous.property.reference',-
+                                     classusei[u].type.classname'.'termbit)
+                end
+              if field.fieldtype=rxt.voidtype then if onrhs then do
+                if field.isMethod
+                 then signal RxError(rxt, tokstart, 'undefined.method.reference',-
+                                     field.toString(cursor.curprogram))
+                 else signal RxError(rxt, tokstart, 'undefined.property.reference',-
+                                     field.toString(cursor.curprogram))
+                end
+              if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+              code.javacode=classusei[u].type.classname'.'field.fieldname
+              if field.isMethod then do
+                field.fieldref2=rxt.pass2
+                code.javacode=code.javacode'()'
+                code.group=S_METHOD
+                if exec then do label doit
+                  argcodes=RxCode[0]         -- no arguments
+                  code.value=interpreter.callMethod(null, field,-
+                                                    argcodes, tokstart)
+                  end doit
+                end
+               else do
+                -- it's a property reference
+                if field.isFinal then code.group=S_FINAL
+                                 else code.group=S_PROP
+                code.constant=field.isKnownValue
+                code.value   =field.fieldvalue
+                if exec then
+                 code.value=interpreter.getProperty(null, field, tokstart)
+                end
+              code.type=field.fieldtype
+              leave stub
+              end /* found */
+            end u
+
+          /* Now specials; we are first segment */
+          if cursor.curprogram.flag.strictcase then termchk=termbit
+                                               else termchk=termbit.lower
+          if specialwords.wordpos(termchk)\==0 then do
+            if termchk=='null' then
+              signal RxError(rxt, tokstart, 'cannot.qualify.null')
+            specialwordcode(cursor, termchk, tokstart, code)
+            leave stub
+            end
+          end /* is first part */
+
+        if \classer.ispackage(code.javacode) then do
+          -- could be a class
+          info=classer.findanyclass(cursor, code.javacode, tokstart)
+          if info\=null then do label haveclass   -- have a class, so far
+            -- Now [1998.04.02, for minor classes] we need to lookahead
+            -- in case we are starting a longer class name.  If we are,
+            -- we need to stay in the stub.
+            -- Only do this if class has no visible children
+            if info.minors>0 then do label havechildren
+              np1=n+1
+              if tokens[np1].type=RxToken.SYM then do
+                nextseg=Rexx tokens[np1].value
+                nextinfo=classer.findanyclass(cursor,-
+                           code.javacode'.'nextseg, tokstart)
+                if nextinfo\=null then leave haveclass
+                end
+              end havechildren
+            -- Remember if a short reference
+            if termstart=partstart then classer.addshortref(info)
+            code.type=info.type
+            code.javacode=shortestname(cursor, info)
+            code.group=S_TYPE
+            -- Types have no .value
+            leave stub
+            end
+          end
+        code.javacode=code.javacode'.'
+        n=n+1; tok=tokens[n]
+        iterate stub /* [for clarity] not yet known, collect more */
+        end /* followed by '.' */
+
+      /* ----------------------------------------------------------- */
+      /* Term stub ending (simple symbol)                            */
+      /* ----------------------------------------------------------- */
+      otherwise /* about to end; simple symbol(s) */
+        -- note: this path is equivalent to that taken for keywords, in
+        -- the fastpath parsesymbol, above.  Changes here may need to be
+        -- reflected above.
+        code.javacode=code.javacode||termbit
+        if termstart=partstart then /* first segment */ do
+          /* could be Var, local method, or special */
+          /* Don't cross-ref if on LHS .. Assign will do it. */
+          bitvar=cursor.curprogram.pooler.findvar(cursor, tokstart.value,-
+                                                  tokstart, onrhs, \onrhs, 1)
+          if bitvar\=null then do  -- it's a local variable
+            -- if bitvar.value=null then v=Rexx 'null'; else v=Rexx bitvar.value
+            -- say 'var:' bitvar.varspell bitvar.islit v
+            badstatic(cursor, bitvar, tokstart)
+            code.javacode=bitvar.varspell
+            code.type=bitvar.vartype
+            code.group=S_VAR            -- in local class
+            code.begoff=termstart
+            code.endoff=n-1
+            if \exec then code.value=bitvar.varvalue
+                     else code.value=interpreter.getVar(cursor, bitvar, tokstart)
+            code.constant=bitvar.islit
+            return code
+            end
+          /* Note we must not try for a property in a superclass, as
+             superclass properties would then override local variables(!) */
+          /* Try for local method.  NB we are first segment. */
+          if \cursor.curprogram.flag.strictargs then /* allowed to try for local method */ do
+            field=classer.findfield(cursor, 1, 1, 0, 0, classinfo,-
+                                    termbit, null, tokstart)
+            if field\=null then
+             if \field.isConstructor /* not constructor */ then do
+              badstatic(cursor, field, tokstart)
+              -- [if ambiguous it wouldn't have been accepted earlier]
+              if field.fieldtype=rxt.voidtype then if onrhs then
+                signal RxError(rxt, tokstart, 'undefined.method.reference',-
+                               field.toString(cursor.curprogram))
+              if exec then do
+                code.value=interpreter.callMethod(cursor.curthis, field,-
+                                                  RxCode[0], tokstart)
+                end
+              field.fieldref2=rxt.pass2
+              if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+              code.javacode=field.fieldname'()'
+              code.type=field.fieldtype
+              code.group=S_METHOD
+              code.begoff=termstart
+              code.endoff=n-1
+              return code
+              end
+            end /* empty args OK */
+
+          /* Try for a static property or method from USES list, if on rhs */
+          if onrhs then loop u=0 to classusei.length-1
+            field=classer.findfield(cursor, 0, \cursor.curprogram.flag.strictargs,-
+                                    1, 1, classusei[u], termbit,-
+                                    RxType[] null, tokstart)
+            if field\=null then do
+              /* will have found a static non-constructor */
+              if field.fieldambig then do
+                if field.isMethod
+                 then signal RxError(rxt, tokstart, 'ambiguous.method.reference',-
+                                     classusei[u].type.classname'.'termbit'()')
+                 else signal RxError(rxt, tokstart, 'ambiguous.property.reference',-
+                                     classusei[u].type.classname'.'termbit)
+                end
+              if field.fieldtype=rxt.voidtype then if onrhs then do
+                if field.isMethod
+                 then signal RxError(rxt, tokstart, 'undefined.method.reference',-
+                                     field.toString(cursor.curprogram))
+                 else signal RxError(rxt, tokstart, 'undefined.property.reference',-
+                                     field.toString(cursor.curprogram))
+                end
+              if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+              code.javacode=classusei[u].type.classname'.'field.fieldname
+              if field.isMethod then do
+                field.fieldref2=rxt.pass2
+                code.javacode=code.javacode'()'
+                code.group=S_METHOD
+                if exec then do label doit
+                  argcodes=RxCode[0]         -- no arguments
+                  code.value=interpreter.callMethod(null, field,-
+                                                    argcodes, tokstart)
+                  end doit
+                end
+               else do
+                if field.isFinal then code.group=S_FINAL
+                                 else code.group=S_PROP
+                code.constant=field.isKnownValue
+                code.value   =field.fieldvalue
+                if exec then
+                 code.value=interpreter.getProperty(null, field, tokstart)
+                end
+              code.type=field.fieldtype
+              code.begoff=termstart
+              code.endoff=n-1
+              return code
+              end /* found */
+            end u
+
+          /* Try for special words, if on rhs [so far had no '.'] */
+          if onrhs then do label rhs
+            if cursor.curprogram.flag.strictcase then termchk=termbit
+                                                 else termchk=termbit.lower
+            if specialwords.wordpos(termchk)\==0 then do
+              if termchk=='super' then
+                signal RxError(rxt, tokstart, 'super.must.be.qualified')
+              specialwordcode(cursor, termchk, tokstart, code)
+              code.begoff=termstart
+              code.endoff=n-1
+              return code
+              end
+            end rhs
+          end /* first segment */
+
+        /* not a known variable or method; could be a type (if on RHS) */
+        if onrhs then do label onrhs
+          info=classer.findanyclass(cursor, code.javacode, tokstart)
+          if info\=null then do
+            /* Remember if a short reference */
+            if termstart=partstart then classer.addshortref(info)
+            code.type=info.type
+            code.javacode=shortestname(cursor, info)
+            code.group=S_TYPE
+            -- a Type has no .value
+            code.begoff=termstart
+            code.endoff=n-1
+            return code
+            end
+          end onrhs
+        -- [later just check termstart here?]
+        if code.javacode.pos('.')==0 then do      -- simple unknown
+          code.group=T_UNKNOWN
+          code.type=rxt.voidtype                  -- [not really needed]
+          code.begoff=termstart
+          code.endoff=n-1
+          return code
+          end
+        /* hopeless */
+        if classer.ispackage(code.javacode) then
+          signal RxError(rxt, tokens[termstart], 'bad.term.package', code.javacode)
+        signal RxError(rxt, tokens[termstart], 'variable.or.type.expected')
+      end /* first select */
+
+   -- pass on 'our' exceptions; rewrap others
+   catch es=RxSignal
+    signal es
+   catch ee=RxError
+    signal ee
+   catch eq=RxQuit
+    signal eq
+   catch e=RuntimeException        -- error detected
+    if exec then signal RxSignal(cursor, e, tokstart)
+            else signal RxQuit(rxt, tokstart, 'internal.error',-
+                               e.toString, e.getMessage)
+    end stub
+
+  /* --- Term stub processed ---------------------------------------- */
+  /* To get here, we have a first object or type, followed by '.'     */
+  /*   code.javacode  is the output Java code so far                  */
+  /*   code.type      describes the object type                       */
+  /*   code.group     describes the group of the stub                 */
+  /*   N is index of next token (the dot)                             */
+  /*   TOK is the next token (always type '.')                        */
+  /* ---------------------------------------------------------------- */
+  -- if cursor.curprogram.flag.diag then
+  --   say '# After stub: TGEN' code.javacode 'TSIG' code.type.toSig-
+  --       'TG' code.group
+
+  staticsofar=(code.group==S_TYPE)      -- anything else is non-static
+
+  -- Term-so-far may have a valid value even if not running (e.g., a
+  -- literal string).  So, if we're not running then we must invalidate
+  -- it so partial values won't get passed along under false colours.
+  if \exec then code.value=null
+   else if code.value=null then if code.group\=S_TYPE then do
+    -- show error at the dot
+    signal RxSignal(cursor, NullPointerException(), tokens[n])
+    end
+
+  /* Now collect continuations */
+  loop label continuation          -- [NB: do not use iterate in this loop]
+    if code.type=rxt.voidtype then do
+      -- [this only shows on LHS .. an RHS partial term wouldn't get this far]
+      signal RxError(rxt, tok, 'partial.term.has.no.value')
+      end
+    /* Test for an array, so far.  If it is one (and we are not simply a
+       type), we convert the signature to Object, but remember we did so
+       with the variable 'arraysofar', which allows us to use .length
+       later */
+    arraysofar=(code.type.isarray & \staticsofar)
+    if arraysofar then code.type=rxt.objecttype
+    if code.type.isprimitive then
+      signal RxError(rxt, tok, 'partial.term.is.primitive', code.type.classname)
+
+    code.javacode=code.javacode'.'
+    code.constant=0                -- no longer constant if more to come
+    code.isstem=0                  -- no longer a stem if more to come
+    code.array=null                -- array indices no longer final
+
+    -- save the penultimate type and value if it's useful; we'll also
+    -- save the final field under the same conditions
+    -- [currently only if LHS compound term, while executing]
+    if \onrhs then if exec then do
+      code.pentype=code.type
+      code.penvalue=code.value
+      end
+
+    n=n+1; tok=tokens[n]
+    if tok.type<>RxToken.SYM then signal RxError(rxt, tok, 'term.part.not.symbol')
+
+    /* Get the RxClassInfo [if any] corresponding to the signature */
+    terminfo=classer.findclass(cursor, code.type, tok, 1)
+    -- Field searches are now from this context, not from current class.
+    -- [Accessibility will be checked from both there and from current]
+
+    parttok=tok                    -- first token of part
+    partname=Rexx tok.value        -- name of the part
+    partstart=n
+    n=n+1; tok=tokens[n]
+    select
+      /* ----------------------------------------------------------- */
+      /* Term continuation with (                                    */
+      /* ----------------------------------------------------------- */
+      when tok.type=RxToken.LPAR then do label lpar
+        depinfo=RxClassInfo null   -- non-null if we are a dependent constructor
+        argcodes=parsemethargs(cursor, n)
+        if argcodes.length=0 then next=n+2
+         else next=argcodes[argcodes.length-1].endoff+2
+        argtypes=codetypes(argcodes)
+
+        /* Try for argument-qualified special methods if it might be
+           possible.  [See similar code above.]  Only .super() at present. */
+        special=boolean 0          -- 1 if a special method
+        if cursor.curmethod\=null then
+         if cursor.curmethod.methodconstructor then
+         if cursor.curthis=null then do label trysuper
+          if termstart\=0 then leave trysuper   -- no chance, not method instruction
+          if cursor.curprogram.flag.strictcase then specialname=partname
+                                               else specialname=partname.lower
+          if specialname\=='super' then leave trysuper
+          -- it is 'xxx.super(...)'
+          cursor.curmethod.methodhadthissuper=1 -- record that we found it
+          superinfo=classinfo.superinfo
+          if superinfo=null then
+            signal RxQuit(rxt, tokstart, 'super.does.not.exist')
+          -- check we are indeed subclass of a dependent class
+          if \superinfo.isdependent then
+            signal RxError(rxt, parttok, 'special.needs.dependent.superclass',-
+                           superinfo.type.classname)
+          -- check Type of qualifier is indeed that of parent
+          if superinfo.parentinfo.type\=code.type then
+            signal RxError(rxt, parttok, 'special.needs.parent',-
+                           superinfo.parentinfo.type.classname,-
+                           code.type.classname)
+          -- 2000.02.09: Note that we don't need to check here whether
+          -- qualifier is indeed either an argument or 'parent', because
+          -- if it were not then it would not have passed no-instance
+          -- checks when the stub was parsed.
+
+          -- If we're doing an execution precall we can 'return' now,
+          -- as we have collected the parent object and argument values
+          -- though we must still apply conversions to match the target.
+          -- [similar code above for ordinary this()/super() calls]
+          if exec then if cursor.curprecall then do
+            field=cursor.curmethod.getfield().fieldspecial
+            convertargs(cursor, parttok, field, argcodes, onrhs, exec)
+            -- we only want the values from the codes
+            args=Object[argcodes.length+1]        -- +1 for the parent
+            args[0]=code.value                    -- the parent
+            loop i=0 for argcodes.length
+              args[i+1]=argcodes[i].value
+              end i
+            if cursor.curprogram.flag.diag then say '# precall signal 2...'
+            signal RxSignal(cursor, args, tokstart)
+            end
+
+          partname=superinfo.shortname            -- for field lookup
+          code.javacode=code.javacode||'super'
+          special=1                               -- special cases below
+          end trysuper
+
+        field=classer.findfield(cursor, 0, 1, 0, 0, terminfo, partname,-
+                                argtypes, parttok)
+        if field=null then do label nofield
+          /* It could be that we are the constructor of a dependent class */
+          depinfo=classer.findanyclass(cursor,-
+                                       terminfo.type.classname'.'partname,-
+                                       parttok)   -- does child class exist?
+          if depinfo\=null then do -- hopeful..
+            field=classer.findfield(cursor, 0, 1, 0, 0, depinfo, partname,-
+                                    argtypes, parttok)
+            if field\=null then leave nofield -- found it [must be constructor]
+            end
+          /* Really is unknown; retry without access checks for better message */
+          field=classer.findfield(cursor, 0, 1, 0, 0, terminfo,-
+                                  partname, argtypes, parttok, 0)
+          if special then methdes='constructor'
+                     else methdes='method'
+          if field=null then
+            signal RxError(rxt, parttok, methdes'.not.found',-
+                           partname'('codestypeString(cursor, argcodes)')',-
+                           terminfo.type.classname)
+           else
+            signal RxError(rxt, parttok, methdes'.not.accessible',-
+                           field.toConciseString(cursor.curprogram),-
+                           field.fieldhidden.type.classname)
+
+          end nofield
+        if field.isConstructor then do
+          if depinfo=null then
+            signal RxError(rxt, parttok, 'constructor.cannot.be.qualified',-
+                           field.toString(cursor.curprogram))
+          -- check it really is dependent
+          if \depinfo.isdependent then
+            signal RxError(rxt, parttok, 'class.not.dependent', depinfo.fullname)
+          -- dependent constructor .. needs 'new' in code (unless super() special)
+          if \special then code.javacode=code.javacode||'new '
+          end
+        if staticsofar then if \field.isStatic then
+          signal RxError(rxt, parttok, 'method.is.not.static',-
+            code.type.classname'.'partname'('codestypeString(cursor, argcodes)')')
+        field.fieldref2=rxt.pass2
+        if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+
+        -- If special then save the field so we can predict it later
+        if special then cursor.curmethod.getfield().fieldspecial=field
+
+        -- add the method name (unless super() special)
+        if \special then
+          code.javacode=code.javacode||field.fieldname
+        -- [convertargs checks for ambiguity and void result]
+        code.javacode=code.javacode-
+          ||convertargs(cursor, parttok, field, argcodes, onrhs, exec)
+        code.type=field.fieldtype            -- is now one of these
+        if special then code.group=S_CONSTR  -- it's actually a constructor
+                   else code.group=S_METHOD
+
+        if exec then do label doit
+          -- this now handles both methods and constructors
+          code.value=interpreter.callMethod(code.value, field,-
+                                            argcodes, parttok)
+          end doit
+
+        n=next
+        end lpar
+
+      /* ----------------------------------------------------------- */
+      /* Term continuation with [                                    */
+      /* ----------------------------------------------------------- */
+      when tok.type=RxToken.LBRK then do label sqcont
+        /* what we have should be a property */
+        field=classer.findfield(cursor, 0, 0, 1, 0, terminfo,-
+                                partname, RxType[] null, parttok)
+        if field=null then do
+          field=classer.findfield(cursor, 0, 0, 1, 0, terminfo,-
+                                  partname, RxType[] null, parttok, 0)
+          if field\=null then
+            signal RxError(rxt, parttok, 'property.not.accessible',-
+                           field.toConciseString(cursor.curprogram),-
+                           field.fieldhidden.type.classname)
+           else
+            signal RxError(rxt, parttok, 'property.not.found',-
+                           partname, terminfo.type.classname)
+          end
+        if staticsofar then if \field.isStatic then
+          signal RxError(rxt, parttok, 'property.is.not.static',-
+                         field.fieldinfo.type.classname'.'partname)
+        if field.fieldambig then
+          signal RxError(rxt, parttok, 'ambiguous.property.reference',-
+                         field.fieldinfo.type.classname'.'partname)
+        if field.fieldtype=rxt.voidtype then if onrhs then
+          signal RxError(rxt, parttok, 'undefined.property.reference',-
+                         field.toString(cursor.curprogram))
+        if field.fieldtype=NrBabel.rexxtype then do
+          /* Class of property is exactly Rexx with no hard dimensions */
+          stem=parsestem(cursor, n)
+          -- syntax OK, arraynext->']'+1
+          next=stem.arraynext
+          code.type=NrBabel.rexxtype              -- dimensions vanish
+          code.javacode=code.javacode||field.fieldname||stem.arraygen
+          code.array=stem     -- [gets cleared above if not last in term]
+          code.isstem=1       -- the term is a stem reference
+
+          if exec then do label doit
+            -- get the stem object
+            code.value=interpreter.getProperty(code.value, field, tokstart)
+            -- if we are alone on LHS then we're an LVALUE thing, so we
+            -- don't need to get the element's value, and instead return
+            -- just the variable's value (the stem)
+            if onrhs, tokens[n].type=RxToken.DOT then do
+              code.value=interpreter.getStemElementValue(cursor,-
+                                                         Rexx code.value,-
+                                                         stem, tokstart)
+              end
+            end doit
+          end
+         else /* not a stem but a fixed array, it seems */ do
+          /* we expect a .PROP[xxx] kind of thing */
+          if \field.fieldtype.isarray then
+            signal RxError(rxt, parttok, 'not.an.array')
+          array=parsearray(cursor, n)   -- collect the contents of the []
+          -- syntax OK, arraynext->']'+1
+          next=array.arraynext
+          if array.arraydef then
+            signal RxError(rxt, parttok, 'array.needs.index')
+          /* check dimensions match */
+          /* Now adjust the dimensions according to how many we used */
+          /* (this code the same as that above .. scope for collapsing) */
+          vardim=field.fieldtype.dimension
+          if vardim<array.arraydim then /* over-dimensioned */
+            signal RxError(rxt, parttok, 'too.many.indexes')
+          code.type=field.fieldtype.basetype(vardim-array.arraydim)
+          code.array=array
+          code.javacode=code.javacode||field.fieldname||array.arraygen
+
+          if exec then do label doit
+            -- get the array object
+            code.value=interpreter.getProperty(code.value, field, parttok)
+            -- if we are last on LHS then we're an LVALUE thing, so we
+            -- don't need to get the array element's value [see NrAssign]
+            if onrhs, tokens[n].type=RxToken.DOT then do
+              -- now haul the element out of the array
+              code.value=interpreter.getArrayElementValue(cursor, code.value,-
+                                                          field.fieldtype,-
+                                                          array, tokstart)
+              end
+            end doit
+          -- [can't be a constant in the non-exec case]
+          end /* fixed array */
+        -- it's a property reference
+        if field.isFinal then code.group=S_FINAL
+                         else code.group=S_PROP
+        n=next
+        /* If it's one of ours, record the reference */
+        if field.fieldinfo.type.classname==cursor.curclass.classname then do
+          isset=tokens[n].type\=RxToken.DOT & \onrhs
+          cursor.curprogram.pooler.findvar(cursor, partname, parttok, 1, isset, 0)
+          end
+        end sqcont
+
+      /* ----------------------------------------------------------- */
+      /* Term continuation with . or ending                          */
+      /* ----------------------------------------------------------- */
+      otherwise
+        /* '.' or ender -- this part is variable name [perhaps method]
+           or [1998.03.31] perhaps a minor class */
+        field=classer.findfield(cursor, 0, \cursor.curprogram.flag.strictargs, 1, 0,-
+                                terminfo, partname, RxType[] null, parttok)
+        if field\=null then do label isfield
+          if staticsofar then if \field.isStatic then do
+            if field.isMethod then error='method.is.not.static'
+                              else error='property.is.not.static'
+            signal RxError(rxt, parttok, error,-
+                           field.fieldinfo.type.classname'.'partname)
+            end
+          if field.fieldambig then do
+            if field.isMethod
+             then signal RxError(rxt, parttok, 'ambiguous.method.reference',-
+                                 field.fieldinfo.type.classname'.'partname'()')
+             else signal RxError(rxt, parttok, 'ambiguous.property.reference',-
+                                 field.fieldinfo.type.classname'.'partname)
+            end
+          if field.fieldtype=rxt.voidtype then if onrhs then do
+            if field.isMethod
+             then signal RxError(rxt, parttok, 'undefined.method.reference',-
+                                 field.toString(cursor.curprogram))
+             else signal RxError(rxt, parttok, 'undefined.property.reference',-
+                                 field.toString(cursor.curprogram))
+            end
+          /* if it's one of ours, record the reference */
+          if field.fieldinfo.type.classname==cursor.curclass.classname then do
+            isset=tok.type\=RxToken.DOT & \onrhs
+            cursor.curprogram.pooler.findvar(cursor, partname, parttok, 1, isset, 0)
+            end
+          if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
+          partname=field.fieldname -- update
+          parttype=field.fieldtype
+          if field.isMethod then do
+            field.fieldref2=rxt.pass2
+            code.group=S_METHOD
+            partargs='()'
+            if exec then do label doit
+              argcodes=RxCode[0]        -- no arguments
+              code.value=interpreter.callMethod(code.value, field,-
+                                                argcodes, parttok)
+              end doit
+            end
+           else do
+            if field.isFinal then code.group=S_FINAL
+                             else code.group=S_PROP
+            code.constant=field.isKnownValue
+            partargs=''
+            if exec then do
+              -- [+++ don't need its value if on LHS and no more dots]
+              code.value=interpreter.getProperty(code.value, field, parttok)
+              if \onrhs then code.field=field     -- save for set
+              end
+             else
+              code.value=field.fieldvalue    -- pick up any constant value
+            end
+          end isfield
+
+         else /* field=null; not found, so far */ do
+          -- try for a minor class
+          minorinfo=classer.findanyclass(cursor,-
+                                         code.javacode||partname, parttok)
+          -- will be an error unless found the minor or special
+          partchk=Rexx(partname)
+          if \cursor.curprogram.flag.strictcase then partchk=partchk.lower
+          select
+            when minorinfo\=null & code.group=S_TYPE then do
+              parttype=minorinfo.type; partargs=''
+              -- group remains S_TYPE
+              code.value=null           -- [B&B]
+              end
+            when partchk=='length' & arraysofar then do
+              /* very special word .. length of an array, possibly
+                 multi-dimensional */
+              partname='length'; parttype=rxt.inttype; partargs=''
+              code.group=S_EXPR   -- specials are un-assignable
+              if exec then do label doit
+                len=java.lang.reflect.Array.getLength(code.value)
+                code.value=Integer(len)
+                end doit
+              end
+            when partchk=='this' & code.group=S_TYPE then do
+              -- we must be in a dependent class, and term so far a
+              -- parent type
+              thisinfo=cursor.curclass.classinfo
+              if \thisinfo.isdependent then
+                signal RxError(rxt, parttok, 'special.not.in.dependent',-
+                               thisinfo.fullname, '.this')
+              -- spin up the parents chain to find the right parent
+              ups=0                                    -- count levels
+              loop until thisinfo=null
+                if thisinfo.type=terminfo.type then leave
+                thisinfo=thisinfo.parentinfo           -- up to parent
+                ups=ups+1
+                end
+              if thisinfo=null then     -- not found
+                signal RxError(rxt, parttok, 'term.part.not.parent',-
+                               terminfo.type.classname, partchk)
+              partname='this'; parttype=terminfo.type; partargs=''
+              code.group=S_EXPR   -- specials are un-assignable
+              -- type is already correct
+              /* Now add fix to get around javac feature: code so far
+                 will be a type signature.  javac accepts this for
+                 top-level class, but not for children(!).
+                 We reduce to the final word for all cases. */
+              ld=code.javacode.lastpos('.', code.javacode.length.toint-1).toint
+              if ld\=0 then code.javacode=code.javacode.substr(ld+1)
+
+              if exec then do label doit
+                -- See RxInterpreter precall callMethod() for details, here
+                -- Spin up the parent instances until we get the one we
+                -- want.  During the first time going up we may be in a
+                -- precall situation.
+                info=cursor.curclass.classinfo
+                inst=cursor.curthis
+                loop i=0 for ups
+                  if i=0 & cursor.curprecall then inst=cursor.curparent
+                   else do    -- need to haul out the this$n field
+                    inst=getParent(cursor, inst, info, parttok)
+                    info=info.parentinfo
+                    end
+                  end i
+                code.value=inst
+                end doit
+              end
+            when partchk=='class' & code.group=S_TYPE then do
+              /* very special word -- class for a Type */
+              partname='class'; parttype=rxt.classtype; partargs=''
+              code.group=S_EXPR   -- specials are un-assignable
+              -- Currently cannot be a primitive type at this point
+              -- Code.value is always null (a Type, so far)
+
+              if exec then do label doit
+                code.value=code.type.getClassObject(rxt.loader)
+                -- It will be null if not found (the class vanished)
+                end doit
+              end
+            otherwise do
+              -- see if we can narrow the error message
+              field=classer.findfield(cursor,-
+                                      0, \cursor.curprogram.flag.strictargs,-
+                                      1, 0, terminfo, partname,-
+                                      RxType[] null, parttok, 0)
+              if field=null then
+                signal RxError(rxt, parttok, 'property.not.found',-
+                               partname, terminfo.type.classname)
+              if field.isMethod then mess='method.not.accessible'
+                                else mess='property.not.accessible'
+              signal RxError(rxt, parttok, mess,-
+                             field.toConciseString(cursor.curprogram),-
+                             field.fieldhidden.type.classname)
+              end
+            end
+          end /* not method/property */
+        code.javacode=code.javacode||partname||partargs
+        code.type=parttype                   -- is now one of these
+      end /* select */
+    tok=tokens[n]
+    if tok.type<>RxToken.DOT then leave      -- term done
+    staticsofar=0                  -- no longer static so far
+   -- pass on 'our' exceptions; rewrap others
+   catch es=RxSignal
+    signal es
+   catch ee=RxError
+    signal ee
+   catch eq=RxQuit
+    signal eq
+   catch e=RuntimeException        -- error detected
+    if exec then signal RxSignal(cursor, e, parttok)
+            else signal RxQuit(rxt, parttok, 'internal.error',-
+                               e.toString, e.getMessage)
+    end continuation
+
+  code.begoff=termstart
+  code.endoff=n-1
+  return code /* parseterm */
+
+ /* BADSTATIC -- test for bad static reference from static code
+    Arg1 is context
+    Arg2 is field or variable being referred to (in this class)
+    Arg3 is where to report error
+    Signals if error, returns otherwise */
+ method badstatic(cursor=RxCursor, field=RxField, tok=RxToken)
+  if field.isStatic then return                   -- always OK
+  if field.isMethod then whatsit='method'
+                    else whatsit='property'
+  checkstatic(cursor, whatsit, tok)
+
+ method badstatic(cursor=RxCursor, var=RxVariable, tok=RxToken)
+  if \var.isnonstaticprop then return             -- always OK
+  checkstatic(cursor, 'property', tok)
+
+ /* CHECKSTATIC -- check for invalid reference to nonstatic
+    Arg1 is the context
+    Arg2 is 'property' or 'method'
+    Arg3 is the error point
+    */
+ method checkstatic(cursor=RxCursor, whatsit=Rexx, tok=RxToken) private
+  if cursor.curexec then return                   -- checked during parse
+  if \cursor.curstatic then do                    -- not static code
+    if cursor.curmethod=null then return          -- not in method is OK
+    if cursor.curthis\=null then return           -- have instance is OK
+    -- in nonstatic method but no instance .. must be constructor
+    signal RxError(rxt, tok, 'constructor.to.nonstatic.'whatsit)
+    end
+  -- is static code
+  signal RxError(rxt, tok, 'static.code.to.nonstatic.'whatsit)
+
+ /* PARSEARRAY: Scan and translate contents of array syntax
+    Arg1 is context
+    Arg2 is start index of array syntax in tokens (that is, of the '[')
+    Returns an RxArray object describing the parsed array syntax, or
+      signals error
+ */
+ method parsearray(cursor=RxCursor, n=int) private returns RxArray
+  tokens=cursor.curclause.tokens   -- local reference
+  exec=cursor.curexec              -- .
+  arraygen=Rexx '['      -- result
+  arraydef=1             -- content-free
+  arraydim=1             -- dimensions
+  content=0              -- content in this segment
+  constant=boolean 1     -- record if all indices constant
+  toklast=RxToken        -- last error point
+  n=n+1                  -- step past opener
+  items=Vector(10)
+  loop arrexp=1 by 1
+    tok=tokens[n]
+    if tok.type=RxToken.RBRK then do
+      if content=arraydef then signal RxError(rxt, tok, 'array.index.missing')
+      arraygen=arraygen']'
+      leave arrexp
+      end
+    if tok.type=RxToken.COMMA then do
+      if content=arraydef then signal RxError(rxt, tok, 'array.index.missing')
+      arraygen=arraygen']['
+      arraydim=arraydim+1
+      content=0
+      toklast=tok
+      n=n+1; iterate arrexp
+      end
+    /* have at least some content */
+    -- if we are second expression and no first expression, then shout..
+    if arrexp=2 then if arraydef then
+      signal RxError(rxt, toklast, 'array.index.missing')
+    toklast=tok
+
+    arraydef=0; content=1
+    /* generate code -- which must convert to INT */
+    ends=RxToken.COMMA||RxToken.RBRK
+    item=rxt.eparser.parseexpr(cursor, 0, n, ends, null)
+    conv=converter.assigncost(cursor, rxt.inttype, item.type)
+    if conv.cost>cursor.curprogram.flag.maxassign then
+      signal RxError(rxt, tok, 'array.needs.int.type',-
+                     cursor.curprogram.babel.typeString(item.type))
+    items.addElement(item)
+    if \item.constant then constant=0
+    converter.convertcode(cursor, rxt.inttype, conv.proc, item)
+    arraygen=arraygen||item.javacode
+    n=item.endoff+1
+    if tokens[n].type=RxToken.END then
+      signal RxError(rxt, tokens[n], 'right.bracket.expected')
+    end arrexp
+  ret=RxArray(arraygen, arraydef, arraydim, n+1)
+  if exec, constant then if \arraydef then do label doit
+    itemlist=RxCode[arraydim]
+    items.copyInto(itemlist)
+    ret.arraycode=itemlist
+    ret.arrayconstant=constant     -- implies all values there
+    end
+  return ret
+
+ /* PARSESTEM: Scan and translate contents of stem array syntax
+    Arg1 is context
+    Arg2 is start index of stem syntax in tokens (that is, of the '[')
+    Arg3 is 1 if evaluation required
+    Returns an RxArray object describing the parsed stem array syntax,
+      or signals any error (arraydef always 0)
+ */
+ method parsestem(cursor=RxCursor, n=int) private returns RxArray
+  tokens=cursor.curclause.tokens   -- local reference
+  exec=cursor.curexec              -- ..
+  stemgen=''        -- result
+  stemdim=1         -- dimensions
+  stemdef=0         -- always 0
+  content=0         -- have content
+  toklast=RxToken   -- last error point
+  if exec then items=Vector(10)
+  n=n+1
+  loop stemexp=1 by 1
+    tok=tokens[n]
+    if tok.type=RxToken.RBRK then do
+      if \content then signal RxError(rxt, tok, 'stem.index.missing')
+      leave stemexp
+      end
+    if tok.type=RxToken.COMMA then do
+      if \content then signal RxError(rxt, tok, 'stem.index.missing')
+      content=0 /* for next segment */
+      stemdim=stemdim+1
+      toklast=tok
+      n=n+1; iterate stemexp
+      end
+    -- if we are second expression and no first expression, then shout..
+    if stemexp=2 then if \content then
+      signal RxError(rxt, toklast, 'stem.index.missing')
+    toklast=tok
+
+    content=1                 /* indicate segment content */
+    /* generate code -- which must convert to Rexx */
+    ends=RxToken.COMMA||RxToken.RBRK
+    item=rxt.eparser.parseexpr(cursor, 0, n, ends, null)
+    conv=converter.assigncost(cursor, NrBabel.rexxtype, item.type)
+    if conv.cost>cursor.curprogram.flag.maxassign then
+      signal RxError(rxt, tok, 'bad.string.index.type',-
+                     cursor.curprogram.babel.typeString(item.type))
+    if exec then items.addElement(item)
+    converter.convertcode(cursor, NrBabel.rexxtype, conv.proc, item)
+    stemgen=stemgen'.getnode('item.javacode').leaf'
+    n=item.endoff+1
+    if tokens[n].type=RxToken.END then
+      signal RxError(rxt, tokens[n], 'right.bracket.expected')
+    end stemexp
+  ret=RxArray(stemgen, stemdef, stemdim, n+1)
+  if exec then if \stemdef then do label doit
+    itemlist=RxCode[stemdim]
+    items.copyInto(itemlist)
+    ret.arraycode=itemlist
+    end
+  return ret
+
+ /* PARSEMETHARGS -- Scan and translate contents of a method argument list
+    Arg1 is context
+    Arg2 is index of start of argument syntax (that is, the '(')
+    Arg3 is 1 if evaluation required
+    Returns array of RxCode objects
+    (unless error, in which case RxError signalled)
+    The endoff of the last (if any) will be the token before the ')'
+ */
+ method parsemethargs(cursor=RxCursor, n=int) returns RxCode[] private
+  tokens=cursor.curclause.tokens   -- local reference
+  last=char '('               -- last separator token
+  n=n+1                       -- token index
+  args=0                      -- argument counter
+  items=Vector(10)
+  loop label methexp
+    tok=tokens[n]
+    if tok.type=RxToken.RPAR   then do
+      if last=',' then signal RxError(rxt, tok, 'method.argument.missing')
+      leave methexp
+      end
+    if tok.type=RxToken.COMMA then do
+      if last=',' | last='(' then signal RxError(rxt, tok, 'method.argument.missing')
+      n=n+1; last=','
+      iterate methexp
+      end
+    /* have at least some content */
+    last='x'                       -- owt but separator
+    args=args+1
+    ends=RxToken.COMMA||RxToken.RPAR
+    item=rxt.eparser.parseexpr(cursor, 0, n, ends, null)
+    items.addElement(item)
+    n=item.endoff+1
+    if tokens[n].type=RxToken.END then
+      signal RxError(rxt, tokens[n], 'right.parenthesis.expected')
+    end methexp
+  itemlist=RxCode[items.size]
+  items.copyInto(itemlist)
+  return itemlist
+
+ /* CONVERTARGS -- convert raw method arguments to a usable output form
+    Arg1 is the context
+    Arg2 is where to report any error (ambiguous or undefined method).
+            This must be the token forming the method name.
+    Arg3 is field found (target [lhs] of conversion)
+    Arg4 is methods arguments code objects array (source [rhs] of conversion)
+    Arg5 is 1 if the method call is on the RHS (void result not allowed)
+    Arg6 is 1 if evaluation required
+
+    Returns converted code, including enclosing parentheses
+    [later this should return a RxCode object]
+
+    Also updates the RxCode objects in the codes array by converting
+      their values (if they have any)
+   */
+ method convertargs(cursor=RxCursor, tok=RxToken, field=RxField,-
+                    codes=RxCode[], onrhs=boolean, exec=boolean)-
+                   private returns Rexx
+  if field.fieldambig then
+    signal RxError(rxt, tok, 'ambiguous.method.reference',-
+      field.fieldinfo.type.classname'.'tok.value'('codestypeString(cursor,-
+                                                                   codes)')')
+  if field.fieldtype=rxt.voidtype then
+   if onrhs then
+    signal RxError(rxt, tok, 'undefined.method.reference',-
+                   field.toString(cursor.curprogram))
+
+  if codes.length=0 then return '()'    -- easy: no conversions needed
+
+  lhtypes =field.fieldargtypes     -- actual method's arguments signatures
+  converts=field.fieldconvert      -- conversion list
+
+  acc=Rexx ''                      -- accumulates result
+  loop i=0 for codes.length
+    if i>0 then acc=acc','
+    /* Convert each code segment and accumulate */
+
+    if exec then
+     if cursor.curprogram.flag.diag then
+      say '# Convertarg:' codes[i].type.tostring(cursor.curprogram)-
+          'to' lhtypes[i].tostring(cursor.curprogram)
+
+    converter.convertcode(cursor, lhtypes[i], converts[i].proc, codes[i])
+    if \exec then acc=acc||codes[i].javacode
+    end i
+  return '('acc')'
+
+ /* SPECIALWORDCODE -- return the code object for one of the special words
+    Arg1 is the context
+    Arg2 is name of the word (lowercase)
+    Arg3 is word whereabouts, for errors
+    Arg4 is the code object to be updated
+    Arg5 is 1 if evaluation required
+    */
+ method specialwordcode(cursor=RxCursor, name=Rexx, tok=RxToken,-
+                        code=RxCode) private returns RxCode
+  tokens=cursor.curclause.tokens        -- local reference
+  classinfo=cursor.curclass.classinfo   -- ..
+  exec=cursor.curexec                   -- ..
+  code.group=S_EXPR                     -- for most cases
+  select
+    when name=='null'    then do
+      code.javacode='null'
+      code.type=rxt.nulltype
+      code.constant=1
+      code.value=null
+      code.group=S_LIT
+      end
+    when name=='ask'     then do
+      code.javacode=NrBabel.rexxioclass'.Ask()'
+      code.type=NrBabel.rexxtype
+      if exec then code.value=RexxIO.Ask()
+      end
+    when name=='this'    then do
+      if cursor.curstatic then
+        signal RxError(rxt, tok, 'static.code.to.special', name)
+      if cursor.curthis=null then       -- if have no instance
+       if cursor.curmethod\=null then   -- .. and in method
+        signal RxError(rxt, tok, 'special.not.constructed', name)
+        -- [note 'this' is OK in property initializers]
+      code.javacode='this'
+      code.type=classinfo.type
+      if exec then code.value=cursor.curthis -- must exist if we got here
+      end
+    when name=='super'   then do
+      if cursor.curstatic then
+        signal RxError(rxt, tok, 'static.code.to.special', name)
+      if cursor.curthis=null then       -- if have no instance
+       if cursor.curmethod\=null then   -- .. and in method
+        signal RxError(rxt, tok, 'special.not.constructed', name)
+      if classinfo.superinfo=null then  -- oops
+        signal RxQuit(rxt, tok, 'super.does.not.exist')
+      code.javacode='super'
+      code.type=classinfo.superinfo.type
+      if exec then code.value=cursor.curthis -- work on 'this' object
+      end
+    when name=='parent'    then do
+      -- 2000.02.08 'parent' is allowed in a super() call, as it's known
+      if cursor.curstatic then
+        signal RxError(rxt, tok, 'static.code.to.special', name)
+      info=cursor.curclass.classinfo
+      if \info.isdependent then
+        signal RxError(rxt, tok, 'special.not.in.dependent', info.fullname, name)
+      code.javacode=info.parentinfo.shortname'.this'
+      code.type=info.parentinfo.type
+      if exec then do
+        -- See RxInterpreter precall callMethod() for details, here
+        -- If we are in precall, or have already been here, then
+        -- curparent will have been set up
+        if cursor.curparent\=null then code.value=cursor.curparent
+         else do    -- need to haul out the this$n field
+          code.value=getParent(cursor, cursor.curthis, info, tok)
+          cursor.curparent=code.value   -- save as lookaside [optional]
+          end
+        -- if code.value=null then
+        -- say '# null parent:' cursor.curprecall (cursor.curthis=null) code.type
+        end
+      end
+    when name=='digits'  then do
+      if cursor.curmethod\=null then set=cursor.curmethod.methodset
+                                else set=cursor.curclass.classset
+      /* It's not OK to make constants here */
+      if set=='null' then code.javacode='(new' NrBabel.rexxclass'('RexxSet.DEFAULT_DIGITS'))'
+                     else code.javacode='(new' NrBabel.rexxclass'('set'.digits))'
+      code.type=NrBabel.rexxtype
+      if exec then do
+        if cursor.curnumer=null then code.value=Rexx(RexxSet.DEFAULT_DIGITS)
+                                else code.value=Rexx(cursor.curnumer.digits)
+        end
+      end
+    when name=='form'  then do
+      if cursor.curmethod\=null then set=cursor.curmethod.methodset
+                                else set=cursor.curclass.classset
+      /* It's not OK to make constants here */
+      if set=='null' then code.javacode='new' NrBabel.rexxclass'("scientific")' -- minor cheat
+                     else code.javacode='new' NrBabel.rexxclass'('set'.formword())'
+      code.type=NrBabel.rexxtype
+      if exec then do
+        if cursor.curnumer=null then code.value=Rexx(RexxSet().formword)
+                                else code.value=Rexx(cursor.curnumer.formword)
+        end
+      end
+    when name=='trace'  then do
+      if cursor.curmethod\=null then trace=cursor.curmethod.methodtrace
+                                else trace=cursor.curclass.classtrace
+      /* It's not OK to make constants here */
+      if trace=='null' then code.javacode='new' NrBabel.rexxclass'("off")'      -- minor cheat
+                       else code.javacode='new' NrBabel.rexxclass'('trace'.levelword())'
+      code.type=NrBabel.rexxtype
+      if exec then do
+        if cursor.curtrace=null then code.value=Rexx("off")
+                                else code.value=Rexx(cursor.curtrace.levelword)
+        end
+      end
+    when name=='version' then do
+      verstring=Rexx (cursor.curprogram.babel.getName-
+                      cursor.curprogram.babel.getVersion-
+                      RxProcessor.procdate)
+      code.value=verstring
+      code.type=NrBabel.rexxtype
+      code.javacode='new' NrBabel.rexxclass'("'verstring'")'
+      if rxt.pass2 then
+        converter.addconstant(cursor, NrBabel.rexxtype, code) -- [new javacode]
+      end
+    when name=='source'  then do                       -- [don't use $0]
+      if cursor.curmethod\=null then how='method'
+                                else how='class'
+      sourcestring=Rexx ('Java' how cursor.curprogram.source.getName)
+      code.value=sourcestring
+      code.type=NrBabel.rexxtype
+      code.javacode='new' NrBabel.rexxclass'("'sourcestring'")'
+      if rxt.pass2 then
+        converter.addconstant(cursor, NrBabel.rexxtype, code) -- [new javacode]
+      end
+    when name=='sourceline'  then do
+      -- return line of first token in clause
+      slstring=Rexx(tokens[0].line)
+      code.value=slstring
+      code.javacode='new' NrBabel.rexxclass'("'slstring'")'
+      code.type=NrBabel.rexxtype
+      if rxt.pass2 then
+        converter.addconstant(cursor, NrBabel.rexxtype, code) -- [new javacode]
+      end
+    -- otherwise signal RxQuit(rxt, null, 'internal.error', 'RxTermParser: swg:' name)
+    end
+  return code
+
+ /* NUMBERTYPE -- process free-standing number (simple term)
+    Determine its type and generate code-so-far.
+    We know it is a syntactically valid number.
+    */
+ method numbertype(code=RxCode) private
+  /* Treat as an integer unless we have decimal part or uncanonical
+     leading 0. */
+  starter=code.javacode.left(1).tochar  -- first character
+
+  if starter='0' then if code.javacode.length.toint>1 then
+   if code.javacode.substr(2,1).tochar\='.' then do
+    -- unusal leading zeros must be treated as strings to preserve the
+    -- zeros
+    rexxnum(code)                            -- make it a safe Rexx
+    return
+    end
+
+  select label numbertype
+    when starter='-'-
+     | code.javacode.verify('0123456789', 'N', 1)==0 then do label inttest
+      -- Start with '-' can only happen from hex/bin literal integers
+      -- Also uses this path if characters all arabic digits
+      t=code.javacode.toint                  -- try for an integer
+      -- converted OK, try for byte or short
+      select
+        when t<=127 & t>=-128 then do
+          code.type=rxt.bytetype
+          -- cast added later if needed [note -128 may turn to byte]
+          end
+        when t<=32767 & t>=-32768 then do
+          code.type=rxt.shorttype
+          -- cast added later if needed
+          end
+        otherwise
+          code.type=rxt.inttype              -- needs a full int
+          -- code.javacode is OK as it is
+        end
+      code.value=Integer(t)
+
+      catch NumberFormatException  -- here if too big for an int
+        do label longtest
+          tl=code.javacode.tolong            -- try for a long
+          code.type=rxt.longtype             -- looks good
+          code.value=Long(tl)
+          code.javacode=code.javacode'L'     -- tell Java
+        catch NumberFormatException
+          -- too long for a long
+          rexxnum(code)                      -- make it a safe Rexx
+        end longtest
+      end inttest
+ /**
+    Float-integer path removed 1997.04.07 -- confusing; treat as floats
+    when code.javacode.datatype('w') then do label floatinteger
+      -- use this path if characters have some extra-digits, or decimal
+      -- part 0, but integer
+      -- [floats miss out on considerable optimizations, at present]
+      rexxnum(code)                          -- make it a safe Rexx
+      end floatinteger
+ **/
+    otherwise                      -- probably not an integer
+      do label floattest
+        tf=code.javacode.tofloat             -- try for a float
+        if tf=0 then if hasE(code.javacode) then
+         signal NumberFormatException        -- underflow
+        if tf=Float.POSITIVE_INFINITY-
+         | tf=Float.NEGATIVE_INFINITY then
+         signal NumberFormatException        -- overflow
+        -- looks good as a number, check significance [try double..]
+        if code.javacode.significance>7 then signal NumberFormatException
+        code.type=rxt.floattype
+        code.value=Double(tf)
+        code.javacode=code.javacode'F'       -- indicate
+      catch NumberFormatException
+        -- too long for a safe float
+        do label doubletest
+          td=code.javacode.todouble          -- try for a double
+          if td=0 then if hasE(code.javacode) then
+           signal NumberFormatException      -- underflow
+          if td=Float.POSITIVE_INFINITY-
+           | td=Float.NEGATIVE_INFINITY then
+           signal NumberFormatException      -- overflow
+          -- looks good as a number, check significance
+          if code.javacode.significance>15 then signal NumberFormatException
+          code.type=rxt.doubletype
+          code.value=Double(td)
+          code.javacode=code.javacode'D'     -- tell Java
+        catch NumberFormatException
+          -- too long for a safe double
+          rexxnum(code)                      -- make it a safe Rexx
+        end doubletest
+      end floattest
+    end numbertype
+  return
+
+ /* HASE -- test for e or E in a string */
+ method hasE(value=Rexx) private returns boolean
+   if value.pos('E')\=='0' then return 1
+   if value.pos('e')\=='0' then return 1
+   return 0
+
+ /* REXXNUM -- code for a Rexx object from a number */
+ method rexxnum(code=RxCode) private
+   code.value=code.javacode
+   code.javacode='new' NrBabel.rexxclass'("'Uniscape(code.javacode)'")'
+   code.type=NrBabel.rexxtype
+   return
+
+ /* MASSAGESTRING -- Transmute escapes, and escape double-quote
+    Arg1 is the token with the literal
+    Arg2 is the code object to be updated
+    -- This is just code moved down to avoid clutter above
+    */
+ method massagestring(tok=RxToken, code=RxCode) private
+  /* \b escape is not permitted at present -- may want \b00010001 */
+
+  -- first compact the string into its raw form for the constant value
+  -- [This duplicates the code below largely.  We do it twice instead of
+  -- generating the Java char/string from the raw characters in order to
+  -- preserve use of escapes.]
+  raw=Rexx(tok.value)
+  quoted=raw                  -- [save reference for reprocessing]
+
+  start=1
+  loop label escapes forever
+    q=int raw.pos('\\', start)
+    if q=0 then leave escapes
+    parse raw left =(q) +1 echar +1 rest
+    if q=1 then left='' /* fixup */
+    if echar=='' then uchar=char ' '
+                 else uchar=Character.toUpperCase(echar)
+    select case uchar
+      when 'T'  then genchar='\t'
+      when 'N'  then genchar='\n'
+      when 'F'  then genchar='\f'
+      when 'R'  then genchar='\r'
+      when '"'  then genchar='\"'
+      when "'"  then genchar="\'"
+      when '\\' then genchar='\\'
+      when '-'  then genchar='\0'       -- NUL
+      when '0'  then genchar='\0'
+      when 'X'  then do
+        parse rest hex +2 rest
+        usehex=hex.space(0).upper
+        if usehex.length\==2 then
+          signal RxError(rxt, tok, 'hexadecimal.escape.too.short')
+        v=usehex.verify('01234567890ABCDEF')
+        if v\==0 then
+          signal RxError(rxt, tok, 'invalid.hexadecimal.in.escape',-
+                         hex.substr(v, 1))
+        genchar=usehex.x2c
+        end
+      when 'U' then do
+        parse rest uni +4 rest
+        useuni=uni.space(0).upper
+        if useuni.length\==4 then
+          signal RxError(rxt, tok, 'unicode.escape.too.short')
+        v=useuni.verify('01234567890ABCDEF')
+        if v\==0 then
+          signal RxError(rxt, tok, 'invalid.hexadecimal.in.escape',-
+                         uni.substr(v, 1))
+        /* protect CR and LF gotchas */
+        if useuni=='000D' then genchar='\r'
+         else if useuni=='000A' then genchar='\n'
+         else genchar=useuni.x2c
+        end
+      when ' ' then
+        signal RxError(rxt, tok, 'invalid.escape.position')
+      otherwise
+        signal RxError(rxt, tok, 'invalid.escape.character', echar)
+      end /* select */
+    raw=left||genchar||rest
+    start=q+1
+    end escapes
+
+  -- Now generate the Java code string.  We know the original is
+  -- valid, as we have already processed it once, so no checks are
+  -- needed this time
+  start=1
+  loop label escapes forever
+    q=int quoted.pos('\\', start)
+    if q=0 then leave escapes
+    parse quoted left =(q) +1 echar +1 rest
+    if q=1 then left='' /* fixup */
+    if echar=='' then uchar=char ' '
+                 else uchar=Character.toUpperCase(echar)
+    select case uchar
+      when 'T'  then escape='\\t'
+      when 'N'  then escape='\\n'
+      when 'F'  then escape='\\f'
+      when 'R'  then escape='\\r'
+      when '"'  then escape='\\"'
+      when "'"  then escape="\\'"
+      when '\\' then escape='\\\\'
+      when '-'  then escape='\\000' -- NUL
+      when '0'  then escape='\\000'
+      when 'X'  then do
+        parse rest hex +2 rest
+        usehex=hex.space(0).upper
+        escape='\\'x2o(usehex)
+        q=q+2
+        end
+      when 'U' then do
+        parse rest uni +4 rest
+        useuni=uni.space(0).upper
+        /* protect CR and LF gotchas */
+        if useuni=='000D' then uni='r'
+         else if useuni=='000A' then uni='n'
+         else uni='u'uni
+        escape='\\'uni
+        q=q+4
+        end
+      end /* select */
+    quoted=left||escape||rest
+    start=q+2
+    end escapes
+
+  /* escape double-quotes */
+  start=1 /* start */
+  loop label doubleq forever
+    q=quoted.pos('"', start)
+    if q=0 then leave
+    if q=1 then do; quoted='\\'quoted; start=3; end
+     else if quoted.substr(q-1, 1)=='\\' then start=q+1 -- already escaped
+     else do
+      parse quoted aa =(q) bb
+      quoted=aa'\\'bb
+      start=q+2
+      end
+    end doubleq
+
+  quoted=Uniscape(quoted)          -- escape any Unicodes > 127
+
+  /* String is escaped. */
+  /* Make it a char if a single character, or string otherwise */
+  parse quoted c1 +1 c2 +1
+  select
+    when c1\=='\\' then explen=1   -- expected length if single-character
+    when c2=='u'   then explen=6
+    when c2=='0'   then explen=4
+    when c2=='1'   then explen=4
+    when c2=='2'   then explen=4
+    when c2=='3'   then explen=4
+    otherwise           explen=2
+    end
+  if quoted.length==explen then do
+    code.javacode=''''quoted''''        -- make char
+    code.type=rxt.chartype
+    code.value=raw                      -- [chars are held as Rexx]
+    end
+   else do
+    code.javacode='"'quoted'"'          -- make String
+    code.type=rxt.stringtype
+    code.value=raw.toString
+    end
+  code.constant=1
+  return
+
+ /* UNISCAPE -- escape any Unicodes > 127
+    Arg1 is string to check
+    returns string unchanged or expanded with escapes.
+    This is required as the input stream for Java must be composed only
+    of ASCII characters (00-7F, although javac accepts up to FF). */
+ method uniscape(in=Rexx) returns String
+  car=in.toCharArray
+  loop i=car.length-1 to 0 by -1  -- from right
+    if car[i]<<='\x7f' then iterate
+    in=in.left(i)-
+       ||'\\u'Rexx(car[i]).c2x.right(4, 0) -
+       ||in.substr(i+2)
+    end i
+  return in
+
+ /* GETPARENT -- return parent, given instance
+    Arg1 is the context cursor
+    Arg2 is the instance object whose parent we want
+    Arg3 is the class info corresponding to the instance object
+    Arg4 is the token in case of error
+    returns the insatnce of the parent object
+    */
+ -- should probably move to RxInterpreter later
+ method getparent(cursor=RxCursor, inst=Object, info=RxClassInfo,-
+                  tok=RxToken) private returns Object
+  thisname='this$'(info.parents-1)
+  -- field is synthetic, and unknown to our field-finder, so we 'fake
+  -- one up' for getProperty.
+  type=info.parentinfo.type
+  field=RxField(cursor.curprogram, info, thisname,-
+                type, 0, 0, null, null)
+  return interpreter.getProperty(inst, field, tok)
+
+ /* ACCEXCEP -- accumulate exceptions
+    Arg1 is code object
+    Arg2 is list to add to what's already there (if any)
+    Exceptions are a list of fully-qualified names, at present. */
+ method accexcep(code=RxCode, add=Rexx) private
+  if code.exceptions=null then code.exceptions=add
+                          else code.exceptions=code.exceptions','add
+  return
+
+ /* X2O -- convert 2 digits hexadecimal to 3 digits octal
+    Arg1 is input digits */
+ method x2o(hex2=Rexx) static
+   parse hex2.upper h1 +1 h2 +1
+   n1=RexxWords.pos(h1, '0123456789ABCDEF', 1)-1
+   n2=RexxWords.pos(h2, '0123456789ABCDEF', 1)-1
+   num=n1*16 + n2        -- to decimal
+   d3=num//8; num=num%8
+   d2=num//8; num=num%8
+   return num||d2||d3
+
+ /* codestypeString -- return method argument signatures as a string
+    Arg1 is the context
+    Arg2 is the array of RxCode objects representing the arguments
+            [may be null]
+    Types are separated by commas, and use fully-qualified names.
+    This is for visible use (error messages) so is babelized.
+    */
+ method codestypeString(cursor=RxCursor, codes=RxCode[]) private returns String
+  list=Rexx ''
+  if codes\=null then loop a=0 for codes.length
+    if a>0 then list=list','
+    ctype=codes[a].type
+    list=list||cursor.curprogram.babel.typeString(ctype)
+    end a
+  return list.toString
+
+ /* codetypes -- return method argument signatures as an array
+    Arg1 is the array of RxCode objects representing the arguments
+            [may be null]
+    Types are separated by commas, and use fully-qualified names. */
+ method codetypes(codes=RxCode[]) private returns RxType[]
+  if codes=null then return null
+  array=RxType[codes.length]
+  loop a=0 for codes.length
+    array[a]=codes[a].type
+    end a
+  return array
+
+ /* shortestname -- return shortest unambiguous name for a class
+    Arg1 is the context
+    Arg2 is the class information object
+
+    returns the short name for a class iff it is in the javaimports
+    list; otherwise the full name is returned to ensure unambiguous.
+    This should be used in generated Java code only.
+    */
+ method shortestname(cursor=RxCursor, info=RxClassInfo) private returns Rexx
+  key=info.type.classname.toString
+  if cursor.curprogram.javaimports.containsKey(key)
+   then return info.fullname  -- short name [with parents, no package]
+  return info.type.classname  -- fully qualified name
+

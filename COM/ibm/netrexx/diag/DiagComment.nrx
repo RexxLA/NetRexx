@@ -1,0 +1,167 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagComment                                                        */
+/*                                                                    */
+/*   An object that tests comments, white space, and continuations.   */
+/*                                                                    */
+/*   !!! Warning; this source contains tab and f-f characters.        */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.23 Initial                                                 */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+options binary
+
+class DiagComment
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagComment
+  ok='OK'
+
+  /*-- C O M M E N T S -------------------------------------------------*/
+  cflag=1; abc='ABC'
+  cflag=cflag & 'abc'/* */'def'   == 'abc def'
+  cflag=cflag & 'abc'-
+  /* */'def'   == 'abc def'
+  cflag=cflag & 'abc'/* */-
+  'def'   == 'abc def'
+  cflag=cflag & abc/* */'def'   == 'ABC def'
+  cflag=cflag & abc-
+  /* */'def'   == 'ABC def'
+  cflag=cflag & abc/* */-
+  'def'   == 'ABC def'
+
+  cflag=cflag & 'abc' /* */'def'  == 'abc def'
+  cflag=cflag & 'abc'/* */ 'def'  == 'abc def'
+  cflag=cflag & 'abc'  /* */'def' == 'abc def'
+  cflag=cflag & 'abc'/* */  'def' == 'abc def'
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'  -- foo
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'  --foo
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def' --foo
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'--foo
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'-- foo
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'--
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def' --
+  cflag=cflag & 'abc' -
+  /* */'def'  == 'abc def'
+  cflag=cflag & 'abc' -            -- bar
+  /* */'def'  == 'abc def'         --- barr
+  cflag=cflag & 'abc' - --bar
+  /* */'def'  == 'abc def'         ----barrr
+  cflag=cflag & 'abc'- --bar
+  /* */'def'  == 'abc def'
+  cflag=cflag & 'abc' /* */-        -- hidden open comment: /*
+  'def'  == 'abc def'               -- hidden quotes etc.:   '  \  "
+  cflag=cflag & abc /* */'def'  == 'ABC def'
+  cflag=cflag & abc -
+  /* */'def'  == 'ABC def'
+  cflag=cflag & abc /* ' hidden quotes etc. " \ */-
+  'def'  == 'ABC def'
+  /* Multi-line comment
+     plus */
+  /* Multi-line comment
+     [three-line]
+     plus */
+  /*
+     Awkward start */
+  /* Awkward end
+*/
+  /* Awkward middle 1 *
+  */
+  /* Awkward middle 2 /
+  */
+
+  if cflag then ok=ok '!' 'Simple comments'
+           else signal DiagX('Simple comments')
+
+  /* check for invalid addition of blank... */
+  cflag=cflag & /* */-
+  'abc def'  == 'abc def'
+  cflag=cflag & /* */ -
+  'abc def'  == 'abc def'
+  cflag=cflag & - /* */
+  'abc def'  == 'abc def'
+  cflag=cflag & - /* */  /* extra blanks between comments */
+  'abc def'  == 'abc def'
+  cflag=cflag & - /* *//* touching comments */
+  'abc def'  == 'abc def'
+
+  cflag=cflag & 'abc'/* */ 'def'  == 'abc def'
+  cflag=cflag & 'abc'-
+  /* */ 'def'  == 'abc def'
+  cflag=cflag & 'abc'/* */-
+   'def'  == 'abc def'
+
+  cflag=cflag & 'abc' /* */ 'def' == 'abc def'
+  cflag=cflag & 'abc'-
+   /* */ 'def' == 'abc def'
+  cflag=cflag & 'abc' /* */-
+   'def' == 'abc def'
+  cflag=cflag & 'abc'- /* */
+   'def' == 'abc def'
+  cflag=cflag & 'abc'- /* */ /* extra blank between */
+   'def' == 'abc def'
+  cflag=cflag & 'abc'- /* *//* adjacent */
+   'def' == 'abc def'
+  cflag=cflag & abc /* */ 'def' == 'ABC def'
+  cflag=cflag & abc-
+   /* */ 'def' == 'ABC def'
+  cflag=cflag & abc /* */-
+   'def' == 'ABC def'
+
+  if cflag then ok=ok '!' 'Mixed comments'
+           else signal DiagX('Mixed comments')
+
+  /* Check nesting of comments */
+  /* /* simple nest */ */
+  /* /* double nest */  /* xx */ */
+  /* /* double nest squash *//* xx */ */
+  /*/* squash left */ */
+  /*/*/* squash left */ */ */
+  /* /* squash right */*/
+  /* /* /* squash right */*/*/
+  /*/* squash both */*/
+  /*/*/* squash both */*/*/
+  /* adjacent comments *//* second *//* Third */
+
+  if cflag then ok=ok '!' 'Nested comments'
+           else signal DiagX('Nested comments')
+
+  /* Now check for spurious continuation character */
+  cff=0; x='\x2d'
+  cff=1  /* this will be treated as continuation of previous, maybe */
+  cflag=cflag & cff & x=='-'
+
+  if cflag then nop -- don't bother to add
+           else signal DiagX('Spurious continuation')
+
+  /* Now test whitespace characters */
+  tabs=int('\t')    'tab'     'tab2'
+  ffs=int('\f')'f-f''f-f2'
+  cflag=cflag & tabs='9 tab tab2'
+  cflag=cflag & ffs='12 f-f f-f2'
+  if cflag then nop -- don't bother to add
+           else signal DiagX('Bad white space')
+
+  /*--------------------------------------------------------------------*/
+
+  say 'DiagComment:' ok
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagComment()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage'"'
+  end

@@ -1,0 +1,224 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* netrexx.lang.RexxParse - Rexx parse function                       */
+/* ------------------------------------------------------------------ */
+/* Copyright IBM Corporation, 1996, 1997.  All Rights Reserved.       */
+/* Author    Mike Cowlishaw                                           */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 96.03.19 Initial version                                           */
+/* 96.03.31 Full Rexx parsing                                         */
+package netrexx.lang
+options binary strictargs nodecimal
+
+/**
+   This defines 'helper functions' for the NetRexx PARSE instruction.
+
+   The primary function here, parse, takes two arguments: an instruction
+   array that is effectively a 'play list' for doing the parse, and an
+   array of Rexx object references which are 'local variables' for the
+   parse.  The latter may be both in and out.
+
+   See Rexx, Object-Rexx, or ANSI specification for full semantics of
+   Parse.
+
+   A 'position' is origin 1; an 'offset' is origin 0.
+ */
+
+/* The instruction-list is driven by the following instructions:
+ *
+ *   EOP      End-of-parse
+ *   EOS      Pattern to match end-of-string
+ *   STRING   String pattern follows:
+ *             I+1  =length of pattern, L
+ *             I+2  =first character of string (if any)
+ *             I+L-1=last character of string (if any)
+ *   ABS      Absolute number
+ *             I+1  =length of number, L (each character holds 0-255)
+                     length may be 0 if the number is 0
+ *             I+2  =high byte of number
+ *             I+L-1=last byte of number
+ *   PLUS     Relative number (+), following bytes as ABS
+ *   MINUS    Relative number (-), following bytes as ABS
+ *   VAR      Variable that contains string
+ *             I+1  =variable offset (in vars array)
+ *   VARABS   Absolute number from variable
+ *             I+1  =variable offset (in vars array)
+ *   VARPLUS  Relative number from variable (+), following byte as VARABS
+ *   VARMINUS Relative number from variable (-), following byte as VARABS
+ *   VARLIST  List of variables to be set from last parsed segment
+ *             I+1  =number of variables in list, N (>=1)
+ *             I+2  =first variable offset
+ *             I+N-1=last variable offset
+ *            Omitted if none to assign between targets
+ */
+
+class RexxParse final
+   /* ----- Constants ----- */
+   properties public constant
+     /* (Used by RxParse) */
+     EOP     =char '\x00'
+     EOS     =char '\x01'
+     STRING  =char '\x02'
+     ABS     =char '\x03'
+     PLUS    =char '\x04'
+     MINUS   =char '\x05'
+     VAR     =char '\x06'
+     VARABS  =char '\x07'
+     VARPLUS =char '\x08'
+     VARMINUS=char '\x09'
+     VARLIST =char '\x0a'
+
+     /* Minimum and maximum column number */
+     MinCol  =0
+     MaxCol  =999999999
+
+   /* ----- Functions ----- */
+   /** Parse a string into variables.
+      <br>Arg1 is Rexx object to be parsed
+      <br>Arg2 is parse instruction list (no length restriction)
+      <br>Arg3 is list of Rexx object references (length 0-250)
+    */
+  method parse(obj=Rexx, list=char[], vars=Rexx[]) static
+    /* ensure we have character version */
+    chars=obj.toCharArray()  /* get character array */
+    onext=0                  /* next offset into the character array */
+    omatch=0                 /* offset of last match start */
+    obeg=int                 /* offset into the character array */
+    oend=0                   /* offset of end of (sub)string to parse, +1 */
+    ip=0                     /* 'instruction pointer' */
+    ins=list[0]              /* first instruction */
+    loop label instruction
+      obeg=onext             /* ready for next pattern match */
+      select label code case ins
+	
+        when STRING, VAR then do
+          if ins=VAR then do
+            needle=vars[int(list[ip+1])].toCharArray()
+            slen=needle.length
+            ip=ip+2  /* step over */
+          end
+            else do
+             slen=int(list[ip+1])
+             needle=char[slen]
+             ip=ip+2  /* -> first data */
+             loop i=0 to slen-1; needle[i]=list[ip]; ip=ip+1; end
+             end
+           /* now look for the needle */
+           omatch=RexxWords.pos(needle, chars, obeg+1)-1
+           if omatch<0 then /* not found */ do
+             oend=chars.length; omatch=oend; onext=oend
+             end
+            else do
+             oend=omatch /* offset */
+             onext=omatch+slen
+             end
+           end
+
+         when EOP then leave
+
+         when EOS then do
+           oend=chars.length; omatch=oend; onext=oend
+           ip=ip+1
+           end
+
+         when VARABS, VARPLUS, VARMINUS then do
+           nextcol=vars[int(list[ip+1])].toint()
+           if nextcol<MinCol | nextcol>MaxCol then
+             signal BadColumnException(vars[int(list[ip+1])])
+           ip=ip+2  /* step over */
+           select
+             when ins=VARABS then omatch=nextcol-1
+             when ins=VARPLUS then do
+               obeg=omatch
+               omatch=omatch+nextcol
+               end
+             when ins=VARMINUS then do
+               obeg=omatch
+               omatch=omatch-nextcol
+               end
+             end
+           if omatch<0 then omatch=0
+           oend=omatch
+           onext=oend
+           if oend<=obeg then oend=chars.length   /* wasn't forward */
+           end
+
+         otherwise /* ABS, PLUS, MINUS */ do
+           nextcol=0
+           ip=ip+1                           /* to count (may be 0) */
+           loop i=1 to int(list[ip])
+             ip=ip+1
+             nextcol=nextcol*256 + int(list[ip])  /* accumulate integer */
+             end
+           ip=ip+1                           /* to next instruction */
+           /* we have the column -- checked at compile time */
+           select
+             when ins=ABS then omatch=nextcol-1
+             when ins=PLUS then do
+               obeg=omatch
+               omatch=omatch+nextcol
+               end
+             when ins=MINUS then do
+               obeg=omatch
+               omatch=omatch-nextcol
+               end
+             end
+           if omatch<0 then omatch=0
+           oend=omatch
+           onext=oend
+           if oend<=obeg then oend=chars.length   /* wasn't forward */
+           end
+         end code
+
+       if obeg>chars.length then obeg=chars.length /* clamp */
+       if oend>chars.length then oend=chars.length
+       /* here, obeg is the offset of first character in string to parse */
+       /*       oend is the offset of last character in string to parse, +1 */
+       /*       ip   is offset of next instruction */
+       ins=list[ip]
+       if ins\=VARLIST then iterate instruction /* no vars to assign */
+       /* here if vars to assign */
+       varcount=int(list[ip+1])
+       ip=ip+2
+
+       /* say varcount 'variable(s) to assign' */
+       loop v=1 to varcount
+         if v=varcount then /* use whole remaining string */ do
+           vbeg=obeg
+           vend=oend
+           obeg=oend
+           end
+          else /* take word */ do
+           loop vbeg=obeg by 1 while vbeg<oend
+             if chars[vbeg]\=' ' then leave
+             end
+           loop vend=vbeg by 1 while vend<oend
+             if chars[vend]=' ' then leave
+             end
+           if vend<oend then obeg=vend+1/* don't reparse trailing blank */
+                        else obeg=vend
+           end
+         /* here, vbeg is start of variable's value */
+         /*       vend is end+1 of variable's value */
+         /*       obeg is start for next value */
+         len=vend-vbeg                  /* calculate length */
+         /* say 'vbeg vend obeg len' vbeg vend obeg len */
+         value=char[len]                /* make char array */
+         loop i=0 to len-1; value[i]=chars[vbeg+i]; end  /* copy */
+         /* say 'Var['(int(list[ip]))']=|'value'|' */
+         vars[int(list[ip])]=Rexx(value)/* create and check object */
+                                        /* [could use non-copy version,
+                                           if it were public] */
+         ip=ip+1                        /* step to next slot */
+         end
+
+       ins=list[ip]      /* prepare for next target */
+       end instruction
+     /* drop out when done */
+     return
+

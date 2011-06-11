@@ -1,0 +1,263 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxField                                                            */
+/*                                                                    */
+/*   An object that represents a known field, either local (in one    */
+/*   of the classes we're processing) or external (known to the JVM). */
+/*                                                                    */
+/*   The representation of a field is the local field signature; in   */
+/*   particular the 'hidden' first argument of dependent constructors */
+/*   does not appear explicitly.                                      */
+/*                                                                    */
+/*   Note that we use the old Java usage of the word 'field' -- that  */
+/*   is, it can refer to both properties and methods.                 */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.25 Initial                                                 */
+/* 1996.08.23 Add name                                                */
+/* 1996.08.29 Add exceptions list                                     */
+/* 1997.04.07 Argument signatures become an array                     */
+/* 1998.04.19 Remove NetRexx dependencies                             */
+/* 1998.04.30 Reorganize with binary attribute flags                  */
+/* 1999.09.12 Add FIELDVALUE property                                 */
+/* 2000.03.17 Add FIELDSPECIAL, for building a proxy constructor      */
+/* 2000.04.16 Add FIELDPROGRAM, for out-of-context babelization       */
+/* ------------------------------------------------------------------ */
+
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+/* Details of the properties
+     FIELDNAME       is the name of the field (exact case)
+     FIELDINFO       is the RxClassInfo (class) to which the field belongs
+     FIELDPROGRAM    is the RxProgram of the field, or which first registered it
+     FIELDCOUNT      is the unique count for fields of this name in class
+     FIELDTYPE       is the result type
+     FIELDVISIB      is VIS_xxx
+     FIELDATTS       is ATT_xxx
+     FIELDAMBIG      is 1 if the field is not unique (ambiguous)
+     FIELDHIDDEN     is RxClassInfo of class from which this field is hidden
+     FIELDVALUE      is value of the field, if known
+     FIELDLOCAL      is non-null if the field has local RxClass or RxMethod
+     FIELDID         is the unique ID of the field (>0 iff a local field)
+     If isMethod then also:
+       FIELDARGTYPES    is the array of types of the method
+                           arguments of the method
+       FIELDEXCEP       is the exceptions list (as a string); null if none
+       FIELDCONVERT     is the arguments conversion procedure list, or
+                           null if the arguments cannot be converted
+                           because ambiguous (more than one).
+       FIELDCOST        is the cost of invoking the field
+       FIELDREF2        is 1 if the method has been used in pass2
+       FIELDSPECIAL     is a field describing the this/super call iff
+                           this field is a constructor method
+     If FIELDMETHOD=0 then the last group are undefined
+
+   Note: FIELDAMBIG, FIELDHIDDEN, FIELDCOST, and FIELDCONVERT are only
+     valid after a call to RxClasser.findfield
+ */
+
+class RxField
+ properties public constant
+  -- Visibility values [mutually exclusive]
+  VIS_UNKNOWN     =int 0           -- unknown
+  VIS_PUB         =int 1           -- access public
+  VIS_INHER       =int 2           -- access inheritable [protected]
+  VIS_SHAR        =int 3           -- access shared [default access]
+  VIS_PRIV        =int 4           -- access private
+
+  -- Attributes [bit-significant]
+  ATT_NONE        =int 0           -- normal
+  ATT_STATIC      =int 0x0001      -- the field is static
+  ATT_FINAL       =int 0x0002      -- the field is final
+  ATT_ABSTRACT    =int 0x0004      -- the field is abstract
+  ATT_DEPRECATED  =int 0x0008      -- the field is deprecated
+  ATT_SYNTHETIC   =int 0x0010      -- the field is generated
+  ATT_VOLATILE    =int 0x0020      -- the field is volatile
+  ATT_TRANSIENT   =int 0x0040      -- the field is transient
+  ATT_NATIVE      =int 0x0080      -- the field is native
+  ATT_PROTECT     =int 0x0100      -- the field is protected (locked)
+  ATT_CONSTVALUE  =int 0x0200      -- the field has constant initializer
+  -- [others may be added later]
+
+ properties public
+  fieldname       =Rexx            -- name of the field
+  fieldinfo       =RxClassInfo     -- class to which the field belongs
+  fieldprogram    =RxProgram       -- program of the field (or where registered)
+  fieldcount      =int             -- ID of same-name field in class
+  fieldtype       =RxType          -- result type
+  fieldvisib      =int             -- visibility of the field
+  fieldatts       =int             -- attributes of the field
+  fieldambig      =boolean 0       -- field is ambiguous
+  fieldhidden     =RxClassInfo     -- class from where field cannot be seen
+  fieldargtypes   =RxType[]        -- field arguments type array
+  fieldconvert    =RxConvert[]     -- arguments conversion list
+  fieldexcep      =Rexx null       -- exceptions raised by the field
+  fieldref2       =boolean 0       -- referenced in pass2
+  fieldcost       =int             -- field cost
+  fieldlocal      =RxClauseParser  -- local method or class parser object
+  fieldid         =int             -- unique ID (iff local)
+  fieldspecial    =RxField         -- field for this/super call [iff constructor]
+  fieldvalue      =Object          -- field value if known [constant]
+                                   -- [as for RxCode values]
+ properties private
+  fieldmethod     =boolean         -- field is a method
+
+ properties private constant
+  voidtype        =RxType(null, 'void', 0)   -- [saves us needing rxt]
+  emptytypes      =RxType[0]                 -- ..
+
+
+ /** This constructor lets the object be set up in an inline call
+    Arg1 is the program (Babel) context for the field
+    Arg2 is the info for the class to which the field belongs
+    Arg3 is the name of the field [exact spelling]
+    Arg4 is the type (signature) of the field
+    Arg5 is the visibility flags
+    Arg6 is the attributes flags
+    Arg7 is the arguments type array if the field is a method (possibly
+            with 0 elements), or null if it is a property
+    */
+ method RxField(newprog=RxProgram, newinfo=RxClassInfo,-
+                newname=Rexx, newtype=RxType, -
+                newvisib=int, newatts=int,-
+                newargs=RxType[], newexcep=Rexx null)
+  fieldprogram=newprog
+  fieldinfo=newinfo
+  fieldname=newname
+  fieldtype=newtype
+  fieldvisib=newvisib
+  fieldatts=newatts
+  fieldargtypes=newargs
+  fieldexcep=newexcep
+  fieldmethod=(newargs\=null)
+
+  -- next can go if we have clean registerfield calls
+  if fieldexcep\=null then if fieldexcep=='' then fieldexcep=null
+
+ /* excepTypes -- return the exceptions list as an array of types */
+ method excepTypes returns RxType[]
+  if fieldexcep=null then return emptytypes
+  overlist=fieldexcep.changestr(',', ' ')
+  types=RxType[overlist.words]
+  loop i=0 for types.length
+    parse overlist overe overlist
+    types[i]=RxType(overe, 0)
+    end
+  return types
+
+ /* Methods for testing attributes */
+ method isMethod returns boolean
+  return fieldmethod
+ method isConstructor returns boolean
+  return fieldmethod & fieldname==fieldinfo.shortname
+
+ method isStatic     returns boolean
+  return (fieldatts & ATT_STATIC)     \=0
+ method isFinal      returns boolean
+  return (fieldatts & ATT_FINAL)      \=0
+ method isConstant   returns boolean
+  return ((fieldatts & ATT_FINAL)\=0) & ((fieldatts & ATT_STATIC)\=0)
+ method isKnownValue returns boolean
+  return ((fieldatts & ATT_FINAL)\=0) & ((fieldatts & ATT_CONSTVALUE)\=0)
+ method isDeprecated returns boolean
+  return (fieldatts & ATT_DEPRECATED) \=0
+ method isAbstract   returns boolean
+  return (fieldatts & ATT_ABSTRACT)   \=0
+ method isSynthetic  returns boolean
+  return (fieldatts & ATT_SYNTHETIC)  \=0
+ method isProtected  returns boolean
+  return (fieldatts & ATT_PROTECT)  \=0
+ method isNative     returns boolean
+  return (fieldatts & ATT_NATIVE)  \=0
+ method isVolatile   returns boolean
+  return (fieldatts & ATT_VOLATILE)  \=0
+ method isTransient  returns boolean
+  return (fieldatts & ATT_TRANSIENT)  \=0
+
+ /** Return a conventional babelized description of the field.
+    Arg1 is the program (language) context
+    Fully qualified names are used. */
+ method toString(program=RxProgram) returns String
+  if fieldmethod then do
+    argstring=RxType.toString(program, fieldargtypes)
+    if isConstructor then return fieldinfo.type.classname'('argstring')'
+    return fieldinfo.type.classname'.'fieldname'('argstring')'
+    end
+  return fieldinfo.type.classname'.'fieldname    -- property
+
+ /** Return a concise conventional babelized description of the field.
+    Arg1 is the program (language) context
+    Arg2 is 1 if the field should be shown simply (so no class
+            qualification is needed for methods and properties).
+    Concise names are used where possible.
+    */
+ method toConciseString(program=RxProgram, local=boolean 0) returns String
+  conciseclass=program.babel.typeConcise(fieldinfo.type)
+  if fieldmethod then do
+    argstring=RxType.toConciseString(program, fieldargtypes)
+    if isConstructor then return conciseclass'('argstring')'
+    if argstring\=='' then argstring='('argstring')'
+    if local then return fieldname||argstring
+    return conciseclass'.'fieldname||argstring
+    end
+  -- a property
+  if local then return fieldname
+  return conciseclass'.'fieldname
+
+ /** Return the signature of the field, JVM-style
+    returns string[e.g.,  (Ljava/lang/Object;)I'
+    Note that dependent constructors must have the hidden parent object
+    argument included in the JVM signature (as the first argument).
+    */
+ method JVMsig returns String
+  iscon=isconstructor
+  des=String ''
+  if fieldmethod then do
+    des=des'('
+    if iscon then if fieldinfo.isdependent then do
+      type=fieldinfo.parentinfo.type
+      des=des||type.tojavaSig.replace('.','/')
+      end
+    if fieldargtypes\=null then loop t=0 for fieldargtypes.length
+      type=fieldargtypes[t]
+      des=des||type.tojavaSig.replace('.','/')
+      end
+    des=des')'
+    end
+  if fieldtype=voidtype, iscon then retsig=String 'V'
+   else retsig=fieldtype.tojavaSig.replace('.','/')
+  des=des||retsig
+  return des
+
+ /** Convert visibility to java keywords */
+ method visibilityToJava(visib=int) static returns Rexx
+  vis=Rexx
+  select
+    when visib=VIS_PUB   then vis='public'
+    when visib=VIS_INHER then vis='protected'
+    when visib=VIS_SHAR  then vis=''
+    when visib=VIS_PRIV  then vis='private'
+    -- otherwise internal error
+    end
+  return vis
+
+ /** Convert attributes flags to java keywords */
+ method attributesToJava(atts=int) static returns Rexx
+  out=Rexx ''
+  if (atts & ATT_STATIC)    \=0 then out=out 'static'
+  if (atts & ATT_FINAL)     \=0 then out=out 'final'
+  if (atts & ATT_ABSTRACT)  \=0 then out=out 'abstract'
+  if (atts & ATT_VOLATILE)  \=0 then out=out 'volatile'
+  if (atts & ATT_TRANSIENT) \=0 then out=out 'transient'
+  if (atts & ATT_NATIVE)    \=0 then out=out 'native'
+  if (atts & ATT_PROTECT)   \=0 then out=out 'synchronized'
+  return out.space
+

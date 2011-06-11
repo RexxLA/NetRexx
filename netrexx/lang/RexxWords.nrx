@@ -1,0 +1,491 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* netrexx.lang.RexxWords - Rexx class word functions                 */
+/* ------------------------------------------------------------------ */
+/* Copyright IBM Corporation, 1996, 1997.  All Rights Reserved.       */
+/* Author    Mike Cowlishaw                                           */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 96.03.03 Initial version                                           */
+/* 96.10.16 remove allblanks processing                               */
+package netrexx.lang
+options binary strictargs nodecimal
+
+/**
+   This defines 'helper functions' for the Rexx class for NetRexx.
+   The functions here are all word- or character-like, and act on char[]
+   strings rather than Rexx or String objects, and return either char[]
+   or primitives.  See Rexx, Object-Rexx, or ANSI specification for full
+   descriptions.  Many of the implementations here are based on the ANSI
+   BIF descriptions; the significant difference is that words are
+   delimited by blanks, not whitespace [Oct96].
+
+   Argument checking (type and range) is assumed done by caller.
+   Currently, all arguments should always be supplied.  Option letters
+   should be a single character, uppercase.  Arguments are never
+   altered.
+
+   A 'position' is origin 1; an 'offset' is origin 0.
+    */
+
+class RexxWords final
+   /* ----- Constants ----- */
+   properties constant
+
+   /* ----- Functions ----- */
+   /** Return 1 if string B is an abbreviation of string A.
+      <br>Arg1 is string A.
+      <br>Arg2 is string B.
+      <br>Arg3 is minimum length
+       */
+   method abbrev(a=char[], b=char[], len=int) static returns boolean
+     if a.length<len | b.length<len then return 0
+     if b.length>a.length then return 0
+     if b.length=0 & len=0 then return 1     -- 'default keyword' rule
+     loop i=0 to b.length-1
+       if a[i]\=b[i] then return 0           -- mismatch
+       end i
+     return 1                                -- all match
+
+   /** Return centred string.
+      <br>Arg1 is string work on.
+      <br>Arg2 is the final width requested.
+      <br>Arg3 is the pad character.
+       */
+   method centre(s=char[], wid=int, pad=char) static returns char[]
+      chop=s.length-wid
+      if chop=0 then return s                -- exact fit
+      ret=char[wid]                          -- need a return array
+      if chop>0 then /* reducing */
+        System.arraycopy(s, chop%2, ret, 0, wid)
+       else /* expanding */ do
+        gap=-chop%2
+        loop i=0 to gap-1; ret[i]=pad; end i
+        System.arraycopy(s, 0, ret, gap, s.length)
+        loop i=gap+s.length to ret.length-1; ret[i]=pad; end i
+        end
+      return ret
+
+   /** Return changed string.
+      <br>Arg1 is string A.
+      <br>Arg2 is string B.
+      <br>Arg3 is pad character.
+       */
+   method changestr(needle=char[], haystack=char[], new=char[]) -
+                    static returns char[]
+     reps=countstr(needle, haystack)
+     newlen=haystack.length + reps*(new.length-needle.length)
+     res=char[newlen]
+     oin=0     /* offset into haystack */
+     out=0     /* offset into res */
+     loop label k for reps
+       p=pos(needle, haystack, oin+1)
+       /* copy stuff up to p */
+       loop i=oin to p-2; res[out]=haystack[i]; out=out+1; end
+       /* add new */
+       loop i=0 to new.length-1; res[out]=new[i]; out=out+1; end
+       oin=p+needle.length-1 /* step over found needle */
+       end k
+     /* add any leftovers */
+     loop i=oin to haystack.length-1; res[out]=haystack[i]; out=out+1; end
+     return res
+
+   /** Return comparison of two strings.
+      <br>Arg1 is string A.
+      <br>Arg2 is string B.
+      <br>Arg3 is pad character.
+       */
+   method compare(a=char[], b=char[], pad=char) static returns int
+     maxlen=a.length
+     if b.length>maxlen then maxlen=b.length
+     loop i=1 to maxlen
+       select
+         when i>a.length then if b[i-1]\==pad then return i
+         /* still have some A */
+         when i>b.length then if a[i-1]\==pad then return i
+         /* have both A and B */
+         otherwise
+           if a[i-1]\==b[i-1] then return i
+        end
+       end i
+     return 0
+
+   /** Return count of occurrences in a string.
+      <br>Arg1 is string of words to look for.
+      <br>Arg2 is the string to check.
+       */
+   method countstr(needle=char[], haystack=char[]) static returns int
+     count=0
+     p=pos(needle, haystack, 1)
+     loop while p>0
+       count=count+1
+       p=pos(needle, haystack, p+needle.length)
+       end
+     return count
+
+   /** Return string without substring.
+      <br>Arg1 is string of words to look in.
+      <br>Arg2 is the start character for delete.
+      <br>Arg3 is count of characters.
+       */
+   method delstr(s=char[], start=int, len=int) static returns char[]
+     if len=0 then return s        /* nothing deleted */
+     if start>s.length then return s /* nothing deleted */
+     /* start is start of first deleted */
+     fin=start+len                   /* start of continuation */
+     if fin>s.length then fin=s.length+1     /* clamp */
+     need=start+s.length-fin
+     res=char[need]                /* make array for result */
+     if start>1       then System.arraycopy(s, 0, res, 0, start-1)
+     if fin<=s.length then System.arraycopy(s, fin-1, res, start-1, s.length-fin+1)
+     return res
+
+   /** Return string without substring of words.
+      <br>Arg1 is string of words to look in.
+      <br>Arg2 is the start word number for delete.
+      <br>Arg3 is count of words.
+       */
+   method delword(s=char[], num=int, len=int) static returns char[]
+     if len=0 then return s        /* nothing deleted */
+     start=wordindex(s, num)       /* start of first excluded */
+     if start=0 then return s      /* none */
+     fin=wordindex(s, num+len)     /* start of first continuation word */
+     /* fin=0 if no continuation */
+     /* [could use delstr here] */
+     if fin=0 then fin=s.length+1
+     need=start+s.length-fin
+     res=char[need]                /* make array for result */
+     if start>1       then System.arraycopy(s, 0, res, 0, start-1)
+     if fin<=s.length then System.arraycopy(s, fin-1, res, start-1, s.length-fin+1)
+     return res
+
+   /** Insert string into another
+      <br>Arg1 is target string     ) NB ...
+      <br>Arg2 is string to insert  )  .. not classic Rexx order
+      <br>Arg3 is where to insert
+      <br>Arg4 is insert length
+      <br>Arg5 is pad character
+       */
+   method insert(chars=char[], newchars=char[], num=int, len=int, padchar=char)-
+              static returns char[]
+    reslen=num+len
+    if num<chars.length then reslen=reslen+chars.length-num
+    res=char[reslen]               /* where we will lay out */
+    if num>0 then do               /* have left part */
+      if num<=chars.length then
+        System.arraycopy(chars, 0, res, 0, num)
+       else /* pad needed */ do
+        System.arraycopy(chars, 0, res, 0, chars.length)
+        loop i=chars.length to num-1; res[i]=padchar; end
+        end
+      end
+    if len>0 then do               /* have insert */
+      if len<=newchars.length then
+        System.arraycopy(newchars, 0, res, num, len)
+       else /* pad needed */ do
+        System.arraycopy(newchars, 0, res, num, newchars.length)
+        loop i=newchars.length to len-1; res[num+i]=padchar; end
+        end
+      end
+    if num<chars.length then do    /* have right part */
+      System.arraycopy(chars, num, res, num+len, chars.length-num)
+      end
+    return res
+
+   /** Overlay a string onto another
+      <br>Arg1 is target string     ) NB ...
+      <br>Arg2 is string to overlay )  .. not classic Rexx order
+      <br>Arg3 is where to overlay
+      <br>Arg4 is overlay length
+      <br>Arg5 is pad character
+       */
+   method overlay(chars=char[], newchars=char[], num=int, len=int, padchar=char)-
+              static returns char[]
+    reslen=num+len-1
+    if reslen<chars.length then reslen=chars.length
+    res=char[reslen]               /* where we will lay out */
+    if num>1 then do               /* have left part */
+      if num-1<=chars.length then
+        System.arraycopy(chars, 0, res, 0, num-1)
+       else /* pad needed */ do
+        System.arraycopy(chars, 0, res, 0, chars.length)
+        loop i=chars.length to num-2; res[i]=padchar; end
+        end
+      end
+    if len>0 then do               /* have insert */
+      if len<=newchars.length then
+        System.arraycopy(newchars, 0, res, num-1, len)
+       else /* pad needed */ do
+        System.arraycopy(newchars, 0, res, num-1, newchars.length)
+        loop i=newchars.length to len-1; res[num-1+i]=padchar; end
+        end
+      end
+    if (num+len-1)<chars.length then do /* have right part */
+      System.arraycopy(chars, num+len-1, res, num+len-1,-
+                       chars.length-(num+len-1))
+      end
+    return res
+
+   /** Find next blank.
+      <br>Arg1 is string to search.
+      <br>Arg2 is where to seach from.
+      <br>Returns 0 if no blanks found.
+       */
+   method nextblank(s=char[], start=int) constant returns int
+     loop i=start to s.length
+       if s[i-1]=' ' then return i
+       end i
+     return 0       /* not found */
+
+   /** Find next non-blank.
+      <br>Arg1 is string to search.
+      <br>Arg2 is where to seach from.
+      <br>Returns 0 if no non-blanks found.
+       */
+   method nextnonblank(s=char[], start=int) constant returns int
+     loop i=start to s.length
+       if s[i-1]\=' ' then return i
+       end i
+     return 0       /* none found */
+
+   /** Return position of a needle character in a haystack.
+      <br>Arg1 is character to look for.
+      <br>Arg2 is the string to check.
+      <br>Arg3 is start position.
+       */
+   method pos(needle=char, haystack=String, start=int) static returns int
+     return pos(needle, haystack.toCharArray(), start)
+
+   method pos(needle=char, haystack=char[], start=int) static returns int
+     loop o=start-1 to haystack.length-1
+       if haystack[o]=needle then return o+1
+       end
+     return 0 /* not found */
+
+   /** Return position of a needle in a haystack.
+      <br>Arg1 is string to look for.
+      <br>Arg2 is the string to check.
+      <br>Arg3 is start position.
+       */
+   method pos(needle=String, haystack=String, start=int) static returns int
+     return pos(needle.toCharArray(), haystack.toCharArray(), start)
+
+   method pos(needle=char[], haystack=char[], start=int) static returns int
+     if needle.length=0 then return 0
+     loop i=start to haystack.length-needle.length+1
+       loop j=0 to needle.length-1
+         if needle[j]\=haystack[i+j-1] then iterate i
+         end j
+       return i /* all matched */
+       end i
+     return 0 /* not found */
+
+   /** Return spaced-out string.
+      <br>Arg1 is string of words to work on.
+      <br>Arg2 is the spacing requested.
+      <br>Arg3 is the pad character.
+       */
+   method space(s=char[], gap=int, pad=char) static returns char[]
+     /* first count words and non-spaces */
+     start=1; count=0; nonspaces=0
+     loop
+       start=nextnonblank(s, start)
+       if start=0 then leave
+       count=count+1
+       nextblank=nextblank(s, start+1)
+       if nextblank=0 then do
+         nonspaces=nonspaces+s.length+1-start
+         leave
+         end
+       nonspaces=nonspaces+nextblank-start
+       start=nextblank
+       end
+     if count=0 then return char[0]     /* wordless */
+     len=(count-1)*gap+nonspaces        /* total chars */
+     res=char[len]
+     /* Roughly the same loop again, but this time copy nonspaces */
+     start=1; out=0
+     loop c=1 to count
+       start=nextnonblank(s, start)
+       if start=0 then leave
+       loop
+         res[out]=s[start-1]
+         start=start+1
+         if start>s.length then leave c /* all done */
+         out=out+1
+         if s[start-1]==' ' then leave
+         end
+       /* Add gap padding, unless last word */
+       if c=count then leave c
+       loop label i for gap
+         res[out]=pad
+         out=out+1
+         end i
+       end c
+     return res
+
+   /** Return substring of words.
+      <br>Arg1 is string of words to look in.
+      <br>Arg2 is the start word number.
+      <br>Arg3 is count of words.
+       */
+   method subword(s=char[], num=int, len=int) static returns char[]
+     if len=0 then return char[0]
+     start=wordindex(s, num)
+     if start=0 then return char[0]
+     fin=wordindex(s, num+len)     /* start of first excluded word */
+     if fin=0 then fin=s.length+1
+     loop fin=fin-1 to start by -1 /* drop trailing blanks */
+       if s[fin-1]\=' ' then leave
+       end
+     need=fin-start+1
+     res=char[need]                /* make & copy substring */
+     System.arraycopy(s, start-1, res, 0, need)
+     return res
+
+   /** Return position of first character that doesn't or does
+      match.
+      <br>Arg1 is primary string to check.
+      <br>Arg2 is list of characters to check for.
+      <br>Arg3 is 'M' for match or 'N' for nomatch.
+      <br>Arg4 is start position.
+      
+      Should be unused, nowadays. */
+   method verify(s=char[], v=char[], opt=char, start=int) static returns int
+     if opt='N' then return verifyn(s, v, start)
+     return verifym(s, v, start)
+
+   /** Return position of first character that matches.
+      <br>Arg1 is primary string to check.
+      <br>Arg2 is list of characters to check for.
+      <br>Arg3 is start position.
+       */
+   method verifym(s=char[], v=char[], start=int) static returns int
+     last=s.length
+     if start>last then return 0
+     if v.length=0 then return 0
+     loop i=start to last
+       try=s[i-1]
+       if try=v[0] then return i   -- common case, fastpath
+       t=pos(try, v, 2)            -- try the others
+       if t>0 then return i        -- matched
+       end i
+     return 0
+
+   /** Return position of first character that doesn't match.
+      <br>Arg1 is primary string to check.
+      <br>Arg2 is list of characters to check for.
+      <br>Arg3 is start position.
+       */
+   method verifyn(s=char[], v=char[], start=int) static returns int
+     last=s.length
+     if start>last then return 0
+     if v.length=0 then return start
+     loop i=start to last
+       t=pos(s[i-1], v, 1)
+       if t=0 then return i      /* unmatched */
+       end i
+     return 0
+
+   /** Return word from a string.
+      <br>Arg1 is string of words to look in.
+      <br>Arg2 is the word number.
+       */
+   method word(s=char[], num=int) static returns char[]
+     return subword(s, num, 1)
+
+   /** Return character position of first character of a word.
+      <br>Arg1 is string to search
+      <br>Arg2 is word position selected
+       */
+   method wordindex(s=char[], num=int) static returns int
+     start=1
+     loop count=1 by 1
+       start=nextnonblank(s, start)
+       if start=0 then return 0
+       if count=num then leave
+       start=nextblank(s, start+1)
+       if start=0 then return 0
+       end
+     return start
+
+   /** Return length of a word.
+      <br>Arg1 is string to search
+      <br>Arg2 is word position selected
+       */
+   method wordlength(s=char[], num=int) static returns int
+     start=wordindex(s, num)
+     if start=0 then return 0
+     fin=nextblank(s, start+1)
+     if fin=0 then fin=s.length+1
+     return fin-start
+
+   /** Return position of a words needle in a haystack.
+      <br>Arg1 is string of words to look for.
+      <br>Arg2 is the string to check.
+      <br>Arg3 is start position (in words).
+       */
+   method wordpos(needle=char[], haystack=char[], wpos=int) static returns int
+     nlen=needle.length            -- cache
+     if nlen=0 then return 0       -- null string
+     /* find and record start of first word in needle */
+     nbeg=nextnonblank(needle, 1)
+     if nbeg=0 then return 0       -- no words
+     /* find position of start word in haystack */
+     hbeg=wordindex(haystack, wpos)
+     if hbeg=0 then return 0       -- wordless haystack
+     hlen=haystack.length          -- cache
+     loop                          -- each possible start in haystack
+       /* compare by words [nbeg and hbeg starts each list] */
+       nb=nbeg; hb=hbeg
+       loop label compare
+         /* start of word in both; find ends */
+         nend=nextblank(needle, nb+1)
+         if nend=0 then nend=nlen+1
+         hend=nextblank(haystack, hb+1)
+         if hend=0 then hend=hlen+1
+         if hend-hb \= nend-nb then          -- word lengths differ
+           leave compare
+         -- compare words
+         h=hb-1
+         loop n=nb-1 to nend-2               -- offsets
+           if needle[n]\=haystack[h] then
+             leave compare                   -- character mismatch
+           h=h+1
+           end n
+         -- word matched
+         if nend>nlen then return wpos       -- needle all matched
+         nb=nextnonblank(needle, nend) -- skip spaces
+         if nb=0 then return wpos            -- needle all matched
+         -- more words in needle
+         if hend>hlen then leave compare     -- no more hay
+         hb=nextnonblank(haystack, hend)-- skip spaces
+         if hb=0 then leave compare          -- no more hay
+         end compare
+       /* here if not found at this wpos start */
+       wpos=wpos+1
+       hbeg=nextblank(haystack, hbeg+1)      -- skip word
+       if hbeg=0 then leave
+       hbeg=nextnonblank(haystack, hbeg+1)   -- skip spaces
+       if hbeg=0 then leave
+       end
+     return 0 /* not found */
+
+   /** Return number of words in a string.
+      <br>Arg1 is string to search
+       */
+   method words(s=char[]) static returns int
+     start=1; count=0
+     loop
+       start=nextnonblank(s, start)
+       if start=0 then leave
+       count=count+1
+       start=nextblank(s, start+1)
+       if start=0 then leave
+       end
+     return count
+

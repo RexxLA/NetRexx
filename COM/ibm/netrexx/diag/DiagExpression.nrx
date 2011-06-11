@@ -1,0 +1,597 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagExpression                                                     */
+/*                                                                    */
+/*   An object that tests facets of expression evaluation.            */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.21 Initial                                                 */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+options nobinary              -- NB
+import java.awt.List          -- for disambiguation test below
+
+numeric digits 2*4            -- nasty position for this...
+
+class DiagExpression
+
+  -- test references to static NUMERIC in prologues [numeric always static]
+  properties shared
+    nump1=1/3
+    numeric digits 6
+    nump2=1/3
+    numeric digits 10
+    nump3=1/3
+  properties constant
+    cstat=7
+    numeric digits cstat
+    nump4=1/3
+  properties shared
+    nump5=1/3
+    numeric digits cstat+2         -- leave digits at 9
+
+  properties private unused
+    aList=List                     -- [should be unambiguous]
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagExpression
+
+  /*-- E X P R E S S I O N S -------------------------------------------*/
+  ok='OK'; flag=boolean
+
+  /*** LOGICAL operators and comparisons ***/
+  if \'0'     then ok=ok '!' '\\'
+              else signal DiagX('\\')
+  if \'0'     then ok=ok '!' '\\'
+              else signal DiagX('\\')
+  if 1&1 &\0  then ok=ok '!' '&'
+              else signal DiagX('&')
+  if 1&&0 &\(1&&1)  then ok=ok '!' '&&'
+              else signal DiagX('&&')
+  if 0 | 1    then ok=ok '!' '|'
+              else signal DiagX('|')
+
+  flag='a'='a' & 'a'='a ' & ' a'='a'
+  if \flag then signal DiagX('"=" 1')
+  flag=flag & 'a'='A' & 'A'='a' & ''='  '
+  if \flag then signal DiagX('"=" 2')
+  flag=flag & 7=07 & 6=' + 6 ' & 5=' 5.00'  & 4.0=4.000
+  if \flag then signal DiagX('"=" 3')
+  flag=flag & '\x20'=' '
+  if \flag then signal DiagX('"=" 4')
+  ok=ok '!' '='
+
+  if 2==02 | 7==7.0 | ' a '=='a' | 'b'=='b ' | 'c'==' c'-
+     | \(2==2) | \('a'=='a')-
+     | \('foo\''=='foo''') | \('foo\"'=="foo""")-
+     | \('foo\0'=="foo\x00") | \('foo\-'=="foo\u0000")-
+     | \('foo\u0023'=="foo\x23")
+              then signal DiagX('==')
+              else ok=ok '!' '=='
+  if 2\==02 & 7\==7.0 & ' a '\=='a' & 'b'\=='b ' & 'c'\==' c'-
+     & \(2\==2) & \('a'\=='a') & 'a'\=='A'
+              then ok=ok '!' '\\=='
+              else signal DiagX('\\==')
+
+  say 'DiagExpression:' ok; ok='OK'
+
+  if 1<>3 & 3><1 & 5\=6 & 8\=9-
+   & 3>2 & 4<5 & 3<=3 & 7>=2 & 7\=4 & 3\>7 & 9\<6 & \(' '=='')
+              then ok=ok '!' 'Comparators'
+              else signal DiagX('Comparators')
+
+  if 7<070 & 7>>070 & 7\>070 & 7\<<070-
+   & 7<070 & 7>>=070 & 7\>070 & 007<<=070-
+   & 77<<770 & 770>>77 & 07<<7 & 1>>01
+              then ok=ok '!' 'Stricts'
+              else signal DiagX('Strict Comparators')
+
+  if 1+2*3==7      -
+   & (1+2)*3==9    -
+   & 3*7-1==20     -
+   & 1'2'==12      -
+   & '33'77==3377  -
+   & (67)76==6776  -
+   & (8)(9)==89    -
+   & (8)(3)*4==812 -
+   & (8)'3'*4==812 -
+   & 8'3'*4==812   -
+   & '8'3*4==812   -
+   & (12=(1)(2)) ==1    -
+   & ((1)(2)=12) ==1    -
+   & (6||7- -3)  ==610
+              then ok=ok '!' 'Precedence'
+              else signal DiagX('Precedence')
+
+  say 'DiagExpression:' ok; ok='OK'
+
+  /** Arithmetic operators **/
+  flag=0
+  if 2+3==5  &  5.75+3.3==9.05  &  5+'-3'==2 & 0.7+0.3==1.0-
+    & 1.23456789+1.00000000 == 2.23456789 then flag=1
+  flag= flag & 1.00000000     == 0.4444444444+0.5555555555
+  flag= flag & 0.444444444    == 0+0.4444444444999
+  flag= flag & 0.444444445    == 0+0.4444444445000
+  flag= flag & 2.500          == 1.250 + 1.250
+  flag= flag & 1.00000000E+13 == 70      + 10000e+9
+  flag= flag & 1.00000000E+13 == 700     + 10000e+9
+  flag= flag & 1.00000000E+13 == 7000    + 10000e+9
+  flag= flag & 1.00000001E+13 == 70000   + 10000e+9
+  flag= flag & 1.00000007E+13 == 700000  + 10000e+9
+  flag= flag & 1.00000000E+13 ==           10000e+9 + 70
+  flag= flag & 1.00000000E+13 ==           10000e+9 + 700
+  flag= flag & 1.00000000E+13 ==           10000e+9 + 7000
+  flag= flag & 1.00000001E+13 ==           10000e+9 + 70000
+  flag= flag & 1.00000007E+13 ==           10000e+9 + 700000
+  flag= flag & 0              == 00.0    + 0.00
+  flag= flag & 0              == 0.00    + 00.0
+  flag= flag & 3.3            == 3       + '.3'
+  flag= flag & 6              == 3       + ' 3'
+  flag= flag & 6              == 3       + '3 '
+  flag= flag & 6              == 3       + '+3'
+  flag= flag & 6              == 3       + ' + 3'
+  flag= flag & 6              == 3       + '+ 3'
+  flag= flag & 6              == 3       + ' +3'
+  flag= flag & 0              == 3       + '-3'
+  flag= flag & 0              == 3       + ' - 3'
+  flag= flag & 0              == 3       + '- 3'
+  flag= flag & 0              == 3       + ' -3'
+  if flag then ok=ok '!' '+'
+          else signal DiagX('+')
+
+  if 2-3==-1 &  5.03-3.1==1.93  & '-5.0'-12.753==-17.753 & 1.3-0.3==1.0-
+    & 1.23456789-1.00000000 == 0.23456789
+    then flag=1
+    else flag=0
+  flag= flag & '-1E-7'        == 10.23456784-10.23456789
+  flag= flag & 0              == 10.23456785-10.23456789
+  flag= flag & 0              == 10.23456786-10.23456789
+  flag= flag & 0              == 10.23456787-10.23456789
+  flag= flag & 0              == 10.23456788-10.23456789
+  flag= flag & 0              == 10.23456789-10.23456789
+  flag= flag & 0              == 10.23456790-10.23456789
+  flag= flag & 0              == 10.23456791-10.23456789
+  flag= flag & 0              == 10.23456792-10.23456789
+  flag= flag & 0              == 10.23456793-10.23456789
+  flag= flag & '1E-7'         == 10.23456794-10.23456789  -- ANSI change
+
+  flag= flag & '-1E-7'        == 10.23456781-10.23456786  -- ..
+  flag= flag & 0              == 10.23456782-10.23456786
+  flag= flag & 0              == 10.23456783-10.23456786
+  flag= flag & 0              == 10.23456784-10.23456786
+  flag= flag & 0              == 10.23456785-10.23456786
+  flag= flag & 0              == 10.23456786-10.23456786
+  flag= flag & 0              == 10.23456787-10.23456786
+  flag= flag & 0              == 10.23456788-10.23456786
+  flag= flag & 0              == 10.23456789-10.23456786
+  flag= flag & 0              == 10.23456790-10.23456786
+  flag= flag & '1E-7'         == 10.23456791-10.23456786  -- ..
+
+  flag= flag & '-1.00000000E+13' == 70      - 10000e+9
+  flag= flag & '-1.00000000E+13' == 700     - 10000e+9
+  flag= flag & '-1.00000000E+13' == 7000    - 10000e+9
+  flag= flag & '-9.9999999E+12'  == 70000   - 10000e+9
+  flag= flag & '-9.9999993E+12'  == 700000  - 10000e+9
+  flag= flag & '1.00000000E+13'  ==           10000e+9 - 70
+  flag= flag & '1.00000000E+13'  ==           10000e+9 - 700
+  flag= flag & '1.00000000E+13'  ==           10000e+9 - 7000
+  flag= flag & '9.9999999E+12'   ==           10000e+9 - 70000
+  flag= flag & '9.9999993E+12'   ==           10000e+9 - 700000
+
+  flag= flag & 0              == 1-0.999999999
+  flag= flag & 0              == 0.999999999-1
+
+  numeric digits 3
+  flag=flag & '12345678900000' - '9999999999999' == '2.4E+12'
+  flag=flag & digits=3
+  numeric digits
+
+  if flag then ok=ok '!' '-'
+          else signal DiagX('-')
+
+  flag=1
+  flag=flag&    5+3*2         == 11  /* checks precedence */
+  numeric digits 3
+  flag=flag & 123456789E+10 * 3456757 == '4.26E+24'
+  flag=flag & 123456789E+10 * 77E-20  == '0.950'
+  numeric digits
+  if flag & 2*3==6  &  5.09*7.1==36.139  & 2.5*4==10.0-
+    & 1.23456789*1.00000000 == 1.23456789-
+    & 9.999999999 * 9.9999999999 == 100.000000
+            then ok=ok '!' '*'
+            else signal DiagX('"*"')
+  flag=1
+  flag=flag& 1     / 3        == 0.333333333
+  flag=flag& 2.4   / 1        == 2.4
+  flag=flag& 2.40  / 1        == 2.4
+  flag=flag& 2.400 / 1        == 2.4
+  flag=flag& 2.4   / 2        == 1.2
+  flag=flag& 2     / 2        == 1
+  flag=flag& 20    / 20       == 1
+  flag=flag& 187   / 187      == 1
+  flag=flag& 2.400 / 2        == 1.2
+  flag=flag& 5     / 2.000    == 2.5
+  flag=flag& 5     / 0.200    == 25
+  flag=flag& 5     / 2        == 2.5
+  flag=flag& 0.0000E-50    /1 == '0'
+  flag=flag& 999999999     /1 == '999999999'
+  flag=flag& 999999999.4   /1 == '999999999'
+  flag=flag& 999999999.5   /1 == '1E+9'
+  flag=flag& 999999999.9   /1 == '1E+9'
+  flag=flag& 999999999.99  /1 == '1E+9'
+  flag=flag& 999999999.999 /1 == '1E+9'
+  if flag then ok=ok '!' '/'
+          else signal DiagX('/')
+  flag=1
+  flag=flag& 101.0 % 3       == 33
+  flag=flag& 2.4   % 1       == 2
+  flag=flag& 2.400 % 1       == 2
+  flag=flag& 18    % 18      == 1
+  flag=flag& 1120  % 1000    == 1
+  flag=flag& 2.4   % 2       == 1
+  flag=flag& 2.400 % 2       == 1
+  flag=flag& 0.5   % 2.000   == '0'
+  flag=flag& 8.005 % 7       == 1
+  flag=flag& 5     % 2       == 2
+  if flag then ok=ok '!' '%'
+          else signal DiagX('%')
+  flag=1
+  flag=flag&  5//5      == 0
+  flag=flag&  13//10    == 3
+  flag=flag&  13//50    == 13
+  flag=flag&  13//100   == 13
+  flag=flag&  13//1000  == 13
+  flag=flag&  0.133//1  == 0.133
+  flag=flag&  0.1033//1 == 0.1033
+  flag=flag&  1.033//1  == 0.033
+  flag=flag&  10.33//1  == 0.33
+  flag=flag&  10.33//10 == 0.33
+  flag=flag&  103.3//1  == 0.3
+  flag=flag&  133//10   == 3
+  flag=flag&  1033//10  == 3
+  flag=flag&  133//50   == 33
+  flag=flag& 101.0 // 3       == '2.0'
+  flag=flag& 102.0 // 3       == '0'
+  flag=flag& 2.4   // 1       == 0.4
+  flag=flag& 2.40  // 1       == 0.40
+  flag=flag& 2.400 // 1       == 0.400
+  flag=flag& 2.4   // 2       == 0.4
+  flag=flag& 2.400 // 2       == 0.400
+  flag=flag& 0.5   // 2.001   == 0.5
+  flag=flag& 0.03  // 7       == 0.03
+  flag=flag& 5     // 2       == 1
+  flag=flag& 1.2   // 0.7345  == 0.4655
+  flag=flag& 0.8   // 1       == 0.8
+  flag=flag& 0.800 // 12      == 0.800
+  flag=flag& 0.800 // 1.7     == 0.800
+  flag=flag& (0.800+0) // 1.7 == 0.800
+  flag=flag& 1     // 0.3     == 0.1
+  flag=flag& 1     // 0.30    == 0.10
+  flag=flag& 1     // 0.300   == 0.100
+  flag=flag& 1     // 0.3000  == 0.1000
+  flag=flag& 1.0   // 0.3     == 0.1
+  flag=flag& 1.00  // 0.3     == 0.10
+  flag=flag& 1.000 // 0.3     == 0.100
+  flag=flag& 1.0000// 0.3     == 0.1000
+  flag=flag& 0.10  // 0.30    == 0.10
+  flag=flag& 0.100 // 0.30    == 0.100
+  flag=flag& 0.10  // 0.300   == 0.10   -- residue is LHS
+  numeric digits 3
+  flag=flag& '12345678900000'//12E+12 == '3.4E+11'
+  numeric digits 9
+  if flag    then ok=ok '!' '//'
+             else signal DiagX('//')
+
+  flag=1
+  flag=flag&     0**0         == 1
+  flag=flag&     0**1         == 0
+  flag=flag&     0**1         == 0
+  flag=flag&     1**0         == 1
+  flag=flag&   0.3**0         == 1
+  flag=flag&    10**999999999 == '1E+999999999'
+  flag=flag&    10**999999998 == 1E+999999998
+  flag=flag&    10**999999997 == 1E+999999997
+  flag=flag&    10**333333333 == 1E+333333333
+  flag=flag&    10**77        == 1E+77
+  flag=flag&    10**22        == 1E+22
+  flag=flag&    10**-77       == 1E-77
+  flag=flag&    10**-22       == 1E-22
+  flag=flag&     2**-1        == 0.5
+  flag=flag&     2**-2        == 0.25
+  flag=flag&     2**-4        == 0.0625
+  flag=flag&    5*3**2        == 45  /* checks precedence */
+  flag=flag&    -3**2           == 9 /* from book */
+  flag=flag&-(2+1)**2           == 9 /* from book */
+  flag=flag&     2**2**3        == 64/* from book */
+  numeric digits 3
+  flag=flag&     2**2.000000001 == 4 /* check rhs input rounding */
+  flag=flag& '123456789E+10'**'-123'=='5.86E-2226' /* check lhs input chop */
+  numeric digits 9
+  x=0.50; temp=1
+  loop n=1 to 10
+    temp=temp*x/1
+    flag=flag&   x**n         == temp
+    end
+  x=2; temp=1
+  loop n=1 to 29
+    temp=temp*x/1
+    flag=flag&   x**n         == temp
+    flag=flag&   x**-n        == 1/temp
+    /* Note that rounding errors are possible for larger "n" */
+    /* due to the information content of the exponent        */
+    end
+  if flag    then ok=ok '!' '**'
+             else signal DiagX('"**"')
+
+  if \0==1 &-
+     \1==0    then ok=ok '!' 'Pref \\'
+              else signal DiagX('Prefix \\')
+  if +7E+1==70 &-
+     +0.00==0  &-
+     +3==3    then ok=ok '!' 'Pref +'
+              else signal DiagX('Prefix +')
+  if -7E+1==-70 &-
+     -0.00==0  &-
+     -9=='-9' then ok=ok '!' 'Pref -'
+              else signal DiagX('Prefix -')
+  say 'DiagExpression:' ok; ok='OK'
+
+  /** Arithmetic and NUMERIC **/
+  nflag=1  /* Parse numeric values */
+  flag=1   /* Arithmetic */
+
+  -- first check the effects of NUMERIC on properties
+  nflag=nflag& nump1=='0.33333333'   -- digits=8
+  nflag=nflag& nump2=='0.333333'     -- digits=6
+  nflag=nflag& nump3=='0.3333333333' -- digits=10
+  nflag=nflag& nump4=='0.3333333'    -- digits=7, static
+  nflag=nflag& nump5=='0.3333333'    -- digits=8
+
+  numeric digits
+  numeric form
+  parse digits pn .
+  parse form   pf .
+  nflag=nflag&  pn='9'        /* check default(s) */
+  nflag=nflag&  pf='scientific'
+
+  flag= flag & 0              == (1.23456784=1.23456789)
+  flag= flag & 0              == (1.23456785=1.23456789)
+  flag= flag & 0              == (1.23456786=1.23456789)
+  flag= flag & 0              == (1.23456787=1.23456789)
+  flag= flag & 0              == (1.23456788=1.23456789)
+  flag= flag & 1              == (1.23456789=1.23456789)
+  flag= flag & 0              == (1.23456790=1.23456789)
+  flag= flag & 0              == (1.23456791=1.23456789)
+  flag= flag & 0              == (1.23456792=1.23456789)
+  flag= flag & 0              == (1.23456793=1.23456789)
+  flag= flag & 0              == (1.23456794=1.23456789)
+  flag= flag & 0              == (1         =0.99999999)
+  flag= flag & 0              == (0.99999999=1          )
+  /* Check guard digit rounding... */
+  flag= flag & 0              == (1.123456784=1.123456789)
+  flag= flag & 1              == (1.123456785=1.123456789)
+  flag= flag & 1              == (1.123456786=1.123456789)
+  flag= flag & 1              == (1.123456787=1.123456789)
+  flag= flag & 1              == (1.123456788=1.123456789)
+  flag= flag & 1              == (1.123456789=1.123456789)
+  flag= flag & 1              == (1.123456790=1.123456789)
+  flag= flag & 1              == (1.123456791=1.123456789)
+  flag= flag & 1              == (1.123456792=1.123456789)
+  flag= flag & 1              == (1.123456793=1.123456789)
+  flag= flag & 0              == (1.123456794=1.123456789)
+  flag= flag & 1              == (1         =0.999999999)
+  flag= flag & 1              == (0.999999999=1          )
+  /* [fuzz tests deleted] */
+  numeric digits 3
+  parse digits pn
+  nflag=nflag&  pn='3'
+  flag=flag&  1/3=0.333
+  flag=flag&  1/3\=0.33
+  numeric digits 9
+  flag=flag&  1/3==0.333333333
+  flag=flag&  0+3e+10 =='3E+10'
+  numeric digits 100
+  parse digits pn
+  nflag=nflag&  pn='100'
+  flag=flag&  1/3=='0.'||Rexx('3').copies(100)
+  flag=flag&  2/3=='0.'||Rexx('6').copies(99)||'7'
+  flag=flag&  (1/3)*3=='0.'||Rexx('9').copies(100)
+  flag=flag&  ((1/3)*3)/3=='0.'||Rexx('3').copies(100)
+  numeric digits 6
+  /* Check defaulting mechanism... */
+  numeric digits
+  parse digits pn
+  nflag=nflag&  pn='9'
+                                        -- until later
+  /* Check Sci/Eng switch */
+  numeric form engineering
+  parse form pf
+  nflag=nflag&  pf='engineering'
+  eflag=1
+  eflag=eflag& 0+3e+8   == "300000000"
+  eflag=eflag& 0+3e+9   == "3E+9"
+  eflag=eflag& 0+3e+10  == "30E+9"
+  eflag=eflag& 0+3e+11  == "300E+9"
+  eflag=eflag& 0+3e+12  == "3E+12"
+  eflag=eflag& 0+0.3e+12== "300E+9"
+  eflag=eflag& 0+3e-9   == "3E-9"
+  eflag=eflag& 0+3e-10  == "300E-12"
+  eflag=eflag& 0+3e-11  == "30E-12"
+  eflag=eflag& 0+3e-12  == "3E-12"
+  eflag=eflag& 0+0.3e-12== "300E-15"
+
+  eflag=eflag& 0+0.001  == "0.001"
+  eflag=eflag& 0+0.0001  == "0.0001"
+  eflag=eflag& 0+0.00001  == "0.00001"
+  eflag=eflag& 0+0.000001  == "0.000001"
+  eflag=eflag& 0+0.0000001  == "100E-9"
+  eflag=eflag& 0+0.00000001  == "10E-9"
+  eflag=eflag& 0+0.000000001  == "1E-9"
+  if eflag then ok=ok '!' 'Engineering'
+           else signal DiagX('Engineering')
+
+  /* Check switch to exponential at different digits */
+  numeric digits 13; numeric form /* sci */
+  flag=flag& 0+3e+12  == "3000000000000"
+  flag=flag& 0+3e+13  == "3E+13"
+  flag=flag& 0+0.000001  == "0.000001"
+  flag=flag& 0+0.0000001  == "1E-7"
+
+  /* exotics */
+  flag=flag & "\u0e57.\u0e50"+0 == '7.0'
+  flag=flag & "\u0b66.\u0b67"+0 == '0.1'
+  flag=flag & "\u0b66\u0b66" +0 == '0'
+  flag=flag & "\u0b6a\u0b66" +0 == '40'
+
+  /* Some more miscellany */
+  flag=flag& 0-0.02 =='-0.02'
+  flag=flag& \(0.02<0)
+  flag=flag& \(0.02=0)
+  flag=flag&   0.02>0
+  flag=flag& \('-0.02'>0)
+  flag=flag&   '-0.02'<0
+  flag=flag& \('-0.02'>'-0.00001')
+  flag=flag&   '-0.02'<'-0.00001'
+  flag=flag&   0\='.'
+  flag=flag& double(0.5)==0.5
+  flag=flag& int(0.5)>=0
+  flag=flag& (111.equals('111')==1)
+
+  /* some more primitive constructors */
+  flag=flag& int('a')==97
+  flag=flag& char(97)=='a'
+  fl1=float 4.0
+  flag=flag& int(fl1)==4
+  flag=flag& float(int 4)==fl1
+  b1=boolean 1
+  flag=flag& int(b1)==1
+  flag=flag& boolean(int 1)==b1
+
+
+  If flag then ok=ok '!' 'Arithmetic'
+          else signal DiagX('Arithmetic')
+  If nflag then ok=ok '!' 'Numeric'
+          else signal DiagX('Numeric/Digits/Form')
+
+  /* Now hexadecimal and binary notations */
+
+  flag=flag& 0b100       == 4
+  flag=flag& 1b1         == -1
+  flag=flag& 2b10        == -2
+  flag=flag& 3b100       == -4
+  flag=flag& 4b1000      == -8
+  flag=flag& 5b10000     == -16
+  flag=flag& 6b100000    == -32
+  flag=flag& 7b1000000   == -64
+  flag=flag& 8b10000000  == -128
+  flag=flag& 9b10000000  == 128
+  flag=flag& 1b0         == 0
+  flag=flag& 2b01        == 1
+  flag=flag& 3b010       == 2
+  flag=flag& 4b0100      == 4
+  flag=flag& 5b01000     == 8
+  flag=flag& 6b010000    == 16
+  flag=flag& 7b0100000   == 32
+  flag=flag& 8b01000000  == 64
+  flag=flag& 9b01000000  == 64
+
+  flag=flag& 0xF         == 15
+  flag=flag& 1xF         == -1
+  flag=flag& 2xF         == 15
+  flag=flag& 0xFF        == 255
+  flag=flag& 2xFF        == -1
+  flag=flag& 3xFF        == 255
+  flag=flag& 0x7         == 7
+  flag=flag& 1x7         == 7
+  flag=flag& 2x7         == 7
+  flag=flag& 0x7F        == 127
+  flag=flag& 2x7F        == 127
+  flag=flag& 3x7F        == 127
+
+  flag=flag& 00xF         == 15    -- leading 0 on length
+  flag=flag& 01xF         == -1
+  flag=flag& 02xF         == 15
+  flag=flag& 10xF         == 15
+  flag=flag& 99xF         == 15
+
+  flag=flag& 0xdad        == 3501  -- lowercase
+  flag=flag& 3xdad        == -595
+  flag=flag& 4xdad        == 3501
+
+  -- examples from doc...
+  flag=flag& 1x8    == (-8)
+  flag=flag& 2x8    == (8)
+  flag=flag& 2x08   == (8)
+  flag=flag& 0x08   == (8)
+  flag=flag& 0x10   == (16)
+  flag=flag& 2x81   == (-127)
+  flag=flag& 3x81   == (129)
+  flag=flag& 4x81   == (129)
+  flag=flag& 4xF081 == (-3967)
+  flag=flag& 8xF081 == (61569)
+  flag=flag& 0x81   == (129)
+  flag=flag& 0xF081 == (61569)
+  flag=flag& 16x81  == (129)
+  flag=flag& 04X81  == (129)
+
+  flag=flag& 1b0    == (0)
+  flag=flag& 1b1    == (-1)
+  flag=flag& 0b10   == (2)
+  flag=flag& 0b100  == (4)
+  flag=flag& 4b1000 == (-8)
+  flag=flag& 8B1000 == (8)
+  flag=flag& 8B1100 == (12)
+  -- exotics from UTF8 source not tested yet
+
+  If flag then ok=ok '!' 'HexBin'
+          else signal DiagX('HexBin')
+
+  /* Now the instanceof operator */
+  ior=Rexx 'xxx'
+  iox=IOException()
+  ioo=Object null
+  ioo=iox
+  flag=flag& (ioo<=Exception)
+  flag=flag& (Exception>=ioo)
+  ioy=DiagExpression2()
+  ioo=ioy
+  flag=flag& (ioo<=Exception)
+  flag=flag& (Exception>=ioo)
+  ior=Rexx 'xxx'
+  ioo=ior
+  flag=flag& \(ioo<=Exception)
+  ioz=DiagExpression3('rk')
+  ioo=ioz
+  flag=flag& \(ioo<=Exception)
+
+  If flag then ok=ok '!' 'InstanceOf'
+          else signal DiagX('InstanceOf')
+
+  say 'DiagExpression:' ok
+ /*--------------------------------------------------------------------*/
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagExpression()
+  catch e=DiagX
+    say 'Failed: "'e.getMessage'"'
+  end
+
+
+/* classes for testing instanceof */
+class DiagExpression2 extends IOException
+ method DiagExpression2
+  super()
+class DiagExpression3 extends Rexx
+ method DiagExpression3(s=String)
+  super(s)

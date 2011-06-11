@@ -1,0 +1,438 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* netrexx.lang.RexxUtil - Rexx class miscellaneous helpers           */
+/* ------------------------------------------------------------------ */
+/* Copyright IBM Corporation, 1996, 1998.  All Rights Reserved.       */
+/* Author    Mike Cowlishaw                                           */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 96.10.17 Initial version (translate); Keystone                     */
+/* 96.10.18 d2x                                                       */
+/* 96.10.20 x2d, format stub                                          */
+/* 96.11.16 doublePow and floatPow                                    */
+/* 97.07.18 x2b, x2c, and hexint moved from Rexx.nrx                  */
+/* 98.12.20 format revised to match BigDecimal algorithm (=ANSI)      */
+package netrexx.lang
+options binary strictargs nodecimal
+
+/**
+   This defines 'helper functions' and 'helper methods' for the Rexx
+   class for NetRexx.  The functions here are the miscellaneous helpers,
+   and return either char[] or primitives.
+   
+   See Rexx, Object-Rexx, or ANSI specification for full descriptions.
+   
+   Argument checking (type and range) is assumed done by caller.
+   Currently, all arguments should always be supplied.  Option letters
+   should be a single character, uppercase.  Arguments are never
+   altered.
+   
+   A 'position' is origin 1; an 'offset' is origin 0.
+ */
+
+class RexxUtil final extends Rexx
+  /* ----- Constants ----- */
+  properties constant private
+   zero   =Rexx(int 0)
+   one    =Rexx(int 1)
+   sixteen=Rexx(int 16)
+
+  /* ----- Functions ----- */
+  /** Translate.
+     <br>Arg1 is string to translate
+     <br>Arg2 is output table
+     <br>Arg3 is input table
+     <br>Arg4 is pad character
+      */
+  method translate(s=char[], out=char[], in=char[], pad=char) constant returns char[]
+    if in.length=0 then return s   -- none to translate
+
+    /* First find out how large a translate table we'll need */
+    maxc=-1
+    loop i=0 to in.length-1
+      if int(in[i])>maxc then maxc=int(in[i])
+      end i
+    tran=char[maxc+1]
+    /* apply the identities through the table */
+    loop i=0 to maxc
+      tran[i]=char(i)
+      end i
+    /* fill in the translates; the input table is traversed
+       right-to-left so the leftmost wins */
+    loop i=in.length-1 to 0 by -1
+      if i<out.length then use=out[i]
+                      else use=pad
+      tran[int(in[i])]=use
+      end i
+    /* Now create the result array and translate into it */
+    res=char[s.length]
+    loop i=0 to s.length-1
+      n=int(s[i])
+      if n>maxc then res[i]=char(n)
+                else res[i]=tran[n]
+      end i
+    return res
+
+  /** D2x.
+     <br>Arg1 is number to convert.
+     <br>Arg2 is N (-1 if not specified)
+     <br>returns char[]
+      */
+  method d2x(d=Rexx, n=int) constant returns char[]
+    if d.ind=Rexx.NotaNum then signal NumberFormatException(d)
+    if d.mant.length>Rexx.DefaultDigits
+      then set=RexxSet(d.mant.length)
+      else set=null
+    /* Negative only allowed if n is given */
+    if d.ind=Rexx.isneg then do
+      if n<0 then signal BadArgumentException(d)
+      work=d.OpMinus(set).OpSub(set, one)
+      neg=boolean 1
+      fill=char 'F'
+      end
+     else do
+      work=d
+      neg=boolean 0
+      fill=char '0'
+      end
+    if n<0 then need=work.mant.length   -- probably too long
+           else need=n
+    /* We do this the 'heavy' way for now */
+    res=char[need]
+    loop i=res.length-1 to 0 by -1      -- from the right
+      rem=int work.OpRem(set, sixteen)  -- this//16
+      work=work.OpDivI(set, sixteen)    -- this%16
+      if neg then res[i]=Rexx.Hexes[15-rem]
+             else res[i]=Rexx.Hexes[rem]
+      if work.ind=Rexx.iszero then do
+        -- if n given, pad with 0's or 'F's and leave; otherwise shorten
+        -- and return
+        if n>=0 then do
+          loop j=i-1 to 0 by -1; res[j]=fill; end j
+          leave i
+          end
+        if i=0 then return res     -- exact fit
+        -- need to shorten
+        newlen=res.length-i
+        newres=char[newlen]
+        System.arraycopy(res, i, newres, 0, newlen)
+        return newres
+        end
+      end i
+    /* get here iff n was given */
+    return res      -- all done
+
+  /** X2b hexadecimal to binary conversion.
+     <br>Arg1 is hexstring to convert.
+     <br>returns char[]
+      */
+  method x2b(x=Rexx) constant returns char[]
+    res=char[x.chars.length*4]
+    loop i=0 for x.chars.length
+      j=hexint(x.chars[i])
+      if j<0 then signal BadArgumentException("Bad hexadecimal" x)
+      k=i*4
+      if j>7      then res[k]  =char '1'
+                  else res[k]  =char '0'
+      if (j&4)\=0 then res[k+1]=char '1'
+                  else res[k+1]=char '0'
+      if (j&2)\=0 then res[k+2]=char '1'
+                  else res[k+2]=char '0'
+      if (j&1)\=0 then res[k+3]=char '1'
+                  else res[k+3]=char '0'
+      end i
+    return res
+
+  /** X2c hexadecimal to coded conversion.
+     <br>Arg1 is hexstring to convert.
+     <br>returns char
+      */
+  method x2c(x=Rexx) constant returns char
+    /* Skip insignificant leading zeros then convert the remainder */
+    loop i=0 to x.chars.length-2; if x.chars[i]\='0' then leave; end
+    acc=0
+    loop i=i to x.chars.length-1
+      j=hexint(x.chars[i])
+      if j<0 then signal BadArgumentException("Bad hexadecimal" x)
+      acc=acc*16+j
+      if acc>65535 then signal BadArgumentException("Too big" x)
+      end
+    return char(acc)
+
+  /** X2d.
+     <br>Arg1 is hexstring to convert.
+     <br>Arg2 is N (-1 if not specified)
+     <br>returns char[]
+      */
+  method x2d(x=Rexx, n=int) constant returns char[]
+    /* see if we're a negative, and decide where to start */
+    neg=boolean 0                                      -- assume non-negative
+    select
+      when n=0 | x.chars.length=0 then return char[] '0'
+      when n<0 then start=0
+      /* n>0 */
+      when n>x.chars.length then start=0
+      otherwise                                        -- n is in string
+        start=x.chars.length-n
+        if x.chars[start]>'7' | x.chars[start]<'0' then neg=1
+        -- baddies caught later
+      end
+    /* determine a safe DIGITS */
+    digs=x.chars.length*5%4+1
+    if digs>Rexx.DefaultDigits then set=RexxSet(digs)
+                               else set=null
+    work=Rexx(int 0)                    -- accumulator
+    loop i=start to x.chars.length-1    -- from the left
+      nibble=hexint(x.chars[i])
+      if nibble<0 then signal BadArgumentException("Bad hexadecimal" x)
+      if neg then nibble=15-nibble
+      work=work.OpMult(set, sixteen).OpAdd(set, Rexx(nibble))
+      end i
+    if neg then work=work.OpAdd(set, one).OpMinus(set)
+    return char[] work
+
+  /** doublePow -- the primitives' power operator
+     <br>Arg1 is number raise to power
+     <br>Arg2 is int power to raise to
+     <br>returns result as a double
+     <br>Will raise overflow if infinity is the result
+      */
+  method doublePow(x=double, n=int) constant returns double
+    /* Precision is 'best can do' -- i.e., double */
+    if n=0 then return 1           /* x**0 == 1 */
+    if n>0 then neg=boolean 0      /* not negative */
+     else do                       /* <0 */
+      n=-n                         /* drop sign */
+      neg=1                        /* but remember it */
+      end
+    /* Not worth tracking top-bit-seen here; square of 1 is cheap */
+    acc=double 1                   /* accumulator */
+    loop i=1 by 1                  /* for each bit [top bit ignored] */
+      n=n+n                        /* shift left 1 bit */
+      if n<0 then acc=acc*x        /* top bit is set */
+      if i=31 then leave           /* that was the last bit */
+      acc=acc*acc                  /* square */
+      end i                        /* 32 bits */
+    if Double.isInfinite(acc) then signal NumberFormatException("Overflow")
+    if neg then return 1/acc       /* was a **-n */
+    return acc
+
+  /** floatPow -- the primitives' power operator
+     <br>Arg1 is number raise to power
+     <br>Arg2 is int power to raise to
+     <br>returns result as a float
+     <br>Will raise overflow if infinity is the result
+      */
+  method floatPow(x=double, n=int) constant returns float
+    res=float doublePow(x, n)
+    if Float.isInfinite(res) then signal NumberFormatException("Overflow")
+    return res
+
+  /** doubleToRexx -- convert a double to a Rexx string
+     <br>Arg1 is number to convert
+     <br>Arg2 is digits to round to
+     <br>returns Rexx string
+      */
+  method doubleToRexx(num=double, digits=int) constant returns Rexx
+    m=Double.doubleToLongBits(num)      /* map to long, bitwise */
+
+    if m>=0 then neg=boolean 0
+     else do
+      neg=1
+      m=m & 9223372036854775807         /* clear sign bit */
+      end
+
+    if m=0 then return Rexx(int 0)      /* +/- zero always returns '0' */
+
+    fmraw=m//4503599627370496           /* mantissa is low 52 bits */
+    fmant=fmraw | 4503599627370496      /* .. with the implied 1 bit */
+    fexp =m%4503599627370496            /* exponent part is the rest */
+
+    if fexp=2047 then do                /* NaN or Infinity */
+      if fmraw=0 then return 'Infinity'
+      return 'NaN'
+      end
+
+    /* Calculate the mantissa to decimal */
+    workset=RexxSet(digits+2)                          /* final digits +2 */
+    res=Rexx(fmant).OpDiv(workset, 4503599627370496)   /* normalize to 0-1 */
+    if fexp\=0 then do                                 /* is exponent to apply */
+      /* 1023 is IEEE exponent bias */
+      twoexp=Rexx(2).OpPow(workset, Rexx(fexp-1023))   /* 2**n */
+      res=res.OpMult(workset, twoexp)                  /* adjust */
+      end
+    /* Finally prepare to requested digits */
+    workset.digits=digits
+    if neg then if res.ind=Rexx.ispos then res.ind=Rexx.isneg    /* invert */
+    return res.OpDiv(workset, one)                     /* format, drop 0's */
+
+  /** Trunc
+     <br>Arg1 is number to truncate (known a number, unformatted)
+     <br>Arg2 is places after point  [>=0]
+     <br>returns char[]
+      */
+  method trunc(num=Rexx, after=int) constant returns char[]
+    if num.mant.length>Rexx.DefaultDigits then set=RexxSet(num.mant.length)
+                                          else set=null
+    num=num.OpPlus(set)            -- make canonical [checks/corrects zeros
+                                   --  and also makes private copy]
+    need=num.mant.length+after
+    if num.exp>0 then need=need+num.exp
+    if need>Rexx.DefaultDigits then set=RexxSet(need)
+                               else set=null
+    num.exp=num.exp+after     -- * 10**after
+    num=num.OpDivI(set, one)  -- truncate unwanted/too-small digits
+    if num.ind=Rexx.iszero then num.exp=after     -- we lost exponent
+    if num.exp>0 then do      -- need some trailing zeros [perhaps many]
+      newmant=char[num.mant.length+num.exp]
+      System.arraycopy(num.mant, 0, newmant, 0, num.mant.length)
+      loop i=num.mant.length to newmant.length-1
+        newmant[i]='0'
+        end i
+      num.mant=newmant
+      num.exp=0
+      end
+    num.exp=num.exp-after     -- / 10**after
+    return num.layoutnum()    -- return laid-out number
+
+  /** Format
+     <br>Arg1 is number to format (known a number, unformatted)
+     <br>Arg2 is places before point [>0]
+     <br>Arg3 is places after point  [>=0]
+     <br>Arg4 is exponent places     [>0]
+     <br>Arg5 is exponent digits     [>=0]
+     <br>Arg6 is exponent form       ['E'/'S', uppercase]
+     <br>returns char[]
+     <p>Arg2 through Arg5 are -1 if not specified
+      */
+  method format(num=Rexx, before=int, after=int,-
+                explaces=int, exdigits=int, exform=char)-
+         constant returns char[]
+    if num.mant.length>Rexx.DefaultDigits then set=RexxSet(num.mant.length)
+                                          else set=null
+
+    num=num.OpPlus(set)            -- make canonical [checks/corrects zeros
+                                   --  and also makes private copy]
+
+    /* Determine the form of the result.  exform may become 'P' to
+       signify Plain (no exponential form). */
+    select label setform
+      when exdigits=-1         then exform='P'
+      when num.ind=Rexx.iszero then exform='P'
+      otherwise
+        -- determine whether triggers
+        mag=num.exp+num.mant.length
+        if mag>exdigits then nop        -- use requested format
+         else if mag<-5 then nop        -- ..
+          else exform='P'
+      end setform
+
+    /* If 'after' was specified then we may need to adjust the
+       mantissa.  This is tricky, as we must conform to the rules of
+       exponential layout (e.g., we cannot end up with 10.0 if
+       scientific). */
+    if after>=0 then loop label setafter
+      -- calculate the current after-length
+      select
+        when exform='P' then thisafter=-num.exp
+        when exform='S' then thisafter=num.mant.length-1
+        otherwise -- engineering
+          lead=(num.exp+num.mant.length-1)//3     -- exponent to use
+          if lead<0 then lead=3+lead              -- negative exponent case
+          lead=lead+1                             -- number of leading digits
+          if lead>=num.mant.length then thisafter=0
+                                   else thisafter=num.mant.length-lead
+        end
+
+      if thisafter=after then leave setafter      -- we're in luck
+      if thisafter<after then do                  -- need added trailing zeros
+        newmant=char[num.mant.length+after-thisafter]
+        System.arraycopy(num.mant, 0, newmant, 0, num.mant.length)
+        loop i=num.mant.length to newmant.length-1
+          newmant[i]='0'
+          end i
+        num.mant=newmant
+        num.exp=num.exp-(after-thisafter)    -- adjust exponent
+        if num.exp<Rexx.MinExp then signal ExponentOverflowException
+        leave setafter
+        end
+      -- we have too many digits after the decimal point <sigh>
+      -- watch out for implied leading zeros in PLAIN case
+      need=num.mant.length-(thisafter-after)
+      if need<0 then do       -- all digits go; no carry possible
+        num.mant=zero.mant    -- carry on with 0
+        num.ind=zero.ind
+        num.exp=zero.exp
+        iterate setafter      -- recheck; may need trailing zeros
+        end
+      bump=(num.mant[need]>='5')
+      if need=0 then if \bump then do
+        num.mant=zero.mant    -- carry on with 0
+        num.ind=zero.ind
+        num.exp=zero.exp
+        iterate setafter      -- recheck; may need trailing zeros
+        end
+      -- truncate the mantissa
+      newmant=char[need]
+      System.arraycopy(num.mant, 0, newmant, 0, need)
+      num.mant=newmant
+      num.exp=num.exp+(thisafter-after)      -- adjust exponent
+      if num.exp>Rexx.MaxExp then signal ExponentOverflowException
+      if \bump then leave setafter           -- we're done
+      -- here if we're rounding up/down
+      incr=Rexx(int 1); incr.ind=num.ind; incr.exp=num.exp
+      num=num.OpAdd(set, incr)
+      -- now go around and check again
+      end setafter
+
+    if exform='S'       then num.form=RexxSet.SCIENTIFIC
+     else if exform='E' then num.form=RexxSet.ENGINEERING
+     else                    num.form=RexxSet.PLAIN
+    if exdigits=-1      then num.dig=0       -- [form will be PLAIN]
+                        else num.dig=exdigits
+
+    a=num.layoutnum()    -- lay out, with exponent, etc.
+
+    /* Here we have laid-out number in 'a' */
+    -- now apply 'before' and 'explaces' as needed
+    if before>0 then do
+      p=RexxWords.pos('.', a, 1)   -- find '.'
+      select
+        when p>0 then p=p-1                  -- found it
+        when exdigits=-1 then p=a.length
+        otherwise                            -- try for 'E'
+          p=RexxWords.pos('E', a, 1)
+          if p>0 then p=p-1                  -- found E
+                 else p=a.length
+        end
+      -- p is now current length of before part
+      if p>before then signal BadArgumentException(before)
+      if p<before then             -- need leading blanks
+        a=Rexx(a, 1).right(a.length+before-p).toCharArray()
+      -- [if p=before then it's just the right length]
+      end
+    if explaces>0 then do
+      epos=RexxWords.pos('E', a, 1)
+      if epos=0 then a=Rexx(a, 1).left(a.length+explaces+2).toCharArray()
+       else do                     -- may need to insert zeros
+        places=a.length-epos-1     -- number so far
+        if places>explaces then signal BadArgumentException(explaces)
+        if places<explaces then    -- need zeros
+          a=Rexx(a, 1).insert('', epos+1, explaces-places, '0').toCharArray()
+        end
+      end
+    return a
+
+  /* ----- Local Helper methods ----- */
+  /** Converts a hexadecimal character to int in range 0 to 15
+     Valid characters are 0-9 a-f A-F
+     Returns -1 if error */
+  method hexint(c=char) private static returns int
+    if c>='0' then if c<='9' then return int(c)-int('0')
+    if c>='A' then if c<='F' then return int(c)-int('A')+10
+    if c>='a' then if c<='f' then return int(c)-int('a')+10
+    return -1

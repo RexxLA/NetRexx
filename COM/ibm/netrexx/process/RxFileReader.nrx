@@ -1,0 +1,250 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxFileReader                                                       */
+/*                                                                    */
+/*   This class makes a file into an RxSource, independent of the     */
+/*   program to which it belongs.                                     */
+/*                                                                    */
+/*   Any errors here must be terminal (RxQuits).                      */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2000.04.30 Initial, from RxStreamer (see change history there)     */
+/* ------------------------------------------------------------------ */
+/* UTF8 coding is applied on a per-line basis.  This isn't 'perfect', */
+/* which would be on a per-clause basis, but it realizes conversions  */
+/* here (rather than being intimately embedded in RxClauser).  This   */
+/* makes it *very* much easier to add new input formats later, while  */
+/* we wait for consensus to appear on input file format(s).  [1996/9] */
+/* [1997/6] UTF8 coding now goes to per-file, with the OPTIONS usage  */
+/* just being a confirmation/enforcement.  This allows us to use the  */
+/* native Java UTF8 decoder (Reader), and the readLine method         */
+/* provided by BufferedReader (which is faster than the old one).     */
+
+package COM.ibm.netrexx.process
+options binary nodecimal
+
+class RxFileReader implements RxSource
+
+ properties constant private
+  bitesize    =250            -- increment for expanding arrays
+  filesep     =Rexx(System.getProperty('file.separator'))
+
+ properties private
+  -- input file things
+  infile     =Rexx            -- true input file name (without path)
+  infilepath =Rexx            -- input file directory, with trailing
+                              -- local separator
+  infileob =File              -- input file fileob
+  inhandle =BufferedReader    -- input file handle, non-null if open
+  inopen   =boolean 0         -- input file has been opened
+  inread   =boolean 0         -- input file has been read
+  inline   =Object[]          -- array of source line character arrays
+  inspace  =int 0             -- capacity (free slot count) of inline
+  sourcelines=0               -- count of lines in input file
+
+  -- Miscellaneous things
+  rxt=RxTranslator            -- the usual
+
+ /* Constructor
+    Arg1 is the translator (root) object, used for errors and diag
+    */
+ method RxFileReader(translator=RxTranslator)
+  rxt=translator              -- save
+
+ /* Openfile -- open the file to read
+    Arg1 is the input file name
+
+    (Note this checks, but does not actually open, the file.  See
+    comments in getLine.)
+    */
+ method openfile(inname=Rexx)
+  if inname.right(5).OpEq(null,'.java') then
+    signal RxQuit(rxt, null, 'cannot.translate.java', inname)
+  if inname.right(6).OpEq(null,'.class') then
+    signal RxQuit(rxt, null, 'cannot.translate.class', inname)
+--trace results
+  infileob=File(inname)
+  if \infileob.exists-                  -- not found
+    | infileob.isDirectory then do label retry
+    lastdot=inname.lastpos('.').toint
+    lastdir=inname.lastpos(filesep).toint
+    if lastdot=0 | lastdot<lastdir then do   -- filename has no dot
+      -- extension possible
+      loop b=0 for rxt.babels.length
+        babel=rxt.babels[b]
+        addext='.'babel.getExtension
+        if inname.right(addext.length)\==addext then do
+          infileob=File(inname||addext) -- try with extension
+          if infileob.exists then
+           if \infileob.isDirectory then leave retry -- found!
+          end
+        end b
+      if rxt.babels.length=1 then inname=inname||addext  -- improve message
+      end
+    signal RxQuit(rxt, null, 'file.not.found', inname)
+    end retry -- infileob
+  /* input file exists */
+  if \infileob.canRead then signal RxQuit(rxt, null, 'file.may.not.be.read', inname)
+
+  /* Try and get the exact case of the filename */
+  infile=infileob.getName               -- get and save name part
+  indir=infileob.getParent              -- return anything except name
+  if indir=null then indir='.'          -- wasn't anything, use 'here'
+  inlist=File(indir).list
+  if inlist\=null then do label checklist
+    -- check for exact match first
+    loop i=0 for inlist.length
+      if inlist[i]==infile then leave checklist
+      end i
+    loop i=0 for inlist.length
+      if Rexx(inlist[i]).OpEq(null,infile) then do  -- [note caseless comparison]
+        infile=inlist[i]                -- use first
+        leave checklist
+        end
+      end i
+    end checklist
+  infilefull=Rexx infileob.getAbsolutePath
+  infilepath=infilefull.left(infilefull.length.toint-infile.length.toint)
+  if infilepath.length.toint=0 then infilepath=null
+  return
+
+ /* getShortName -- returns short name [used for checking or default
+    class name]; that is, the name with any extension removed. */
+ method getShortName returns String
+  s=int infile.lastpos(filesep)
+  if s>0 then name=infile.substr(s+1)
+         else name=infile
+  e=int name.lastpos('.')
+  if e<2 then e=name.length.toint+1
+  return name.left(e-1).toString
+
+ /* getName -- returns the standard name of the source [used for
+    tracing, and for the 'source' special word] */
+ method getName returns String
+  return infile.toString
+
+ /* getPath -- if the source is a file then returns its path (including
+    any final file separator) else returns null */
+ method getPath returns String
+   return infilepath
+
+ /* getLineCount -- number of lines in the program */
+ method getLineCount returns int
+  return sourcelines
+
+ /* recover -- recover storage used by cache */
+ method recover
+  inline=null                      -- done with the cache
+  return
+
+ /* close -- will be called when no longer needed */
+ method close
+  if rxt.superflag.diag then say '# closeinput'
+  -- close input file, if open
+  if inhandle\=null then do
+    inhandle.close;
+    catch IOException              -- [ignore error]
+    finally inhandle=null
+    end
+  inline=null                      -- done with the cache
+  return
+
+ /* getLine -- returns given line from the input file as char[]
+    Arg1 is line number (first line=1)
+    Returns line as a String of characters if line read OK,
+      or null if outside bounds of file
+    Raises error if disaster
+
+    This opens the file on first call, but reads lines on demand.  This
+    saves us from reading the entire file when there's a serious lexical
+    error (for example, accidentally compiling a large binary file).
+    However, it will lock up the source file for all of pass0.
+
+    Sourceline must not be used after CLOSE is called, as storage is
+    recovered at that point.
+
+    -- Original written on AA56, Miami->London, 23.5.96
+    */
+ method getLine(linenum=int) returns char[]
+  if linenum<1 then return null              -- [could be internal.error]
+
+  if \inopen then do label openfile          -- need to open the file
+    inopen=1                                 -- show done
+    do                                       -- open the file
+      instream=FileInputStream(infileob)
+      if \rxt.superflag.utf8
+        then inhandle=BufferedReader(InputStreamReader(instream))
+        else inhandle=BufferedReader(InputStreamReader(instream, 'UTF8'))
+    catch e=IOException
+      signal RxQuit(rxt, null, 'error.opening.file', infile, e.getMessage)
+      end
+    if rxt.superflag.diag then say '# Reading' infile'...'
+    inline=Object[bitesize]                  -- initial lines array
+    inspace=bitesize                         -- spare capacity of array
+    end openfile
+
+  if linenum>sourcelines then do label getline
+    if inread                 then return null    -- we've processed it all
+    if linenum>sourcelines+1  then return null    -- [could be internal.error]
+    /* More data may be available: read a new line from the file */
+
+    do
+      nextlinestr=inhandle.readLine          -- get next line [String]
+    catch e=IOException                      -- assume during read
+      -- note that line number is useless for 'invalid.utf8.found' as we
+      -- are using a BufferedReader, so the error appears earlier than
+      -- the actual line.
+      /*      if e<=sun.io.MalformedInputException   -- [arrives as an IOException] */
+      /*        then signal RxQuit(rxt, null, 'invalid.utf8.found', infile) */
+      /* rvj 20080225 deprecated since 2003 and should be removed from all tools according to sun */
+      signal RxQuit(rxt, null, 'error.reading.file', infile, e.getMessage)
+    end
+
+    if nextlinestr==null then nextline=char[] null
+     else do
+      nextline=nextlinestr.toCharArray       -- convert to char array
+      -- Handle EOF.  We assume that if it is the final character of the
+      -- line then it's genuinely EOF, as we don't read-ahead.
+      last=nextline.length-1
+      if last>=0 then if nextline[last]='\x1a' then do
+        if last=0 then nextline=null         -- discard the line
+         else                                -- remove the EOF character
+          nextline=nextlinestr.substring(0, last).toCharArray
+        end
+      end
+
+    if nextline=null then do                 -- EOF
+        inhandle.close                       -- free up the file
+      catch IOException                      -- [ignore close error]
+      finally
+        inhandle=null
+        inread=1                             -- show it has all been read
+        if rxt.superflag.diag then say '# Read' infile'.'
+        return null
+      end
+
+    /* Ensure a slot for the new line in the array */
+    if inspace=0 then do                     -- need to extend array
+      new=Object[inline.length+bitesize]
+      inspace=bitesize
+      -- loop i=0 to inline.length-1; new[i]=inline[i]; end
+      System.arraycopy(inline, 0, new, 0, inline.length)
+      inline=new
+      end
+
+    sourcelines=sourcelines+1                     -- we have another line
+    inline[sourcelines-1]=nextline                -- store the line
+    inspace=inspace-1                             -- one slot less
+    end getline
+
+  /* Return the requested line */
+  return char[] inline[linenum-1]
+
