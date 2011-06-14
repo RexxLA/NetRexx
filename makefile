@@ -24,7 +24,7 @@ jar:
 	find COM -name '*.class' | xargs jar uvf NetRexxC.jar
 	find COM -name '*.properties' | xargs jar uvf NetRexxC.jar
 	find netrexx -name '*.class' | xargs jar uvf NetRexxC.jar
-	find netrexx -name '*.txt' | xargs jar uvf NetRexxR.jar
+	find netrexx -name '*.txt' | xargs jar uvf NetRexxC.jar
 
 .PHONY: runtimejar
 runtimejar:
