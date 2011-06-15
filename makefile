@@ -21,8 +21,8 @@ all:
 jar:
 	echo Main-Class: COM.ibm.netrexx.process.NetRexxC > manifest
 	jar cvfm NetRexxC.jar manifest
-	find COM -name '*.class' | xargs jar uvf NetRexxC.jar
-	find COM -name '*.properties' | xargs jar uvf NetRexxC.jar
+	find COM/ibm/netrexx/process -name '*.class' | xargs jar uvf NetRexxC.jar
+	find COM/ibm/netrexx/process -name '*.properties' | xargs jar uvf NetRexxC.jar
 	find netrexx -name '*.class' | xargs jar uvf NetRexxC.jar
 	find netrexx -name '*.txt' | xargs jar uvf NetRexxC.jar
 
@@ -30,7 +30,7 @@ jar:
 runtimejar:
 	echo Main-Class: COM.ibm.netrexx.process.NetRexxC > manifest
 	jar cvfm NetRexxR.jar manifest
-	find COM -name '*.properties' | xargs jar uvf NetRexxR.jar
+#	find COM -name '*.properties' | xargs jar uvf NetRexxR.jar
 	find netrexx -name '*.class' | xargs jar uvf NetRexxR.jar
 	find netrexx -name '*.txt' | xargs jar uvf NetRexxR.jar
 
