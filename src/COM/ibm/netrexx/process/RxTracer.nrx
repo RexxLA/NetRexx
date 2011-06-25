@@ -1,0 +1,280 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxTracer                                                           */
+/*                                                                    */
+/*   This class manages code generation for tracing (pass 2).         */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.08.01 Initial                                                 */
+/* 1998.05.16 Major revision to handle comments better                */
+/* 1998.05.21 Names support for TRACE VAR                             */
+/* 1998.05.22 Optimize names code generation                          */
+/* 1999.10.03 Simplify constants when one-line clause traced          */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxTracer uses RxCode
+
+ properties shared
+  copyright=RxProcessor.copyright
+
+ properties private
+  rxt=RxTranslator            -- the usual
+
+ /* RxTracer -- Constructor */
+ method RxTracer(translator=RxTranslator)
+  rxt=translator              -- save
+
+ /* traceclause -- generate trace clause code
+    Arg1 is the clause to trace
+    Arg2 is the test level (if current [max] is lower, no tracing needed)
+    Arg3 is the array of lowercase variable names assigned in this clause
+
+    Clause trace code is generated only if pass2 and in a method, and it
+      is possible that the clause may need tracing.
+
+    If the testlevel (level required for tracing) is VAR then this is
+      code associated with an assignment.  If the current level (maximum
+      level for the class, or in this case method) doesn't require that
+      the clause be traced anyway then we avoid code generation unless a
+      variable that's in a TRACE VAR is involved.  [If we supported
+      dynamic trace var, this check should be disabled.]
+    */
+ method traceclause(clause=RxClause, testlevel=RexxTrace.ALL,-
+                    names=String[] null)
+  if \rxt.program.flag.java then return      -- not making code
+  parser=rxt.program.parser
+  if parser.level<2 then return              -- only trace in methods
+  if parser.cursor.curmethod.methodmaxtrace<testlevel then return
+  if \rxt.pass2 then return                  -- [B&B]
+  if parser.thislevel.terminal then return   -- unreachable [B&B]
+  -- Now the name-check optimization
+  if testlevel=RexxTrace.VAR then            -- is assignment-type clause ..
+   if parser.cursor.curmethod.methodmaxtrace<RexxTrace.ALL then -- not always traced
+    do label checkvars
+    -- check all names against method, class, and program dictionaries
+    if names=null then return                -- no names supplied
+    loop n=0 for names.length
+      lowname=Rexx names[n]
+      if parser.cursor.curmethod.methodtracevars[lowname] then leave checkvars
+      if parser.cursor.curclass.classtracevars[lowname] then leave checkvars
+      end n
+    return     -- no name was found in in-scope TRACE VAR
+    end checkvars
+
+  /* determine the trace object */
+  traceobj=parser.cursor.curmethod.methodtrace
+  if traceobj=='null' then
+    signal RxQuit(rxt, clause.tokens[0], 'internal.error', 'RxTracer: null trace object')
+
+  /* Get the lines for tracing */
+  -- The code, now in RxClause, was here originally
+  lines=clause.tracelines(rxt)
+  pending  =Rexx ''                          -- javacode for a line or an
+
+  if lines.length=1 then do
+    pending='"'cleanup(lines[0])'"'
+    pendtype=RxType.STRING_TYPE
+    end
+   else do
+    pending=Rexx '{' -- javacode for an array of lines
+    loop i=0 for lines.length
+      if i>0 then pending=pending','
+      pending=pending'"'cleanup(lines[i])'"'
+      end i
+    pending=pending'}'
+    pendtype=RxType.STRINGARRAY_TYPE
+    end
+
+  code=RxCode(S_EXPR, pendtype, null)
+  code.javacode=pending
+  rxt.converter.addconstant(parser.cursor, pendtype, code) -- make it a constant
+  linecode=code.javacode
+  -- We now have the array (or single string) for the lines of code,
+  -- named by LINECODE
+
+  /* Now make a constant array for assignment names, if any */
+  if names=null then namecode=''
+   else do
+    code=RxCode(S_EXPR, RxType.STRINGARRAY_TYPE, null)
+    code.javacode='{'
+    loop n=0 for names.length
+      if n>0 then code.javacode=code.javacode','
+      code.javacode=code.javacode'"'names[n]'"'
+      end
+    code.javacode=code.javacode'}'
+    namecode=rxt.converter.addconstant(parser.cursor, RxType.STRINGARRAY_TYPE,-
+                                       code).javacode
+    end
+  -- We now have the array for any names, named by NAMECODE (or '')
+
+  /* Generate code to call the runtime helper function to actually trace
+     the clause, if runtime level is sufficiently high */
+  -- omit arguments if possible
+  select
+    when namecode\=='' then addlevel=','testlevel','namecode
+    when testlevel\=RexxTrace.ALL then addlevel=','testlevel
+    otherwise addlevel=''
+    end
+  firstline=clause.tokens[0].line       -- get first line number
+  javacode=traceobj'.traceclause('firstline','linecode||addlevel');'
+  /* Either queue it up (if deferred) or output immediately */
+  if parser.cursor.curmethod.methodtracedefer
+   then parser.cursor.curmethod.defer(javacode)
+   else do
+    rxt.program.streamer.outpart(javacode)
+    if parser.cursor.curclause.tokens[0].type=RxToken.SP then
+      rxt.program.streamer.out('') -- cosmetic for comment clauses
+    end
+
+ /* CLEANUP -- clean up (sanitize) source string */
+ -- This makes the sourceline safe for use as a Java string constant
+ -- (Data/results are cleaned up at runtime)
+ method cleanup(string=Rexx) private returns Rexx
+  string=string.strip('T')              -- save a few bytes
+  /* Double-up '\' and escapes '"' */
+  /* Tabs allowed to remain */
+  start=1
+  loop label escapes forever
+    q=int string.pos('\\', start)
+    if q=0 then leave escapes
+    parse string left =(q) +1 rest
+    if q=1 then left='' /* fixup */
+    string=left||'\\\\'||rest
+    start=q+2
+    end escapes
+
+  /* escape double-quotes */
+  start=1
+  loop label doubleq forever
+    q=int string.pos('"', start)
+    if q=0 then leave doubleq
+    parse string left =(q) +1 rest
+    if q=1 then left='' /* fixup */
+    string=left||'\\"'||rest
+    start=q+2
+    end doubleq
+
+  return string
+
+ /* tracearg -- trace a method argument (if pass2, sufficient level, etc.)
+    Arg1 is the RxVariable describing the argument
+    Arg2 is the test level (if current is lower, no tracing needed)
+
+    Level checks are as for traceclause (qv.).
+    */
+ method tracearg(var=RxVariable, testlevel=RexxTrace.METHODS)
+  if \rxt.program.flag.java then return      -- not making code
+  parser=rxt.program.parser
+  if parser.level<2 then return              -- only trace in methods
+  if parser.cursor.curmethod.methodmaxtrace<testlevel then return
+  if \rxt.pass2 then return                  -- [B&B]
+  -- [cannot be unreachable]
+
+  /* Generate code to call the runtime helper function to actually trace
+     the argument, if runtime level is sufficiently high.
+     This will be a stand-alone statement, so don't wrap.
+     The special tracetag 'm' is used so at runtime we can detect data
+     to be traced even if not Trace Results.
+     */
+  code=RxCode(S_EXPR, var.vartype, null)
+  code.javacode=var.varspell
+  tracecode(code, parser.cursor.curclause.tokens[0], 'm', testlevel, var.varname, 0)
+  outline=code.javacode';'
+
+  /* Either queue it up (if deferred) or output immediately */
+  if parser.cursor.curmethod.methodtracedefer
+   then parser.cursor.curmethod.defer(outline)
+   else rxt.program.streamer.outpart(outline)
+
+
+ /* TRACECODE -- trace code (if pass2, sufficient level, etc.)
+    Arg1 is the RxCode object to which tracing might be added
+    Arg2 is the token associated with code start
+    Arg3 is the tag for the code trace
+    Arg4 is the test level (if current is lower, no tracing needed)
+    Arg5 is the optional name for the data
+    Arg6 is 1 to wrap/recast the result, 0 otherwise (stand-alone)
+    returns the same code object either unchanged or with a RexxTrace
+    wrap-around.
+
+    Level checks and TRACE VAR optimizations are as for traceclause (qv.).
+
+    In all cases, the returned code will maintain type and group.
+    [Group must be maintained, so uncommitted literals correctly
+    preserve state.]
+    */
+ method tracecode(code=RxCode, tok=RxToken, tag=char,-
+                  testlevel=RexxTrace.RESULTS,-
+                  name=Rexx '', wrap=boolean 1) returns RxCode
+  if \rxt.program.flag.java then return code -- not making code
+  parser=rxt.program.parser
+  if parser.level<2 then return code         -- only trace in methods
+  if parser.cursor.curmethod.methodmaxtrace<testlevel then return code
+  if \rxt.pass2 then return code             -- [B&B - or internal error]
+
+  -- Now the name-check optimization
+  if testlevel=RexxTrace.VAR then            -- is assignment-type clause ..
+   if parser.cursor.curmethod.methodmaxtrace<RexxTrace.RESULTS then -- not always traced
+    do label checkvars
+    -- check name against method, class, and program dictionaries
+    if name=null then return code
+    lowname=name.lower()
+    if parser.cursor.curmethod.methodtracevars[lowname] then leave checkvars
+    if parser.cursor.curclass.classtracevars[lowname] then leave checkvars
+    return code     -- name was not found in in-scope TRACE VAR
+    end checkvars
+
+  /* we can now handle following case (but tracing does come out in odd place) */
+  /* 1998.12.03 -- no: this doesn't work if the trace object is local to
+     the method, so for now re-disable. */
+  if parser.cursor.curmethod.methodconstructor then -- cannot trace this()/super()
+   if parser.cursor.curthis=null then           -- ..
+    if wrap then return code                    -- .. argument expressions
+  -- [wrap is not set for the 'later' trace case]
+
+  if code.javacode=='null' then do           -- constant null
+    if rxt.program.flag.diag then
+      say '# Tracer null:' code.type.toSig() wrap
+    return code                              -- cannot trace this [restriction]
+    end
+
+  /* We will trace... */
+  -- code.group must not change
+
+  /* determine the trace object */
+  traceobj=parser.cursor.curmethod.methodtrace
+  if traceobj=='null' then signal RxQuit(rxt, tok, 'internal.error', 'RxTracer: null trace object 2')
+  /* Decide on the RexxTrace method to invoke */
+  sub=Rexx ''            -- name part
+  rescast=''             -- result Java cast
+  ctype=code.type        -- local reference
+  select
+    -- select subroutine names, etc.
+    when ctype=RxType.REXX_TYPE  then sub='Rexx'
+    when ctype=RxType.STRING_TYPE    then sub='String'
+    when ctype=RxType.CHARARRAY_TYPE then sub='chararray'
+    when ctype.isPrimitive()     then do
+      sub=ctype.classname
+      code.javacode='('ctype.toJava()')('code.javacode')'
+      end
+    otherwise            -- not a well-known or primitive
+      sub='Object'
+      rescast='('ctype.toJava()')'
+    end
+
+  /* Generate the code to call the runtime helper function to actually
+     trace the data, if runtime level is sufficiently high */
+  code.javacode=traceobj'.trace'sub'('tok.line','code.javacode','''tag''','testlevel',"'name'")'
+  if wrap then code.javacode='('rescast||code.javacode')'
+  -- we must leave the group as-is, as it might be a pending constant
+  return code
+

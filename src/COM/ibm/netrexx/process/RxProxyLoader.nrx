@@ -1,0 +1,132 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 2000.        All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxProxyLoader                                                      */
+/*                                                                    */
+/*   The ProxyLoader factory                                          */
+/*                                                                    */
+/*   This is used for loading proxies; it can load classes either     */
+/*   by name or by RxClassInfo.  The class must be a local class.     */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2000.03.16 Initial                                                 */
+/* 2000.04.08 We now load all classes for which we have RxClassInfo   */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxProxyLoader extends ClassLoader
+
+ properties shared
+  rxt=RxTranslator            -- the usual
+
+ /* General Constructor */
+ method RxProxyLoader(translator=RxTranslator)
+  super(translator.getClass().getClassLoader())       -- link in as parent
+  rxt=translator
+
+ /* Load a class by name
+    Arg1 is the name
+    Arg2 is 1 if the class is to be resolved immediately
+    returns the new Class object, or signals ClassNotFoundException
+
+    We need to load the class only if:
+      1. It's a local class, so we need to provide the proxy
+      2. It's in the same package as any of our local classes, so we
+         need to have it loaded by the same classloader as our proxies,
+         so it will show as being in the same package if necessary.
+         [For example: for subclassing, for accessing private classes,
+         (including dependent classes).]
+
+    Others (including constrained classes) we can leave to the
+    super-classloader.
+
+    This isn't perfect, but is the best we can do.  (A pre-loaded class
+    that tries to access a private class/interface which we need, too,
+    isn't going to be able to.  However that should only happen for
+    things used by the compiler, so should affect only interpretation
+    of compiler modules themselves.)
+    */
+ method loadClass(name=String, link=boolean) inheritable protect-
+                  signals ClassNotFoundException-
+                  returns Class
+  if rxt.superflag.diag then
+    say '# loadClass:' name '[String]'
+
+  info=rxt.classer.findknownclass(name)
+
+  select
+    when info=null then nop   -- need default classloader to do it
+    when info.local then return loadClass(info, link)
+    when \info.ispublic then return loadClass(info, link)  -- fastpath this case
+    otherwise
+      -- it's a public non-local, see if it's in one of our packages and
+      -- if it is then we should load it
+      if rxt.localpackages.containsKey(info.packname) then
+        return loadClass(info, link)
+      -- drop through for default classloader to do it
+    end
+
+  --  delegate
+  lc=super.loadClass(name, link)
+  if lc=null then if rxt.superflag.diag then say '# loadClass:' name 'failed'
+  return lc
+
+
+ /* Load the class using an RxClassInfo object
+    Arg1 is the RxClassInfo object for a class
+    Arg2 is 1 if the class is to be resolved immediately
+    returns the new Class object, or signals ClassNotFoundException
+    records the info class to save redefinition
+    */
+ method loadClass(info=RxClassInfo, link=boolean) shared protect-
+                  returns Class
+  -- if already defined (e.g., due to dependency) then don't redefine
+  if info.classobject\=null then return info.classobject
+
+  if rxt.superflag.diag then
+    say '# loadClass:' info.type '[Info]'
+
+  if \info.local then do
+    -- class data will have been saved
+    data=info.imagedata
+    -- add this info object to the cleanup list so the lookaside can be
+    -- cleared quickly after execution
+    rxt.classer.addlookaside(info)
+    end
+   else do label localclass
+    ourproxy=RxProxy(rxt, info)              -- the proxy measurer
+    data=ourproxy.getBytes()                   -- create its class data
+
+    /*** [Leave this code here in case needed to verify a proxy later]
+    -- write the proxy class to disk if -test is set for the program
+    program=info.localclass.classprogram
+    if program.flag.test then do             -- save the file on disk
+      ofileob=File(info.type.getClassfilename'.proxy')
+      outhandle=FileOutputStream(ofileob)
+      outhandle.write(data, 0, data.length)  -- [must write the whole]
+      outhandle.close
+     catch e=IOException
+      say '[Error writing proxy file:' e.getMessage']'
+      end
+    ***/
+    end localclass
+
+  -- use foo$bar name for Minors)
+  name=info.type.toJavaSig()
+  name=name.substring(1, name.length()-1) -- strip L and ;
+
+  -- say '# DefClass:' name data.length
+
+  newclass=defineClass(name, data, 0, data.length) -- magic
+
+  if link then resolveClass(newclass)
+  info.classobject=newclass                  -- prevent redefinition
+  return newclass
+

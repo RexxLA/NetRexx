@@ -1,0 +1,97 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrSay                                                              */
+/*                                                                    */
+/*   An object that represents a parsed Say clause                    */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.29 Initial                                                 */
+/* 1996.06.06 Landmark .. the first 'Hello World' using this, in full */
+/* 1996.07.12 First RxClauseParser object                             */
+/* 1999.10.04 Implement interpret [experimental version]              */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Say clause                    */
+class NrSay implements RxClauseParser uses RxCode, RxExpr
+ properties private
+  rxt    =RxTranslator   -- root
+  parser =RxParser       -- local reference
+  tokens =RxToken[]      -- local reference
+  expr   =RxExpr         -- expression [null if none]
+
+ /** Construct an object from the current clause */
+ method NrSay(newrxt=RxTranslator)
+  rxt    =newrxt                                  -- the boss
+  parser =rxt.program.parser
+  tokens =parser.cursor.curclause.tokens
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrSay', pass)
+  if tokens[1].type=RxToken.END then do
+    expr=null    -- no expression
+    return
+    end
+  /* have expression */
+  if tokens[1].type=RxToken.SP then begin=2; else begin=1
+
+  code=rxt.eparser.parseexpr(parser.cursor, 0, begin, null, null)
+  expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
+
+  -- We used to have to play tricks to handle arbitrary null values,
+  --   but RexxIO.Say in NetRexx 1.1 has been upgraded to accept all
+  --   signatures, and handles null gracefully in all cases.
+  -- There is one case we need to worry about, though: floating point
+  --   numbers should not go through a conversion through binary if a
+  --   literal.  (It's OK for integers to be left as binary.)
+  expr.type=code.type
+  expr.conv=null
+  if code.group=S_LIT then
+   if code.type=RxType.FLOAT_TYPE-
+    | code.type=RxType.DOUBLE_TYPE then do
+    conv=rxt.converter.assigncost(parser.cursor, RxType.REXX_TYPE, code.type)
+    -- rxt.converter.convertcode(parser.cursor, RxType.REXX_TYPE, conv.proc, code)
+    rxt.converter.torexx(parser.cursor, code, 1)  -- allow constant
+    expr.type=RxType.REXX_TYPE
+    expr.conv=conv
+    end
+
+  -- Suppose we'd better special-case "say null", too, for javac...
+  if code.type=RxType.NULL_TYPE then do
+    code.javacode='""'
+    code.constant=1
+    code.type=RxType.STRING_TYPE
+    expr.type=RxType.STRING_TYPE
+    end
+
+  return
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** code generation [only] */
+ method generate
+  if expr=null then jcode='""'
+               else jcode=expr.code.javacode
+  rxt.program.streamer.out(RxType.REXXIO_CLASS'.Say('jcode');')
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  if expr=null then say;
+   else do
+    code=expr.evaluate(cursor)          -- re-evaluate as needed
+    say rxt.interpreter.stringvalue(code)
+    end
+  return
+

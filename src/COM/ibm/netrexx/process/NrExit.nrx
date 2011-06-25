@@ -1,0 +1,79 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrExit                                                             */
+/*                                                                    */
+/*   An object that represents a parsed Exit clause                   */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.29 Initial                                                 */
+/* 1997.02.17 Add Java 'return' after an exit, for javac              */
+/* 2000.03.09 Implement interpretation                                */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Exit clause                   */
+class NrExit implements RxClauseParser
+ properties private
+  rxt    =RxTranslator                  -- root
+  parser =RxParser                      -- local reference
+  pcursor=RxCursor                      -- local reference
+  tokens =RxToken[]                     -- local reference
+
+  exitjavacode=Rexx '0'                 -- default exit code
+
+ /** Construct an object from the current clause */
+ method NrExit(newrxt=RxTranslator)
+  rxt    =newrxt
+  parser =rxt.program.parser
+  pcursor=parser.cursor
+  tokens =pcursor.curclause.tokens
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrExit', pass)
+
+  parser.thislevel.terminal=1           -- followers are unreachable
+
+  if tokens[1].type\==RxToken.END then do
+    if tokens[1].type=RxToken.SP  then begin=2; else begin=1
+    code=rxt.eparser.parseexpr(pcursor, 0, begin, null, null)
+    conv=rxt.converter.assigncost(pcursor, RxType.INT_TYPE, code.type)
+    if conv.cost>rxt.program.flag.maxassign then
+      RxError(rxt, tokens[begin], 'exit.needs.int.type',-
+              rxt.program.babel.typeString(code.type))
+     else do
+      rxt.converter.convertcode(pcursor, RxType.INT_TYPE, conv.proc, code)
+      exitjavacode=code.javacode
+      end
+    end
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  /* We need a dummy 'return' in the Java code, for javac */
+  -- decide what to return ('0', 'false', 'null', or nothing)
+  select
+    when pcursor.curmethod.methodconstructor          then ret=''
+    when pcursor.curmethod.methodrettype=RxType.VOID_TYPE then ret=''
+    when pcursor.curmethod.methodrettype=RxType.BOOL_TYPE then ret=' false'
+    when pcursor.curmethod.methodrettype.isPrimitive()  then ret=' 0'
+    otherwise                                              ret=' null'
+    end
+  -- add code, with braces in case follows an IF
+  rxt.program.streamer.out('{System.exit('exitjavacode');return'ret';}')
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  signal RxSignal(cursor, null, tokens[0]) -- null exception indicates Exit

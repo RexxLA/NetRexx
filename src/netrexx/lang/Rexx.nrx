@@ -1,0 +1,2195 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* netrexx.lang.Rexx                                                  */
+/* ------------------------------------------------------------------ */
+/* Copyright IBM Corporation, 1996, 1998.  All Rights Reserved.       */
+/* Author    Mike Cowlishaw                                           */
+/*                                                                    */
+/* Must not use operators on Rexx class objects (or loop will ensue)  */
+/* A Rexx object is never changed in value once constructed; this     */
+/*   avoids the need for exclusivity (locking).  However, the         */
+/*   contents of the indexed variables collection can change.         */
+/* ------------------------------------------------------------------ */
+/* Notes:                                                             */
+/*   tochar and padcheck are identical code                           */
+/*   System.arraycopy is faster than explicit loop as follows         */
+/*     Mean length 4:  equal                                          */
+/*     Mean length 8:  x2                                             */
+/*     Mean length 16: x3                                             */
+/*     Mean length 24: x4                                             */
+/*   From Rexx experience, we expect mean length 8-16                 */
+/*   Compiling self, though, made no significant difference           */
+/*                                                                    */
+/*   Mant could be changed to byte array, with '0' subtracted         */
+/*                                                                    */
+/*   DMSRCN referred to below is the original (1981) IBM S/370        */
+/*   assembler code implementation of the algorithms below; it is     */
+/*   now called IXXRCN and is available with the OS/390 and VM/ESA    */
+/*   operating systems.                                               */
+/* ------------------------------------------------------------------ */
+/* 96.01.30 Initial version in NetRexx                                */
+/* 96.02.08 Rework with String property; don't extend StringBuffer    */
+/* 96.02.10 [RexxNum] Initial version in NetRexx                      */
+/* 96.02.15 Fix to allow for incorrect String.getChars documentation  */
+/* 96.02.17 [RexxNum] -> Primitive conversions                        */
+/* 96.02.19 [RexxNum] complete toString, add rounding, exponents      */
+/* 96.02.20 [RexxNum] charaddsub -- simplified from DMSRCN, multiply  */
+/* 96.02.22 [RexxNum] dodivide -- using DMSRCN algorithm              */
+/* 96.02.24 Major changes:                                            */
+/*            -- merge Rexx and RexxNum classes                       */
+/*            -- number lookaside determined at construction time     */
+/*            -- Operators all have a RexxSet argument (may be null)  */
+/*            -- conversions from number to string deferred to time-  */
+/*               of-use [layout()]                                    */
+/* 96.0x.xx Stubs for many standard methods (as for ANSI BIFs)        */
+/* 96.03.05 Rexx(String[]) constructor                                */
+/* 96.03.11 Add RexxNode and getnode(Rexx), etc., for stems           */
+/* 96.05.17 tochar() returns first character [used to expect number]  */
+/* 96.06.06 tochar(String) and tochar(char[]) helper functions added  */
+/* 96.06.15 tochararray(char) helper added; also hashCode and equals. */
+/* 96.06.23 use hashtables for indexed arrays, RexxNode becomes proxy */
+/* 96.07.28 add numeric FORM                                          */
+/* 96.08.11 gather built-ins, and ensure stubs for all                */
+/* 96.08.21 use System.arraycopy for simple copies                    */
+/* 96.09.20 exists() (and testnode); if leaf=null then dropped        */
+/* 96.09.21 extended upper() and lower() with start/length            */
+/* 96.09.24 use Character for upper/lower, so Unicode works on 1.0.1  */
+/* 96.09.24 allow extra digits for numbers                            */
+/* 96.09.29 stubs for d2x, format, sequence, x2d                      */
+/* 96.11.16 power operator                                            */
+/* 96.11.18 insert, overlay, trunc stubs                              */
+/* 97.07.18 move x2b, x2c to RexxUtil; add conversion functions       */
+/* 97.07.30 add copyIndexed                                           */
+/* 97.10.28 revise overflow detection                                 */
+/* 97.12.xx add operand preparation to power, multiply, add           */
+/* 98.01.13 divide result of 0 not cleanly finished                   */
+/* 98.03.07 copyindexed should return a value                         */
+/* 98.05.31 correct finalization of remainder                         */
+/* 98.07.01 boundary conditions for charaddsub adjusted               */
+/* 98.12.20 extend layout to force/allow plain notation               */
+/* ------------------------------------------------------------------ */
+package netrexx.lang
+options binary nodecimal strictargs strictcase   noformat
+
+/**
+   This defines the primary string class for NetRexx.
+ */
+
+class Rexx implements RexxOperators, Serializable
+
+  /* ----- Constants ----- */
+  properties constant public  -- might be useful to others
+    DefaultDigits = RexxSet.DEFAULT_DIGITS             -- default Digits
+    DefaultForm	  = RexxSet.DEFAULT_FORM               -- default Form
+    Lowers	  = 'abcdefghijklmnopqrstuvwxyz'
+    Uppers	  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    Digits09	  = '0123456789'
+    Hexes	  = char[] '0123456789ABCDEFabcdef'    -- note uppercase first
+
+  properties constant shared     -- local to package
+    ispos   = byte  1            -- ind: indicates positive (must be 1)
+    iszero  = byte  0            -- ind: indicates zero     (must be 0)
+    isneg   = byte (-1)          -- ind: indicates negative (must be -1)
+    NotaNum = byte (-2)          -- ind: indicates non-number
+    MinExp  = -999999999         -- minimum exponent allowed
+    MaxExp  = 999999999          -- maximum exponent allowed
+    MinArg  = -999999999         -- minimum argument integer
+    MaxArg  = 999999999          -- maximum argument integer
+
+  /* ----- Properties ----- */
+  properties shared
+    /** The immutable character value of the object.
+       <p>When constructed from a number, or after an arithmetic
+       operation, this may be null (and numeric lookaside must exist).
+       Conversion from number to string is only done when necessary.
+        */
+    chars=char[]
+
+    /** The indicator
+       <p>This may take the values:
+       <pre>
+       1  -- the number is positive
+       0  -- the number is zero
+       -1 -- the number is negative
+       -2 -- not a number (NotaNum)
+        */
+    -- We only need two bits for this, but use a byte for now
+    ind=byte
+
+    /** The formatting indicator
+       <p>This may take the values:
+       <pre>
+       RexxSet.SCIENTIFIC     -- use scientific notation
+       RexxSet.ENGINEERING    -- use engineering notation
+       RexxSet.PLAIN          -- use plain
+        */
+    /* We only need two bits for this, at present, but use a byte */
+    form=byte
+
+    /** The character value of the mantissa, if a number.
+       This is undefined if ind=NotaNum.
+        */
+    mant=char[]
+
+    /** The exponent, if a number.  This is undefined if
+       ind=NotaNum.
+        */
+    exp=int
+
+    /** The digits to use for laying out, if a number.  This is
+       undefined if ind=NotaNum.
+        */
+    dig=int
+
+    /** The stem collection for this Rexx object (null, if no
+       collection yet).
+        */
+    coll=Hashtable
+
+  /* ----- Constructors ----- */
+  /** Make a Rexx object from a char  */
+  /* 96.05.29 -- this is much more common than before */
+  method Rexx(inchar=char)
+    super(); new=char[1]
+    new[0]=inchar
+    r=Rexx(new, 1)  -- we need to test numericality
+    chars=r.chars; ind=r.ind; mant=r.mant; exp=r.exp
+    dig=r.dig; form=r.form
+    return
+
+  /** Make a Rexx object from an array of chars.  This copies the
+     character array.  */
+  method Rexx(in=char[])
+    new=char[in.length]
+    System.arraycopy(in, 0, new, 0, in.length)
+    r=Rexx(new, 1);
+    chars=r.chars; ind=r.ind; mant=r.mant; exp=r.exp
+    dig=r.dig; form=r.form
+    return
+
+  /** Make a Rexx object from a java.lang.String  */
+  method Rexx(string=java.lang.String)
+    this(string.toCharArray(), 1); return
+
+  /** Make a Rexx object from an array of java.lang.String; the
+     array elements are concatenated with a single blank between each.
+   */
+  method Rexx(strings=java.lang.String[])
+    this(sa2ca(strings), 1); return     -- use helper
+
+  /** Clean-Clone a Rexx object
+     It does not need to copy chars and mant arrays as Rexx objects are
+     immutable; however, the collection is not (and must not) be copied.
+   */
+  method Rexx(in=Rexx)
+    chars=in.chars; ind=in.ind; mant=in.mant
+    exp=in.exp; dig=in.dig; form=in.form
+    coll=null                 -- ensure no collection
+    return
+
+  /** Make a Rexx object directly from a boolean.  */
+  method Rexx(flag=boolean)
+    super(); exp=0; dig=9; form=DefaultForm; mant=char[1]
+    if flag then do; mant[0]='1'; ind=ispos; end
+            else do; mant[0]='0'; ind=iszero; end
+    chars=mant -- avoid layouts
+    return
+
+  /** Make a Rexx object from a byte.  */
+  method Rexx(num=byte)
+    this(int num)
+
+  /** Make a Rexx object from a short.  */
+  method Rexx(num=short)
+    this(int num)
+
+  /** Make a Rexx object directly from an int.  */
+  -- We fastpath commoners
+  -- chars is set to null only for negatives less than -9, and
+  -- we then ensure will layout correctly by setting suitable digits
+  method Rexx(num=int)
+    super(); exp=0; form=DefaultForm
+    if num<=9 then if num>=-9 then do   -- very common single digit case
+      mant=char[1]
+      select
+        when num>0 then do
+          mant[0]=char(int('0')+num); chars=mant
+          ind=ispos
+          end
+        when num=0 then do
+          mant[0]=char '0'; chars=mant
+          ind=iszero
+          end
+        otherwise -- <0
+          chars=char[2]
+          chars[0]='-'
+          chars[1]=char(int('0')-num)
+          mant[0]=chars[1]
+          ind=isneg
+        end
+      return
+      end
+    if num>0 then do
+      ind=ispos
+      mant=Integer.toString(num,10).toCharArray()
+      chars=mant
+      return
+      end
+    /* 0 case already handled */
+    ind=isneg
+    chars=null; dig=10                            -- needs layout later
+    if num=int(-2147483648) then do               -- special case
+      mant=String('2147483648').toCharArray()
+      return; end
+    num=-num
+    mant=Integer.toString(num,10).toCharArray()
+    return
+
+  /** Make a Rexx object directly from a long.  */
+  method Rexx(num=long)
+    this(String.valueOf(num).toCharArray(),1)
+
+  /** Make a Rexx object directly from a float.  */
+  /* We used to rely on Java for this, using:
+       this(String.valueOf(num).toCharArray(),1)
+     but this did not return a canonical Rexx number (and only 6 digits) */
+  method Rexx(num=float)
+    this(RexxUtil.doubleToRexx(num, 7))
+
+  /** Make a Rexx object directly from a double.  */
+  /* We used to rely on Java for this, using:
+       this(String.valueOf(num).toCharArray(),1)
+     but 6-digit result was unacceptable. */
+  method Rexx(num=double)
+    this(RexxUtil.doubleToRexx(num, 16))
+
+  /** Make a Rexx object from an array of chars without copying
+     the array.  The second argument indicates (by being present) that
+     no copy is needed; if 1, numeric lookaside will be attempted, if 0,
+     the string cannot be a number.
+     <p>
+     This is the primary constructor; all incoming strings end up here.
+     <p>
+     This constructor checks to see if the incoming array describes a
+     valid number; if so, numeric lookaside is set up.  If not (which
+     will usually be detected rapidly), the ind is set to NotaNum to
+     indicate that this is syntactically not a valid number.
+     <p>In all cases, a reference to the original character array is
+     preserved for rapid re-use as a string, and to avoid changing all
+     number-like inputs to canonical form.
+      */
+  method Rexx(s=char[], trynum=boolean) shared
+    super(); chars=s                    -- we have chars
+    ind=NotaNum                         -- assume not a number
+    /* Fast path exit: numbers start with a digit, dot, blank, or +/- */
+    if s.length=0 then return           -- null string
+    if s[0]>'9' then do                 -- +/-/. and blank all < '9'
+      if s[0]<='\x7f' then return       -- no ASCII number possible
+      -- unless an extra digit it cannot be a number
+      -- [more detailed check for base is below]
+      if \Character.isDigit(s[0]) then return
+      end
+    if \trynum then return              -- no parse necessary
+    len=s.length
+    /* Remove blanks and handle sign */
+    loop i=len-1 to 0 by -1             -- strip trailing
+      if s[i]\=' ' then leave
+      len=len-1
+      if len=0 then return              -- bad conversion (all blanks)
+      end i
+
+    insign=0
+    start=-1
+    loop i=0 to len-1
+      if s[i]=' ' then iterate
+      if s[i]='-' then do
+        if insign\=0 then return        -- two signs
+        insign=-1
+        iterate
+        end
+      if s[i]\='+' then do              -- start of number found
+        start=i
+        leave
+        end
+      /* found '+' */
+      if insign\=0 then return          -- two signs
+      insign=1
+      end i
+    if start<0 then return              -- no content
+
+    /* We're at the start of the number */
+    exotic=boolean 0                    -- have extra digits
+    d=0                                 -- count of digits found
+    e=-1                                -- where dot was found
+    last=-1                             -- last character of mantissa
+    loop i=start to len-1
+      if s[i]>='0' then                 -- test for digit
+       if s[i]<='9' then do
+        last=i; d=d+1                   -- still in mantissa
+        iterate
+        end
+      if s[i]='.' then do               -- record and ignore
+        if e>=0 then return             -- two dots
+        e=i-start                       -- offset into mantissa
+        iterate
+        end
+      if s[i]\='e' then if s[i]\='E' then do -- expect an extra digit
+        if \Character.isDigit(s[i]) then return   -- not a number
+        -- defer the base 10 check until later to avoid extra method call
+        exotic=1                        -- will need testing later
+        last=i; d=d+1                   -- still in mantissa
+        iterate
+        end
+      /* Found 'e' or 'E' -- now process exponent */
+      if i>len-3 then return            -- no room for sign + one digit
+      if len-i>11 then return           -- more than sign + 9 digits
+      if s[i+1]='-'       then eneg=boolean 1
+       else if s[i+1]='+' then eneg=0
+       else return -- not a number unless sign after the 'E'
+      if len-i-2>9 then return
+      loop j=i+2 to len-1
+        if s[j]<'0' then return         -- bad
+        if s[j]>'9' then do             -- maybe extra digit
+          if \Character.isDigit(s[j]) then return -- not a number
+          dvalue=Character.digit(s[j], 10)        -- check base
+          if dvalue<0 then return                 -- not base 10
+          end
+         else dvalue=int(s[j])-int('0')
+        exp=exp*10+dvalue
+        end
+      if eneg then exp=-exp             -- was negative
+      leave i -- done with the exponent
+      end i
+    /* Here when all done */
+    if d=0 then return                  -- no mantissa
+    if e>=0 then exp=exp+e-d            -- adjust exponent if had dot
+
+    /* strip leading zeros/dot (leave final if all 0's) */
+    loop i=start to last-1
+      if s[i]='.' then start=start+1    -- step past
+       else if s[i]='0' then do; start=start+1; d=d-1; end
+       else if s[i]<='9' then /* non-0 */ leave i
+       else /* exotic */ do
+        if Character.digit(s[i], 10)\=0 then leave i   -- non-0 or bad
+        -- is 0, strip like '0'
+        start=start+1; d=d-1
+        end
+      end
+
+    select label setmant
+      when exotic then do               -- need to check for exotica
+        mant=char[d]                         -- must use copy
+        j=0                                  -- shift after dot
+        loop i=0 to d-1
+          if s[start+i]='.' then j=1
+          c=s[start+i+j]
+          if c<='9' then /* easy */ mant[i]=c
+           else do
+            dvalue=Character.digit(c, 10)
+            if dvalue<0 then return          -- not a number after all
+            mant[i]=char(dvalue+int('0'))
+            end
+          end i
+        end
+      when d=chars.length then mant=chars    -- it's a pure integer already
+      otherwise do                           -- make and copy mantissa
+        mant=char[d]
+        j=0                                  -- shift after dot
+        loop i=0 to d-1
+          if s[start+i]='.' then j=1
+          mant[i]=s[start+i+j]
+          end i
+        end
+      end setmant
+
+    /* Set the sign .. this confirms we have a number lookaside */
+    if mant[0]='0'    then do; ind=iszero; exp=0; end
+     else if insign<0 then ind=isneg
+     else                  ind=ispos
+
+    /* say 'seenum: mant ind exp dig form' mant ind exp dig form */
+    return
+
+  /** Make an 'empty' Rexx object  */
+  method Rexx() shared; super(); return
+
+  /* ----- Collection methods ----- */
+  /* These are for NetRexx compiler to use; normally undocumented. */
+
+  /** Return the RexxNode keyed from a Rexx value.  */
+  /* The Hashtable class protects the collection, but we have to
+     protect the coll property if we change (initialize) it. */
+  method getnode(key=Rexx) returns RexxNode
+    if coll=null then do protect this
+      if coll=null then                           -- still virgin
+        coll=Hashtable(37, 0.67)                  -- make a hashtable
+      end
+    node=RexxNode coll.get(key)                   -- look it up
+    if node\=null then                            -- found
+     if node.leaf\=null then return node          -- .. and not dropped
+    /* unknown node .. create an initialized proxy for it and return it */
+    /* Note: must clone with *no* collection for the initial value. */
+    -- The clone operation is fast
+    node=RexxNode(Rexx(this))                     -- make node
+    /* Note: must add to collection, in case about to be set */
+    coll.put(key, node)                           -- save
+    return node
+
+  /** Test if a node exists in the collection.
+            Returns 1 if it does, or 0 otherwise.  */
+  method testnode(key=Rexx) returns boolean
+    if coll=null then return 0                    -- no nodes
+    node=RexxNode coll.get(key)                   -- look it up
+    if node=null                then return 0     -- no node
+    if node.leaf=null           then return 0     -- dropped
+    if Object node.leaf-                          -- if the same as initial
+     ==Object node.initleaf then return 0         -- .. means never set
+    return 1                                      -- it's real
+
+  /** Return an enumeration of keys for a Rexx collection.  */
+  /* The Hashtable class protects the collection, but we have to
+     protect the coll property if we change (initialize) it. */
+  -- This is used for LOOP OVER
+  method keys protect returns Enumeration
+    if coll=null then do protect this
+      if coll=null then                           -- still virgin
+        coll=Hashtable(37, 0.67)                  -- make a hashtable
+      end
+    return coll.keys()
+
+  /* ----- Base environment methods ----- */
+  /** Intlength returns the length of the value as an int  */
+  method intlength() private final returns int
+    if chars=null then chars=layout()
+    return chars.length
+
+  /** Intwords returns count of words as an integer  */
+  method intwords() private final returns int
+    if chars=null then chars=layout()
+    return RexxWords.words(chars)
+
+  /** Return the value as a String  */
+  method toString() returns String
+    if chars=null then chars=layout()
+    return String(chars)
+
+  /** Return the value as a (new) char array  */
+  method toCharArray() returns char[]
+    if chars=null then chars=layout()
+    res=char[chars.length]
+    System.arraycopy(chars, 0, res, 0, chars.length)
+    return res
+
+  /** Return the value as a char.
+     Raises exception if not a single character.
+      */
+  method tochar() returns char signals NotCharacterException
+    if chars=null then chars=layout()
+    if this.chars.length\=1 then signal NotCharacterException(this.chars)
+    return this.chars[0]
+
+  /** Return a hashcode for the value.
+      */
+  method hashCode returns int
+    if chars=null then chars=layout()
+    if chars.length<14 then over=(chars.length+1)%2
+                       else over=7
+    /* Hash the first and last OVER characters */
+    hash=0
+    loop i=0 to over-1
+      hash=hash*7+int(chars[i])*2+int(chars[chars.length-i-1])
+      end i
+    return hash
+
+  /** The '=' operator, Java-style.  */
+  method equals(rhs=Object) returns boolean
+    if rhs=null then return 0
+    if rhs<=Rexx   then return docomparestrict(null, Rexx rhs)=0
+    if rhs<=String then return docomparestrict(null, Rexx(String rhs))=0
+    if rhs<=char[] then return docomparestrict(null, Rexx(char[] rhs))=0
+    return 0
+
+  /** Return a character from the value  */
+  method charAt(index=int) returns char
+    if chars=null then chars=layout()
+    return chars[index]
+
+  /** Return java.lang.String as a char.
+     Helper function.
+     Raises exception if not a single character.                .
+      */
+  method tochar(s=java.lang.String) static returns char signals NotCharacterException
+    if s.length()\=1 then signal NotCharacterException(s)
+    return s.charAt(0)
+
+  /** Return char[] as a char.
+     Helper function.
+     Raises exception if not a single character.                .
+      */
+  method tochar(s=char[]) static returns char signals NotCharacterException
+    if s.length\=1 then signal NotCharacterException(s)
+    return s[0]
+
+  /** Return char as a char[].
+     Helper function.
+      */
+  method tochararray(c=char) static returns char[]
+    ca=char[1]; ca[0]=c
+    return ca
+
+  /** Return Rexx as a char array
+     Helper function, allows and will return null.
+      */
+  method tochararray(r=Rexx) constant returns char[]
+    if r=null then return null
+    if r.chars=null then r.chars=r.layout()
+    res=char[r.chars.length]
+    System.arraycopy(r.chars, 0, res, 0, r.chars.length)
+    return res
+
+  /** Return char[] as a Rexx.
+     Helper function, allows and will return null.
+      */
+  method toRexx(ca=char[]) constant returns Rexx
+    if ca=null then return null
+    new=char[ca.length]
+    System.arraycopy(ca, 0, new, 0, ca.length)
+    return Rexx(new, 1)
+
+  /** Return String as a Rexx.
+     Helper function, allows and will return null.
+      */
+  method toRexx(s=String) constant returns Rexx
+    if s=null then return null
+    return Rexx(s.toCharArray(), 1)
+
+  /** Return Rexx as a String
+     Helper function, allows and will return null.
+      */
+  method toString(r=Rexx) constant returns String
+    if r=null then return null
+    if r.chars=null then r.chars=r.layout()
+    return String(r.chars)
+
+  /** Return significance (mantissa length in decimal digits)  of
+     a number, or 0 if not a number.  */
+  method significance returns int
+    if ind=NotaNum then return 0
+    return mant.length
+
+  /* --- Convert to number primitives --- */
+  /* These may lose low-order precision, but may not lose high-order */
+
+  /** Return a number as an boolean
+     Raises exception if not exactly 0 or 1
+      */
+  method toboolean() returns boolean signals NotLogicException
+    /* We know the number, if a number, is normalized */
+    if ind=iszero then return 0         -- easy, and 50%
+    if ind=ispos then
+     if mant.length=1 then
+      if mant[0]='1' then return 1
+    signal NotLogicException("Boolean must be 0 or 1.  Found:" this.toString())
+
+  /** Return a number as a byte.
+     Raises exception if information loss.
+      */
+  method tobyte() returns byte signals NumberFormatException
+    num=this.toint()  -- this will check validity too
+    if num>127 | num<-128 then
+      signal NumberFormatException("Conversion overflow")
+    return byte num
+
+  /** Return a number as a short.
+     Raises exception if information loss.
+      */
+  method toshort() returns short signals NumberFormatException
+    num=this.toint()  -- this will check validity too
+    if num>32767 | num<-32768 then
+      signal NumberFormatException("Conversion overflow")
+    return short num
+
+  /** Return a number as an int.
+     Raises exception if invalid or overflow.
+     Decimal part must be 0.
+     This does not use tolong() as the latter might be quite slow.
+      */
+  method toint() returns int signals NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    /* We know the number is normalized */
+    if ind=iszero then return 0         -- easy, and quite common
+    /* drop any trailing decimal part */
+    lodigit=mant.length-1
+    if exp<0 then do
+      lodigit=lodigit+exp               -- reduces by -(-exp)
+      /* all decimal places must be 0 */
+      if lodigit<0 then cstart=0; else cstart=lodigit+1
+      loop j=cstart to mant.length-1
+        if mant[j]\='0' then
+          signal NumberFormatException("Decimal part non-zero:" this)
+        end j
+      if lodigit<0 then return 0        -- -1<this<1
+      useexp=0
+      end
+     else /* >=0 */ do
+      if exp+mant.length>10 then        -- early exit
+        signal NumberFormatException("Conversion overflow")
+      useexp=exp
+      end
+    /* convert the mantissa to binary, inline for speed */
+    result=int 0; lastresult=result
+    loop i=0 to lodigit+useexp
+      result=result*10
+      if i<=lodigit then result=result+(int(mant[i])-int('0'))
+      if result<lastresult then /* also catches the 'impossible' number */ do
+        /* however the impossible number is allowed if we are negative */
+        if ind=isneg then if result=Integer.MIN_VALUE
+         then if i=lodigit+useexp                 -- used all digits
+         then return result
+        signal NumberFormatException("Conversion overflow")
+        end
+      lastresult=result
+      end i
+    /* Looks good */
+    if ind>0 then return result
+    return -result
+
+  /** Return the number as a long.
+     Raises exception if information loss.
+     Decimal part must be 0.
+      */
+  /* Later move this to a function in a helper class to save space? */
+  /* Identical to toint except for result=long, and exp>=20 test */
+  method tolong() returns long signals NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    /* We know the number is normalized */
+    if ind=0 then return 0              -- easy, and quite common
+    lodigit=mant.length-1               -- last included digit
+    if exp<0 then do
+      lodigit=lodigit+exp               -- -(-exp)
+      /* all decimal places must be 0 */
+      if lodigit<0 then cstart=0; else cstart=lodigit+1
+      loop j=cstart to mant.length-1
+        if mant[j]\='0' then
+          signal NumberFormatException("Decimal part non-zero:" this)
+        end j
+      if lodigit<0 then return 0        -- -1<this<1
+      useexp=0
+      end
+     else /* >=0 */ do
+      if exp+mant.length>=20 then       -- early exit
+        signal NumberFormatException("Conversion overflow")
+      useexp=exp
+      end
+    /* convert the mantissa to binary, inline for speed */
+    /* int(0) should => 0, later */
+    result=long int(0); lastresult=result
+    loop i=0 to lodigit+useexp
+      result=result*10
+      if i<=lodigit then result=result+(int(mant[i])-int('0'))
+      if result<lastresult then /* also catches the 'impossible' number */ do
+        /* however the impossible number is allowed if we are negative */
+        if ind<0 then if result=Long.MIN_VALUE
+         then if i=lodigit+useexp                 -- used all digits
+         then return result
+        signal NumberFormatException("Conversion overflow")
+        end
+      lastresult=result
+      end i
+    /* so far so good */
+    if ind>0 then return result
+    return -result
+
+  /** Return the number as a float
+     Should raises exception if information loss.
+      */
+  method tofloat() returns float signals NumberFormatException
+    dub=this.todouble()
+    if dub>3.402823466e+38 | dub<-3.402823466e+38
+      then signal NumberFormatException("Overflow")
+    return float dub
+
+  /** Return the number as a double.
+     Raises exception if information loss.
+      */
+  /* We go via a String for now .. later do a better/faster version */
+  /* This does not detect underflow [small numbers -> 0] */
+  method todouble() returns double signals NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    if chars=null then chars=layout()   -- convert to chars
+    /* next line may raise NumberFormatException */
+    dub=Double.valueOf(String(chars)).doubleValue()
+    if Double.isInfinite(dub) then signal NumberFormatException("Overflow")
+    return dub
+
+  /** Return char array value of a number (conversion from number
+       to laid-out canonical char array).
+     The mantissa will either already have been rounded (following an
+       operation) or will be of length appropriate (in the case of
+       construction from an int).
+     We should/must not alter the mantissa, here (or format and trunc
+       will break).
+     Form maybe the internal-use PLAIN setting, to force plain layout.
+     Note that 'dig' is just a trigger point, and hence may be 0; it is
+       only used if form is not PLAIN.
+      */
+  method layoutnum() shared returns char[]   -- visible to RexxUtil
+   return layout()
+
+  method layout() private returns char[]     -- fast linkage version
+   /* Next are sanity checks, can be removed later */
+   if ind=NotaNum then say "Internal error: Rexx missing number" chars
+   if dig<0       then do
+     say "Internal error: Rexx: bad dig" dig
+     dig=DefaultDigits
+     end
+   /* say 'layout: mant ind exp dig form' mant ind exp dig form */
+
+   mag=exp+mant.length
+
+   if mag>dig | mag<-5 then             -- exponential notation triggered
+    if form\=RexxSet.PLAIN then do      -- .. and allowed
+     sb=StringBuffer(mant.length+15)    -- -x.xxxE+999999999
+     if ind=isneg then sb.append('-')
+     euse=exp+mant.length-1             -- exponent to use
+     /* setup sig=significant digits and copy to result */
+     if form=DefaultForm then do        -- scientific
+       sb.append(mant[0])               -- significant character
+       if mant.length>1 then            -- have decimal part
+        sb.append('.').append(mant, int 1, mant.length-1)
+       end
+      else do label engineering
+       sig=euse//3                      -- common
+       if sig<0 then sig=3+sig          -- negative exponent
+       euse=euse-sig
+       sig=sig+1
+       if sig>=mant.length then do      -- zero padding may be needed
+        sb.append(mant, int 0, mant.length)
+         loop for sig-mant.length
+           sb.append('0')
+           end
+         end
+        else do                         -- decimal point needed
+        sb.append(mant, int 0, sig).append('.').append(mant, sig, mant.length-sig)
+         end
+       end engineering
+
+     if euse\=0 then do
+       if euse<0 then do; s='-'; euse=-euse; end
+        else s='+'
+       sb.append('E').append(s).append(euse)
+       end
+     res=char[sb.length()]; sb.getChars(0, sb.length(), res, 0)
+     return res
+     end
+
+   /* Here for a plain number */
+   if exp=0 then /* easy */ do
+     if ind>=0 then return mant
+     res=char[mant.length+1]; res[0]='-'
+     System.arraycopy(mant, 0, res, 1, mant.length)
+     return res
+     end
+
+   /* Need a '.', and maybe quite a few zeros */
+   sb=StringBuffer(mant.length+dig+5+3+10) -- allow for all cases
+   if ind=isneg then sb.append('-')
+   /* MAG is the position of the point in the mantissa (index of the
+      character it follows) */
+   if mag<1 then /* 0.00xxxx form */ do
+     sb.append('0').append('.')
+     loop for -mag            -- maybe 0
+       sb.append('0')
+       end
+     sb.append(mant)
+     res=char[sb.length()]; sb.getChars(0, sb.length(), res, 0); return res
+     end
+   if mag>mant.length then /* xxxx0000 form */ do
+     sb.append(mant)
+     loop for mag-mant.length -- never 0
+       sb.append('0')
+       end
+     res=char[sb.length()]; sb.getChars(0, sb.length(), res, 0); return res
+     end
+   /* decimal point is in the middle of the mantissa */
+   sb.append(mant, int 0, mag).append('.').append(mant, mag, mant.length-mag)
+   res=char[sb.length()]; sb.getChars(0, sb.length(), res, 0)
+   return res
+
+  /* ----- Argument checker methods ----- */
+  /** checks and returns a pad character, or raises exception if invalid */
+  method padcheck() private returns char signals NotCharacterException
+    if chars=null then chars=layout()
+    if chars.length\=1 then signal NotCharacterException(chars)
+    return chars[0]
+
+  /** checks an argument to ensure it's a true integer in a certain range
+     if OK, returns it */
+  method intcheck(min=int, max=int) private returns int -
+      signals BadArgumentException
+    if ind=NotaNum then signal NumberFormatException("Not a number")
+    /* We know the number is normalized */
+    /* check any trailing decimal part is all 0's */
+    lodigit=mant.length-1
+    if exp<0 then loop i=exp+1 to 0 by 1
+      if mant[lodigit]='0' then lodigit=lodigit-1
+        else signal NumberFormatException("Non-zero decimal part in" this)
+      end i
+    i=this.toint()
+    if i<min then signal BadArgumentException("Argument" i "<" min)
+    if i>max then signal BadArgumentException("Argument" i ">" max)
+    return i
+
+  /** checks there is an option character, and that it is in list
+     if found, returns it (always upper case)
+     Arg1 is string of permitted option characters (all upper case) */
+  method optioncheck(oklist=String) private returns char -
+      signals BadArgumentException
+    if chars=null then chars=layout()
+    if chars.length=0 then signal BadArgumentException("Null option string")
+    -- Next line split to work around 1.1.4 JIT problem (flaky optimization)
+    ochar=chars[0]
+    uchar=Character.toUpperCase(ochar)
+    if oklist.indexOf(int(uchar),0)<0 then
+      signal BadArgumentException("Bad Option character" ochar '['uchar']')
+    return uchar
+
+  /* ---------------------------------------------------------------- */
+  /* Rexx 'built-in' methods                                          */
+  /* ---------------------------------------------------------------- */
+  /* Some of these are evaluated directly; others just
+     check arguments then call a helper function */
+
+  /** Abbrev  */
+  method abbrev(b=Rexx, len=Rexx b.intlength()) returns Rexx
+    n=len.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    if b.chars=null then b.chars=b.layout()
+    return Rexx RexxWords.abbrev(chars, b.chars, n)
+
+  /** Abs returns the absolute value of a number.  */
+  method abs() returns Rexx signals NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    if mant.length>DefaultDigits then set=RexxSet(mant.length)
+     else set=null
+    if ind>=0 then return this.OpPlus(set) -- make canonical
+    return this.OpMinus(set)
+
+  /** B2x binary to hexadecimal conversion.  */
+  method b2x returns Rexx
+    if chars=null then chars=layout()
+    if chars.length=0 then signal BadArgumentException("No digits")
+    res=char[(chars.length+3)%4]
+    j=res.length-1
+    acc=0; mask=1
+    loop i=chars.length-1 to 0 by -1
+      if chars[i]='0' then nop
+       else if chars[i]='1' then acc=acc+mask
+       else signal BadArgumentException("Bad binary" this)
+      mask=mask+mask     -- shift left 1
+      if mask=16 | i=0 then do
+        res[j]=Hexes[acc]; j=j-1
+        acc=0; mask=1
+        end
+      end
+    return Rexx(res)
+
+  /** Centre/Center  */
+  method centre(wid=Rexx, pad=Rexx ' ') returns Rexx
+    width   =wid.intcheck(0, MaxArg)
+    padchar =pad.padcheck()
+    if chars=null then chars=layout()
+    return Rexx RexxWords.centre(chars, width, padchar)
+  method center(wid=Rexx, pad=Rexx ' ') returns Rexx
+    return this.centre(wid, pad)
+
+  /** Changestr  */
+  method changestr(old=Rexx, new=Rexx) returns Rexx
+    if chars=null then chars=layout()
+    if old.chars=null then old.chars=old.layout()
+    if new.chars=null then new.chars=new.layout()
+    return Rexx RexxWords.changestr(old.chars, chars, new.chars)
+
+  /** Compare compares with a string  */
+  method compare(target=Rexx, pad=Rexx ' ') returns Rexx
+    padchar =pad.padcheck()
+    if chars=null then chars=layout()
+    if target.chars=null then target.chars=target.layout()
+    return Rexx RexxWords.compare(chars, target.chars, padchar)
+
+  /** Copies returns n copies of a Rexx object  */
+  method copies(n=Rexx) returns Rexx signals BadArgumentException
+    rep=n.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    len=chars.length
+    res=char[rep*len]
+    start=0
+    loop for rep
+      System.arraycopy(chars, 0, res, start, len)
+      start=start+len
+      end
+    return Rexx(res, 1)
+
+  /** CopyIndexed merges the collection of indexed strings with
+     the collection of (explicitly-set) indexed strings from another
+     Rexx object, and returns the current object.  */
+  method copyIndexed(r=Rexx) protect returns Rexx
+    -- Note that the whole operation is protected (atomic)
+    if r.coll=null then return this     -- that was easy [probably rare]
+    do protect r.coll
+      it=r.coll.keys()
+      loop label collcopy while it.hasMoreElements()
+        key=Rexx it.nextElement()
+        node=RexxNode r.coll.get(key)   -- get the node for the key
+        -- ignore if dropped or never set explicitly
+        if node.leaf=null then iterate collcopy   -- a dropped item
+        if Object node.leaf==Object node.initleaf then iterate collcopy
+        -- it's a reference that we want
+        -- use getnode for safety, initialization, and to maintain transparency
+        this.getnode(key).leaf=node.leaf
+        end collcopy
+      end
+    return this
+
+  /** Countstr  */
+  method countstr(b=Rexx) returns Rexx
+    if chars=null then chars=layout()
+    if b.chars=null then b.chars=b.layout()
+    return Rexx RexxWords.countstr(b.chars, chars)
+
+  /** C2d coded to decimal conversion.  */
+  method c2d returns Rexx; return Rexx(int(padcheck()))
+
+  /** C2x coded to hexadecimal conversion.  */
+  method c2x returns Rexx
+    enc=int(padcheck())
+    res=char[] '0000'
+    res[3]=Hexes[enc//16]; enc=enc%16
+    if enc=0 then return Rexx(res).right(1)
+    res[2]=Hexes[enc//16]; enc=enc%16
+    if enc=0 then return Rexx(res).right(2)
+    res[1]=Hexes[enc//16]; enc=enc%16
+    if enc=0 then return Rexx(res).right(3)
+    res[0]=Hexes[enc//16]; enc=enc%16
+    return Rexx(res)
+
+  /** Datatype returns 0/1; tests datatypes.
+     <p>Differences from classic Rexx:
+     <ol>
+     <li>Must always be an option.
+     <li>'B' and 'X' do not allow whitespace, and return 0 for a null
+         string.
+     <li>'D' for arabic digits
+     <li>'S' tests only NetRexx characters (i.e., as 'A', plus '_'); the
+         first letter may not be a digit..
+      */
+  -- This uses our methods [verify, etc.]
+  method datatype(opt=Rexx) returns Rexx signals BadArgumentException
+    ochar=opt.optioncheck('ABDLMNSUWX')
+    select label types
+      when intlength()=0 then ok=0
+      when ochar='A' then ok=verify(Lowers||Uppers||Digits09)==0
+      when ochar='B' then ok=verify('01')==0
+      when ochar='D' then ok=verify(Digits09)==0
+      when ochar='L' then ok=verify(Lowers)==0
+      when ochar='M' then ok=verify(Lowers||Uppers)==0
+      when ochar='N' then ok=\(ind=NotaNum)
+      when ochar='S' then ok=verify('_'Lowers||Uppers||Digits09)==0 -
+                             & left(1).verify(Digits09)\==0
+      when ochar='U' then ok=verify(Uppers)==0
+      when ochar='W' then do
+        /* If a number, make canonical and divide by 1, then just look for '.' */
+        if ind=NotaNum then ok=0
+         else do
+          if mant.length>DefaultDigits then set=RexxSet(mant.length)
+                                       else set=null
+          ok=this.OpDiv(set, '1').pos('.')==0
+          end
+        end
+      when ochar='X' then ok=verify(Hexes)==0
+      end types
+    return ok
+
+  /** Delstr deletes a substring (index 1) of a Rexx object  */
+  -- Use intlength as length is a forward reference
+  method delstr(n=Rexx, length=Rexx this.intlength()) -
+      signals BadArgumentException -
+      returns Rexx
+    start=n.intcheck(1, MaxArg)
+    len  =length.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    return Rexx RexxWords.delstr(chars, start, len)
+
+  /** Delword deletes a substring of words (index 1) of a Rexx
+     object  */
+  method delword(n=Rexx, length=Rexx this.intwords()) -
+      signals BadArgumentException -
+      returns Rexx
+    start=n.intcheck(1, MaxArg)
+    len  =length.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    return Rexx RexxWords.delword(chars, start, len)
+
+  /** D2c decimal to coded conversion.  */
+  method d2c returns Rexx
+    i=this.toint()
+    if i<0 | i>65535 then signal NumberFormatException("Encoding bad" this)
+    return Rexx(char(i))
+
+  /** D2x decimal to hexadecimal conversion.  */
+  method d2x(n=Rexx) returns Rexx signals BadArgumentException, NumberFormatException
+    req=n.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    return Rexx RexxUtil.d2x(this, req)
+  method d2x() returns Rexx signals BadArgumentException, NumberFormatException
+    if chars=null then chars=layout()
+    return Rexx RexxUtil.d2x(this, -1)
+
+  /** Exists tests indexed variable  */
+  method exists(key=Rexx) returns Rexx
+    return Rexx(testnode(key))
+
+  /** Format -- number layout.  */
+  /* Note: use of null to indicate omitted argument is Java-only */
+  method format(before=Rexx null, after=Rexx null,-
+                explaces=Rexx null, exdigits=Rexx null,-
+                exform=Rexx null) returns Rexx-
+         signals BadArgumentException, NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    if before  =null then b=-1;  else b=  before.intcheck(1, MaxArg)
+    if after   =null then a=-1;  else a=   after.intcheck(0, MaxArg)
+    if explaces=null then p=-1;  else p=explaces.intcheck(1, MaxArg)
+    if exdigits=null then d=-1;  else d=exdigits.intcheck(0, MaxArg)
+    if   exform=null then f='S'; else f=exform.optioncheck('SE')
+    return Rexx(RexxUtil.format(this, b, a, p, d, f), 1)
+
+  /** Insert  */
+  method insert(new=Rexx, n=Rexx 0, length=Rexx new.intlength(), pad=Rexx ' ')-
+      signals BadArgumentException -
+      returns Rexx
+    num=n.intcheck(0, MaxArg)
+    len=length.intcheck(0, MaxArg)
+    padchar=pad.padcheck()
+    if chars=null then chars=layout()
+    if new.chars=null then new.chars=new.layout()
+    return Rexx(RexxWords.insert(chars, new.chars, num, len, padchar), 1)
+
+  /** Lastpos returns the last position of the needle in a Rexx object  */
+  method lastpos(needle=Rexx) signals BadArgumentException returns Rexx
+    start=this.intlength()
+    if start=0 then start=1             -- Use 1 if 0-length haystack
+    return lastpos(needle, Rexx(start))
+  method lastpos(needle=Rexx, start=Rexx) returns Rexx -
+      signals BadArgumentException
+    startoff=start.intcheck(1, MaxArg)-1
+    if chars=null then chars=layout()
+    if startoff>=chars.length then startoff=chars.length-1
+    if needle.chars=null then needle.chars=needle.layout()
+    nlength=needle.chars.length
+    if nlength=0 then return Rexx(int 0)
+    startoff=startoff-nlength+1
+    loop i=startoff to 0 by -1
+      loop j=0 to nlength-1
+        if needle.chars[j]\=chars[i+j] then iterate i
+        end j
+      return Rexx(i+1)
+      end i
+    return Rexx(int 0)
+
+  /** Left returns the leftmost substring of a Rexx object  */
+  method left(length=Rexx, pad=Rexx ' ') returns Rexx
+    return substr(Rexx(int 1), length, pad)
+
+  /** Length returns the length of the Rexx object, in characters
+      */
+  method length() returns Rexx; return intlength()
+
+  /** Lower returns lowercased Rexx object  */
+  method lower(n=Rexx 1, length=this.length()) -
+      signals BadArgumentException returns Rexx
+    startoff=n.intcheck(1, MaxArg)-1
+    len     =length.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    j=chars.length
+    if j=0 then return Rexx('')    -- null string
+    res=char[j]                    -- result will be full length
+    if len<j | startoff>0 then     -- some unchanged characters
+      System.arraycopy(chars, 0, res, 0, j)
+    loop i=startoff to j-1 for len
+      res[i]=Character.toLowerCase(chars[i])
+      end
+    return Rexx(res, 1)
+
+  /** Max returns the larger number, first if equal.  */
+  method max(rhs=Rexx) returns Rexx signals NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    if rhs.ind=NotaNum then signal NumberFormatException(chars)
+    len=DefaultDigits
+    if this.mant.length>len then len=this.mant.length
+    if rhs.mant.length>len then len=rhs.mant.length
+    if this.docompare(RexxSet(len), rhs)<0 then ret=rhs; else ret=this
+    len=DefaultDigits; if ret.mant.length>len then len=ret.mant.length
+    return ret.OpPlus(RexxSet(len))
+
+  /** Min returns the smaller number, first if equal.  */
+  method min(rhs=Rexx) returns Rexx signals NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    if rhs.ind=NotaNum then signal NumberFormatException(chars)
+    len=DefaultDigits
+    if this.mant.length>len then len=this.mant.length
+    if rhs.mant.length>len then len=rhs.mant.length
+    if this.docompare(RexxSet(len), rhs)>0 then ret=rhs; else ret=this
+    len=DefaultDigits; if ret.mant.length>len then len=ret.mant.length
+    return ret.OpPlus(RexxSet(len))
+
+  /** Overlay  */
+  method overlay(new=Rexx, n=Rexx 1, length=Rexx new.intlength(), pad=Rexx ' ')-
+      signals BadArgumentException -
+      returns Rexx
+    num=n.intcheck(1, MaxArg)
+    len=length.intcheck(0, MaxArg)
+    padchar=pad.padcheck()
+    if chars=null then chars=layout()
+    if new.chars=null then new.chars=new.layout()
+    return Rexx(RexxWords.overlay(chars, new.chars, num, len, padchar), 1)
+
+  /** Pos returns the position of the needle in a Rexx object  */
+  method pos(needle=Rexx, start=Rexx 1) returns Rexx -
+      signals BadArgumentException
+    startoff=start.intcheck(1, MaxArg)-1
+    if needle.chars=null then needle.chars=needle.layout()
+    if needle.chars.length=0 then return Rexx(int 0)
+    if chars=null then chars=layout()
+    loop i=startoff to chars.length-needle.chars.length
+      loop j=0 to needle.chars.length-1
+        if needle.chars[j]\=chars[i+j] then iterate i
+        end j
+      return Rexx(i+1)
+      end i
+    return Rexx(int 0)
+
+  /** Reverse returns reversed Rexx object  */
+  method reverse() returns Rexx
+    if chars=null then chars=layout()
+    j=chars.length
+    if j=0 then return Rexx('')    -- null string
+    res=char[j]
+    loop i=0 to j-1; j=j-1; res[i]=chars[j]; end
+    return Rexx(res, 1)
+
+  /** Right returns the rightmost substring of a Rexx object  */
+  method right(length=Rexx, pad=Rexx ' ') returns Rexx -
+      signals NotCharacterException, BadArgumentException
+    len=length.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    trim=chars.length-len
+    if trim>=0 then return this.substr(trim+1)
+    /* need padding */
+    padchar=pad.padcheck()
+    res=char[len]
+    loop i=0 to -trim-1; res[i]=padchar; end i
+    System.arraycopy(chars, 0, res, i, res.length-i)
+    return Rexx(res, 1)
+
+  /** Sequence (aka xrange).  */
+  method sequence(final=Rexx) returns Rexx-
+      signals BadArgumentException, NotCharacterException
+    startchar=this.padcheck()
+    finalchar=final.padcheck()
+    istart=int(startchar)
+    len=int(finalchar)-istart+1
+    if len<=0 then signal BadArgumentException("final<start")
+    car=char[len]
+    loop i=0 to len-1
+      car[i]=char(i+istart)
+      end i
+    return Rexx(car, 1)
+
+  /** Sign tests sign  */
+  method sign() returns Rexx signals NumberFormatException
+    if this.ind=NotaNum then signal NumberFormatException(chars)
+    return Rexx(this.ind)
+
+  /** Space returns evenly-spaced string  */
+  method space(n=Rexx 1, pad=Rexx ' ') returns Rexx
+    gap     =n.intcheck(0, MaxArg)
+    padchar =pad.padcheck()
+    if chars=null then chars=layout()
+    return Rexx RexxWords.space(chars, gap, padchar)
+
+  /** Strip returns stripped Rexx object  */
+  method strip(opt=Rexx 'B', pad=Rexx ' ') returns Rexx -
+      signals BadArgumentException
+    ochar=opt.optioncheck('BLT')
+    padchar=pad.padcheck()
+    if chars=null then chars=layout()
+    if chars.length=0 then return Rexx('')   -- null string
+    if ochar='T' then startoff=0
+     else /* strip leading padding */ do
+      loop startoff=0 to chars.length-1
+        if this.chars[startoff]\=padchar then leave
+        end
+      if startoff=chars.length then return Rexx('')
+      end
+    if ochar='L' then endoff=chars.length-1
+     else /* strip trailing padding */ do
+      loop endoff=chars.length-1 to 0 by -1
+        if this.chars[endoff]\=padchar then leave
+        end
+      if endoff<0 then return Rexx('')
+      end
+    if startoff=0 then if endoff=chars.length-1 then -- no change
+      return Rexx(this)
+    /* Need to return a substring */
+    len=endoff-startoff+1
+    subchars=char[len]
+    System.arraycopy(chars, startoff, subchars, 0, len)
+    return Rexx(subchars, 1)
+
+  /** Substr returns a substring (index 1) of a Rexx object  */
+  method substr(n=Rexx,-
+                length=Rexx(this.intlength()+1-n.toint()).max(0),-
+                pad=Rexx ' ')-
+      signals NotCharacterException, BadArgumentException -
+      returns Rexx
+    startoff=n.intcheck(1, MaxArg)-1
+    len     =length.intcheck(0, MaxArg)
+    padchar =pad.padcheck()
+    if chars=null then chars=layout()
+    thislen =chars.length
+    subchars=char[len]
+    if startoff+len<=thislen then
+      System.arraycopy(chars, startoff, subchars, 0, len)
+     else do
+      /* pad needed; note startoff may be to right of string */
+      if startoff<thislen then          -- have some to re-use
+        System.arraycopy(chars, startoff, subchars, 0, thislen-startoff)
+       else startoff=thislen            -- pad from 0
+      loop i=thislen-startoff to len-1; subchars[i]=padchar; end
+      end
+    return Rexx(subchars, 1)
+
+  /** Subword returns a substring of words  */
+  method subword(n=Rexx, length=this.length()) returns Rexx
+    start=n.intcheck(1, MaxArg)
+    len  =length.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    return Rexx RexxWords.subword(chars, start, len)
+
+  /** Translate  */
+  method translate(tableo=Rexx, tablei=Rexx, pad=Rexx ' ')-
+      signals BadArgumentException -
+      returns Rexx
+    padchar=pad.padcheck()
+    if chars=null then chars=layout()
+    if tableo.chars=null then tableo.chars=tableo.layout()
+    if tablei.chars=null then tablei.chars=tablei.layout()
+    return Rexx RexxUtil.translate(chars, tableo.chars, tablei.chars, padchar)
+
+  /** Trunc number truncation.  */
+  method trunc(n=Rexx 0) returns Rexx-
+         signals BadArgumentException, NumberFormatException
+    if ind=NotaNum then signal NumberFormatException(chars)
+    after=n.intcheck(0, MaxArg)
+    return Rexx(RexxUtil.trunc(this, after))
+
+  /** Upper returns uppercased Rexx object  */
+  method upper(n=Rexx 1, length=this.length()) -
+      signals BadArgumentException returns Rexx
+    startoff=n.intcheck(1, MaxArg)-1
+    len     =length.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    j=chars.length
+    if j=0 then return Rexx('')    -- null string
+    res=char[j]                    -- result will be full length
+    if len<j | startoff>0 then     -- some unchanged characters
+      System.arraycopy(chars, 0, res, 0, j)
+    loop i=startoff to j-1 for len
+      res[i]=Character.toUpperCase(chars[i])
+      end
+    return Rexx(res, 1)
+
+  /** Verify returns verification  */
+  method verify(list=Rexx, opt=Rexx 'N', start=Rexx 1) returns Rexx
+    ochar=opt.optioncheck('NM')
+    from=start.intcheck(1, MaxArg)
+    if chars=null then chars=layout()
+    if list.chars=null then list.chars=list.layout()
+    if ochar='N' then return Rexx RexxWords.verifyn(chars, list.chars, from)
+    return Rexx RexxWords.verifym(chars, list.chars, from)
+
+  /** Word returns a substring of words  */
+  method word(n=Rexx) returns Rexx; return this.subword(n, 1)
+
+  /** Wordindex returns index of a word  */
+  method wordindex(n=Rexx) returns Rexx
+    from=n.intcheck(1, MaxArg)
+    if chars=null then chars=layout()
+    return Rexx RexxWords.wordindex(chars, from)
+
+  /** Wordlength returns length of a word  */
+  method wordlength(n=Rexx) returns Rexx
+    from=n.intcheck(1, MaxArg)
+    if chars=null then chars=layout()
+    return Rexx RexxWords.wordlength(chars, from)
+
+  /** Wordpos returns the position of the words needle in a Rexx
+     object  */
+  method wordpos(needle=Rexx, num=Rexx 1) returns Rexx
+    n=num.intcheck(1, MaxArg)
+    if chars=null then chars=layout()
+    if needle.chars=null then needle.chars=needle.layout()
+    return Rexx RexxWords.wordpos(needle.chars, chars, n)
+
+  /** Words returns count of words  */
+  method words() returns Rexx
+    return intwords()
+
+  /** X2b hexadecimal to binary conversion.  */
+  method x2b returns Rexx
+    if chars=null then chars=layout()
+    if chars.length=0 then signal BadArgumentException("No digits")
+    return Rexx(RexxUtil.x2b(this))
+
+  /** X2c hexadecimal to coded conversion.  */
+  method x2c returns Rexx
+    if chars=null then chars=layout()
+    if chars.length=0 then signal BadArgumentException("No digits")
+    return Rexx(RexxUtil.x2c(this))
+
+  /** X2d hexadecimal to decimal conversion.  */
+  method x2d(n=Rexx) returns Rexx signals BadArgumentException
+    req=n.intcheck(0, MaxArg)
+    if chars=null then chars=layout()
+    return Rexx RexxUtil.x2d(this, req)
+  method x2d() returns Rexx signals BadArgumentException
+    if chars=null then chars=layout()
+    return Rexx RexxUtil.x2d(this, -1)
+
+  /* ---------------------------------------------------------------- */
+  /* General Operator methods                                         */
+  /* ---------------------------------------------------------------- */
+  /** The '||' operator.  */
+  method OpCc(set=RexxSet, rhs=Rexx) returns Rexx
+    return concat(set, rhs, 0)
+  /** The ' ' operator.  */
+  method OpCcblank(set=RexxSet, rhs=Rexx) returns Rexx
+    return concat(set, rhs, 1)
+
+  /** The '=' operator.  */
+  method OpEq(set=RexxSet, rhs=Rexx) returns boolean
+    return this.docompare(set, rhs)=0
+  /** The '\=' operator.  */
+  method OpNotEq(set=RexxSet, rhs=Rexx) returns boolean
+    return this.docompare(set, rhs)\=0
+  /** The '<' operator.  */
+  method OpLt(set=RexxSet, rhs=Rexx) returns boolean
+    return this.docompare(set, rhs)<0
+  /** The '>' operator.  */
+  method OpGt(set=RexxSet, rhs=Rexx) returns boolean
+    return this.docompare(set, rhs)>0
+  /** The '<=' operator.  */
+  method OpLtEq(set=RexxSet, rhs=Rexx) returns boolean
+    return this.docompare(set, rhs)<=0
+  /** The '>=' operator.  */
+  method OpGtEq(set=RexxSet, rhs=Rexx) returns boolean
+    return this.docompare(set, rhs)>=0
+
+  /** The '==' operator.  */
+  method OpEqS(set=RexxSet, rhs=Rexx) returns boolean
+    return docomparestrict(set, rhs)=0
+  /** The '\==' operator.  */
+  method OpNotEqS(set=RexxSet, rhs=Rexx) returns boolean
+    return docomparestrict(set, rhs)\=0
+  /** The '<<' operator.  */
+  method OpLtS(set=RexxSet, rhs=Rexx) returns boolean
+    return docomparestrict(set, rhs)<0
+  /** The '>>' operator.  */
+  method OpGtS(set=RexxSet, rhs=Rexx) returns boolean
+    return docomparestrict(set, rhs)>0
+  /** The '<<=' operator.  */
+  method OpLtEqS(set=RexxSet, rhs=Rexx) returns boolean
+    return docomparestrict(set, rhs)<=0
+  /** The '>>=' operator.  */
+  method OpGtEqS(set=RexxSet, rhs=Rexx) returns boolean
+    return docomparestrict(set, rhs)>=0
+
+  /** The '|' operator.  */
+  method OpOr(set=RexxSet, rhs=Rexx) returns boolean
+    set=set
+    return this.toboolean()|rhs.toboolean()
+
+  /** The '&' operator.  */
+  method OpAnd(set=RexxSet, rhs=Rexx) returns boolean
+    set=set
+    return this.toboolean()&rhs.toboolean()
+
+  /** The '&&' operator.  */
+  method OpXor(set=RexxSet, rhs=Rexx) returns boolean
+    set=set
+    return this.toboolean()&&rhs.toboolean()
+
+  /** The '\' prefix operator.  */
+  method OpNot(set=RexxSet) returns boolean
+    set=set
+    return \this.toboolean()
+
+  /* ----- Numeric Operator methods ----- */
+  /** The minus operator.  */
+  /* This clones and flips the sign; invalidates chars to ensure
+     canonical if used as a string, later */
+  method OpMinus(set=RexxSet) returns Rexx
+    if this.ind=NotaNum then signal NumberFormatException(chars)
+    res=Rexx(this); res.ind=-res.ind; res.chars=null
+    if set=null then do; res.dig=DefaultDigits; res.form=DefaultForm; end
+                else do; res.dig=set.digits;    res.form=set.form;    end
+    return res.finish(res.dig, 0)
+
+  /** The plus operator.  */
+  /* Checks validity, clones, and invalidates chars */
+  method OpPlus(set=RexxSet) returns Rexx
+    if this.ind=NotaNum then signal NumberFormatException(chars)
+    res=Rexx(this); res.chars=null
+    if set=null then do; res.dig=DefaultDigits; res.form=DefaultForm; end
+                else do; res.dig=set.digits;    res.form=set.form;    end
+    return res.finish(res.dig, 0)
+
+  /** The Subtract operator.  */
+  method OpSub(set=RexxSet, rhs=Rexx) returns Rexx
+    if this.ind=NotaNum then signal NumberFormatException(this.chars)
+    if rhs.ind=NotaNum then signal NumberFormatException(rhs.chars)
+    /* carry out the subtraction */
+    newrhs=Rexx(rhs)          -- clone
+    newrhs.ind=-newrhs.ind    -- prepare to subtract
+    return this.OpAdd(set, newrhs) -- arithmetic
+
+  /** The Add operator.  */
+  method OpAdd(set=RexxSet, rhs=Rexx) returns Rexx
+    lhs=this
+    if lhs.ind=NotaNum then signal NumberFormatException(lhs.chars)
+    if rhs.ind=NotaNum then signal NumberFormatException(rhs.chars)
+    if set=null then do; resdig=DefaultDigits; resform=DefaultForm; end
+     else            do; resdig=set.digits;    resform=set.form; end
+
+    /* Quick exit for add 0 -- code below assumes non-zero sign */
+    if lhs.ind=0 then do
+      res=Rexx(rhs); res.chars=null; res.dig=resdig; res.form=resform
+      return res.finish(resdig, 0); end
+    if rhs.ind=0 then do
+      res=Rexx(lhs); res.chars=null; res.dig=resdig; res.form=resform
+      return res.finish(resdig, 0); end
+
+    /* Prepare numbers according to Rexx rules */
+    if lhs.mant.length>resdig+1 then do; lhs=Rexx(lhs); lhs.cut(resdig); end
+    if rhs.mant.length>resdig+1 then do; rhs=Rexx(rhs); rhs.cut(resdig); end
+
+    res=Rexx()                          -- build result here
+    res.dig=resdig; res.form=resform    -- record digits & form
+
+    /* Now see how much we have to pad or truncate lhs or rhs in order
+       to align the numbers.  If one number is much larger than the
+       other, then the smaller cannot affect the answer [but we may
+       still need to pad with up to DIGITS trailing zeros]. */
+    select
+      when lhs.exp=rhs.exp then /* no adjustment needed */ do
+        -- This is the most common, and fastest, path
+        usel=lhs.mant; user=rhs.mant; res.exp=lhs.exp
+        end
+      when lhs.exp>rhs.exp then do  -- need to pad lhs and/or truncate rhs
+        newlen=lhs.mant.length+lhs.exp-rhs.exp
+        /* if, after pad, lhs would be longer than rhs by >digits then
+           rhs cannot affect answer, so we only need to pad up to a
+           length of DIGITS+1. */
+        if newlen>rhs.mant.length+resdig+1 then do     -- LHS is sufficient
+          res.mant=lhs.mant
+          res.exp=lhs.exp; res.ind=lhs.ind
+          if res.mant.length<resdig then do            -- need 0 padding
+            res.mant=char[resdig]
+            System.arraycopy(lhs.mant, 0, res.mant, 0, lhs.mant.length)
+            loop i=lhs.mant.length to resdig-1; res.mant[i]='0'; end
+            res.exp=res.exp-(resdig-lhs.mant.length)
+            end
+          return res.finish(resdig, 0)
+          end
+        -- RHS may affect result
+        res.exp=rhs.exp                      -- expected final exponent
+        if newlen>resdig+1 then do           -- LHS will be max; RHS truncated
+          tlen=newlen-resdig-1               -- truncation length
+          user=char[rhs.mant.length-tlen]
+          System.arraycopy(rhs.mant, 0, user, 0, user.length)
+          res.exp=res.exp+tlen
+          newlen=resdig+1
+          end
+         else user=rhs.mant
+        if newlen>lhs.mant.length then do    -- need to pad LHS
+          usel=char[newlen]
+          System.arraycopy(lhs.mant, 0, usel, 0, lhs.mant.length)
+          loop i=lhs.mant.length to newlen-1; usel[i]='0'; end
+          end
+         else usel=lhs.mant
+        end
+      otherwise -- need to pad rhs and/or truncate lhs
+        newlen=rhs.mant.length+rhs.exp-lhs.exp
+        if newlen>lhs.mant.length+resdig+1 then do     -- RHS is sufficient
+          res.mant=rhs.mant
+          res.exp=rhs.exp; res.ind=rhs.ind
+          if res.mant.length<resdig then do            -- need 0 padding
+            res.mant=char[resdig]
+            System.arraycopy(rhs.mant, 0, res.mant, 0, rhs.mant.length)
+            loop i=rhs.mant.length to resdig-1; res.mant[i]='0'; end
+            res.exp=res.exp-(resdig-rhs.mant.length)
+            end
+          return res.finish(resdig, 0)
+          end
+        -- LHS may affect result
+        res.exp=lhs.exp                      -- expected final exponent
+        if newlen>resdig+1 then do           -- RHS will be max; LHS truncated
+          tlen=newlen-resdig-1               -- truncation length
+          usel=char[lhs.mant.length-tlen]
+          System.arraycopy(lhs.mant, 0, usel, 0, usel.length)
+          res.exp=res.exp+tlen
+          newlen=resdig+1
+          end
+         else usel=lhs.mant
+        if newlen>rhs.mant.length then do    -- need to pad RHS
+          user=char[newlen]
+          System.arraycopy(rhs.mant, 0, user, 0, rhs.mant.length)
+          loop i=rhs.mant.length to newlen-1; user[i]='0'; end
+          end
+         else user=rhs.mant
+      end
+
+    /* OK, we have aligned mantissas.  Now add or subtract. */
+    if lhs.ind==rhs.ind then /* same sign [0 not possible] */ do
+      res.mant=charaddsub(usel, user, 1)
+      res.ind=lhs.ind             -- true in all cases
+      return res.finish(resdig, 0)
+      end
+
+    /* different signs -- subtraction needed */
+    /* before we can swap we must determine which is the larger, as our
+       add/subtract routine can only handle non-negative results */
+    res.ind=lhs.ind                               -- likely sign
+    if usel.length>user.length then nop           -- original A bigger
+     else if usel.length<user.length then do      -- original B bigger
+      t=usel; usel=user; user=t                   -- swap
+      res.ind=-res.ind
+      end
+     else /* lengths the same */ do
+      /* may still need to swap: compare the strings */
+      ia=0; ib=0; ea=usel.length-1; eb=user.length-1
+      loop label compare
+        if ia<=ea then ca=usel[ia]
+         else do
+          if ib>eb then do
+            /* identical */
+            res.mant=char[1]; res.mant[0]='0'; res.ind=0; res.exp=0
+            return res
+            end
+          ca='0'
+          end
+        if ib<=eb then cb=user[ib]
+         else cb='0'
+        if ca\=cb then do
+          if ca<cb then /* swap needed */ do
+            t=usel; usel=user; user=t             -- swap
+            res.ind=-res.ind
+            end
+          leave; end
+        /* mantissas the same, so far */
+        ia=ia+1; ib=ib+1
+        end compare
+      end -- lengths the same
+    /* here, A>B, result cannot be 0 until rounded afterwards */
+    res.mant=charaddsub(usel, user, -1)           -- subtract
+    /* round, before removing leading zeros */
+    if res.mant.length>resdig then res.round(resdig)
+    /* Now see if we have to strip leading 0's */
+    if res.mant[0]='0' then do
+      loop i=1 to res.mant.length
+        if i=res.mant.length then /* all 0 */ do
+          res.mant=char[1]; res.mant[0]='0'; res.ind=0; res.exp=0
+          return res
+          end
+        if res.mant[i]\='0' then do
+          new=char[res.mant.length-i]
+          System.arraycopy(res.mant, i, new, 0, res.mant.length-i)
+          res.mant=new
+          leave i; end
+        end i
+      end
+    return res
+
+  /** The Multiply operator.  */
+  method OpMult(set=RexxSet, rhs=Rexx) returns Rexx
+    lhs=this
+    if lhs.ind=NotaNum then signal NumberFormatException(lhs.chars)
+    if rhs.ind=NotaNum then signal NumberFormatException(rhs.chars)
+    if set=null then do; resdig=DefaultDigits; resform=DefaultForm; end
+                else do; resdig=set.digits;    resform=set.form;    end
+    /* Prepare numbers according to Rexx rules */
+    if lhs.mant.length>resdig+1 then do; lhs=Rexx(lhs); lhs.cut(resdig); end
+    if rhs.mant.length>resdig+1 then do; rhs=Rexx(rhs); rhs.cut(resdig); end
+
+    res=Rexx()                               -- where we'll build result
+    res.dig=resdig; res.form=resform         -- for layout
+    res.ind=byte lhs.ind*rhs.ind             -- final sign
+    res.exp=lhs.exp+rhs.exp                  -- initial exponent
+
+    /* for best speed, as in DMSRCN, we use the shorter number as the
+       multiplier and the longer as the multiplicand */
+    if lhs.mant.length<rhs.mant.length then do
+      multer=lhs.mant; mand=rhs.mant; end
+     else do
+      multer=rhs.mant; mand=lhs.mant; end
+    acc=char[1]; acc[0]='0'                  -- accumulator
+
+    /* now the main long multiplication loop */
+    loop n=multer.length-1 to 0 by -1
+      mult=int(multer[n])-int('0')
+      if mult>0 then                         -- [optimization]
+        acc=charaddsub(acc, mand, mult)      -- accumulate
+      if n=0 then leave n                    -- done
+      /* multiply multiplicand by 10 */
+      /* later: can avoid create & copy if charaddsub took length(s) */
+      newmand=char[mand.length+1]
+      System.arraycopy(mand, 0, newmand, 0, mand.length)
+      newmand[mand.length]='0'               -- the trailing 0
+      mand=newmand
+      end n
+    res.mant=acc                             -- prepare the result
+    return res.finish(resdig, 0)
+
+  /** The Divide operator.  */
+  method OpDiv(set=RexxSet, rhs=Rexx) returns Rexx
+    return this.dodivide('D', set, rhs)
+
+  /** The '%' operator.  */
+  method OpDivI(set=RexxSet, rhs=Rexx) returns Rexx
+    return this.dodivide('I', set, rhs)
+
+  /** The '//' operator.  */
+  method OpRem(set=RexxSet, rhs=Rexx) returns Rexx
+    return this.dodivide('R', set, rhs)
+
+  /** The '**' operator.  */
+  method OpPow(set=RexxSet, rhs=Rexx) returns Rexx
+    if this.ind=NotaNum then signal NumberFormatException(this.chars)
+    /* Round the rhs to DIGITS as per definition */
+    if set=null then d=DefaultDigits
+                else d=set.digits
+    if rhs.mant.length>d then do
+      rhs=Rexx(rhs)                -- clone ..
+      rhs.round(d)                 -- .. and round
+      end
+    if rhs.mant.length+rhs.exp>d then
+      signal BadArgumentException("Too many digits:" rhs.toString())
+    n=rhs.intcheck(MinArg, MaxArg)
+    /* Similarly truncate the lhs to DIGITS+1 if need be */
+    lhs=this
+    if lhs.mant.length>d+1 then do; lhs=Rexx(lhs); lhs.cut(d); end
+    one=Rexx(int 1)                -- several uses
+    /* L for precision calculation [see ANSI, and TRL p133] */
+    if rhs.exp=0 then L=rhs.mant.length      -- very common
+                 else L=Rexx(n).length()     -- without decimal zeros
+    if set=null then workset=RexxSet(DefaultDigits+L+1)
+                else workset=RexxSet(set.digits+L+1, set.form)
+    res=one                        -- accumulator
+    if n=0 then return res         -- x**0 == 1
+    if n<0 then n=-n               -- [rhs.ind records the sign]
+    seenbit=boolean 0              -- set once we've seen a 1-bit
+    loop i=1 by 1                  -- for each bit [top bit ignored]
+      n=n+n                        -- shift left 1 bit
+      if n<0 then do               -- top bit is set
+        seenbit=1                  -- OK, we're off
+        res=res.OpMult(workset, lhs) -- acc=acc*x
+        end
+      if i=31 then leave           -- that was the last bit
+      if \seenbit then iterate     -- we don't have to square 1
+      res=res.OpMult(workset, res) -- acc=acc*acc [square]
+      end i                        -- 32 bits
+
+    if rhs.ind<0 then              -- was a **-n
+      res=one.OpDiv(workset, res)  -- 1/acc [at longer digits]
+
+    /* Final calculation rounds and removes trailing zeros */
+    return res.OpDiv(set, one)     -- acc/1
+
+  /* ----- Private methods ----- */
+
+  /** DODIVIDE -- carry out division operations
+     Arg1 is code: D=divide (/), I=integer divide (%), R=remainder (//)
+     Arg2 is the rhs.
+
+     Underlying algorithm (complications for Remainder function are
+     omitted for clarity):
+
+       Test for x/0 and then 0/x
+       Exp =Exp1 - Exp2
+       Exp =Exp +len(var1) -len(var2)
+       Sign=Sign1 * Sign2
+       Pad accumulator (Var1) to double-length with 0's (pad1)
+       Pad Var2 to same length as Var1
+       C2B=1st two digits of var2, +1 to allow for roundup
+       have=0
+       Do until (have=digits+1 OR residue=0)
+         if exp<0 then if integer divide/residue then leave
+         this_digit=0
+         Do forever
+            compare numbers
+            if <0 then leave inner_loop
+            if =0 then do -- quick exit without subtract
+               this_digit=this_digit+1; output this_digit
+               leave outer_loop; end
+            Compare lengths of numbers (mantissae):
+            If same then CA=first_digit_of_Var1
+                    else CA=first_two_digits_of_Var1
+            mult=ca*10/c2b   -- Good and safe guess at divisor
+            if mult=0 then mult=1
+            this_digit=this_digit+mult
+            subtract
+            end inner_loop
+          if have\=0 | this_digit\=0 then do
+            output this_digit
+            have=have+1; end
+          var2=var2/10
+          exp=exp-1
+          end outer_loop
+       exp=exp+1   -- set the proper exponent
+       if have=0 then generate answer=0
+       Return to FINISHED
+       Result defined by MATHV1
+
+       For extended commentary, see DMSRCN(*)
+       */
+  method dodivide(code=char, set=RexxSet, rhs=Rexx) private final returns Rexx -
+      signals NumberFormatException, DivideException
+    if this.ind=NotaNum then signal NumberFormatException(this.chars)
+    if rhs.ind=NotaNum then signal NumberFormatException(rhs.chars)
+    if rhs.ind=0 then signal DivideException("Divide by 0") -- includes 0/0
+    if set=null then do; resdig=DefaultDigits; resform=DefaultForm; end
+                else do; resdig=set.digits;    resform=set.form;    end
+
+    lhs=this
+    if lhs.ind=0 then return Rexx(int 0)     -- all three results must be 0
+
+    /* Prepare numbers according to Rexx rules */
+    if lhs.mant.length>resdig+1 then do; lhs=Rexx(lhs); lhs.cut(resdig); end
+    if rhs.mant.length>resdig+1 then do; rhs=Rexx(rhs); rhs.cut(resdig); end
+    /* precalculate exponent */
+    newexp=lhs.exp-rhs.exp + lhs.mant.length-rhs.mant.length
+    /* If new exponent -ve, then some quick exits are possible */
+    if newexp<0 then if code\='D' then do
+      if code='I' then return Rexx(int 0)    -- no integer part
+      res=Rexx(lhs)                          -- clone - remainder is input value
+      res.dig=resdig; res.form=resform
+      return res.finish(resdig, 0)           -- don't strip remainder
+      end
+
+    /* We need slow division */
+    res=Rexx()                               -- where we'll build result
+    res.ind=byte lhs.ind*rhs.ind             -- final sign (for D/I)
+    res.exp=newexp                           -- initial exponent (for D/I)
+    res.dig=resdig; res.form=resform         -- for layout
+    res.mant=char[resdig+1]                  -- where build the result
+
+    /* Now pad the mantissae with trailing zeros */
+    newlen=resdig+resdig+1
+    var1=char[newlen]
+    System.arraycopy(lhs.mant, 0, var1, 0, lhs.mant.length)
+    loop i=lhs.mant.length to newlen-1; var1[i]='0'; end
+    var2=char[newlen]
+    System.arraycopy(rhs.mant, 0, var2, 0, rhs.mant.length)
+    loop i=rhs.mant.length to newlen-1; var2[i]='0'; end
+
+    /* Calculate first two digits of rhs (var2), +1 for later estimations */
+    c2b=(int(var2[0])-int('0'))*10 + int(var2[1])-int('0') + 1
+
+    /* start the long-division loops */
+    have=0
+    loop label outer
+      thisdigit=0
+      /* find the next digit */
+      loop label inner
+        if var1.length<var2.length then leave inner    -- V1 too low
+        if var1.length=var2.length then do             -- compare needed
+          do label compare                             -- comparison
+            loop i=0 to var1.length-1
+              if var1[i]<var2[i] then leave inner      -- V1 too low
+              if var1[i]>var2[i] then leave compare    -- OK to subtract
+              end i
+            /* reach here if lhs and rhs are identical; the residue will
+               be 0 so we are done, and we don't need the final
+               subtraction unless doing remainder (in which case '0' may
+               be needed) */
+            if code\='R' then do
+              thisdigit=thisdigit+1
+              res.mant[have]=char(thisdigit+int('0'))
+              have=have+1
+              leave outer
+              end
+            end compare
+          /* prepare for subtraction.  Estimate CA (lengths the same) */
+          ca=int(var1[0])-int('0')      -- use only first digit
+          end -- lengths the same
+         else /* lhs longer than rhs */ do
+          /* use first two digits for estimate */
+          ca=(int(var1[0])-int('0'))*10
+          if var1.length>1 then ca=ca+int(var1[1])-int('0')
+          end
+        /* subtraction needed; V1>=V2 */
+        mult=ca*10%c2b; if mult=0 then mult=1
+        thisdigit=thisdigit+mult
+        var1=charaddsub(var1, var2, -mult)   -- subtract
+        if var1[0]\='0' then iterate inner   -- maybe another subtract needed
+        /* V1 now has leading zeros, remove leading 0's and try again */
+        /* (It could be longer than V2) */
+        d=var1.length
+        loop start=0 to d-2
+          if var1[start]\='0' then leave
+          d=d-1
+          end
+        reduced=char[d]                      -- make and copy mantissa
+        System.arraycopy(var1, start, reduced, 0, d)
+        var1=reduced
+        end inner
+
+      /* We have the next digit */
+      if have\=0 | thisdigit\=0 then do      -- put the digit we got
+        res.mant[have]=char(thisdigit+int('0'))
+        have=have+1
+        if have=resdig+1 then leave outer    -- we have all we need
+        if var1[0]='0' then leave outer      -- residue now 0
+        end
+      /* can leave now if not Divide and no integer part left  */
+      if code\='D' then if res.exp<=0 then leave outer
+      /* to get here, V1 is less than V2, so divide V2 by 10 and go for
+         the next digit */
+      res.exp=res.exp-1                      -- reduce the exponent
+      /* later: can avoid create & copy if charaddsub took length(s) */
+      newvar2=char[var2.length-1]
+      System.arraycopy(var2, 0, newvar2, 0, var2.length-1)
+      var2=newvar2
+      end outer
+
+    /* here when we have finished dividing, for some reason */
+    if code='I' | code='R' then /* check for integer overflow */ do
+      if have+res.exp>resdig then signal DivideException("Integer overflow")
+      end
+    if code\='R' then /* Divide or Integer Divide */ do
+      if have=0 then return Rexx(int 0)     -- got no digits
+      if have=res.mant.length then do       -- got digits+1 digits
+        res.round(resdig)
+        have=resdig
+        end
+      /* make the mantissa 'have' long */
+      newmant=char[have]
+      System.arraycopy(res.mant, 0, newmant, 0, have)
+      res.mant=newmant
+      return res.finish(resdig, 1)
+      end
+
+    /* We were doing Remainder -- return the residue */
+    if have=0 then do                        -- no integer part was found
+      /* return lhs, canonical */
+      res=Rexx(lhs);  res.chars=null; res.dig=resdig; res.form=resform
+      return res.finish(resdig, 0); end
+    if var1[0]='0' then return Rexx(int 0)   -- simple 0 residue
+    res.ind=lhs.ind                          -- sign is always as LHS
+    /* Calculate the exponent by subtracting the number of padding zeros
+       we added and adding the original exponent */
+    padding=resdig+resdig+1-lhs.mant.length
+    res.exp=res.exp-padding+lhs.exp
+
+    /* strip insignificant padding zeros from residue, and create/copy
+       the resulting mantissa if need be */
+    d=var1.length
+    loop i=d-1 to 1 by -1 while res.exp<lhs.exp & res.exp<rhs.exp
+      if var1[i]\='0' then leave
+      d=d-1
+      res.exp=res.exp+1
+      end
+    if d<var1.length then /* need to reduce */ do
+      newvar1=char[d]
+      System.arraycopy(var1, 0, newvar1, 0, d)
+      var1=newvar1
+      end
+    res.mant=var1
+    return res.finish(resdig, 0)
+
+  /** CUT -- cut back a Rexx Mantissa to digits+1
+     Arg1 is digits (not digits+1)
+   */
+  method cut(d=int) private
+    adjust=mant.length-d-1
+    if adjust<=0 then return  -- [B&B] nowt to do
+    exp=exp+adjust
+    use=char[d+1]
+    System.arraycopy(mant, 0, use, 0, d+1)
+    mant=use; chars=null      -- sign will not change
+    return
+
+  /* ROUND -- rounds current Rexx to specified digits */
+  method round(d=int) private
+    adjust=mant.length-d
+    if adjust<=0 then return  -- nowt to do
+    exp=exp+adjust
+    if adjust>1 then /* truncate */ do
+      use=char[d+1]
+      System.arraycopy(mant, 0, use, 0, d+1)
+      end
+     else use=mant
+    add=char[1]; add[0]='5'
+    new=charaddsub(use, add, 1)
+    if new.length>d+1 then exp=exp+1 -- had a carry
+    /* [room for improvement here] */
+    res=char[d]     -- make the final result ...
+    System.arraycopy(new, 0, res, 0, d)
+    mant=res; chars=null
+    return
+
+  /** CHARADDSUB -- add or subtract two >=0 integers in char arrays
+     This routine performs the calculation:
+
+       C=A+(B*M)
+
+     Where M is in the range -9 through +9
+
+     If M<0 then A>=B must be true, so the result is always positive.
+     Leading zeros are not removed after a subtraction.  The result is
+     either the same length as the longer of A and B, or 1 longer than
+     that (if a carry occurred).
+
+     A and B are right-aligned.
+
+     1996.02.20 -- enhanced version of DMSRCN algorithm (1981)
+
+     [Performance can be improved by reuse, etc. -- see MFC's BigDecimal]
+   */
+  method charaddsub(a=char[], b=char[], m=int) static private-
+         returns char[]
+    /* We'll usually be right if we assume no carry */
+    ap=a.length-1                  -- -> final (rightmost) digit
+    bp=b.length-1                  -- ..
+    maxarr=ap
+    if bp>maxarr then maxarr=bp
+    res=char[maxarr+1]
+    carry=0                        -- carry or borrow
+    loop op=maxarr to 0 by -1
+      da=carry
+      if ap>=0 then do             -- have some A digit
+        da=da+int(a[ap])-int('0')
+        ap=ap-1;
+        end
+      if bp>=0 then do             -- have some B digit
+        da=da+(int(b[bp])-int('0'))*m
+        bp=bp-1
+        end
+      /* result could be -82 to 91 */
+      if da<0 then do
+        da=da+100                  -- yes, this is right -- consider -50
+        carry=da%10-10
+        res[op]=char((da//10)+int('0'))
+        iterate op; end
+      if da>9 then do
+        carry=(da%10)
+        res[op]=char((da//10)+int('0'))
+        iterate op; end
+      /* no carry */
+      carry=0
+      res[op]=char(da+int('0'))
+      end
+    /* say '--->' res carry */
+    if carry=0 then return res
+    -- if carry<0 then signal DivideException("internal.error ["a b m carry"]")
+    /* We have carry -- need to make space for the extra digit */
+    new=char[maxarr+2]
+    new[0]=char(carry+int('0'))
+    System.arraycopy(res, 0, new, 1, maxarr+1)
+    return new
+
+  /** concatenates two Rexx objects, optionally with blank(s)  */
+  method concat(set=RexxSet, rhs=Rexx, blanks=int) private returns Rexx
+    set=set
+    if chars=null then chars=layout()
+    if rhs.chars=null then rhs.chars=rhs.layout()
+    res=char[chars.length+rhs.chars.length+blanks]
+    System.arraycopy(this.chars, 0, res, 0, chars.length)
+    if blanks>0 then
+      loop i=chars.length to chars.length+blanks-1; res[i]=' '; end
+    System.arraycopy(rhs.chars, 0, res, chars.length+blanks, rhs.chars.length)
+    return Rexx(res, 1)
+
+  /** Make a character array from an array of java.lang.String;
+     the array elements are concatenated with a single blank between
+     each.  */
+  method sa2ca(s=String[]) private static returns char[]
+    blanks=s.length-1                   -- number of blanks needed
+    if blanks<0 then return char[0]     -- empty
+    len=blanks                          -- length of result (to be)
+    loop i=0 to blanks; len=len+s[i].length(); end
+    res=char[len]
+    out=0                               -- output offset
+    loop i=0 to blanks
+      seglen=s[i].length()
+      s[i].getChars(0, seglen, res, out)
+      if i=blanks then leave            -- no blank after final
+      out=out+seglen+1
+      res[out-1]=' '
+      end i
+    return res
+
+  /** General Rexx compare  */
+  method docompare(set=RexxSet, rhs=Rexx) private final returns int
+    if this.ind\=NotaNum then
+     if rhs.ind\=NotaNum then do label numcompare
+      /* Numeric compare */
+      if this.ind==rhs.ind & this.exp==rhs.exp then do
+        /* sign & exponent the same [very common] */
+        thislength=this.mant.length
+        if thislength<rhs.mant.length then return -this.ind
+        if thislength>rhs.mant.length then return this.ind
+        /* lengths are the same; we can do a straight mantissa compare
+           unless maybe rounding [rounding is very unusual] */
+        dig=DefaultDigits
+        if set\=null then dig=set.digits
+        if thislength<=dig then do
+          loop i=0 to thislength-1
+            if this.mant[i]<rhs.mant[i] then return -this.ind
+            if this.mant[i]>rhs.mant[i] then return this.ind
+            end
+          return 0  -- identical
+          end
+        /* drop through for full comparison */
+        end
+       else do
+        /* More fastpaths possible */
+        if this.ind<rhs.ind then return -1
+        if this.ind>rhs.ind then return  1
+        end
+      /* carry out a subtract to make the comparison */
+      newrhs=Rexx(rhs)               -- clone
+      newrhs.ind=-newrhs.ind         -- prepare to subtract
+      res=this.OpAdd(set, newrhs)    -- arithmetic
+      return res.ind
+      end numcompare
+    /* One of them isn't a number */
+    if chars=null then chars=layout(); sl=this.chars
+    if rhs.chars=null then rhs.chars=rhs.layout(); sr=rhs.chars
+    il=0; ir=0; el=sl.length-1; er=sr.length-1
+    loop el=el to 0 by -1 while sl[el]=' '; end   -- skip trailers
+    loop er=er to 0 by -1 while sr[er]=' '; end   -- skip trailers
+    loop il=0 to el while sl[il]=' '; end  -- skip leaders
+    loop ir=0 to er while sr[ir]=' '; end  -- ..
+    /* Now the real comparison */
+    cl=char; cr=char
+    loop
+      if il<=el then cl=sl[il]; else cl=' '  -- pad with blanks on right as
+      if ir<=er then cr=sr[ir]; else cr=' '  -- .. per TRL (else matches '\0')
+      if cr=cl then do
+        if cr=' ' then if il>el then if ir>er then leave
+        il=il+1; ir=ir+1; iterate
+        end
+      /* differ (exactly) but maybe not caseless */
+      cl=Character.toLowerCase(cl)
+      cr=Character.toLowerCase(cr)
+      if cr\=cl then do
+        if cl<cr then return -1
+        return 1
+        end
+      /* cr=cl */
+      il=il+1; ir=ir+1
+      end
+    return 0
+
+  /** Strict Rexx compare  */
+  method docomparestrict(set=RexxSet, rhs=Rexx) private final returns int
+    if this.chars=null then this.chars=this.layout(); sl=this.chars
+    if rhs.chars=null  then rhs.chars=rhs.layout();   sr=rhs.chars
+    il=0; ir=0; el=sl.length-1; er=sr.length-1
+    loop
+      if il<=el then cl=sl[il]
+       else do
+        if ir>er then leave
+        cl='\0'
+        end
+      if ir<=er then cr=sr[ir]
+       else cr='\0'
+      if cr\=cl then do
+        if cl<cr then return -1
+        return 1
+        end
+      /* characters the same */
+      il=il+1; ir=ir+1
+      end
+    set=set
+    return 0
+
+  /** Compare (normalized) mantissas.
+            Arg1 is lhs
+            Arg2 is rhs
+            returns -1, 0, 1
+      */
+  /** not used
+  method mantcompare(lhs=char[], rhs=char[]) static private returns int
+    if lhs.length<rhs.length then return -1
+    if lhs.length>rhs.length then return  1
+    /* lengths the same */
+    loop i=0 to lhs.length-1
+      if lhs[i]<rhs[i] then return -1
+      if lhs[i]>rhs[i] then return  1
+      end i
+    return 0   -- really are =
+  **/
+
+  /** Round (if need be) then check for 0 mantissa
+            returns this rounded, unchanged, or new 0 object if needed
+            Arg1 is length to round to
+            Arg2 is whether trailing insignificant zeros should be
+                    removed after round
+      */
+  method finish(roundlen=int, strip=boolean) private final returns Rexx
+    if this.mant.length>roundlen then this.round(roundlen)
+
+    /* If strip requested, remove insignificant trailing zeros */
+    if strip then do
+      d=mant.length
+      /* see if we need to drop any trailing zeros */
+      loop i=d-1 to 1 by -1
+        if mant[i]\='0' then leave
+        d=d-1
+        exp=exp+1
+        end i
+      if d<mant.length then /* need to reduce */ do
+        newmant=char[d]
+        System.arraycopy(mant, 0, newmant, 0, d)
+        mant=newmant
+        end
+      end
+    /* now check for all zeros in mantissa */
+    loop i=0 to this.mant.length-1
+      if this.mant[i]\='0' then /* non-0 result */ do
+        /* check for overflow */
+        mag=exp+mant.length-1
+        if mag<MinExp | mag>MaxExp then do label overflow
+          -- possible reprieve if form is engineering
+          if form=RexxSet.ENGINEERING then do
+            sig=mag//3                       -- leftover
+            if sig<0 then sig=3+sig          -- negative exponent
+            mag=mag-sig                      -- exponent to use
+            if mag>=MinExp then if mag<=MinExp then leave overflow
+            end
+          signal ExponentOverflowException(mag)
+          end overflow
+        return this
+        end
+      end i
+    /* mantissa is all zeros */
+    if this.mant.length=1 then
+     if this.ind=0 then
+      if this.exp=0 then return this
+    return Rexx(int 0)

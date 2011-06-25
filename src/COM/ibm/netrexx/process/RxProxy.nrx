@@ -1,0 +1,1110 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 2000.        All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxProxy                                                            */
+/*                                                                    */
+/*   The Proxy object.                                                */
+/*                                                                    */
+/*   This is constructed from a RxClassInfo object, and can           */
+/*   provide the proxy class as a byte array; once this has been      */
+/*   loaded, the proxy object can be discarded.                       */
+/*                                                                    */
+/*   This is very close to being a general classfile writer.          */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2000.03.14 Initial                                                 */
+/* 2000.04.10 Add this$n field handling in dependent classes          */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/* ------------------------------------------------------------------ */
+/* Proxies:  [2000.03.14]                                             */
+/*                                                                    */
+/* Each local class (synthetic class) has a real proxy class loaded   */
+/* for it.  The proxy class forms instances and holds properties      */
+/* during interpretation.                                             */
+/* ------------------------------------------------------------------ */
+
+-- +++ should check for limits overflows
+-- +++ constantValue code not complete, as it's unused
+
+import sun.tools.java.RuntimeConstants
+
+class RxProxy uses RuntimeConstants, RxField
+
+ properties constant
+  majorVersion=int 45         -- look like a 1.0 class
+  minorVersion=int  3         -- ..
+  voidsig=String '()V'        -- signature for a void method
+  proxyInitsig=String '(I)V'  -- signature for a proxyInit call
+  callMethodsig=String -      -- signature for a callMethod call
+    '(Ljava/lang/Object;I[Ljava/lang/Object;)Ljava/lang/Object;'
+  cinitname=String '<clinit>' -- class initializer name
+  oinitname=String '<init>'   -- object initializer name
+  ACC_SUPER =32               -- [not in RuntimeConstants]
+  dollarname=String '$0'      -- name of the static variable
+  interpreterType=RxType('COM.ibm.netrexx.process', 'RxInterpreter', 0)
+  translatorType=RxType('COM.ibm.netrexx.process', 'RxTranslator', 0)
+  -- wrapper classes
+  doubleType=RxType('java.lang', 'Double', 0)
+  floatType=RxType('java.lang', 'Float', 0)
+  longType=RxType('java.lang', 'Long', 0)
+  intType=RxType('java.lang', 'Integer', 0)
+  oArrayType=RxType('java.lang', 'Object', 1)
+
+ properties shared
+  rxt      =RxTranslator      -- the usual
+  info     =RxClassInfo       -- the class for which to make a proxy
+  dollarref=int               -- fieldRef for the $0 property
+  thisref  =int               -- fieldRef for any this$n property
+
+  -- cached method references; valid for this proxy only
+  refPI    =int 0             -- proxyInit reference
+  refCM    =int 0             -- callMethod reference
+  refiv    =int 0             -- Integer.intValue reference
+  reffv    =int 0             -- Float.floatValue reference
+  refdv    =int 0             -- Double.doubleValue reference
+  reflv    =int 0             -- Long.longValue reference
+
+ properties private
+  -- lookaside data, in the order it will eventually appear in the class
+  thisclass =int 0            -- this class ID
+  superclass=int 0            -- super-class ID
+
+  -- constant pool data
+  conlength =int 0            -- total size of the pool in bytes
+  conindex  =int 0            -- constant pool indexes used
+  conlist   =Vector(50)       -- ordered list of entries
+  constants =Hashtable(50)    -- key is string = the constant (one byte
+                              -- per char); value is Integer(index)
+  -- Interface information
+  impclasses=int[]            -- interface ids
+
+  -- Property and method data.  Both are one larger than the 'real'
+  -- count for the class.
+  -- Properties have the $0 item added; methods have the <clinit>, which
+  -- is always created,
+  propcount =int 0            -- count of properties
+  propnameid=int[]            -- list of field names
+  proptypeid=int[]            -- list of field types
+  propflags =int[]            -- list of access flags
+  propatts  =Vector[]         -- collects attributes [AttrXX objects]
+  propattlen=int 0            -- size of all attributes attached to properties
+  methcount =int 0            -- count of methods
+  methnameid=int[]            -- list of method names
+  methtypeid=int[]            -- list of method types
+  methflags =int[]            -- list of access flags
+  methatts  =Vector[]         -- collects attributes [AttrXX objects]
+  methattlen=int 0            -- size of all attributes attached to methods
+
+  -- others
+  clasatts  =Vector           -- list of class attributes
+  clasattlen=int 0            -- size of all attributes attached to class
+
+  -- shared information
+  classlength=int             -- exact size of the class, in bytes
+
+ /* General Constructor */
+ method RxProxy(translator=RxTranslator, newinfo=RxClassInfo)
+  rxt=translator
+  info=newinfo
+
+  -- here we process the contents of the class without actually building
+  -- the bytestreams, so we know how big it will be
+  if rxt.superflag.diag then say '# Building Proxy for:' info.type
+
+  thisclass=conClass(info.type)
+  if info.superinfo\=null then superclass=conClass(info.superinfo.type)
+
+  /* check property list */
+  if info.impinfos=null then impclasses=int[0]
+   else do
+    impclasses=int[info.impinfos.length]
+    loop i=0 for impclasses.length
+      impclasses[i]=conClass(info.impinfos[i].type)
+      end i
+    end
+
+  /* Properties */
+  propcount=info.proplist.size()
+  extras=1+info.isdependent             -- $0 and perhaps this$n
+  propnameid=int[propcount+extras]
+  proptypeid=int[propcount+extras]
+  propflags=int[propcount+extras]
+  propatts=Vector[propcount+extras]
+
+  -- add $0 variable (Interpreter reference); take care if interface
+  propflags[0]=ACC_FINAL+ACC_STATIC
+  if \info.isinterface then propflags[0]=propflags[0]+ACC_PRIVATE
+                       else propflags[0]=propflags[0]+ACC_PUBLIC
+  propnameid[0]=addutf8(dollarname)
+  proptypeid[0]=addSig(interpreterType)
+  -- no attributes
+  -- make a reference; we'll need it
+  dollarref=conRef(CONSTANT_FIELD, info.type, dollarname, interpreterType)
+
+  -- add the this$n variable, if needed
+  if info.isdependent then do
+    propflags[1]=ACC_FINAL+ACC_PUBLIC
+    thisname='this$'(info.parents-1)    -- one down gets this$0, etc.
+    propnameid[1]=addutf8(thisname)
+    proptypeid[1]=addSig(info.parentinfo.type)
+    thisref=conRef(CONSTANT_FIELD, info.type, thisname, info.parentinfo.type)
+    end
+
+  loop f=extras for propcount
+    field=RxField info.proplist.elementAt(f-extras)
+    propflags[f]=accflags(field)
+    propnameid[f]=addutf8(field.fieldname)
+    proptypeid[f]=addSig(field.fieldtype)
+    if field.fieldvalue\=null then do   -- need ConstantValue
+      atcv=AttribCV(field.fieldvalue)
+      attrvect=Vector(1)
+      attrvect.addElement(atcv)
+      propatts[f]=attrvect
+      propattlen=propattlen+atcv.size()
+      end
+    end
+  propcount=propcount+extras            -- allow for static $0
+
+  /* Methods -- as found in class, plus one for static initializer */
+  methcount=info.methlist.size()
+  methnameid=int[methcount+1]
+  methtypeid=int[methcount+1]
+  methflags=int[methcount+1]
+  methatts=Vector[methcount+1]
+
+  /* add the static initializer in slot 0 */
+  methflags[0]=ACC_STATIC               -- [ignored, in fact]
+  methnameid[0]=addutf8(cinitname)      -- fixed name
+  methtypeid[0]=addutf8(voidsig)        -- constant signature
+  attrvect=Vector(2)
+  atec=AttribEC(RxType.EMPTY_TYPES)         -- no Exceptions for now +++
+  attrvect.addElement(atec)
+  methattlen=methattlen+atec.size()
+  atco=AttribCO(null)                   -- make the code for static initializer
+  attrvect.addElement(atco)
+  methattlen=methattlen+atco.size()
+  methatts[0]=attrvect
+
+  loop f=1 for methcount
+    field=RxField info.methlist.elementAt(f-1)
+    methflags[f]=accflags(field)
+    if field.isConstructor() then methnameid[f]=addutf8(oinitname) -- special name ..
+                           else methnameid[f]=addutf8(field.fieldname)
+    methtypeid[f]=addMethSig(field)
+    -- There must always be an Exceptions attribute
+    -- There is always be a Code attribute, except native and abstract methods
+    attrvect=Vector(2)
+    atec=AttribEC(field)                -- exceptions
+    attrvect.addElement(atec)
+    methattlen=methattlen+atec.size()
+    if field.isNative(), field.isAbstract() then nop  -- no code, thanks
+     else do
+      atco=AttribCO(field)              -- make the code for the method
+      attrvect.addElement(atco)
+      methattlen=methattlen+atco.size()
+      end
+    methatts[f]=attrvect
+    end
+  methcount=methcount+1                 -- allow for static initializer
+
+  /* add class attribute(s) */
+  filename=info.localclass.classprogram.source.getName()
+  clasatts=Vector(1)
+  atsf=AttribSF(filename)
+  clasatts.addElement(atsf)
+  clasattlen=clasattlen+atsf.size()
+
+  /* calculate exact class size */
+  classlength=24+conlength-                  -- fixed and constant pool
+              +2*impclasses.length-          -- interface list
+              +8*propcount+propattlen-       -- properties
+              +8*methcount+methattlen-       -- methods
+              +clasattlen                    -- class attributes
+
+  if rxt.superflag.diag then do
+    say '# --- constant pool:' conlength 'class:' classlength '---'
+    say '#     props:' propcount 'meths:' methcount
+    say '#     atts:' propattlen methattlen clasattlen
+    end
+  return
+
+
+ /* ---------------------------------------------------------------- */
+ /* Get the byte array for the class                                 */
+ /* ---------------------------------------------------------------- */
+ method getBytes returns byte[]
+  array=byte[classlength]
+  offset=0
+  offset=writeInt(array, offset, JAVA_MAGIC)      -- coffee time
+  offset=writeShort(array, offset, minorVersion)
+  offset=writeShort(array, offset, majorVersion)
+  offset=writeShort(array, offset, conindex+1)    -- constant count
+
+  -- now write the constant pool
+  loop con=0 for conlist.size()
+    ca=(String conlist.elementAt(con)).toCharArray()
+    tag=int(ca[0])
+    offset=writeByte(array, offset, tag)
+    select case tag           -- write the constant as needed
+      /* See classfile specifications for these constants */
+      when CONSTANT_INTEGER, CONSTANT_FLOAT,-
+           CONSTANT_FIELD, CONSTANT_METHOD,-
+           CONSTANT_INTERFACEMETHOD, CONSTANT_NAMEANDTYPE then do
+        offset=writeShort(array, offset, int(ca[1]))
+        offset=writeShort(array, offset, int(ca[2]))
+        end
+      when CONSTANT_CLASS, CONSTANT_STRING then do
+        offset=writeShort(array, offset, int(ca[1]))
+        end
+      when CONSTANT_LONG, CONSTANT_DOUBLE then do
+        offset=writeShort(array, offset, int(ca[1]))
+        offset=writeShort(array, offset, int(ca[2]))
+        offset=writeShort(array, offset, int(ca[3]))
+        offset=writeShort(array, offset, int(ca[4]))
+        end
+      when CONSTANT_UTF8 then do
+        offset=writeShort(array, offset, int(ca[1]))   -- length
+        -- ca[2] onwards are the original characters of the string
+        loop i=2 for ca.length-2
+          c=ca[i]                  -- get a char
+          select
+            when c ='\u0000' then
+              offset=writeShort(array, offset, 0xc080) -- special
+            when c<='\u007f' then
+              offset=writeByte(array, offset, int(c))
+            when c<='\u07ff' then do
+              hi=int(c)
+              lo=(hi & 0x3f) | 0x80
+              hi=(hi%0x40 & 0x1F) | 0xc0
+              offset=writeByte(array, offset, hi)
+              offset=writeByte(array, offset, lo)
+              end
+            otherwise
+              hi=int(c)
+              lo=(hi & 0x3f) | 0x80
+              hi=hi%0x40
+              mi=(hi & 0x3f) | 0x80
+              hi=(hi%0x40 & 0x0F) | 0xe0
+              offset=writeByte(array, offset, hi)
+              offset=writeByte(array, offset, mi)
+              offset=writeByte(array, offset, lo)
+            end
+          end i
+        end
+      end
+    end con -- writing constant pool...
+
+  -- continue with the class, access flags next
+  offset=writeShort(array, offset, accflags(info))
+  offset=writeShort(array, offset, thisclass)
+  offset=writeShort(array, offset, superclass)    -- may be 0
+
+  -- interfaces
+  offset=writeShort(array, offset, impclasses.length)
+  loop i=0 for impclasses.length
+    offset=writeShort(array, offset, impclasses[i])
+    end
+
+  -- properties
+  offset=writeShort(array, offset, propcount)
+  loop i=0 for propcount
+    offset=writeShort(array, offset, propflags[i])
+    offset=writeShort(array, offset, propnameid[i])
+    offset=writeShort(array, offset, proptypeid[i])
+    if propatts[i]=null then propattscount=0
+                        else propattscount=propatts[i].size()
+    offset=writeShort(array, offset, propattscount)
+    loop j=0 for propattscount
+      att=Attrib propatts[i].elementAt(j)
+      offset=att.writeBytes(array, offset)
+      end j
+    end i
+
+  -- methods
+  offset=writeShort(array, offset, methcount)
+  loop i=0 for methcount
+    offset=writeShort(array, offset, methflags[i])
+    offset=writeShort(array, offset, methnameid[i])
+    offset=writeShort(array, offset, methtypeid[i])
+    if methatts[i]=null then methattscount=0
+                        else methattscount=methatts[i].size()
+    offset=writeShort(array, offset, methattscount)
+    loop j=0 for methattscount
+      att=Attrib methatts[i].elementAt(j)
+      offset=att.writeBytes(array, offset)
+      end j
+    end i
+
+  -- class attributes
+  if clasatts=null then clasattscount=0
+                   else clasattscount=clasatts.size()
+  offset=writeShort(array, offset, clasattscount)
+  loop j=0 for clasattscount
+    att=Attrib clasatts.elementAt(j)
+    offset=att.writeBytes(array, offset)
+    end j
+
+  return array
+
+ /* accflags -- return the access flags for a field or class */
+ method accflags(cinfo=RxClassInfo) returns int
+  flags=int ACC_SUPER -- 'modern class'
+  if cinfo.ispublic    then flags=flags|ACC_PUBLIC
+  if cinfo.isfinal     then flags=flags|ACC_FINAL
+  if cinfo.isinterface then flags=flags|ACC_INTERFACE
+  if cinfo.isabstract  then flags=flags|ACC_ABSTRACT
+  return flags
+
+ method accflags(field=RxField) returns int
+  -- setAccessible(1) does not seem to override the visibility, so make
+  -- all fields public in the proxy
+  flags=ACC_PUBLIC
+  /**
+  select case field.fieldvisib
+    when VIS_PUB   then flags=ACC_PUBLIC
+    when VIS_INHER then flags=ACC_PROTECTED
+    when VIS_PRIV  then flags=ACC_PRIVATE
+    otherwise flags=0    -- SHARED is default access
+    end
+  **/
+
+  if field.isFinal()     then flags=flags|ACC_FINAL
+  if field.isStatic()    then flags=flags|ACC_STATIC
+  if field.isAbstract()  then flags=flags|ACC_ABSTRACT
+  if field.isVolatile()  then flags=flags|ACC_VOLATILE
+  if field.isTransient() then flags=flags|ACC_TRANSIENT
+  if field.isProtected() then flags=flags|ACC_SYNCHRONIZED
+  if field.isNative()    then flags=flags|ACC_NATIVE
+  return flags
+
+ /* ---------------------------------------------------------------- */
+ /* writeXxxx methods write to an offset in a byte array             */
+ /* For all:                                                         */
+ /*   Arg1 is the byte array                                         */
+ /*   Arg2 is the offset to start writing                            */
+ /*   returns updated offset (where next write should be)            */
+ /* ---------------------------------------------------------------- */
+
+ /* write a byte */
+ method writeByte(array=byte[], offset=int, data=int) returns int
+   array[offset+0]=byte(data&0xff)
+   return offset+1
+
+ /* write two bytes */
+ method writeShort(array=byte[], offset=int, data=int) returns int
+   array[offset+0]=byte((data%256)&0xff)
+   array[offset+1]=byte(data&0xff)
+   return offset+2
+
+ /* write four bytes */
+ method writeInt(array=byte[], offset=int, data=int) returns int
+   array[offset+3]=byte(data&0xff)
+   data=int((long(data)&0xffffffff)%256)     -- quick fix for no shift
+   array[offset+2]=byte(data&0xff)
+   data=data%256
+   array[offset+1]=byte(data&0xff)
+   data=data%256
+   array[offset+0]=byte(data&0xff)
+   return offset+4
+
+
+ /* ---------------------------------------------------------------- */
+ /* The remainder are methods for adding constants, etc. to the      */
+ /* various pools.                                                   */
+ /* ---------------------------------------------------------------- */
+
+ /* Constants summary chart:
+    CONSTANT_UTF8              len, bytes           len=u2(start+1)+3
+    CONSTANT_INTEGER           int                  len=5
+    CONSTANT_FIELD             class, nametype      len=5
+    CONSTANT_METHOD            class, nametype      len=5
+    CONSTANT_CLASS             UTF8                 len=3
+    CONSTANT_STRING            UTF8                 len=3
+    CONSTANT_FLOAT             float                len=5
+    CONSTANT_LONG              long                 len=9; index=index+1
+    CONSTANT_DOUBLE            double               len=9; index=index+1
+    CONSTANT_INTERFACEMETHOD   class, nametype      len=5
+    CONSTANT_NAMEANDTYPE       UTF8, UTF8           len=5
+    CONSTANT_UNICODE           [not defined]        len=u2(start+1)*2+3 -- unused
+
+    In the constant pool hashtable, the values are held in Strings.  The
+    character array for each string uses the chars as follows:
+      c[0]  the tag
+      c[1]  first u2 of the constant, or UTF8 length of a string
+      c[2]+ additional U2s as needed, or the chars of a string
+    UTF8 items are left unpacked; they are converted to UTF8 when
+    writing bytes, later.
+
+    The methods below starting 'conXxx' are used elsewhere, the 'addXxx'
+    ones actually add items to the hashtable (if not found), and are
+    only used rarely above.
+
+ */
+
+ /* conClass -- get the ID for a CLASS */
+ method conClass(type=RxType) returns int
+  id=addSig(type)             -- get the JVM signature
+
+  -- if the class is an array, then the name is the Java signature of
+  -- the array.  Otherwise it is the Java name of the class with package
+  -- separators being '/'.  To get this right, we use the Java signature
+  -- of the class and remove the 'L' and ';'
+  if type.dimension>0 then id=addSig(type)
+   else do
+    s=type.toJavaSig()       -- get the class signature
+    s=s.replace('.','/')   -- and change to class file format
+    s=s.substring(1, s.length()-1)   -- strip delimiters
+    id=addutf8(s)
+    end
+  return addone(CONSTANT_CLASS, id)
+
+ /* conRef -- get the ID for reference [FIELD, METHOD, INTERFACEMETHOD] */
+ method conRef(tag=int, ctype=RxType, name=String, type=RxType) returns int
+  nid=addutf8(name)
+  tid=addSig(type)            -- note this is not a CLASS item
+  ntid=addtwo(CONSTANT_NAMEANDTYPE, nid, tid)
+  cid=conClass(ctype)
+  return addtwo(tag, cid, ntid)
+
+ -- next version for when we have (say) a method signature
+ method conRef(tag=int, ctype=RxType, name=String, sig=String) returns int
+  nid=addutf8(name)
+  tid=addutf8(sig)            -- e.g., '(I)V'
+  ntid=addtwo(CONSTANT_NAMEANDTYPE, nid, tid)
+  cid=conClass(ctype)
+  return addtwo(tag, cid, ntid)
+
+ /* conString -- get the id for a String */
+ method conString(s=String) returns int
+  return addone(CONSTANT_STRING, addutf8(s))
+
+ /* conInt, conFloat, conLong, conDouble -- constant primitives */
+ method conInt(i=int) returns int
+  tag=CONSTANT_INTEGER
+  return add4(tag, i)
+ method conFloat(f=float) returns int
+  tag=CONSTANT_FLOAT
+  return add4(tag, Float.floatToIntBits(f))
+ method conLong(l=long) returns int
+  tag=CONSTANT_LONG
+  return add8(tag, l)
+ method conDouble(d=double) returns int
+  tag=CONSTANT_DOUBLE
+  return add8(tag, Double.doubleToLongBits(d))
+
+ /* addSig -- add a signature */
+ method addSig(type=RxType) private returns int
+  s=type.toJavaSig()       -- get the class signature
+  s=s.replace('.','/')   -- and change to class file format
+  return addutf8(s)
+
+ /* addMethSig -- add a method signature */
+ method addMethSig(field=RxField) private returns int
+  return addutf8(field.JVMsig())
+
+ /* addtwo -- add a two-ref item */
+ method addtwo(tag=int, ref1=int, ref2=int) private returns int
+  c=char[3]
+  c[0]=char(tag)
+  c[1]=char(ref1)
+  c[2]=char(ref2)
+  return addit(c, 5)
+
+ /* addone -- add a one-ref item */
+ method addone(tag=int, ref=int) private returns int
+  c=char[2]
+  c[0]=char(tag)
+  c[1]=char(ref)
+  return addit(c, 3)
+
+ /* add8 -- add an 8-byte primitive */
+ method add8(tag=int, v=long) private returns int
+  c=char[5]
+  c[0]=char(tag)
+  c[4]=char(v & 0xffff)       -- lowest two bytes
+  v=v%0x10000
+  c[3]=char(v & 0xffff)
+  v=v%0x10000
+  c[2]=char(v & 0xffff)
+  v=v%0x10000
+  c[1]=char(v & 0xffff)
+  i=addit(c, 9)
+  conindex=conindex+1         -- bump the index a special 1 :-(
+  return i
+
+ /* add4 -- add a 4-byte primitive */
+ method add4(tag=int, v=int) private returns int
+  c=char[3]
+  c[0]=char(tag)
+  c[2]=char(v & 0xffff)
+  c[1]=char((v%0x10000) & 0xffff)
+  return addit(c, 5)
+
+
+ /* Addutf8 -- add a string as a UTF8 item */
+ method addutf8(ca=char[]) shared returns int
+  bcount=0                    -- length when encoded in bytes
+  loop i=0 for ca.length
+    c=ca[i]
+    select
+      when c ='\u0000' then bcount=bcount+2
+      when c<='\u007f' then bcount=bcount+1
+      when c<='\u07ff' then bcount=bcount+2
+      otherwise             bcount=bcount+3
+      end
+    end i
+  co=char[2+ca.length]
+  co[0]=char(CONSTANT_UTF8)
+  co[1]=char(bcount)
+  loop i=0 for ca.length
+    co[i+2]=ca[i]
+    end
+  return addit(co, 3+bcount)
+
+ /* addit .. locate (and add if not there) an item to the pool
+    Arg1 is the String to use as the value/key
+    Arg2 is the eventual length in bytes, when written
+    */
+ method addit(key=String, datalen=int) private returns int
+  v=constants.get(key)
+  if v\=null then return (Integer v).intValue()
+  conindex=conindex+1
+  conlength=conlength+datalen
+  -- say '  ..put:' conindex key
+  v=Integer(conindex)         -- index of the constant
+  constants.put(key, v)       -- place in dictionary
+  conlist.addElement(key)     -- and in ordered list
+  return conindex
+
+/* ------------------------------------------------------------------ */
+/* Minor classes -- one per attribute type that we use                */
+/* ------------------------------------------------------------------ */
+
+/* Common information and writer for all attributes */
+class RxProxy.Attrib dependent
+ properties shared
+  nameid=int             -- constant pool index for the name
+  length=int             -- length of the attribute data [total is +6]
+
+ /* construct the attribute with given name */
+ method Attrib(name=String)
+  nameid=parent.addutf8(name)
+
+ /* size -- returns the total size in bytes of the attribute */
+ method size returns int
+  return length+6
+
+ /* writeBytes .. copy ourself to the byte array
+    Arg1 is the byte array
+    Arg2 is the offset to start writing
+    returns updated offset (where next write should be)
+    */
+ method writeBytes(array=byte[], offset=int) returns int
+  offset=writeShort(array, offset, nameid)
+  offset=writeInt(array, offset, length)
+  return offset
+
+ /* proxies for the parent writers */
+ method writeByte(array=byte[], offset=int, data=int) returns int
+  return parent.writeByte(array, offset, data)
+ method writeShort(array=byte[], offset=int, data=int) returns int
+  return parent.writeShort(array, offset, data)
+ method writeInt(array=byte[], offset=int, data=int) returns int
+  return parent.writeInt(array, offset, data)
+
+/* ------------------------------------------------------------------ */
+/* ConstantValue attribute                                            */
+/* ------------------------------------------------------------------ */
+class RxProxy.AttribCV dependent extends RxProxy.Attrib
+ properties shared
+  valueid=int            -- constant pool index for the value
+
+ -- always need a value...
+ method AttribCV(value=Object)
+  parent.super("ConstantValue")
+  super.length=2
+  signal RxQuit(parent.rxt, null, 'not.yet.implemented', 'ConstantValue')
+
+ -- writeBytes .. copy ourself to the byte array starting at offset
+ method writeBytes(array=byte[], offset=int) returns int
+  offset=super.writeBytes(array, offset)     -- write common bytes
+  offset=writeShort(array, offset, valueid)
+  return offset
+
+/* ------------------------------------------------------------------ */
+/* SourceFile attribute                                               */
+/* ------------------------------------------------------------------ */
+class RxProxy.AttribSF dependent extends RxProxy.Attrib
+ properties shared
+  fileid=int             -- constant pool index for the filename
+
+ -- always need a filename...
+ method AttribSF(filename=String)
+  parent.super("SourceFile")
+  super.length=2
+  fileid=parent.addutf8(filename)
+
+ -- writeBytes .. copy ourself to the byte array starting at offset
+ method writeBytes(array=byte[], offset=int) returns int
+  offset=super.writeBytes(array, offset)     -- write common bytes
+  offset=writeShort(array, offset, fileid)
+  return offset
+
+/* ------------------------------------------------------------------ */
+/* Exceptions attribute                                               */
+/* ------------------------------------------------------------------ */
+class RxProxy.AttribEC dependent extends RxProxy.Attrib
+ properties shared
+  exids=int[]                      -- list of exception IDs
+
+ -- this constructor gets the types list from a field
+ method AttribEC(field=RxField)
+  this(field.excepTypes())
+
+ -- this constructor gets types directly (may be an empty array)
+ method AttribEC(types=RxType[])
+  parent.super("Exceptions")
+  super.length=2+2*types.length
+  exids=int[types.length]          -- may be 0
+  loop i=0 for types.length
+    exids[i]=parent.conClass(types[i])
+    end i
+
+ -- writeBytes .. copy ourself to the byte array starting at offset
+ method writeBytes(array=byte[], offset=int) returns int
+  offset=super.writeBytes(array, offset)     -- write common bytes
+  offset=writeShort(array, offset, exids.length)
+  loop i=0 for exids.length
+    offset=writeShort(array, offset, exids[i])
+    end i
+  return offset
+
+/* ------------------------------------------------------------------ */
+/* Code attribute                                                     */
+/* ------------------------------------------------------------------ */
+class RxProxy.AttribCO dependent extends RxProxy.Attrib -
+                       uses RuntimeConstants
+ properties shared
+  rxt=RxTranslator  -- local reference
+  maxstack=int      -- maximum stack depth
+  maxlocals=int     -- maximum locals needed
+  bytes=byte[]      -- bytecodes array
+  byteslen=int      -- actual length of bytes[] used (<=bytes.length)
+  par=RxProxy       -- parent object
+                    -- [shouldn't need this, but accessing 'parent' in
+                    -- methods other than constructor gets NPE]
+
+ -- This constructor makes the code for a proxy method call
+ -- If the argument is null then we are handling the static initializer
+ method AttribCO(field=RxField)
+  parent.super("Code")
+  par=parent
+  rxt=parent.rxt              -- local
+
+  if field=null then do       -- <clinit>
+    maxstack=5
+    maxlocals=5
+    bytes=byte[20]            -- [currently use 14]
+    o=0                       -- bytes offset
+
+    -- Always the same code: set up the interpreter reference, and call
+    -- the proxyInit method in the interpreter.
+
+    -->> get field RxTranslator.proxyInterpreter
+    o=writeByte(bytes, o, opc_getstatic)
+    ref=parent.conRef(CONSTANT_FIELD, parent.translatorType,-
+                      'proxyInterpreter', parent.interpreterType)
+    o=writeShort(bytes, o, ref)
+
+    -->> dup    [we'll use this again in a moment]
+    o=writeByte(bytes, o, opc_dup)
+
+    -->> save in $0
+    o=writeByte(bytes, o, opc_putstatic)
+    o=writeShort(bytes, o, parent.dollarref)
+    -- here the $0 value copy [RxInterpreter instance] is on the stack
+
+    -->> load constant classid integer
+    o=makeIconst(bytes, o, parent.info.classid)
+
+    -->> call proxyInit
+    o=writeByte(bytes, o, opc_invokevirtual)
+    if parent.refPI=0 then
+      parent.refPI=parent.conRef(CONSTANT_METHOD, parent.interpreterType,-
+                                 'proxyInit', parent.proxyInitsig)
+    o=writeShort(bytes, o, parent.refPI)
+
+    -->> return
+    byteslen=writeByte(bytes, o, opc_return) -- we're done
+    end
+   else do label realmethod
+    -- we have a real method; determine argument count(s)
+    -- this may be increased by one for a dependent constructor
+    argcount=field.fieldargtypes.length
+    tsfield=field.fieldspecial   -- this describes the this/super call
+    if tsfield=null then tsargcount=0
+     else do
+      depsuper=int tsfield.fieldinfo.isdependent -- [used below]
+      tsargcount=tsfield.fieldargtypes.length+depsuper
+      end
+
+    -- calculate the stacksize that we need:
+    maxac=argcount
+    if tsargcount>maxac then maxac=tsargcount
+    maxstack=maxac+7+1        -- OA[] is duped argcount times; and all
+                              -- args may appear on stack
+                              -- 7 allows for wrapping sequence for a Long
+                              -- 1 allows for parent object in dependent
+
+    -- now the maximum bytecode length calculation (assuming all
+    -- arguments need wrapping/unwrapping, etc.):
+    --   start:                           5
+    --   package arguments               13*argcount
+    --   if constructor: start:           1
+    --      if set this$n:                5
+    --      if precall needed: precall:  16
+    --        unpackage results:          8*tsargcount [dependent included]
+    --        pop                         1
+    --      if dependent arg to add       2
+    --      this/super call:              3
+    --   callMethod:                     13
+    --   unwrap result & return:          3
+    --
+    needbytes=49 + argcount*13 + tsargcount*8
+    bytes=byte[needbytes]
+    o=0                       -- bytes offset (instruction counter)
+
+    -- we'll always want to use callMethod, so ensure it's reference is cached
+    if parent.refCM=0 then
+      parent.refCM=parent.conRef(CONSTANT_METHOD, parent.interpreterType,-
+                                 'callMethod', parent.callMethodsig)
+
+    /* Copy the arguments into an Object Array (OA).  We know the
+       type of each arg; collect it from local variables and put it
+       into the array.  Note that the object array does not include the
+       'hidden' first argument of a dependent constructor.
+       */
+    -->> make correct sized array of Objects
+    o=makeIconst(bytes, o, argcount)       -- length onto stack
+    o=writeByte(bytes, o, opc_anewarray)   -- make the array ..
+    o=writeShort(bytes, o, parent.conClass(RxType.OBJECT_TYPE))
+
+    -- put ARGCOUNT copies of the OA (Object Array) reference on the stack
+    loop i=0 for argcount
+      o=writeByte(bytes, o, opc_dup)
+      end i
+
+    -- now put the arguments into the Object array, wrapping as needed
+    -- [optimize later to use dload_1, etc.]
+    if field.isStatic() then loc=0   -- next local variable # to use
+     else do                       -- method or ordinary constructor
+      loc=1
+      -- start with arg2 if we are a dependent constructor
+      if field.fieldinfo.isdependent then if field.isConstructor() then loc=2
+      end
+
+    loop i=0 for argcount
+      o=makeIconst(bytes, o, i)            -- will be there for OA[i]=
+      argtype=field.fieldargtypes[i]
+      if argtype.isPrimitive() then do label prims
+        -- primitives need wrapping; we generate (for example):
+        --    new java.lang.Integer
+        --    dup
+        --    iload n
+        --    invokespecial java.lang.Integer.<init>(int)
+        o=writeByte(bytes, o, opc_new)       -- new ...
+        select
+          when argtype=RxType.LONG_TYPE then do
+            wraptype=parent.longType
+            o=writeShort(bytes, o, parent.conClass(wraptype))
+            o=writeByte(bytes, o, opc_dup)
+            o=writeByte(bytes, o, opc_lload) -- load long [two words]
+            o=writeByte(bytes, o, loc)       -- .. from local
+            loc=loc+1                        -- just used an extra
+            wrapsig='(J)V'
+            end
+          when argtype=RxType.FLOAT_TYPE then do
+            wraptype=parent.floatType
+            o=writeShort(bytes, o, parent.conClass(wraptype))
+            o=writeByte(bytes, o, opc_dup)
+            o=writeByte(bytes, o, opc_fload) -- load float
+            o=writeByte(bytes, o, loc)       -- .. from local
+            wrapsig='(F)V'
+            end
+          when argtype=RxType.DOUBLE_TYPE then do
+            wraptype=parent.doubleType
+            o=writeShort(bytes, o, parent.conClass(wraptype))
+            o=writeByte(bytes, o, opc_dup)
+            o=writeByte(bytes, o, opc_dload) -- load double [two words]
+            o=writeByte(bytes, o, loc)       -- .. from local
+            loc=loc+1                        -- just used an extra
+            wrapsig='(D)V'
+            end
+          otherwise -- all others go to int
+            wraptype=parent.intType
+            o=writeShort(bytes, o, parent.conClass(wraptype))
+            o=writeByte(bytes, o, opc_dup)
+            o=writeByte(bytes, o, opc_iload) -- load integer
+            o=writeByte(bytes, o, loc)       -- .. from local
+            wraptype=parent.intType
+            wrapsig='(I)V'
+          end
+        -- add the constructor call...
+        o=writeByte(bytes, o, opc_invokespecial)
+        ref=parent.conRef(CONSTANT_METHOD, wraptype,-
+                          parent.oinitname, wrapsig)
+        o=writeShort(bytes, o, ref)
+        end prims
+       else do         -- reference argument
+        o=writeByte(bytes, o, opc_aload)   -- load reference
+        o=writeByte(bytes, o, loc)         -- .. from local
+        end
+      -- have OA, index, value
+      o=writeByte(bytes, o, opc_aastore)   -- slot it into the array
+      loc=loc+1
+      end i
+    -- now just one reference to the object array is left on the stack
+    maxlocals=loc                          -- [that's how many locals]
+
+    /* Here it can get a bit tricky.  If we are a constructor then we
+       have to do a pre-call to the interpreter to get the values for
+       the call to this/super, as the call to this/super has to be done
+       here to keep the verifier happy.
+       The pre-call is indicated by the field ID being made negative.
+       The pre-call is not needed if this/super call takes no arguments.
+       */
+    if field.isConstructor() then do label constructorcode
+      if tsfield=null then
+        signal RxQuit(rxt, null, 'internal.error',-
+                      'RxProxy: tsfield null' field.toString())
+
+      -->> load arg0, the instance prototype, ready for this/super
+      o=writeByte(bytes, o, opc_aload_0)
+
+      /* If the this/super call has agruments (real or hidden) then precall */
+      if tsargcount>0 then do label precall
+        -- Pre-call the interpreter to get value to pass to this/super:
+        --   callMethod(obj, -fieldid, argsarray)
+        -- Returns values for the arguments in an Object[] array.
+        -- Note that the context object is usually null for a precall,
+        -- but for a dependent constructor it is arg1, the parent object
+
+        -->> get a copy of the OA reference to the top of the stack
+        o=writeByte(bytes, o, opc_dup2) -- now OA, arg0, OA, arg0
+        o=writeByte(bytes, o, opc_pop)  -- drop the extra arg0
+
+        /* Now do the pre-call to callMethod */
+        -->> get $0 and move it under the OA (OA is the last argument)
+        o=writeByte(bytes, o, opc_getstatic)
+        o=writeShort(bytes, o, parent.dollarref)
+        o=writeByte(bytes, o, opc_swap)
+
+        -->> get null, or parent object, for first argument, and put it under OA
+        --   [NB: Use of uninitialized instance is not allowed, so we
+        --   cannot use aload_0.]
+        if field.fieldinfo.isdependent
+         then o=writeByte(bytes, o, opc_aload_1)
+         else o=writeByte(bytes, o, opc_aconst_null)
+        o=writeByte(bytes, o, opc_swap)
+
+        -->> get the fieldid (second argument), negate, and put it under OA
+        o=makeIconst(bytes, o, field.fieldid)
+        o=writeByte(bytes, o, opc_ineg)
+        o=writeByte(bytes, o, opc_swap)
+
+        -->> call callMethod
+        o=writeByte(bytes, o, opc_invokevirtual)
+        if parent.refCM=0 then
+          parent.refCM=parent.conRef(CONSTANT_METHOD, parent.interpreterType,-
+                                     'callMethod', parent.callMethodsig)
+        o=writeShort(bytes, o, parent.refCM)
+
+        -->> after precall, the returned object must be an array of objects
+        --   including one for any hidden object (parent).
+        --   Cast it, so we can access the elements
+        o=writeByte(bytes, o, opc_checkcast)      -- cast to Object[]
+        o=writeShort(bytes, o, par.conClass(par.oArrayType))
+
+        /* We've now got the arguments to this/super, from the precall.
+           They will have arrived in an OA (Object[]) so get ready for the
+           this/super call by setting up the object reference and then
+           emptying the OA on to the stack, unwrapping primitives as we
+           go.  */
+
+        -- for each element of the array we do:
+        --   dup [copy ref to the array]
+        --   iconstant for index
+        --   aaload
+        --   .. unwrap if need be; references need no action
+        --   swap  [bring OA to top]
+        -- finally at the end, pop the left-over OA reference
+        -- [could simply not generate final dup, but this is a little clearer]
+        loop i=0 for tsargcount
+          o=writeByte(bytes, o, opc_dup)
+          o=makeIconst(bytes, o, i)          -- array index
+          o=writeByte(bytes, o, opc_aaload)
+          -- now unwrap if needed
+          if i<depsuper                      -- doing parent object
+            then o=makeUnwrap(bytes, o, tsfield.fieldinfo.parentinfo.type)
+            else o=makeUnwrap(bytes, o, tsfield.fieldargtypes[i-depsuper])
+          o=writeByte(bytes, o, opc_swap)    -- bring pending OA to the top
+          end i          -- each returned argument
+
+        o=writeByte(bytes, o, opc_pop)       -- pop the OA returned from precall
+        end precall
+
+      -->> invokespecial on the superclass or thisclass <init> method
+      o=writeByte(bytes, o, opc_invokespecial)
+      ref=parent.conRef(CONSTANT_METHOD, tsfield.fieldinfo.type,-
+                        parent.oinitname, tsfield.JVMsig())
+      o=writeShort(bytes, o, ref)
+
+      -->> if we're a dependent constructor, now set the 'this$n' property
+      if field.fieldinfo.isdependent then do
+        o=writeByte(bytes, o, opc_aload_0)        -- instance, now valid
+        o=writeByte(bytes, o, opc_aload_1)        -- parent object
+        o=writeByte(bytes, o, opc_putfield)       -- and set
+        o=writeShort(bytes, o, parent.thisref)    -- ..
+        end
+
+      -- now drop through for normal callMethod
+      end constructorcode
+
+    /* Now do the real call to callMethod */
+    -->> get $0 and move it under the OA (OA is the last argument)
+    o=writeByte(bytes, o, opc_getstatic)
+    o=writeShort(bytes, o, parent.dollarref)
+    o=writeByte(bytes, o, opc_swap)
+
+    -->> get the instance for first argument and put it under OA
+    --   Use null for a static method
+    if field.isStatic() then o=writeByte(bytes, o, opc_aconst_null)
+                      else o=writeByte(bytes, o, opc_aload_0)
+    o=writeByte(bytes, o, opc_swap)
+
+    -->> get the fieldid (second argument) and put it under OA
+    o=makeIconst(bytes, o, field.fieldid)
+    o=writeByte(bytes, o, opc_swap)
+
+    -->> call callMethod
+    o=writeByte(bytes, o, opc_invokevirtual)
+    o=writeShort(bytes, o, parent.refCM)
+
+    -->> Now generate either return [discards stack] or Unwrap +
+    -->> typed return (if not void or a constructor)
+    type=field.fieldtype
+    if field.isConstructor(), type=RxType.VOID_TYPE then do
+      -- o=writeByte(bytes, o, opc_pop)  -- [no need for this]
+      -->> return
+      opcode=opc_return                  -- void return
+      end
+     else do -- something to return
+      o=makeUnwrap(bytes, o, type)       -- unwrap primitives
+      -- decide on the opcode to use
+      if type.isPrimitive() then select label prims
+        when type=RxType.LONG_TYPE   then opcode=opc_lreturn
+        when type=RxType.FLOAT_TYPE  then opcode=opc_freturn
+        when type=RxType.DOUBLE_TYPE then opcode=opc_dreturn
+        otherwise                     opcode=opc_ireturn -- all others
+        end prims
+       else opcode=opc_areturn     -- a reference
+      end
+    byteslen=writeByte(bytes, o, opcode) -- we're done
+    end realmethod
+  super.length=12+byteslen
+
+ -- makeIconst .. put an integer constant onto the stack
+ method makeIconst(array=byte[], o=int, value=int) returns int
+   select
+     when value=0  then o=writeByte(array, o, opc_iconst_0)
+     when value=1  then o=writeByte(array, o, opc_iconst_1)
+     when value=2  then o=writeByte(array, o, opc_iconst_2)
+     when value=3  then o=writeByte(array, o, opc_iconst_3)
+     when value=4  then o=writeByte(array, o, opc_iconst_4)
+     when value=5  then o=writeByte(array, o, opc_iconst_5)
+     when value=-1 then o=writeByte(array, o, opc_iconst_m1)
+     when value>=2x80 & value<=2x7F then do
+       o=writeByte(array, o, opc_bipush)
+       o=writeByte(array, o, value)
+       end
+     when value>=4x8000 & value<=4x7FFF then do
+       o=writeByte(array, o, opc_sipush)
+       o=writeShort(array, o, value)
+       end
+     otherwise -- need to use constant pool
+       o=writeByte(array, o, opc_ldc_w)
+       o=writeShort(array, o, par.conInt(value))
+     end
+   return o
+
+ -- makeUnwrap .. unwrap top of stack (JVM type is Object) if it's a
+ -- wrapped primitive, or just cast it if it's not.
+ method makeUnwrap(array=byte[], o=int, type=RxType) returns int
+  if type=RxType.OBJECT_TYPE then return o  -- no cast, even, needed
+
+  o=writeByte(bytes, o, opc_checkcast)            -- need to cast
+
+  if \type.isPrimitive() then do
+    o=writeShort(bytes, o, par.conClass(type))    -- cast to type
+    return o -- no unwrap needed
+    end
+
+  -- primitives need unwrapping; we generate (for example):
+  --    invokevirtual java.lang.Integer.intValue
+  select
+    when type=RxType.LONG_TYPE then do
+      o=writeShort(bytes, o, par.conClass(par.longType))
+      if par.reflv=0 then
+        par.reflv=par.conRef(CONSTANT_METHOD, par.longType,-
+                             'longValue', '()J')
+      methref=par.reflv
+      end
+    when type=RxType.FLOAT_TYPE then do
+      o=writeShort(bytes, o, par.conClass(par.floatType))
+      if par.reffv=0 then
+        par.reffv=par.conRef(CONSTANT_METHOD, par.floatType,-
+                             'floatValue', '()F')
+      methref=par.reffv
+      end
+    when type=RxType.DOUBLE_TYPE then do
+      o=writeShort(bytes, o, par.conClass(par.doubleType))
+      if par.refdv=0 then
+        par.refdv=par.conRef(CONSTANT_METHOD, par.doubleType,-
+                             'doubleValue', '()D')
+      methref=par.refdv
+      end
+    otherwise -- all others go to int
+      o=writeShort(bytes, o, par.conClass(par.intType))
+      if par.refiv=0 then
+        par.refiv=par.conRef(CONSTANT_METHOD, par.intType,-
+                             'intValue', '()I')
+      methref=par.refiv
+    end
+  -- add the unwrap call...
+  o=writeByte(bytes, o, opc_invokevirtual)
+  o=writeShort(bytes, o, methref)
+  return o
+
+ -- writeBytes .. copy ourself to the byte array starting at offset
+ method writeBytes(array=byte[], offset=int) returns int
+  offset=super.writeBytes(array, offset)          -- write common bytes
+  offset=writeShort(array, offset, maxstack)
+  offset=writeShort(array, offset, maxlocals)
+  offset=writeInt(  array, offset, byteslen)      -- length actually used
+  loop i=0 for byteslen                           -- copy the bytecodes
+    array[offset]=bytes[i]
+    offset=offset+1
+    end i
+  offset=writeShort(array, offset, 0)             -- no exception table
+  offset=writeShort(array, offset, 0)             -- no attributes
+  return offset
+

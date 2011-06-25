@@ -1,0 +1,1711 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2004.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxExprParser                                                       */
+/*                                                                    */
+/*   Parses an expression and constructs the corresponding RxCode     */
+/*   object.                                                          */
+/*                                                                    */
+/*   This may be used                                                 */
+/*     -- in pass1, for properties                                    */
+/*     -- in pass2, for properties and in method bodies               */
+/*     -- in pass3 (interpretation), for all evaluations              */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.06 Initial [as RxExpression]                               */
+/* 1996.06.10 CodeOp results exposed (for NrLoop)                     */
+/* 1996.07.04 Subexpressions now handled by RxTermParser              */
+/*            (Redundant subexpression code remains, here)            */
+/* 1997.06.16 Array initializers now allowed, too                     */
+/* 1997.08.08 Rework to be a factory; codeop etc. are stand-alone     */
+/* 1998.04.15 allow 'instanceof' an interface iff source not final    */
+/* 1998.04.26 change from Signatures to Types                         */
+/* 1998.12.21 Add external Codeop that wraps both sides               */
+/* 1999.02.26 Optimizations for ==, \==  [BA286]                      */
+/* 1999.09.12 Calculate compile-time constants                        */
+/* 1999.09.13 Extend calculations to when interpretation requested    */
+/* 1999.09.15 Move to operation codes                                 */
+/* 1999.09.18 Inhibit constant propagation for Rexx ops (no settings) */
+/* 1999.10.20 Make cursor-based                                       */
+/* 1999.11.10 Add conditional OR operator (internal only at present)  */
+/* 2000.02.18 Only copy tokens array if necessary; speed termins      */
+/* 2000.02.26 Add evalexpr [wraps exceptions]                         */
+/* 2004.12.18 'do i=0 to to foo' failed (empty expression->AOOB)      */
+/* ------------------------------------------------------------------ */
+/* To-do .. remove redundant sub-expression code                      */
+-- Currently   foo=boolean \bar    will fail with dyadic.not; raise
+--   check to earlier (in fact start using codes up in parser)
+
+-- Interpretation wishlist...
+--   .. [perhaps] move op->code conversion earlier
+--   .. conditional OR should not evaluate RHS when interpreting
+--      [but it is not, in fact, used]
+--   .. Some references to parser; disabled for now during .exec, but
+--      could be done better
+
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxExprParser uses RxCode
+
+ properties shared
+  copyright=RxProcessor.copyright
+
+ properties private
+  rxt       =RxTranslator     -- the boss
+  classer   =RxClasser        -- class manager
+  converter =RxConverter      -- spin doctor
+
+  -- No locals here, as this factory may be called recursively
+
+ properties private constant
+  /* shared constants */
+  compareops   =Rexx('= \\= < > <= >=')
+  allcompareops=Rexx(compareops '== \\== << >> <<= >>=')
+  equalityops  =Rexx('= == \\= \\==')
+  arithops     =Rexx('+ - / * ** // %')
+  logicops     =Rexx('& | && ?')             -- '?' is Conditional OR
+  semicolon    =RxExprOpType(';', null, 0, 0)
+
+  int0         =Integer(0)
+  int1         =Integer(1)
+
+  /* operation codes */
+  O_AND        =int  1
+  O_BLANK      =int  2
+  O_CONCAT     =int  3
+  O_CONDOR     =int  4
+  O_DIVIDE     =int  5
+  O_EQ         =int  6
+  O_GT         =int  7
+  O_GTEQ       =int  8
+  O_IDIVIDE    =int  9
+  O_LT         =int 10
+  O_LTEQ       =int 11
+  O_MINUS      =int 12
+  O_NEQ        =int 13
+  O_NOT        =int 14
+  O_OR         =int 15
+  O_PLUS       =int 16
+  O_POWER      =int 17
+  O_REM        =int 18
+  O_SEQ        =int 19
+  O_SNEQ       =int 20
+  O_SGT        =int 21
+  O_SLT        =int 22
+  O_SGTEQ      =int 23
+  O_SLTEQ      =int 24
+  O_TIMES      =int 26
+  O_XOR        =int 27
+
+ /** Construct the factory
+    Arg1 is the translator root */
+ method RxExprParser(newrxt=RxTranslator)
+  rxt      =newrxt                 -- the boss
+  classer  =rxt.classer            -- class manager
+  converter=rxt.converter          -- conversions
+
+ /** EVALEXPR - Evaluate an expression from current clause
+    This takes the same arguments as parseexpr (see below); it is a
+    wrapper whose function is to convert evaluation exceptions into
+    RxSignals.  Already-wrapped exceptions are passed on as-is [in fact,
+    this should be all or almost all]. */
+ method evalexpr(cursor=RxCursor, typeallowed=boolean, n=int,-
+                 termins=char[], termwords=Rexx,-
+                 tracetag=char '>', tracename=Rexx '')-
+                returns RxCode
+  do
+  -- we could duplicate a severely-cut-down version of parseexpr into here
+    return parseexpr(cursor, typeallowed, n, termins, termwords,-
+                     tracetag, tracename)
+  catch e=RuntimeException
+    if \(e<=RxSignal) then do
+      if cursor.curprogram.flag.diag then do
+        say '# unwrapped exception' e
+        e.printStackTrace()
+        end
+      e=RxSignal(cursor, e, null)
+      end
+    signal e
+  end
+
+ /** PARSEEXPR - parse an expression in the current clause
+    Arg1 is evaluation context
+    Arg2 is 1 if the expression is allowed to return an S_TYPE
+    Arg3 is token number to start from in TOKENS
+    Arg4 is list of valid terminator token.types [usually null, default END]
+    Arg5 is list of valid terminator keywords [usually null, default none]
+    Arg6 is tracing tag character to use for tracing ('\0' to inhibit trace)
+    Arg7 is tracing name to use for tracing [implies Trace Var may affect]
+    returns an RxCode object for the expression
+
+    The non-recursive algorithm here very closely follows the expression
+      evaluator in MFC's classic-Rexx interpreter.  See DMSREV for
+      commentary (commented capital labels match DMSREV).  Terminating
+      keywords are handled here rather than in the level above, however.
+    Expression ends in END, or one of the tokens in the Arg3 list or a
+      keyword in the Arg4 list.
+
+    Terminating keywords are handled by converting them to an END token
+    in COPYTOKENS, which is the tokens[] array actually processed here.
+
+    Values on OP stack:
+      ';'    end of expression
+      '('    start of sub-expression
+      '['    start of array initializer
+      'P'    prefix op indicator
+      'B' n  blank operator
+      'O' n  other operator, tok.value is operator
+      'A' n  abbuttal
+    n is the actual token number if blank (SP) or operator (OP) token,
+    or the token number of the next token if abuttal
+
+    Difference from Classic Rexx:
+      Multiple prefix operators cannot happen
+
+    During execution we trap and wrap RuntimeExceptions immediately so
+    we can localize the position to the nearest token.
+
+    */
+ method parseexpr(cursor=RxCursor, typeallowed=boolean, n=int,-
+                  termins=char[], termwords=Rexx,-
+                  tracetag=char '>', tracename=Rexx '')-
+                 returns RxCode
+
+  ops       =Stack            -- the operators stack [of RxExprOpType objects]
+  terms     =Stack            -- the terms stack [of RxCode objects]
+  tokens=cursor.curclause.tokens        -- local reference
+
+  /* If the expression can be terminated by a keyword, search for any of
+     the keywords and replace first found by ';' */
+  if termwords<>null then /* search needed */ do
+    /* this works as side-effect assignments are not possible at our level */
+    utermwords=termwords.upper()
+    loop i=n to tokens.length-1
+      tok=tokens[i]; t=tok.type
+      if t=RxToken.END then leave i     -- end of clause
+      if t=RxToken.SYM then do label hadsym
+        uvalue=Rexx(tok.value).upper()
+        -- if -exec then we know the term word is known a keyword, so no
+        -- need for the iskey check
+        if utermwords.wordpos(uvalue)\==0 then
+         if rxt.exec, cursor.curprogram.parser.iskey(uvalue, uvalue) then do
+          /* Match!  Drop blank to left, if any, then terminate with END */
+          if i>0 then if tokens[i-1].type=RxToken.SP then do
+            i=i-1
+            end
+          -- make a working copy of the tokens array [just as much as we need]
+          copytokens=RxToken[i+1]
+          System.arraycopy(tokens, 0, copytokens, 0, i+1)
+          copytokens[i]=RxToken(RxToken.END, tok.line, tok.pos,-
+                                tok.len, RxToken.EOC)
+          tokens=copytokens             -- now use copy
+          -- check for empty expression now for better message
+          if n>=i then signal RxError(rxt, tok, 'term.expected')
+          leave i; end
+        end hadsym
+      end i
+    end
+
+  /* Start parsing... */
+  ops=Stack()                           -- make stacks
+  terms=Stack()                         -- ..
+
+  ops.push(semicolon)                   -- terminator onto stack
+  tok=tokens[n]; t=tok.type
+  if t=RxToken.SP then n=n+1            -- step over leading blank
+  expressionstart=n                     -- for any message, and begoff
+  endit=boolean 0                       -- terminator flag
+  /* EXGO -- term expected (possibly prefixed by '(', '[', or prefix op) */
+  loop label exgo
+    tok=tokens[n]; t=tok.type
+    -- 19960704 next line now includes '('
+    -- 19970616 next line now includes '['
+    if t=RxToken.SYM | t=RxToken.STR | t=RxToken.NUM | t=RxToken.LPAR-
+     | t=RxToken.LBRK then do           -- can be pure term
+      newterm=rxt.tparser.parseterm(cursor, n, 1)
+      if newterm.group=T_UNKNOWN then signal RxError(rxt, tok, 'unknown.variable')
+      if newterm.type=RxType.VOID_TYPE then signal RxError(rxt, tok, 'undefined.type')
+      -- push onto term stack
+
+      if cursor.curprogram.flag.diag then do
+        if newterm.value=null then nv='? [null]'
+         else nv=newterm.value.getClass().getName() rxt.interpreter.stringvalue(newterm)
+        say '# term:' newterm.type.toSig() ''''newterm.javacode''''-
+            '['nv']' newterm.endoff
+        end
+
+      terms.push(newterm)
+      -- record exceptions if parsing
+      if \rxt.exec then
+        cursor.curprogram.parser.addexceptions(1, newterm.exceptions, tok)
+      n=newterm.endoff+1
+      /* CHKOP: */
+      loop label chkop
+        opt=RxExprOpType ops.peek()
+        if opt.isprefix then do
+          ops.pop()                       -- drop from stack
+          -- evaluate
+          terms.push(oneopdo(cursor, opt.tok.value, opt.tok, RxCode terms.pop()))
+          iterate chkop                 -- could be stacked dissimilar prefixes
+          end
+        /* CHKVALID -- check for valid state */
+        /* Possibly an operator next */
+        tok=tokens[n]; t=tok.type
+        abuttal=boolean 0
+        if t=RxToken.SYM | t=RxToken.STR | t=RxToken.NUM | t=RxToken.LPAR
+         then abuttal=1
+        if t=RxToken.SP | t=RxToken.OP | abuttal
+         then /* operator */ do label execable
+          /* EXECABLE: */
+          select
+            when t=RxToken.SP then do   -- blank operator
+              co=Rexx ' '
+              oplen=1
+              end
+            when abuttal then do        -- abuttal operator
+              co='||'
+              oplen=0
+              end
+            otherwise                   -- general operator
+              co=optokens(tokens, n)
+              oplen=co.length()
+            end
+          /* if op stacked, resolve priorities and 'execute' if needed */
+          tos=opt.type
+          if tos='O' | tos='B' | tos='A' then
+            opdo(cursor, tokens, terms, ops, co, tok, -1)
+          -- now stack
+          if abuttal then ops.push(RxExprOpType('A', tok, n, 0))
+                     else ops.push(RxExprOpType(t,   tok, n, 0))
+          n=n+oplen                     -- step over operator tokens, if any
+          iterate exgo                  -- go for next term
+          end
+        /* ISTERM -- terminator expected */
+        /* END always allowed (added at initialization) */
+        /* ) always allowed at end of sub-expression */
+        /* list of token types in TERMINS also allowed (e.g., ']),') */
+        select
+          when t==RxToken.END then endit=1
+          when t==RxToken.RPAR then endit=1
+          when termins=null then nop         -- no list
+          otherwise loop i=0 for termins.length
+            if t==termins[i] then do
+              endit=1
+              leave i
+              end
+            end i
+          end
+        if endit then do                     -- terminator found
+          if opt\=null then do                         -- if real operator..
+            opdo(cursor, tokens, terms, ops, '?', tok, 0) -- .. flush stack
+            opt=RxExprOpType ops.peek()                  -- new top, perhaps
+            end
+          -- [next will go, later]
+          if opt.type=='(' then              -- should be ending sub-expression
+           if t==RxToken.RPAR then do
+            -- pass on parentheses
+            code=RxCode terms.peek()
+            code.javacode='('code.javacode')'
+            ops.pop()                          -- pop the '('
+            n=n+1                            -- step over the ')'
+            iterate chkop; end
+          /* stack should now be empty */
+          if opt.type\=';' then
+            signal RxError(rxt, tok, 'unmatched.left.parenthesis') -- opt.type
+          /* ensure not spurious ')' end */
+          if t==RxToken.RPAR then
+           if termins=null, RexxWords.pos(t, termins, 1)==0 then
+            signal RxError(rxt, tok, 'unexpected.right.parenthesis')
+          /* terminator is expected/allowed */
+          leave exgo                   -- always OK
+          end
+        /* Some improved messages at this point */
+        if t=RxToken.RBRK then
+          signal RxError(rxt, tok, 'unexpected.right.bracket')
+        if t=RxToken.RPAR then
+          signal RxError(rxt, tok, 'unexpected.right.parenthesis')
+        if t=RxToken.COMMA then
+          signal RxError(rxt, tok, 'unexpected.comma')
+        if t=RxToken.END then
+          signal RxError(rxt, tok, 'unexpected.clause.end')
+        signal RxError(rxt, tok, 'bad.expression.syntax') -- 'so far:' (RxCode terms.peek).javacode
+        end chkop
+      /* UnR */
+      -- signal RxQuit(rxt, tok, 'internal.error', 'RxExprParser: unexpected1')
+      end /* pure term */
+
+    /* not a pure term */
+    tok=tokens[n]; t=tok.type
+    if t=RxToken.LPAR then  /* starting sub-expression */ do
+      ops.push(RxExprOpType(t, null, 0, 0))
+      n=n+1
+      iterate exgo; end
+    if t=RxToken.OP then do
+      ochar=tok.value[0]
+      if ochar='+' | ochar='-' | ochar='\\' then do
+        /* we have a prefix op */
+        ops.push(RxExprOpType('O', tok, n, 1))    -- stack it [with token, flag]
+        n=n+1                                     -- .. and step over the operator
+        iterate exgo; end
+      end
+    /* to get here, op stack should be empty */
+    if (RxExprOpType ops.pop()).type\==';' then
+      signal RxError(rxt, tok, 'term.expected')
+    if termins\=null then
+     if RexxWords.pos(t, termins, 1)\==0 then leave exgo -- terminator allowed
+    if t=RxToken.END then
+      signal RxError(rxt, tok, 'unexpected.clause.end')
+    signal RxError(rxt, tok, 'bad.expression.syntax')
+    end exgo
+
+  /* We've come to the end of the expression tokens */
+  -- 0 case often detected in RxTermParser or other expression-user
+  if terms.empty() then do
+    if n=expressionstart then signal RxError(rxt, tok, 'expression.expected')
+    -- next probably cannot happen now
+    signal RxError(rxt, tok, 'expression.incomplete')
+    end
+  code=RxCode terms.pop()       -- get the top-of-stack
+  -- terms stack should now be empty
+  if \terms.empty() then
+    signal RxQuit(rxt, tok, 'internal.error', 'RxExprParser: terms unempty')
+
+  /* check for valid group, and post-process literals */
+  select label groupcheck
+    when code.group=T_UNKNOWN then do
+      tok=tokens[expressionstart]
+      signal RxError(rxt, tok, 'unknown.result.not.allowed')
+      end
+    when code.group=S_TYPE then do
+      if typeallowed then leave groupcheck   -- it's OK
+      tok=tokens[expressionstart]
+      signal RxError(rxt, tok, 'type.result.not.allowed')
+      end
+    when code.group=S_LIT then do
+      -- if a narrow literal, then a cast is needed, in case we're used
+      -- as a method or constructor argument.
+      if code.type=RxType.BYTE_TYPE | code.type=RxType.SHORT_TYPE then
+        code.javacode='('code.type.toJava()')'code.javacode
+      end
+    otherwise
+      nop                                    -- all other groups allowed
+    end groupcheck
+
+  /* add or do tracing if necessary [never trace a Type result] */
+  if tracetag\='\0' then if code.group\=S_TYPE then do
+    if tracename=='' then tlevel=RexxTrace.RESULTS
+                     else tlevel=RexxTrace.VAR
+    if cursor.curprogram.flag.java then if rxt.pass2 then
+      cursor.curprogram.tracer.tracecode(code, cursor.curclause.tokens[0],-
+                                         tracetag, tlevel, tracename)
+    if cursor.curexec then if cursor.curtrace\=null then
+     if code.value\=null then do   -- [this test just to match compile]
+      val=rxt.interpreter.stringvalue(code)  -- always to String
+      cursor.curtrace.traceString(cursor.curclause.tokens[0].line,-
+                                  val, tracetag, tlevel, tracename)
+      end
+    end
+
+  /* Add the positional information to the code object */
+  code.begclause=cursor.curclause
+  code.endclause=code.begclause
+  code.begoff=expressionstart
+  code.endoff=n-1
+  return code
+
+ /** OPDO -- process dyadic operators.
+    Arg1 is context cursor
+    Arg2 is current tokens array
+    Arg3 is current terms stack
+    Arg4 is current operators stack
+    Arg5 is new operator token value
+    Arg6 is token for any error
+    Arg7 is priority to force (-1 if no force to be used)
+ */
+ method opdo(cursor=RxCursor, tokens=RxToken[], terms=Stack, ops=Stack,-
+             operator=Rexx, tok=RxToken, prio=int) private
+  if operator=='\\' then signal RxError(rxt, tok, 'dyadic.not')
+
+  if prio=-1 then prio=getprio(operator, tok)     -- unforced
+
+  /* NXOPDO: operator loop */
+  loop label nxopdo
+    /* possibly something on stack; get it and then get its priority */
+    opt=RxExprOpType ops.peek()
+    select
+      when opt.type=='A' then stackop=Rexx '||'
+      when opt.type=='B' then stackop=' '
+      when opt.type=='O' then stackop=optokens(tokens, opt.off)
+      otherwise return             -- not an op on stack, so nothing to do
+      end
+    tok=opt.tok
+    stackprio=getprio(stackop, tok)
+    if stackprio<prio then return  -- let it stack up [not ready to execute]
+
+    /* Priority same or higher .. generate now [term-1]=[term-1]op[term] */
+    rhscode=RxCode terms.pop()       -- top-of-stack
+    lhscode=RxCode terms.pop()       -- .. -1
+    ops.pop()                        -- pop the op, too
+    terms.push(twoopdo(cursor, stackop, tok, lhscode, rhscode))
+
+  catch EmptyStackException
+    signal RxQuit(rxt, tok, 'internal.error', 'RxExprParser: nxopdo bad stack')
+    end nxopdo
+  /* UnR */
+
+/** CODEOP -- generate code for a dyadic operation, with wrapping
+   Arg1 is the operator (as a Rexx string)
+   Arg2 is error point (offset of token where to report an error)
+   Arg3 is left-hand side code
+   Arg4 is right-hand side code
+
+   returns a (probably different) RxCode object for the operation
+   code.begoff/endoff are not set
+
+   Used by NrLoop (for increment operation, etc.) and NrWhen.
+   Note that this modifies the lhs and rhs code (may add wrapping), and
+     may evaluate the result.
+
+   Note: the wrapping (and hence the entrypoint) is redundant now, as
+         twoopdo now wraps as required.  We'll drop it later
+
+   */
+ method codeop(cursor=RxCursor, inop=Rexx, tok=RxToken,-
+               lhs=RxCode, rhs=RxCode) returns RxCode
+   converter.javawrap(lhs)
+   converter.javawrap(rhs)
+   return twoopdo(cursor, inop, tok, lhs, rhs)
+
+/** ------------------------------------------------------------------
+   TWOOPDO -- generate code for, and/or execute, a dyadic operation
+   Arg1 is context cursor
+   Arg2 is the operator (as a Rexx string)
+   Arg3 is error point (offset of token where to report an error)
+   Arg4 is left-hand side code
+   Arg5 is right-hand side code
+   returns an RxCode object for the operation
+
+   code.begoff/endoff are not set
+   Value is calculated if:
+     Both sides are compile-time constants, or
+     Interpret requested  (exec=1)
+   ------------------------------------------------------------------ */
+ method twoopdo(cursor=RxCursor, inopchars=Rexx, tok=RxToken,-
+                lhs=RxCode, rhs=RxCode) returns RxCode
+
+  exec=cursor.curexec
+
+  op=getcode(inopchars)  -- coded operation
+
+  -- If both values are constants then we may be able to declare the
+  -- result a constant, too, and calculate its value
+  bothconstant=lhs.constant & rhs.constant
+  -- if bothconstant then say 'BC' lhs.value rhs.value
+
+  /* Can't work on null (unless cast or test for equality).  */
+  if lhs.type=RxType.NULL_TYPE then do label leftnull
+    -- next line needed if casts become symmetrical
+    -- if rhs.group=S_TYPE then if op=O_BLANK | op=O_CONCAT then leave leftnull
+    if equalityops.wordpos(inopchars, 1)\==0 then leave leftnull
+    signal RxError(rxt, tok, 'cannot.operate.on.null.lhs')
+    end leftnull
+  if rhs.type=RxType.NULL_TYPE then do label rightnull
+    if lhs.group=S_TYPE then if op=O_BLANK | op=O_CONCAT then leave rightnull
+    if equalityops.wordpos(inopchars, 1)\==0 then leave rightnull
+    signal RxError(rxt, tok, 'cannot.operate.on.null.rhs')
+    end rightnull
+
+  -- similar checks at runtime
+  if exec then do
+    if lhs.value=null then do label leftnull
+      -- A Type always has value null
+      if lhs.group=S_TYPE then leave leftnull
+      if equalityops.wordpos(inopchars, 1)\==0 then leave leftnull
+      signal RxSignal(cursor, NullPointerException('Left operand null'), tok)
+      end leftnull
+    if rhs.value=null then do label rightnull
+      if rhs.group=S_TYPE then leave rightnull
+      -- cast null to a type is OK
+      if lhs.group=S_TYPE then if op=O_BLANK | op=O_CONCAT then leave rightnull
+      if equalityops.wordpos(inopchars, 1)\==0 then leave rightnull
+      signal RxSignal(cursor, NullPointerException('Right operand null'), tok)
+      end rightnull
+    end
+
+  code=RxCode()          -- result object
+  code.group=S_EXPR      -- default an expression stream
+
+  if RxType.REXX_TYPE=lhs.type then lhsopand=char 'S'
+   else if RxType.STRING_TYPE=lhs.type then lhsopand=char 'S'
+   else if lhs.type.isPrimitive() then lhsopand='P'
+   else if RxType.CHARARRAY_TYPE=lhs.type then lhsopand=char 'S'
+   else lhsopand='U'
+
+  if RxType.REXX_TYPE=rhs.type then rhsopand=char 'S'
+   else if RxType.STRING_TYPE=rhs.type then rhsopand=char 'S'
+   else if rhs.type.isPrimitive() then rhsopand='P'
+   else if RxType.CHARARRAY_TYPE=rhs.type then rhsopand=char 'S'
+   else rhsopand='U'
+
+  /* Treat Type OP Value, when OP is a prefix op, as Type||(op value) */
+  if lhs.group=S_TYPE then
+   if op=O_PLUS | op=O_MINUS | op=O_NOT then do
+    -- it's actually a prefix operator
+    rhs=oneopdo(cursor, inopchars, tok, rhs) -- apply the prefix
+    inopchars=' '                            -- convert operator to cast ..
+    op=O_BLANK                               -- .. [concatenation]
+    end
+
+  /* ===== Concatenations and casting ===== */
+  if op=O_BLANK | op=O_CONCAT then do label concatcast
+    if lhs.group=S_TYPE  then /* cast/convert/coerce */ do label cast
+      if rhs.group=S_TYPE then signal RxError(rxt, tok, 'cannot.convert.type.to.type')
+      /* If the right-hand side is a literal then we must be careful,
+         as the typing, so far, is premature.  Make the type canonical
+         (as though about to assign to a new variable). */
+      if rhs.group=S_LIT then do label litcon
+        -- optimization: if RHS is already the type we want, then no
+        -- special action needed here
+        if rhs.type=lhs.type then leave litcon
+        converter.litexpr(cursor, rhs)
+        end litcon
+
+      if cursor.curprogram.flag.diag then
+        say '# cast' rhs.javacode 'from' rhs.type.toSig() 'to' lhs.type.toSig()
+
+      /* strong cast allowed .. anything that doesn't risk conversion error */
+      if rhs.type=RxType.VOID_TYPE then signal RxError(rxt, tok, 'undefined.type')
+      conv=converter.assigncost(cursor, lhs.type, rhs.type)
+      if conv.cost>rxt.convertible then do
+        signal RxError(rxt, tok, 'cannot.convert',-
+                       cursor.curprogram.toString(rhs.type),-
+                       cursor.curprogram.toString(lhs.type))
+        end
+      -- Now do the conversion.  If of a constant then an error is
+      -- possible, for example:  char 'ab'
+      do
+        converter.convertcode(cursor, lhs.type, conv.proc, rhs)
+      catch e=RuntimeException
+        if exec then signal RxSignal(cursor, e, tok)
+        -- can only be an error if there's a value, so this is safe
+        signal RxError(rxt, tok, 'bad.cast',-
+                       cursor.curprogram.toString(lhs.type),-
+                       rxt.interpreter.stringvalue(rhs))
+      end
+      code.javacode=rhs.javacode
+
+      /* Re-apply explicit cast if Converter optimized out as a widener */
+      if conv.cost>0 & conv.cost<10 then do
+        cast='('lhs.type.toJava()')'
+        where=code.javacode.pos(cast).toint()
+        if where=0 | where>2 then
+          code.javacode='('lhs.type.toJava()')'code.javacode
+        end
+
+      /* evaluate... */
+      if rhs.constant | exec then do label doit
+        code.constant=rhs.constant
+        code.value=rhs.value            -- converted above
+        end doit
+
+      code.type=lhs.type
+      return code
+      end cast
+
+    -- Not a cast; disallow type on RHS (this restriction could be removed)
+    if rhs.group=S_TYPE then signal RxError(rxt, tok, 'cannot.have.rhs.type')
+
+    /* True concatenate expected.  In general, anything can be converted
+       to a string and hence concatenated, but we disallow a dimension
+       mismatch.  (i.e., we cannot concatenate to an array, except
+       char[]).  This avoids the "foo=int[3] 0" trap. */
+    if lhsopand='U' then if lhs.type.isarray() then
+     if lhs.type\=RxType.CHARARRAY_TYPE then
+      signal RxError(rxt, tok, 'array.operation.invalid',-
+                     cursor.curprogram.toString(lhs.type))
+    if rhsopand='U' then if rhs.type.isarray() then
+     if rhs.type\=RxType.CHARARRAY_TYPE then
+      signal RxError(rxt, tok, 'array.operation.invalid',-
+                     cursor.curprogram.toString(rhs.type))
+
+    bincat=boolean 0
+    if cursor.curbinary then
+     if lhs.type\=RxType.REXX_TYPE then
+     if rhs.type\=RxType.REXX_TYPE then bincat=1
+
+    /* Different treatment now for BINARY code generation or not -- some
+         code compression possible here.
+       Note that if either is Rexx then we return Rexx.
+       This is an optimization rather than a difference in result.
+       */
+    if bincat then do label bincat -- Neither is Rexx
+      /* Terms must be primitives or strings or converted to strings.
+         We convert even primitives (except char) to Strings (consider
+           'x'4), and we must handle booleans specially ourselves.
+         We do have to worry when both operands are char, however, as we
+           would be generating lhs+rhs .. which would add them if no
+           other concatentation were involved.  For this special case,
+           we convert the lhs to a String.
+         We use explicit .toString conversion for objects of type Object
+           (rather than use the converter) so it will always work
+           (rather than attempt downcast).  Note that we cannot use
+           toString for char[] types.
+         [1998.01.13] Convert even char to String, as in Java 1.2b2 a
+                      char is now treated as a number when concatenated.
+         */
+      select
+        when lhs.type=RxType.BOOL_TYPE then lhs.javacode='('lhs.javacode'?"1":"0")'
+--      when lhs.type=RxType.CHAR_TYPE & rhs.type\=RxType.CHAR_TYPE then nop -- special
+        when lhs.type=RxType.OBJECT_TYPE then do
+          converter.javawrap(lhs)
+          lhs.javacode=lhs.javacode'.toString()'
+          end
+        otherwise
+          conv=converter.assigncost(cursor, RxType.STRING_TYPE, lhs.type)
+          converter.convertcode(cursor, RxType.STRING_TYPE, conv.proc, lhs)
+        end
+
+      /* [1998.10.07] pass rhs primitives through asis (wrapped if
+         subexpression) mostly for Waba but also to avoid some
+         conversions */
+      -- char is still converted, to avoid JIT problem in Java 1.2
+
+      select
+        when rhs.type=RxType.BOOL_TYPE then rhs.javacode='('rhs.javacode'?"1":"0")'
+        when rhs.type\=RxType.CHAR_TYPE & rhs.type.isPrimitive() then
+          converter.javawrap(rhs)
+--      when rhs.type=RxType.CHAR_TYPE then nop
+        when rhs.type=RxType.OBJECT_TYPE then do
+           converter.javawrap(rhs)
+           rhs.javacode=rhs.javacode'.toString()'
+           end
+        otherwise
+          conv=converter.assigncost(cursor, RxType.STRING_TYPE, rhs.type)
+          converter.convertcode(cursor, RxType.STRING_TYPE, conv.proc, rhs)
+        end
+      if op=O_BLANK then jop='+" "+'; else jop='+'
+      code.javacode=lhs.javacode||jop||rhs.javacode
+      code.type=RxType.STRING_TYPE
+      end bincat
+     else do label rexxcat    -- Rexx concatenate
+      /* Convert to Rexx if required */
+      -- we may use constants
+      converter.torexx(cursor, lhs, 1)
+      converter.torexx(cursor, rhs, 1)
+      if op=O_BLANK then meth='OpCcblank'; else meth='OpCc'
+      converter.javawrap(lhs)
+      code.javacode=lhs.javacode'.'meth'('settings()','rhs.javacode')'
+      code.type=RxType.REXX_TYPE
+      end rexxcat
+
+    /* Only difference between binary and non-binary evaluation is that
+       the former returns String rather than Rexx... */
+    if bothconstant | exec then do label doit
+      code.constant=bothconstant
+      if op=O_BLANK then
+        sres=rxt.interpreter.stringvalue(lhs)' 'rxt.interpreter.stringvalue(rhs)
+       else
+        sres=rxt.interpreter.stringvalue(lhs)||rxt.interpreter.stringvalue(rhs)
+      if bincat then code.value=sres
+                else code.value=Rexx(sres)
+      -- no error possible, already checked for null
+      end doit
+
+    return code
+    end concatcast
+
+  /* ===== 'instanceof' and 'superclassof' operations ===== */
+  if op=O_GTEQ | op=O_LTEQ then
+   if lhs.group=S_TYPE | rhs.group=S_TYPE then do label instanceof
+    code.type=RxType.BOOL_TYPE
+    if lhs.group=rhs.group then /* both S_TYPE - static test */ do
+      if op=O_LTEQ    then test=classer.issubclass(cursor, lhs.type, rhs.type, tok)
+      /*    O_GTEQ */ else test=classer.issubclass(cursor, rhs.type, lhs.type, tok)
+      if test then do
+        code.javacode='true'
+        code.value=int1
+        end
+       else do
+        code.javacode='false'
+        code.value=int0
+        end
+      code.constant=1
+      return code
+      end
+    /* mixed object/type */
+    /* [1998.04.15] allow test for an interface iff source not final */
+    /* [1998.12.10] allow primitives (with warning) */
+    -- tests for not found later (allow for char[])
+    linfo=classer.findclass(cursor, lhs.type, tok, 0)
+    rinfo=classer.findclass(cursor, rhs.type, tok, 0)
+    if op=O_LTEQ then do
+      /* LHS must be same, a sub-, or a superclass of RHS, or be Object
+         (this latter case allows for char[], and speeds up many very
+         common cases), or RHS must be an Interface type and LHS not
+         final. */
+      select
+        when lhs.type=RxType.OBJECT_TYPE               then nop -- OK
+        when linfo=null then
+          signal RxError(rxt, tok, 'class.not.found', lhs.type.classname)
+        when rinfo=null then
+          signal RxError(rxt, tok, 'class.not.found', rhs.type.classname)
+        when classer.issubclass(cursor, rinfo, linfo, tok) then nop -- OK
+        when classer.issubclass(cursor, linfo, rinfo, tok) then nop -- OK
+        when rinfo.isinterface & \linfo.isfinal    then nop -- OK
+        otherwise
+          -- [primitive types end up here, too]
+          RxWarn(rxt, tok, 'cannot.be.instanceof.lhs',-
+                 cursor.curprogram.toString(lhs.type),-
+                 cursor.curprogram.toString(rhs.type))
+          code.javacode='false'
+          code.wrapped=1
+          return code
+        end
+      code.javacode='('lhs.javacode 'instanceof' rhs.javacode')'
+      code.wrapped=1
+      end
+     else /* must be O_GTEQ */ do
+      /* [Strictly speaking we are reordering here, but the type operand
+         cannot have side-effects] */
+      /* RHS must be same, a sub-, or a superclass of LHS, or be Object
+         (this latter case allows for char[], and speeds up many very
+         common cases), or LHS must be an Interface type and RHS not
+         final. */
+      select
+        when rhs.type=RxType.OBJECT_TYPE               then nop -- OK
+        when rinfo=null then
+          signal RxError(rxt, tok, 'class.not.found', rhs.type.classname)
+        when linfo=null then
+          signal RxError(rxt, tok, 'class.not.found', lhs.type.classname)
+        when classer.issubclass(cursor, linfo, rinfo, tok) then nop -- OK
+        when classer.issubclass(cursor, rinfo, linfo, tok) then nop -- OK
+        when linfo.isinterface & \rinfo.isfinal    then nop -- OK
+        otherwise
+          -- [primitive types end up here, too]
+          RxWarn(rxt, tok, 'cannot.be.instanceof.rhs',-
+                 cursor.curprogram.toString(rhs.type),-
+                 cursor.curprogram.toString(lhs.type))
+          code.javacode='false'
+          code.wrapped=1
+          return code
+        end
+      code.javacode='('rhs.javacode 'instanceof' lhs.javacode')'
+      code.wrapped=1
+      end
+
+    if exec then do label doit
+      if op=O_LTEQ then obj=lhs
+                   else obj=rhs
+      -- we know the object value is a super- or sub-class of the
+      -- Type: checked at compile time
+
+      cname=Rexx(obj.value.getClass().getName())
+      -- an array is of type Object
+      if cname.left(1)=='[' then otype=RxType.OBJECT_TYPE
+                            else otype=RxType(cname, 0) -- is dollared
+      oinfo=classer.findclass(cursor, otype, tok, 0) -- find the object's classinfo
+      res=int0
+      if op=O_LTEQ then do
+        if classer.issubclass(cursor, oinfo, rinfo, tok) then res=int1
+        end
+       else /* must be O_GTEQ */ do
+        if classer.issubclass(cursor, oinfo, linfo, tok) then res=int1
+        end
+      code.value=res
+      end doit
+
+    return code
+    end instanceof
+
+  /* ===== Operators not using Types on either side ===== */
+  -- from now on, Types not allowed
+  if lhs.group=S_TYPE then
+    signal RxError(rxt, tok, 'cannot.operate.on.type.lhs',-
+                   cursor.curprogram.toString(lhs.type))
+  if rhs.group=S_TYPE then
+    signal RxError(rxt, tok, 'cannot.operate.on.type.rhs',-
+                   cursor.curprogram.toString(rhs.type))
+
+  /* If both terms are primitives (except char), and BINARY is set, then
+     we simply generate native operations, with booleans being converted
+     as necessary.
+     In general, char operands are string-like, and are treated as strings.
+     However, char:char comparisons can (and must) be effected efficiently.
+     */
+  /* Test for anything that we can do rapidly */
+  -- note optimization for bool-bool logical operators, which allows us
+  -- to avoid needing a conditional OR operator in the Rexx class
+  select
+    when lhsopand\='P' then okbin=0
+    when rhsopand\='P' then okbin=0
+    when lhs.type=RxType.BOOL_TYPE & rhs.type=RxType.BOOL_TYPE-
+        & logicops.wordpos(inopchars, 1)\==0 then okbin=1
+    when \cursor.curbinary then okbin=boolean 0
+    when lhs.type=RxType.CHAR_TYPE & rhs.type=RxType.CHAR_TYPE-
+        & allcompareops.wordpos(inopchars, 1)\==0 then okbin=1
+    when lhs.type=RxType.CHAR_TYPE then okbin=0
+    when rhs.type=RxType.CHAR_TYPE then okbin=0
+    otherwise okbin=1
+    end
+  -- if cursor.curprogram.flag.diag then say '# okbin' okbin
+
+  if okbin then do label nativeok                      -- native
+    /* Logical operations need special handling */
+    if logicops.wordpos(inopchars, 1)\==0 then do label logics
+      /* If both boolean, generate direct Java */
+      /* Otherwise, generate '1' or '0' then bitwise operator */
+      if (lhs.type=RxType.BOOL_TYPE & rhs.type=RxType.BOOL_TYPE)
+       then code.type=RxType.BOOL_TYPE
+       else /* mixed */ do
+        /* Convert booleans to integers */
+        if lhs.type=RxType.BOOL_TYPE then lhs.javacode='('lhs.javacode'?1:0)'
+        if rhs.type=RxType.BOOL_TYPE then rhs.javacode='('rhs.javacode'?1:0)'
+        code.type=binarytype(lhs.type, rhs.type) -- arithmetical
+        if code.type=RxType.FLOAT_TYPE | code.type=RxType.DOUBLE_TYPE then
+          signal RxError(rxt, tok, 'cannot.use.logical.op', code.type.classname)
+        end
+      select case op
+        when O_OR      then jop='|'    -- note, no short-circuits
+        when O_AND     then jop='&'    -- ..
+        when O_XOR     then jop='^'
+        when O_CONDOR  then jop='||'   -- short-circuit version
+        end
+      converter.javawrap(lhs)
+      converter.javawrap(rhs)
+      code.javacode=lhs.javacode||jop||rhs.javacode
+
+      if exec | bothconstant then do label doit
+        code.constant=bothconstant
+        -- we excluded floating point binaries, so values can only be
+        -- integral
+        ln=(Number lhs.value).longValue()
+        rn=(Number rhs.value).longValue()
+        select case op
+          when O_OR      then ll=ln|rn
+          when O_AND     then ll=ln&rn
+          when O_XOR     then ll=ln&&rn
+          when O_CONDOR  then ll=ln||rn
+          end
+        -- reduce to integer if we can
+        if code.type\=RxType.LONG_TYPE then code.value=Integer(int ll)
+                                   else code.value=Long(ll)
+        -- no errors possible
+        end doit
+
+      return code
+      end logics
+
+    /* ===== Now we must have either arithmetic or comparisons ===== */
+    -- Convert booleans to ints, in code
+    if lhs.type=RxType.BOOL_TYPE then do
+      lhs.javacode='('lhs.javacode'?1:0)'
+      lhs.wrapped=1
+      lhs.type=RxType.INT_TYPE    -- value will have been Integer already
+      end
+    if rhs.type=RxType.BOOL_TYPE then do
+      rhs.javacode='('rhs.javacode'?1:0)'
+      rhs.wrapped=1
+      rhs.type=RxType.INT_TYPE    -- value will have been Integer already
+      end
+
+    if op=O_POWER then do label powerop      -- rather special case
+      -- always returns something floating
+      if lhs.type=RxType.LONG_TYPE | lhs.type=RxType.DOUBLE_TYPE
+       then do
+        code.type=RxType.DOUBLE_TYPE
+        end
+       else do
+        code.type=RxType.FLOAT_TYPE
+        end
+      converter.javawrap(lhs)
+      converter.javawrap(rhs)
+      code.javacode=RxType.REXXUTIL_CLASS'.'code.type.classname-
+             ||'Pow((double)'lhs.javacode||',(int)'rhs.javacode')'
+      code.wrapped=1
+
+      if exec | bothconstant then do label doit
+        code.constant=bothconstant
+        dl=(Number lhs.value).doubleValue()
+        ir=(Number rhs.value).intValue()
+        d=RexxUtil.doublePow(dl, ir)         -- result
+        if code.type=RxType.FLOAT_TYPE then d=float d
+        code.value=Double(d)
+      catch e=RuntimeException               -- infinite result
+        if exec then signal RxSignal(cursor, e, tok)
+        signal RxError(rxt, tok, 'bad.dyadic.operation', '**')
+        end
+
+      return code
+      end powerop
+
+    /* strict and non-strict comparisons are created equal */
+    select case op
+      when O_IDIVIDE then jop='/'
+      when O_REM     then jop='%'
+      when O_EQ      then jop='=='
+      when O_NEQ     then jop='!='
+      when O_SNEQ    then jop='!='
+      when O_SLT     then jop='<'
+      when O_SGT     then jop='>'
+      when O_SLTEQ   then jop='<='
+      when O_SGTEQ   then jop='>='
+      otherwise           jop=inopchars -- Java is same as Rexx [or **]
+      end
+
+    -- choose the result type
+    select
+      when op=O_DIVIDE then /* divide returns something floating */ do
+        if lhs.type=RxType.LONG_TYPE | lhs.type=RxType.DOUBLE_TYPE-
+         | rhs.type=RxType.LONG_TYPE | rhs.type=RxType.DOUBLE_TYPE
+         then do
+          worktype=RxType.DOUBLE_TYPE
+          end
+         else do
+          worktype=RxType.FLOAT_TYPE
+          end
+        converter.javawrap(lhs)
+        converter.javawrap(rhs)
+--      -- add cast unless already there
+--      castit='('worktype.classname')'
+--      if lhs.javacode.pos(castit)\=='1' then lhs.javacode=castit||lhs.javacode
+--      if rhs.javacode.pos(castit)\=='1' then rhs.javacode=castit||rhs.javacode
+        end
+      when op=O_IDIVIDE then /* integer divide returns an integer */ do
+        if lhs.type=RxType.LONG_TYPE | lhs.type=RxType.DOUBLE_TYPE-
+         | rhs.type=RxType.LONG_TYPE | rhs.type=RxType.DOUBLE_TYPE
+         then do
+          worktype=RxType.LONG_TYPE
+          end
+         else do
+          worktype=RxType.INT_TYPE
+          end
+        converter.javawrap(lhs)
+        converter.javawrap(rhs)
+--      -- add cast unless already there
+--      castit='('worktype.classname')'
+--      if lhs.javacode.pos(castit)\=='1' then lhs.javacode=castit||lhs.javacode
+--      if rhs.javacode.pos(castit)\=='1' then rhs.javacode=castit||rhs.javacode
+        end
+      otherwise
+        worktype=binarytype(lhs.type, rhs.type)
+      end
+
+    /* Apply converter to both operands to
+       - add wrapping if needed
+       - simplify simple constants
+       */
+    -- There's a odd path to here if both sides are CHAR and we are
+    -- doing a compare.  In this case, don't clean/convert the operands
+    if lhs.type\=RxType.CHAR_TYPE then do
+      conv=converter.assigncost(cursor, worktype, lhs.type)
+      converter.convertcode(cursor, worktype, conv.proc, lhs)
+      conv=converter.assigncost(cursor, worktype, rhs.type)
+      converter.convertcode(cursor, worktype, conv.proc, rhs)
+      end
+    converter.javawrap(lhs)
+    converter.javawrap(rhs)
+    code.javacode=lhs.javacode||jop||rhs.javacode
+
+    /* If it was a comparison then the type will end up as boolean... */
+    if allcompareops.wordpos(inopchars, 1)\==0
+     then code.type=RxType.BOOL_TYPE
+     else code.type=worktype
+
+    /* now actually evaluate, if required */
+    if exec | bothconstant then do label doit
+      code.constant=bothconstant
+      -- determine the evaluation working type; this is the same as the
+      -- Java, except that we hold all floats as doubles
+      if worktype=RxType.FLOAT_TYPE then worktype=RxType.DOUBLE_TYPE
+
+      -- for the special case char comparisons, convert the characters
+      -- into Integers and proceed as for ints (worktype will be int)
+      if lhs.type=RxType.CHAR_TYPE then do
+        lhs.value=Integer(int((Rexx lhs.value).tochar()))
+        rhs.value=Integer(int((Rexx rhs.value).tochar()))
+        end
+
+      -- worktype is now int, long, or double; unroll these
+      select label worktypes
+        when worktype=RxType.INT_TYPE then do
+          il=(Number lhs.value).intValue()
+          ir=(Number rhs.value).intValue()
+          i=int                              -- result
+          select case op
+            when O_SEQ     then i=il= ir
+            when O_SNEQ    then i=il\=ir
+            when O_SLT     then i=il< ir
+            when O_SGT     then i=il> ir
+            when O_SLTEQ   then i=il<=ir
+            when O_SGTEQ   then i=il>=ir
+            when O_EQ      then i=il= ir
+            when O_NEQ     then i=il\=ir
+            when O_LT      then i=il< ir
+            when O_GT      then i=il> ir
+            when O_LTEQ    then i=il<=ir
+            when O_GTEQ    then i=il>=ir
+            when O_PLUS    then i=il+ ir
+            when O_MINUS   then i=il- ir
+            when O_TIMES   then i=il* ir
+            when O_DIVIDE  then i=il% ir     -- actually integer divide
+            when O_IDIVIDE then i=il% ir
+            when O_REM     then i=il//ir
+            -- O_POWER, O_BLANK, O_CONCAT and logics are handled above
+            -- O_NOT not a dyadic
+            end
+          -- decapitate check if necessary
+          -- NB: booleans would have become ints if add, etc.
+          select
+            when code.type=RxType.BYTE_TYPE then i=byte(i)
+            when code.type=RxType.SHORT_TYPE then i=short(i)
+            otherwise nop
+            end
+          code.value=Integer(i)
+          end
+        when worktype=RxType.LONG_TYPE then do
+          ll=(Number lhs.value).longValue()
+          lr=(Number rhs.value).longValue()
+          l=long                             -- result
+          select case op
+            when O_SEQ     then l=ll= lr
+            when O_SNEQ    then l=ll\=lr
+            when O_SLT     then l=ll< lr
+            when O_SGT     then l=ll> lr
+            when O_SLTEQ   then l=ll<=lr
+            when O_SGTEQ   then l=ll>=lr
+            when O_EQ      then l=ll= lr
+            when O_NEQ     then l=ll\=lr
+            when O_LT      then l=ll< lr
+            when O_GT      then l=ll> lr
+            when O_LTEQ    then l=ll<=lr
+            when O_GTEQ    then l=ll>=lr
+            when O_PLUS    then l=ll+ lr
+            when O_MINUS   then l=ll- lr
+            when O_TIMES   then l=ll* lr
+            when O_DIVIDE  then l=ll% lr     -- actually integer divide
+            when O_IDIVIDE then l=ll% lr
+            when O_REM     then l=ll//lr
+            -- O_POWER, O_BLANK, O_CONCAT and logics are handled above
+            -- O_NOT not a dyadic
+            end
+          code.value=Long(l)
+          end
+        when worktype=RxType.DOUBLE_TYPE then do
+          dl=(Number lhs.value).doubleValue()
+          dr=(Number rhs.value).doubleValue()
+          d=double 0                         -- result
+          select case op
+            when O_SEQ     then d=dl= dr
+            when O_SNEQ    then d=dl\=dr
+            when O_SLT     then d=dl< dr
+            when O_SGT     then d=dl> dr
+            when O_SLTEQ   then d=dl<=dr
+            when O_SGTEQ   then d=dl>=dr
+            when O_EQ      then d=dl= dr
+            when O_NEQ     then d=dl\=dr
+            when O_LT      then d=dl< dr
+            when O_GT      then d=dl> dr
+            when O_LTEQ    then d=dl<=dr
+            when O_GTEQ    then d=dl>=dr
+            when O_PLUS    then d=dl+ dr
+            when O_MINUS   then d=dl- dr
+            when O_TIMES   then d=dl* dr
+            when O_DIVIDE  then d=dl/ dr     -- *not* integer divide
+            when O_IDIVIDE then d=dl% dr
+            when O_REM     then d=dl//dr
+            -- O_POWER, O_BLANK, O_CONCAT and logics are handled above
+            -- O_NOT not a dyadic
+            end
+          -- reduce if necessary
+          if code.type=RxType.FLOAT_TYPE then d=float(d)
+          code.value=Double(d)
+          end
+        otherwise
+          -- say 'Expr worktype:' worktype.getClassObject(rxt.loader).getname
+          -- say '  lhs:' lhs.value.getclass.getname lhs.value.tostring
+          -- say '  rhs:' rhs.value.getclass.getname rhs.value.tostring
+          -- code.value=null
+          nop
+      catch e=RuntimeException               -- error (e.g., 1%0)
+        if exec then signal RxSignal(cursor, e, tok)
+        signal RxError(rxt, tok, 'bad.dyadic.operation', inopchars)
+        end worktypes
+      end doit
+
+    return code
+    end nativeok /* native Java op */
+
+
+  /* ===== Operations probably Rexx-like.  We can use Rexx operations if
+     operands are primitives, strings, or can be assigned to Rexx
+     (strictly speaking, if necessary). ===== */
+
+  if lhsopand='U' then if lhs.type\=RxType.NULL_TYPE then do
+    conv=converter.assigncost(cursor, RxType.REXX_TYPE, lhs.type)
+    if conv.cost<=cursor.curprogram.flag.maxassign then lhsopand='R'
+    end
+  if rhsopand='U' then if rhs.type\=RxType.NULL_TYPE then do
+    conv=converter.assigncost(cursor, RxType.REXX_TYPE, rhs.type)
+    if conv.cost<=cursor.curprogram.flag.maxassign then rhsopand='R'
+    end
+
+  /* ==== Some non-Rexx operations still possible ===== */
+  if lhsopand='U' | rhsopand='U' then do label nonrexx
+    /* Only (in)equality can be tested */
+    if equalityops.wordpos(inopchars, 1)==0 then do
+      if lhsopand='U' then badtype=lhs.type; else badtype=rhs.type
+      badts=cursor.curprogram.toString(badtype)
+      if badtype.isarray() then -- improved error message
+        signal RxError(rxt, tok, 'array.operation.invalid', badts)
+      signal RxError(rxt, tok, 'operation.not.allowed', badts)
+      end
+    /* can only compare references with references */
+    if lhsopand='P' then
+      signal RxError(rxt, tok, 'cannot.compare.primitive.object',-
+                     cursor.curprogram.toString(lhs.type),-
+                     cursor.curprogram.toString(rhs.type))
+    if rhsopand='P' then
+      signal RxError(rxt, tok, 'cannot.compare.object.primitive',-
+                     cursor.curprogram.toString(lhs.type),-
+                     cursor.curprogram.toString(rhs.type))
+    /* if both non-null then we must check for possible cast-assign */
+    if lhs.type=RxType.NULL_TYPE | lhs.type=RxType.NULL_TYPE then nop
+     else do
+      conv=converter.assigncost(cursor, lhs.type, rhs.type)
+      if conv.cost>=40 then
+        signal RxError(rxt, tok, 'cannot.compare.dissimilar',-
+                       cursor.curprogram.toString(lhs.type),-
+                       cursor.curprogram.toString(rhs.type))
+      end
+    /* OK to compare */
+    code.type=RxType.BOOL_TYPE
+
+    /* If RHS is an instance or subclass of LHS (but neither 'null'),
+       then use .equals for '=' and '\=' */
+    if op=O_EQ | op=O_NEQ then
+     if lhs.type\=RxType.NULL_TYPE then
+     if rhs.type\=RxType.NULL_TYPE then
+     if classer.issubclass(cursor, lhs.type, rhs.type, tok) then do
+      if op=O_EQ then neg=''; else neg='!'
+      converter.javawrap(lhs)
+      code.javacode=neg||lhs.javacode'.equals('rhs.javacode')'
+      code.wrapped=1
+      if exec | bothconstant then do label doit
+        code.constant=bothconstant
+        eq=lhs.value.equals(rhs.value)
+        if neg=='!' then eq=\eq
+        if eq then code.value=int1
+              else code.value=int0
+        -- no error possible
+        end doit
+      return code
+      end
+
+    /* General strict native compare */
+    select case op
+      when O_EQ   then jop='=='
+      when O_SEQ  then jop='=='
+      when O_NEQ  then jop='!='
+      when O_SNEQ then jop='!='
+      end
+    converter.javawrap(lhs)
+    converter.javawrap(rhs)
+    code.javacode=lhs.javacode||jop||rhs.javacode
+    if exec | bothconstant then do label doit
+      code.constant=bothconstant
+      eq=lhs.value==rhs.value
+      if jop=='!=' then eq=\eq
+      if eq then code.value=int1
+            else code.value=int0
+      -- no errors
+      end doit
+    return code
+    end nonrexx
+
+  /* ===== We have Go for Rexx operation ===== */
+
+  /* Optimization:
+     If we are comparing strictly equals (or \==) then:
+     1. if one argument is String and the other is String or
+        char, use .equals directly on String
+     2. if both are primitives of same type, then use ==/!=
+        [could enhance this for byte/int, etc.]
+     primitives compare has been done already if binary.
+     */
+  if op=O_SEQ | op=O_SNEQ then do label eqopt     -- strict compare
+    if lhs.type=RxType.STRING_TYPE | rhs.type=RxType.STRING_TYPE then do label streq
+      if lhs.type=RxType.CHAR_TYPE then do       -- convert to string
+        conv=converter.assigncost(cursor, RxType.STRING_TYPE, lhs.type)
+        converter.convertcode(cursor, RxType.STRING_TYPE, conv.proc, lhs)
+        end
+      if rhs.type=RxType.CHAR_TYPE then do       -- convert to string
+        conv=converter.assigncost(cursor, RxType.STRING_TYPE, rhs.type)
+        converter.convertcode(cursor, RxType.STRING_TYPE, conv.proc, rhs)
+        end
+      if lhs.type\=rhs.type then leave eqopt -- not both strings now
+      if op=O_SEQ then neg=''; else neg='!'
+      converter.javawrap(lhs)
+      code.javacode=neg||lhs.javacode'.equals('rhs.javacode')'
+      code.wrapped=1
+      code.type=RxType.BOOL_TYPE
+      if exec | bothconstant then do label doit
+        code.constant=bothconstant
+        eq=rxt.interpreter.stringvalue(lhs).equals(-
+           rxt.interpreter.stringvalue(rhs))
+        if neg=='!' then eq=\eq
+        if eq then code.value=int1
+              else code.value=int0
+        -- no errors
+        end doit
+      return code
+      end streq
+    if lhs.type\=rhs.type then leave eqopt   -- not both same type
+    if lhsopand\=='P' then leave eqopt       -- not both primitives
+    if op=O_SEQ then jop='=='; else jop='!='
+    converter.javawrap(lhs)
+    converter.javawrap(rhs)
+    code.javacode=lhs.javacode||jop||rhs.javacode
+    code.type=RxType.BOOL_TYPE
+    if exec | bothconstant then do label doit
+      code.constant=bothconstant
+      select
+        when lhs.value<=Integer then
+          eq=(Integer lhs.value).intValue()   ==(Integer rhs.value).intValue()
+        when lhs.value<=Double then
+          eq=(Double  lhs.value).doubleValue()==(Double  rhs.value).doubleValue()
+        when lhs.value<=Long then
+          eq=(Long    lhs.value).longValue()  ==(Long    rhs.value).longValue()
+        when lhs.value<=Rexx then
+          eq=(Rexx lhs.value).equals(Rexx rhs.value)
+        end
+      if jop=='!=' then eq=\eq
+      if eq then code.value=int1
+            else code.value=int0
+      -- no errors
+      end doit
+    return code
+    end eqopt
+
+  /* Make constants out of literals, or do conversion to Rexx */
+  converter.torexx(cursor, lhs, 1)
+  converter.torexx(cursor, rhs, 1)
+
+  if cursor.curprogram.flag.diag then do
+    if lhs.value=null then lv='[null]'; else lv=lhs.value.toString()
+    if rhs.value=null then rv='[null]'; else rv=rhs.value.toString()
+    say '# rexxOp:' lhs.type.toSig() lv '<'op'>' rhs.type.toSig() rv
+    end
+
+  /* determine the method for each operation */
+  -- detect NoDecimal violation here, too
+  select case op
+    when O_SEQ   then meth='OpEqS'
+    when O_SNEQ  then meth='OpNotEqS'
+    when O_SLT   then meth='OpLtS'
+    when O_SGT   then meth='OpGtS'
+    when O_SLTEQ then meth='OpLtEqS'
+    when O_SGTEQ then meth='OpGtEqS'
+    when O_OR    then meth='OpOr'
+    when O_AND   then meth='OpAnd'
+    when O_XOR   then meth='OpXor'
+    otherwise do
+      if \cursor.curprogram.flag.decimal then
+        signal RxError(rxt, tok, 'decimal.arithmetic.required')
+      select case op
+        when O_EQ      then meth='OpEq'
+        when O_NEQ     then meth='OpNotEq'
+        when O_LT      then meth='OpLt'
+        when O_GT      then meth='OpGt'
+        when O_LTEQ    then meth='OpLtEq'
+        when O_GTEQ    then meth='OpGtEq'
+        when O_PLUS    then meth='OpAdd'
+        when O_MINUS   then meth='OpSub'
+        when O_TIMES   then meth='OpMult'
+        when O_DIVIDE  then meth='OpDiv'
+        when O_IDIVIDE then meth='OpDivI'
+        when O_REM     then meth='OpRem'
+        when O_POWER   then meth='OpPow'
+        -- O_BLANK and O_CONCAT are handled above, O_NOT not a dyadic
+        end
+      end
+    end
+  /* and generate the right term and signature */
+  select
+    when arithops.wordpos(inopchars, 1)     \==0 then code.type=RxType.REXX_TYPE
+    when allcompareops.wordpos(inopchars, 1)\==0 then code.type=RxType.BOOL_TYPE
+    when logicops.wordpos(inopchars, 1)     \==0 then code.type=RxType.BOOL_TYPE
+    otherwise                                         code.type=RxType.REXX_TYPE -- never
+    end
+  converter.javawrap(lhs)
+  code.javacode=lhs.javacode'.'meth'('settings()','rhs.javacode')'
+  code.wrapped=1
+
+  -- Rexx operations cannot be constants as settings unknown
+  -- [Though we could assume default if no NUMERICs at all.]
+  if exec then do label doit
+    code.constant=0           -- [B&B]
+    -- we have to be careful here, in the special case where a value is
+    -- a 'fake' instance which is a subclass of Rexx.  In that case we
+    -- go via toString()
+    if lhs.value<=Rexx then lrexx=Rexx lhs.value
+                       else lrexx=Rexx(lhs.value.toString())
+    if rhs.value<=Rexx then rrexx=Rexx rhs.value
+                       else rrexx=Rexx(rhs.value.toString())
+    numer=cursor.curnumer
+    select case op
+      when O_SEQ     then bool=lrexx.OpEqS(   numer, rrexx)
+      when O_SNEQ    then bool=lrexx.OpNotEqS(numer, rrexx)
+      when O_SLT     then bool=lrexx.OpLtS(   numer, rrexx)
+      when O_SGT     then bool=lrexx.OpGtS(   numer, rrexx)
+      when O_SLTEQ   then bool=lrexx.OpLtEqS( numer, rrexx)
+      when O_SGTEQ   then bool=lrexx.OpGtEqS( numer, rrexx)
+      when O_OR      then bool=lrexx.OpOr(    numer, rrexx)
+      when O_AND     then bool=lrexx.OpAnd(   numer, rrexx)
+      when O_XOR     then bool=lrexx.OpXor(   numer, rrexx)
+      when O_EQ      then bool=lrexx.OpEq(    numer, rrexx)
+      when O_NEQ     then bool=lrexx.OpNotEq( numer, rrexx)
+      when O_LT      then bool=lrexx.OpLt(    numer, rrexx)
+      when O_GT      then bool=lrexx.OpGt(    numer, rrexx)
+      when O_LTEQ    then bool=lrexx.OpLtEq(  numer, rrexx)
+      when O_GTEQ    then bool=lrexx.OpGtEq(  numer, rrexx)
+      -- below here are arithmetics
+      when O_PLUS    then rres=lrexx.OpAdd(   numer, rrexx)
+      when O_MINUS   then rres=lrexx.OpSub(   numer, rrexx)
+      when O_TIMES   then rres=lrexx.OpMult(  numer, rrexx)
+      when O_DIVIDE  then rres=lrexx.OpDiv(   numer, rrexx)
+      when O_IDIVIDE then rres=lrexx.OpDivI(  numer, rrexx)
+      when O_REM     then rres=lrexx.OpRem(   numer, rrexx)
+      when O_POWER   then rres=lrexx.OpPow(   numer, rrexx)
+      -- O_BLANK and O_CONCAT are handled above, O_NOT not a dyadic
+      end
+    if code.type=RxType.BOOL_TYPE then do
+      if bool then i=1; else i=0
+      code.value=Integer(i)
+      end
+     else code.value=rres
+  catch e=RuntimeException         -- error (e.g., divide by 0, NullPointer)
+    signal RxSignal(cursor, e, tok)
+    end doit
+
+  return code
+
+ /** ONEOPDO -- generate code for a prefix operator from top of stack
+    Arg1 is context cursor
+    Arg2 is new operator token value
+    Arg3 is token for any error
+    Arg4 is right-hand side code
+    returns RxCode object for the operation result
+    code.begoff/endoff are not set
+    */
+ method oneopdo(cursor=RxCursor, inopchars=char[], tok=RxToken,-
+                rhs=RxCode) returns RxCode
+  /* This is much the same as TWOOPDO (though a lot simpler) */
+  /* See TWOOPDO for more explanation of the procedure here */
+  if rhs.group==S_TYPE then
+    signal RxError(rxt, tok, 'cannot.operate.on.type')
+
+  if rhs.group=S_TYPE then signal RxError(rxt, tok, 'cannot.have.rhs.type')
+
+  exec=cursor.curexec
+
+  rtype=rhs.type
+  if rtype=RxType.NULL_TYPE then signal RxError(rxt, tok, 'cannot.operate.on.null.rhs')
+
+  if exec then if rhs.value=null then
+    signal RxSignal(cursor, NullPointerException('Right operand null'), tok)
+
+  select
+    when rtype=RxType.REXX_TYPE  then opand=char 'S'    -- string
+    when rtype.isPrimitive()       then opand=char 'P'    -- primitive
+    when rtype=RxType.STRING_TYPE    then opand=char 'S'    -- string
+    when rtype=RxType.CHARARRAY_TYPE then opand=char 'S'    -- string
+    otherwise
+      signal RxError(rxt, tok, 'operation.not.allowed',-
+                     cursor.curprogram.toString(rtype))
+    end
+
+  op=getcode(inopchars)       -- coded operation
+
+  code=RxCode()               -- result object [could probably reuse rhs]
+  /* preserve literality and constancy */
+  if rhs.group=S_LIT then code.group=S_LIT
+                     else code.group=S_EXPR       -- an expression stream
+  code.constant=rhs.constant
+
+  if cursor.curbinary & opand='P' then            -- use native
+   if rtype\=RxType.CHAR_TYPE then do label prim      -- [unless char]
+    converter.javawrap(rhs)                       -- pre-wrap
+    rjavacode=rhs.javacode
+    if op=O_NOT then do label mononot             -- not
+      if rtype=RxType.FLOAT_TYPE | rtype=RxType.DOUBLE_TYPE then
+        signal RxError(rxt, tok, 'cannot.use.logical.op', rtype.classname)
+      -- exact check if value is known
+      if code.constant | exec then do label doit
+        rvalue=Rexx(rxt.interpreter.stringvalue(rhs))
+        b=rvalue.toboolean()              -- will raise exception if non-boolean
+        if b then code.value=int0
+             else code.value=int1
+       catch e=RuntimeException         -- non boolean
+        if \exec then signal RxError(rxt, tok, 'value.not.boolean', rvalue)
+        signal RxSignal(cursor, e, tok)
+        end doit
+
+      code.type=RxType.BOOL_TYPE
+      if rtype=RxType.BOOL_TYPE then code.javacode='(!'rjavacode')'
+       else do -- It's integral
+        /* We should test for 0 or 1 exactly .. but this would be very
+           expensive, for a binary class.  Could possibly invoke a
+           helper to raise the 'boolean not 0 or 1' exception. */
+        code.javacode=rjavacode'==0' -- not keen on this
+        end
+      return code
+      end mononot
+
+    /* Binary + or - */
+    if rtype=RxType.BOOL_TYPE then do
+      rjavacode='('rjavacode'?1:0)'
+      code.type=RxType.INT_TYPE
+      end
+     else do
+      /* Optimization: narrow edge cases (e.g., -128 is byte) */
+      if op=O_MINUS then if code.group=S_LIT then do
+        if rjavacode=='128'        then rtype=RxType.BYTE_TYPE
+        if rjavacode=='32768'      then rtype=RxType.SHORT_TYPE
+        if rjavacode=='2147483648' then rtype=RxType.INT_TYPE
+        end
+      code.type=rtype
+      end
+
+    -- add the operator
+    code.javacode=inopchars||rjavacode
+    code.wrapped=0                 -- consider:  7- -3  or 7+ +3
+
+    if code.constant | exec then do label doit
+      o=rhs.value
+      if op=O_MINUS then do        -- + has no effect on binaries
+        select
+          when o<=Integer then o=Integer(-(Integer o).intValue())
+          when o<=Long    then o=Long(-(Long o).longValue())
+          when o<=Double  then o=Double(-(Double o).doubleValue())
+          end
+        end
+      code.value=o
+      -- no errors
+      end doit
+
+    /* If not a literal then we need the cast to preserve type */
+    -- [note: byte and short +/- literals will be cast on expression
+    -- completion, if needed]
+    if code.group\=S_LIT then do
+      code.javacode='('code.type.classname')'code.javacode
+      code.wrapped=0
+      end
+    return code
+    end prim
+
+  /* Rexxy */
+  -- we may use constant, here
+  converter.torexx(cursor, rhs, 1)      -- updates rhs
+  select
+    when op=O_NOT   then meth='OpNot'
+    when \cursor.curprogram.flag.decimal then
+      signal RxError(rxt, tok, 'decimal.arithmetic.required')
+    when op=O_MINUS then meth='OpMinus'
+    when op=O_PLUS  then meth='OpPlus'
+    end
+  converter.javawrap(rhs)                         -- wrap
+  code.javacode=rhs.javacode'.'meth'('settings()')'
+  code.wrapped=1
+  if op=O_NOT then code.type=RxType.BOOL_TYPE
+              else code.type=RxType.REXX_TYPE
+
+  -- Rexx operations cannot be constants as settings unknown
+  -- [Though we could assume default if no NUMERICs at all.]
+  if code.constant then code.constant=0
+  if exec then do label doit
+    rvalue=Rexx(rxt.interpreter.stringvalue(rhs))
+    numer=cursor.curnumer
+    select case op
+      when O_NOT   then do
+        if rvalue.OpNot(numer) then code.value=int1
+                               else code.value=int0
+        end
+      when O_MINUS then code.value=rvalue.OpMinus(numer)
+      when O_PLUS  then code.value=rvalue.OpPlus(numer)
+      end
+   catch e=RuntimeException
+    signal RxSignal(cursor, e, tok)
+    end doit
+
+  return code
+
+/** UNARYTYPE -- return type for binary primitive operations
+   arg1 is rhs type, known to be a 0 dimension primitive
+   */
+/** not in use
+ method unarytype(type=RxType) private returns RxType
+  if type.classname\=='byte' then
+   if type.classname\=='short' then
+   if type.classname\=='char' then return type
+  return RxType.INT_TYPE
+**/
+
+/** BINARYTYPE -- return type for binary primitive operations
+   Arg1 is lhs type
+   Arg2 is rhs type
+   */
+ method binarytype(lhstype=RxType, rhstype=RxType) private returns RxType
+  if lhstype.classname=='double' then return lhstype
+  if rhstype.classname=='double' then return rhstype
+  if lhstype.classname=='float'  then return lhstype
+  if rhstype.classname=='float'  then return rhstype
+  if lhstype.classname=='long'   then return lhstype
+  if rhstype.classname=='long'   then return rhstype
+  return RxType.INT_TYPE
+
+/* GETCODE -- single-char code for operator
+   Arg1 is operator
+   returns the int code for the operator
+   no error possible */
+-- use of the code will become pervasive later
+ method getcode(testop=Rexx) returns int private
+  if testop.length().toint()=1 then do label onechar
+    select case testop.tochar()
+      when ' '          then return O_BLANK
+      when '+'          then return O_PLUS
+      when '-'          then return O_MINUS
+      when '='          then return O_EQ
+      when '<'          then return O_LT
+      when '>'          then return O_GT
+      when '|'          then return O_OR
+      when '*'          then return O_TIMES
+      when '&'          then return O_AND
+      when '/'          then return O_DIVIDE
+      when '%'          then return O_IDIVIDE
+      when '\\'         then return O_NOT
+      -- the next one is 'internal use only', by WHEN [and maybe IF]; we
+      -- can change it later if we need the character
+      when '?'          then return O_CONDOR
+      end
+    end onechar
+  -- multi-char operators [dictionary might be faster]
+  select
+    when testop=='\\='  then return O_NEQ
+    when testop=='||'   then return O_CONCAT
+    when testop=='=='   then return O_SEQ
+    when testop=='\\==' then return O_SNEQ
+    when testop=='>='   then return O_GTEQ
+    when testop=='<='   then return O_LTEQ
+    when testop=='&&'   then return O_XOR
+    when testop=='//'   then return O_REM
+    when testop=='**'   then return O_POWER
+    when testop=='>>'   then return O_SGT
+    when testop=='<<'   then return O_SLT
+    when testop=='>>='  then return O_SGTEQ
+    when testop=='<<='  then return O_SLTEQ
+    end
+
+/** GETPRIO -- return priority of dyadic operator
+   Arg1 is operator
+   Arg2 is token in case of error */
+ method getprio(testop=Rexx, tok=RxToken) returns int private
+
+  op=getcode(testop)  -- coded operation
+
+  select case op
+    when O_BLANK   then return 5
+    when O_PLUS    then return 7
+    when O_MINUS   then return 7
+    when O_EQ      then return 4
+    when O_GT      then return 4
+    when O_LT      then return 4
+    when O_OR      then return 2
+    when O_TIMES   then return 8
+    when O_AND     then return 3
+    when O_DIVIDE  then return 8
+    when O_IDIVIDE then return 8
+    when O_NOT     then signal RxError(rxt, tok, 'dyadic.not')
+    when O_NEQ     then return 4
+    when O_CONCAT  then return 5
+    when O_SEQ     then return 4
+    when O_SNEQ    then return 4
+    when O_GTEQ    then return 4
+    when O_LTEQ    then return 4
+    when O_XOR     then return 2
+    when O_REM     then return 8
+    when O_POWER   then return 9
+    when O_SGT     then return 4
+    when O_SLT     then return 4
+    when O_SGTEQ   then return 4
+    when O_SLTEQ   then return 4
+    otherwise nop
+    end
+  signal RxQuit(rxt, tok, 'internal.error', 'RxExprParser: bad operator' testop)
+
+/** OPTOKENS -- return operator extracted from tokens array
+   Arg1 is tokens array to use
+   Arg2 is place to start (will be an O)
+   Preference is triples then doubles then singles
+   Alternatives are converted to the core set
+   */
+ method optokens(tokens=RxToken[], n=int) returns Rexx private
+  /* t=tokens[n].type -- is always 'O' */
+  v=Rexx tokens[n].value[0]
+  t2=tokens[n+1].type
+  if t2\=RxToken.OP then return v       -- it must be a single
+
+  /* could be double, maybe triple */
+  vv=v||tokens[n+1].value[0]
+  t3=tokens[n+2].type
+  if t3=RxToken.OP then do              -- could be triple
+    vvv=vv||tokens[n+2].value[0]
+    if vvv=='\\==' then return vvv
+    if vvv=='<<='  then return vvv
+    if vvv=='>>='  then return vvv
+    if vvv=='\\>>' then return '<<='    -- make canonical
+    if vvv=='\\<<' then return '>>='
+    end
+  if vv=='\\=' then return vv
+  if vv=='<='  then return vv
+  if vv=='>='  then return vv
+  if vv=='||'  then return vv
+  if vv=='=='  then return vv
+  if vv=='//'  then return vv
+  if vv=='**'  then return vv
+  if vv=='&&'  then return vv
+  if vv=='>>'  then return vv
+  if vv=='<<'  then return vv
+  if vv=='<>'  then return '\\='        -- make canonical
+  if vv=='><'  then return '\\='
+  if vv=='\\>' then return '<='
+  if vv=='\\<' then return '>='
+  return v                              -- return single
+
+ /** SETTINGS -- return current settings object during parsing */
+ method settings private returns Rexx
+   if rxt.exec then return ''
+   -- later make internal error:
+   -- signal RxQuit(rxt, null, 'internal.error', 'RxExprParser: settings')
+   if rxt.program.parser.level>=2 then
+     return rxt.program.parser.cursor.curmethod.methodset
+   return rxt.program.parser.cursor.curclass.classset
+
+
+/** Class for an OpType Object -- only used here */
+class RxExprOpType final shared
+ properties shared
+   type=char             -- the operator token type (e.g., 'O', ';')
+   tok=RxToken           -- associated token (null for separator things)
+   off=int               -- offset of token
+   isprefix=boolean 0    -- 1 if operator is a prefix operator
+
+ method RxExprOpType(newtype=char, newtok=RxToken, newoff=int, newpref=boolean)
+   type=newtype; off=newoff; tok=newtok; isprefix=newpref
+

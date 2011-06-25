@@ -1,0 +1,303 @@
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* DiagLoop                                                           */
+/*                                                                    */
+/*   An object that tests Loop constructs.                            */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.19 Initial                                                 */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.diag
+options nobinary decimal
+-- options binary   -- [not used, so FOR 0.9999999999 will round]
+
+class DiagLoop
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagLoop
+
+  --trace all
+
+  /*-- L O O P ---------------------------------------------------------*/
+  ok='OK'
+  i=0
+  loop for 10
+    i=i+1
+    end
+  if i=10 then ok=ok '!' 'Explicit Loop'
+          else signal DiagX('Explicit Loop')
+
+  j=0; m=0
+  loop for 5-2 while 1=1
+    /* possible Loop block problem */
+    m=m+2
+    end
+  loop while i<12
+    i=i+1; j=j+1
+    end
+  loop k=1+2 to 3+1 while 1=1  /* checks storage allocation self-check */
+    end
+  if i=12&j=2&k=5&m=6 then ok=ok '!' 'Loop While'
+                      else signal DiagX('Loop While')
+
+  j=0
+  loop until i=15
+    i=i+1; j=j+1
+    end
+  if i=15&j=3 then ok=ok '!' 'Loop Until'
+              else signal DiagX('Loop Until')
+  say 'DiagLoop:' ok; ok='OK'
+
+  /* Test iterative Loop loops of various kinds */
+  j=0; flag='1'; fail=''
+  loop i  =  1 to 12 by 2 while(i<=7)
+    j=j+1; end
+  if j\=4 | i<>9 then flag='0'
+  if \flag & fail='' then fail='It1' j i
+
+  j=0
+  loop i=0-1 to(10-22)by 20-22 until i<-7
+    j=j+1; end
+  if j\=5 | i\=-9 then flag='0'
+  if \flag & fail='' then fail='It2' j i
+
+  j=0
+  loop i=1 to 8 until i>3; j=j+1; end
+  if i><4 | j<>4 then flag='0'
+  if \flag & fail='' then fail='It3' j i
+
+  j=0
+  loop for j+7 until j=12
+    j=j+1; end
+  if j\=7 then flag='0'
+  if \flag & fail='' then fail='It4' j
+
+  j=0
+  loop j=1 to j+97 until j=12
+    j=j+1; end
+  if j\=12 then flag='0'
+  if \flag & fail='' then fail='It5' j
+
+  loop i=1 to 45; end
+  if i\=46 then flag='0'
+  if \flag & fail='' then fail='It6' i
+
+  j=0; loop forever
+     j=j+1; if j=6 then leave; end
+  if j\=6 then flag=0
+  if \flag & fail='' then fail='It7' j
+
+  /* Test iterative Loop loops with non-integer arguments */
+  k=1
+  /* These should all iterate once */
+  loop for 0.9999999999 /* legal as will round to 1 */
+    k=k+1
+    end
+  flag=flag&k=2
+  if \flag & fail='' then fail='It8' k
+
+  k2=0
+  loop i=1 by 1 for 0.9999999999 /* legal as will round to 1 */
+    k2=k+1
+    end
+  flag=flag&k2=3
+  if \flag & fail='' then fail='It8.5' k
+
+  lasti=''
+  loop i=0.9999999999 to 1 by -1
+    lasti=i
+    k=k+1
+    end
+  flag=flag & k=3 & lasti=='1.00000000'
+  if \flag & fail='' then fail='It9' k
+
+  loop i=1 to 0.9999999999
+    lasti=i
+    k=k+1
+    end
+  flag=flag&k=4 & lasti=='1'
+  if \flag & fail='' then fail='It10' k
+  /* Now a bit more complicated */
+  k=0
+  loop i=-0.5 to 0.5 by 0.1
+    k=k+1
+    end
+  flag=flag&k=11
+  if \flag & fail='' then fail='It11' k
+  loop i=0+0.5 to 0-0.5 by ' - 1E-1 '
+    k=k+1
+    end
+  flag=flag&k=22
+  if \flag & fail='' then fail='It12' k
+  k=0
+  loop i=-0.5 to 0.5 by 0.1 until i>0.3
+    k=k+1
+    end
+  flag=flag&i=0.4 &k=10
+  if \flag & fail='' then fail='It13a' i k
+  k=0
+  loop i=-0.5 to 0.5 by 0.1 until i>100  -- 2001.05.22
+    k=k+1
+    end
+  flag=flag&i=0.6 &k=11
+  if \flag & fail='' then fail='It13b' i k
+  k=0
+  loop i=-0.5 to 0.5 by 0.1 while i<100  -- 2001.05.22
+    k=k+1
+    end
+  flag=flag&i=0.6 &k=11
+  if \flag & fail='' then fail='It13b' i k
+  k=0
+  loop i=-5E-1 to 5E-1 by 0.1 while i<0.3
+    k=k+1
+    end
+  flag=flag&i=0.3 &k=8
+  if \flag & fail='' then fail='It14' i k
+
+  k=0
+  loop i=-5E-1 to 5E-1 by 0.1 for 1
+    k=k+1
+    end
+  flag=flag&k=1
+  if \flag & fail='' then fail='It15' k
+  k=0
+  loop i=1 to 10 for 9
+    k=k+1
+    end
+  flag=flag&k=9 &i=10
+  if \flag & fail='' then fail='It16' i k
+  k=0
+  loop i=1 to 10 for 10
+    k=k+1
+    end
+  flag=flag&k=10&i=11
+  if \flag & fail='' then fail='It17' i k
+  k=0
+  loop i=1 to 10 for 11
+    k=k+1
+    end
+  flag=flag&k=10&i=11
+  if \flag & fail='' then fail='It18' i k
+  k=0
+  loop i=0 for 9    -- very common idiom
+    k=k+1
+    end i
+  flag=flag&k=9&i=9
+  if \flag & fail='' then fail='It19' i k
+
+  if flag then ok=ok '!' 'Loop I=nn..'
+          else signal DiagX('Loop I=nn..,' fail)
+
+  i=1
+  j=3; loop j=1 to j
+     i=i+1
+     end
+
+  if i=4 then ok=ok '!' 'Loop j=1 to j'
+         else signal DiagX('Loop J=1 to J')
+
+  j=0; k=0
+  loop i=1 by 1 until j=10
+    j=j+1
+    if j=5 then leave
+    if j=3 then do
+      k=9
+      iterate
+      end
+    k=k+1
+    end
+  if j=5 & k=10 then flag=1
+                else flag=0
+  k=0; l=0
+  loop i=1 to 10
+     k=k+1
+     loop j=6.0 to 1*1+(1-1)by -1
+       l=l-1
+       if j>3 then iterate j
+       l=l-1
+       if i=2 then leave i
+              else leave j
+--     l=124 -- dead code
+       end
+     k=k+5
+     end
+  if l\=-10 | k\=7 then flag=0
+
+  /* Check for unlabelled nested ITERATE */
+  i=0
+  tails=0                          -- times through ending code
+  loop until i>5                   -- unnamed loop
+    i=i+1
+    if i>=3 then do label lab
+      if i=4 then iterate          -- in error, this might apply to inner
+      end lab
+    tails=tails+1                  -- go through here 5 times
+    end
+  flag=flag & (tails=5)
+
+  if flag then ok=ok '!' 'Leave/Iterate'
+          else signal DiagX('Leave/Iterate')
+  say 'DiagLoop:' ok; ok='OK'
+
+  /* Loop OVER a Dictionary */
+  var=Hashtable(7)
+  var.put('key3', 'value3')
+  var.put('key2', 'value2')
+  var.put('key1', 'value1')
+  var.put('key4', 'value4')
+  check=String[4]
+  loop tail over var
+    -- say 'Tail:' tail.toString 'Value:' var.get(tail).toString
+    check[Rexx(tail.toString).substr(4)-1]=var.get(tail).toString
+    end tail
+  flag=1
+  loop i=0 to 3
+    -- say check[i]
+    if i+1<>Rexx(check[i]).substr(6) then flag=0  -- bad
+    end
+  if flag then ok=ok '!' 'Loop over [Dictionary]'
+          else signal DiagX('Loop over [Dictionary]')
+
+  /* Loop OVER a Rexx indexed variable */
+  rexxvar='xxx'
+  rexxvar['key3']='value3'
+  rexxvar['key2']='value2'
+  rexxvar['key1']='value1'
+  /* Try and confuse, by making a reference to an index, and also
+     explicitly setting and dropping an index */
+  flag=flag & rexxvar['key5']=='xxx'
+  rexxvar['key5']='value5'
+  rexxvar['key5']=null
+  rexxvar['key4']='value4'    -- this one should appear
+  rexxvar['key2']='value2'    -- ditto [note repeat]
+
+  RexxCheck=Rexx[4]
+  loop label x rexxtail over rexxvar
+    -- say 'Tail:' rexxtail 'Value:' rexxvar[rexxtail]
+    RexxCheck[rexxtail.substr(4)-1]=rexxvar[rexxtail]
+    end x
+  flag=1
+  loop i=0 to 3
+    -- say RexxCheck[i]
+    if i+1<>RexxCheck[i].substr(6) then flag=0   -- bad
+    end
+  if flag then ok=ok '!' 'Loop over [Rexx]'
+          else signal DiagX('Loop over [Rexx]')
+
+  say 'DiagLoop:' ok
+
+  /*--------------------------------------------------------------------*/
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagLoop()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage'"'
+  end
+

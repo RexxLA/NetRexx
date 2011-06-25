@@ -1,0 +1,425 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrAssign                                                           */
+/*                                                                    */
+/*   An object that represents a parsed assignment instruction.       */
+/*                                                                    */
+/*   This one is special in that part of the construction is done     */
+/*   by the 'process' method, which is passed the LHS as a RxCode     */
+/*   object.  This is an optimization that saves re-parsing the LHS.  */
+/*                                                                    */
+/*   Similarly special, property assignments are processed twice, as  */
+/*   on first attempt they may fail due to a forward reference.       */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.08 Initial                                                 */
+/* 1996.07.12 Reorganized for RxClauseParser                          */
+/* 1999.08.07 Optimize int=int+1 and int=int-1                        */
+/* 2000.02.24 Implement interpret complete                            */
+/* ------------------------------------------------------------------ */
+-- Could use RxExpr for the RHS, later
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class NrAssign implements RxClauseParser uses RxCode, RxVariable
+
+ properties private constant
+  unknownrhs='/*unknown*/'    -- indicates pass1 assignment failed
+
+ properties private
+  rxt       =RxTranslator     -- the boss
+  parser    =RxParser         -- our parser
+  pooler    =RxVarpool        -- variables manager
+  pcursor   =RxCursor         -- our parsing cursor
+  tokens    =RxToken[]        -- local reference
+  converter =RxConverter      -- local reference
+
+  -- results of process method
+  deprecated=boolean 0        -- following is a deprecated property
+  javaline  =Rexx ''          -- code [for now]
+
+  -- following used for interpretation
+  lhtype    =RxType
+
+  lhs       =RxCode           -- LHS code term [always present]
+  rhs       =RxCode null      -- RHS code [may be constant or null]
+  conv      =RxConvert null   -- conversion required [null if none]
+  tracetag  =char '?'         -- tracing tag
+  tracename =Rexx ''          -- tracing name (as written)
+  tracenames=String[]         -- list of traceable names (lowercase)
+  rhslitexpr=boolean 0        -- we used litexpr on RHS
+
+ /** Construct an object from the current clause */
+ method NrAssign(newrxt=RxTranslator)
+  rxt      =newrxt                      -- the boss
+  parser   =rxt.program.parser          -- our parser
+  pooler   =rxt.program.pooler          -- our variables manager
+  pcursor  =parser.cursor               -- our parsing cursor
+  tokens   =pcursor.curclause.tokens    -- local reference
+  converter=rxt.converter               -- conversions
+
+ /** process -- parse an assignment clause right-hand-side
+   Arg1 is the code for the term that represents the left-hand side.
+   Arg2 is token number that follows left-hand side.
+           This will identify either an '=' sign or (for uninitialized
+           properties only) a ';'.
+
+   a) If the left term is compound, it is not a local name and we just
+      generate a Java assignment (provided we are in a method).
+      We already know it looks like an assignment to get here.
+
+   b) If the left term is simple, it should be one of ours: we call
+      CHECKVAR appropriately before generating the assignment.
+
+ */
+ method process(term=RxCode, begin=int)
+  lhs=term                              -- save
+
+  tokstart=tokens[0]                    -- where lhs starts
+
+  if parser.level=1 then do;
+    inmeth=boolean 0                    -- not in a method
+    varatts=pcursor.curpropatts         -- 'inherit' the property attributes
+    end
+   else do
+    inmeth=1                            -- must be a Local
+    varatts=RxVariable.VAR_LOCAL
+    end
+
+  /** Check the LHS group, and determine its nature for tracing */
+  lhsgroup=term.group                   -- what group of term?
+  select label checkgroup case lhsgroup
+    when S_VAR then do                  -- ok
+      /* avoid the lookup if definitely not tracing */
+      if pcursor.curmethod=null then tracetag='>'
+       else if pcursor.curmethod.methodmaxtrace=RexxTrace.OFF then tracetag='>'
+       else do
+        tvar=pooler.findvar(pcursor, tokstart.value, tokstart, 0, 0, 0)
+        tracetag=tvar.tracetag()
+        tracename=tvar.varname
+        end
+      end
+    when T_UNKNOWN then do              -- ok
+      if inmeth then tracetag='v'
+                else tracetag='p'
+      tracename=tokstart.value
+      end
+    when S_PROP then do                 -- assignable property
+      tracetag='p'                      -- property [from another class]
+      -- tracename remains ''
+      end
+    when S_FINAL  then signal RxError(rxt, tokstart, 'cannot.assign.to.constant')
+    when S_EXPR   then signal RxError(rxt, tokstart, 'cannot.assign.to.term')
+    when S_METHOD then signal RxError(rxt, tokstart, 'cannot.assign.to.method')
+    when S_LIT    then signal RxError(rxt, tokstart, 'cannot.assign.to.literal')
+    when S_CONSTR then signal RxError(rxt, tokstart, 'cannot.assign.to.constructor')
+    when S_TYPE   then signal RxError(rxt, tokstart, 'cannot.assign.to.type')
+    end checkgroup
+
+  if lhsgroup=T_UNKNOWN then do
+    lhscode=tokstart.value              -- name of variable
+    lhtype=RxType.VOID_TYPE                 -- unknown
+    end
+   else do
+    lhscode=term.javacode               -- save LHS
+    lhtype=term.type                    -- and its signature
+    end
+  /* say 'assign to group' term.group '('tokstart.value')' lhscode 'Sig:' lhtype.toSig() */
+
+  /* trace the clause (tracer will check for pass2/level2 */
+  if tracename=='' then do
+    tracenames=String[] null
+    end
+   else do
+    tracenames=String[1]
+    tracenames[0]=tracename.lower().toString()
+    end
+  rxt.program.tracer.traceclause(pcursor.curclause, RexxTrace.VAR, tracenames)
+
+  tokbegin=tokens[begin]
+  tbeg=tokbegin.type
+  if tbeg=RxToken.END then do -- special default; can only get here if a property
+    ptype=RxType.REXX_TYPE
+    var=pooler.checkvar(pcursor, varatts, tokstart.value,-
+                        null, tokstart, ptype, tokbegin, 1)
+    if rxt.pass2 then do -- first use by definition
+      deprecated=var.isdeprecated()
+      javaline=(var.javamodifiers() ptype.toJava()).space() var.varspell';'
+      end
+    return; end
+
+  if tbeg<>RxToken.OP then signal RxQuit(rxt, tokbegin, 'internal.error', 'NrAssign no =')
+  if tokbegin.value\=='=' then signal RxQuit(rxt, tokbegin, 'internal.error', 'NrAssign no = 2')
+
+  /* Remember exceptions */
+  parser.addexceptions(1, term.exceptions, tokens[0])
+
+  /* Get the RHS [can be just a Type]
+     If there's an error, then:
+
+      * if this is pass1 we are tentatively determining the value/type
+        of a property.  In this case we suppress any error messages
+        during the evaluation, and assign the property a type of 'void'
+        in the good hope that it won't be referenced in a method
+        argument list.
+
+      * if this is pass2, we have a permanent error: if this is a
+        Defining assignment then it's terminal (as we'll likely generate
+        ever-increasing errors).  If the LHS is already known (but not
+        type 'void'), however, we can continue as we know the type of
+        the variable.
+     */
+  rhsstart=begin+1; tokrstart=tokens[rhsstart]    -- where the rhs begins
+  /* special message for x==3; case */
+  if tokrstart.type==RxToken.OP then if rxt.pass2 then
+   if tokrstart.value=='=' then
+    signal RxQuit(rxt, tokrstart, 'assign.extra.equals')
+  do
+    if rxt.pass1 then rxt.program.quieterror=1    -- [turned off in finally]
+
+    rhs=rxt.eparser.parseexpr(pcursor, 1, rhsstart, null, null, tracetag, tracename)
+    -- say '#assign:' lhsgroup'='rhs.group rhs.type.toSig() rhs.javacode
+    if rhs.group=S_LIT then do                    -- indeterminate RHS
+      if lhsgroup=T_UNKNOWN then do               -- we choose type
+        converter.litexpr(pcursor, rhs)
+        rhslitexpr=1                              -- remember we did it
+        end
+       else do
+        /* this next is purely cosmetic for error message (mychar=3) */
+        if lhtype=RxType.CHAR_TYPE then
+         if rhs.type=RxType.BYTE_TYPE -
+          | rhs.type=RxType.SHORT_TYPE then do
+          rhs.type=RxType.INT_TYPE
+          end
+        end
+      end
+  catch e=RxError
+    if rxt.pass1 then do
+      if rxt.program.flag.diag then say '# pass1 assignment fail'
+      rhs=RxCode()                                -- need a code object
+      rhs.group=S_TYPE                            -- and a kind of type
+      rhs.type=RxType.VOID_TYPE                       -- show as void, for this pass
+      rhs.javacode=unknownrhs                     -- [placeholder]
+      end
+     else do
+      if lhsgroup=T_UNKNOWN then signal RxQuit    -- abandon as unsafe
+      if lhtype=RxType.VOID_TYPE then signal RxQuit   -- ..
+      -- otherwise propagate the error
+      signal e
+      end
+  finally rxt.program.quieterror=0                -- always
+  end
+
+  /*
+   * say 'assign to group' lhsgroup '('tokstart.value')' lhs 'Sig:' lhtype.toSig()
+   * say '           from' rhs.group '('tokstart.value')' rhs 'Sig:' rhs.type.toSig()
+   */
+
+  if lhsgroup=T_UNKNOWN then /* new variable of ours */ do label newours
+    -- register the variable
+    newvar=pooler.checkvar(pcursor, varatts, tokstart.value,-
+                           null, tokstart, rhs.type,-
+                           tokrstart, (rhs.group==S_TYPE))
+
+    if \rxt.pass2 then return           -- no output code, etc., needed yet
+
+    -- next two are really only cosmetic, for diagnostics during exec
+    lhs.group=S_VAR                     -- OK, admit it's one of ours
+    lhs.type=rhs.type                   -- and its type
+
+    if rhs.constant then do
+      newvar.varvalue=rhs.value
+      if newvar.isconstant() then
+       if (newvar.vartype.isPrimitive() | newvar.vartype=RxType.STRING_TYPE) then
+        newvar.setlit()
+      end
+
+    if rhs.group=S_TYPE then do
+      /* If RHS is just a type: if we are in a method the declaration
+         will have been generated for the start of the method by CHECKVAR,
+         so we need no code generated here. */
+      if inmeth then return             -- no code needed at all
+      suffix=Rexx ';'                   -- is a simple property declaration
+      end
+     else do                            -- have a value to assign
+      /* if rxt.program.flag.diag then say '#' value.begin '<<' rhs.group rhs */
+      suffix='='rhs.javacode';'
+      end
+    varname=newvar.varspell             -- get real spelling
+    /* If we're a property then we need a type declaration (with
+       modifiers).  If we're in a method then we don't, as CHECKVAR will
+       have created the initial declaration. */
+    if inmeth then javaline=varname||suffix
+     else /* property */ do
+      /* If an indirect property then only 0 or 1 dimension is allowed */
+      if newvar.isindirect() then if rhs.type.dimension>1 then
+        signal RxError(rxt, tokrstart, 'indirect.too.many.dimensions',-
+                       rxt.program.babel.typeString(rhs.type))
+      deprecated=newvar.isdeprecated()
+      /* convert the signature to java-style, and reorder for cosmetics */
+      rhscla=rhs.type.classname
+      def='[]'.copies(rhs.type.dimension)
+      javaline=(newvar.javamodifiers() rhscla).space() varname||def||suffix
+      end
+    return
+    end newours
+
+  /* should be a known variable, or other resolved LHS term */
+
+  if rhs.group=S_TYPE then do  -- type on right is wrong for known variable
+    if rhs.type=lhtype then do
+      RxWarn(rxt, tokstart,  'duplicate.variable.assign.type',-
+            rxt.program.babel.typeString(lhtype))
+      return
+      end
+    signal RxError(rxt, tokrstart, 'variable.type.mismatch',-
+                   rxt.program.babel.typeString(rhs.type),-
+                   rxt.program.babel.typeString(lhtype))
+    end
+
+  if lhsgroup=S_VAR then /* old variable of ours */ do
+    /* This is mostly for double-check and cross-reference */
+    /* It also checks we're not assigning to an old property constant */
+    oldvar=pooler.checkvar(pcursor, varatts, tokstart.value,-
+                           lhtype, tokstart, rhs.type,-
+                           tokrstart, 0)
+    end
+
+  /* lhs is a known entity with a type */
+
+  /* Check can assign */
+  conv=converter.assigncost(pcursor, lhs.type, rhs.type)
+  if conv.cost>rxt.program.flag.maxassign then
+    signal RxError(rxt, tokrstart, 'cannot.assign',-
+                   rxt.program.babel.typeString(rhs.type),-
+                   rxt.program.babel.typeString(lhs.type))
+
+  if \rxt.pass2 then return -- no code or evaluation needed yet
+
+  -- optimize here when no conversion needed
+  if lhs.type=rhs.type then conv=null
+   else converter.convertcode(pcursor, lhs.type, conv.proc, rhs)
+
+  /* If ours, update value using the converted value, iff types match */
+  -- [probably useless/redundant now]
+  if lhsgroup=S_VAR then
+   if oldvar.vartype=rhs.type then
+    oldvar.varvalue=rhs.value
+
+-- +++ next few should be moved down to generate
+
+  if rxt.program.flag.diag & lhs.type\=rhs.type then add=' /*'lhs.type.toSig()'<='rhs.type.toSig()'*/'
+                                                else add=''
+
+  javaline=lhscode'='rhs.javacode';'add
+
+  -- 1999.08.07:  optimize int=int+1 to int++ and int=int-1 to int--
+  if lhs.type=RxType.INT_TYPE then
+   if lhsgroup=S_VAR then do
+    if rhs.javacode==lhscode'+1' then javaline=lhscode'++;'
+     else if rhs.javacode==lhscode'-1' then javaline=lhscode'--;'
+    end
+
+  return
+
+ /** code generation [only] */
+ method generate
+  /* Add the 'deprecated' flagger, if required */
+  if deprecated then
+   if \rxt.program.flag.comments then
+    rxt.program.streamer.out('/** @deprecated */')
+  if javaline\=='' then rxt.program.streamer.out(javaline)
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrAssign', pass)
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return tracenames
+
+ /** ----------------------------------------------------------------- */
+ /* Interpretation                                                    */
+ /* ----------------------------------------------------------------- */
+ method interpret(cursor=RxCursor null)
+  -- for prologue (property) assignments, we only get here if we have
+  -- the right staticality
+
+  if cursor.curprogram.flag.diag then
+    say '#=' lhs.group lhs.type.toSig() ':' cursor.curclause.toString()
+
+  -- get value for the right-hand-side
+  if rhs=null then do
+    -- set default value for right-hand-side [needed for bare properties only]
+    rhs=RxCode(S_TYPE, lhs.type, null)
+    end
+   else if \rhs.constant, cursor.curtrace\=null then do -- re-evaluation needed
+    -- re-evaluation needed
+    rhs=rxt.eparser.evalexpr(cursor, 1, rhs.begoff, null, null, tracetag,-
+                             tracename)
+    -- if we used litexpr before, we must re-apply it now
+    -- [later separate out litexpr so we can set conv appropriately?]
+    if rhslitexpr then do
+      rhs.group=S_LIT                   -- setup
+      converter.litexpr(cursor, rhs)
+      end
+    if conv\=null then do
+      tok=cursor.curclause.tokens[rhs.begoff]
+      converter.convertcode(cursor, lhs.type, conv.proc, rhs, tok)
+      end
+    end
+  -- just-a-type is OK, in which case it has initial value
+  if rhs.group=S_TYPE then rhs.value=rxt.interpreter.initvalue(rhs.type)
+
+
+  /* now effect the assignment */
+  lhstok=cursor.curclause.tokens[0]     -- local reference
+
+  -- Compound properties on the LHS need careful treatment...
+  if lhs.group=S_PROP then do label props
+    -- re-evaluate the LHS term, so we get the correct last-value
+    -- context object set in the LHS code object
+    lhs=rxt.tparser.evalterm(cursor, 0, 0)
+
+    -- could be indexed...
+    if lhs.array\=null then do
+      -- we just reevaluated the LHS; the value of the LHS should be the array
+      -- or string to index
+      if lhs.isstem then                -- indexed string
+        rxt.interpreter.setStemElementValue(cursor, Rexx lhs.value, lhs.array,-
+                                            lhstok, Rexx rhs.value)
+       else
+        rxt.interpreter.setArrayElementValue(cursor, lhs.value, lhs.type,-
+                                             lhs.array, lhstok, rhs.value)
+      end
+     else -- simple property
+      rxt.interpreter.setProperty(lhs.penvalue, lhs.field, lhstok, rhs.value)
+    end props
+
+   else /* simple variable or indexed assignment */ do
+    -- could be indexed...
+    if lhs.array\=null then do
+      lhs=rxt.tparser.evalterm(cursor, 0, 0)
+      -- LHS value will be the array
+      -- say '# LV:' lhs.isstem lhs.value rhs.value lhs.array
+      if lhs.isstem then                -- indexed string
+        rxt.interpreter.setStemElementValue(cursor, Rexx lhs.value, lhs.array,-
+                                            lhstok, Rexx rhs.value)
+       else
+        rxt.interpreter.setArrayElementValue(cursor, lhs.value, lhs.type,-
+                                             lhs.array, lhstok, rhs.value)
+      end
+     else do
+      var=pooler.refindvar(cursor, lhstok.value)  -- find the variable
+      rxt.interpreter.setVar(cursor, var, lhstok, rhs.value)  -- set it
+      end
+    end
+
+  return

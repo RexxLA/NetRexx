@@ -1,0 +1,155 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 2000.        All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxSignal                                                           */
+/*                                                                    */
+/*   An object that represents an active Exception during execution.  */
+/*                                                                    */
+/*   This always contains a 'real' exception (as from code.value),    */
+/*   which may be an instance of a local class, with the exceptions:  */
+/*                                                                    */
+/*   1. if the signal object is null then this is an 'unstoppable'    */
+/*      exit request (from NrExit).                                   */
+/*                                                                    */
+/*   2. if the signal object is an Object[] array then we are         */
+/*      returning from a special precall (collecting the arguments    */
+/*      for a super(...) constructor call.                            */
+/*                                                                    */
+/* RxSignal.Frame                                                     */
+/*   An object that represents an position in a program (for trace-   */
+/*   back).                                                           */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2000.02.26 Initial                                                 */
+/* 2000.02.27 Add SignalFrame                                         */
+/* 2000.03.09 Add null signal object, for Exit                        */
+/* 2000.03.29 Add Object[] signal object, for precall return          */
+/* 2000.04.14 Construct using cursor as base                          */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxSignal extends RuntimeException
+ properties public
+  signalobj   =Object         -- the signal (Throwable) object, or
+                              -- instance of a local class.
+  signalinfo  =RxClassInfo    -- the corresponding class info
+                              -- [null iff signalobj is null or Object[]]
+  signaltoken =RxToken        -- where it happened
+
+  signalframes=Vector(4)      -- collection of frames for traceback
+
+ properties private
+
+ properties private constant
+  eyecatch='+'.copies(3)      -- [avoid three plusses in a row]
+
+ /* This constructor lets the object be set up in an inline call
+    Arg1 is the context
+    Arg2 is the exception or other indication object (see notes)
+    Arg3 is the whereabouts in source code (if known)
+    */
+ method RxSignal(cursor=RxCursor, newsig=Object, newtok=RxToken)
+  signalobj=newsig
+  if signalobj\=null then if \(signalobj<=Object[]) then do
+    -- real exception; if it's a pending one then remove the temporary wrapper
+    if signalobj<=RxSignalPend then signalobj=(RxSignalPend signalobj).signalobj
+    -- [ignore any original tok for now]
+    -- having unwrapped it, it could be one of ours...
+    if signalobj<=RxSignal then do
+      oldsignal=RxSignal signalobj
+      signalobj=oldsignal.signalobj
+      -- override later token
+      if oldsignal.signaltoken\=null then newtok=oldsignal.signaltoken
+      end
+
+    rxt=cursor.curprogram.translator
+    signalinfo=rxt.classer.findclass(cursor, signalobj.getClass().getName(), null, 0)
+    end
+  signaltoken=newtok
+
+  Frame(cursor.curprogram, null, newtok) -- add creation frame
+
+ /* SHOWFRAMES -- display the traceback, Rexx-style
+    (except oldest at top, Java-style)
+    Code here is quite similar to RxMessage, could perhaps share.
+    */
+ method showFrames(rxt=RxTranslator)
+  loop f=0 for signalframes.size()-1
+    sigframe=Frame signalframes.elementAt(f)
+    prog=sigframe.frameprogram
+
+    numwidth=String.valueOf(prog.source.getLineCount()).length()+1
+    pad=' '.copies(numwidth)
+
+    nextfield=(Frame signalframes.elementAt(f+1)).framefield
+
+    if nextfield.fieldlocal\=null then do
+      localmeth=RxMethod nextfield.fieldlocal
+      add=' ['localmeth.methodprogram.source.getName()-
+         ||':'localmeth.methodclause.tokens[0].line']'
+      end
+     else add=''
+
+    rxt.say(pad '--- in' nextfield.toConciseString(nextfield.fieldprogram)add)
+
+    if add=='' then iterate   -- not a local exception
+
+    tok=sigframe.frametoken
+    if tok=null then iterate  -- actual position unknown
+
+    line=prog.source.getLine(tok.line)
+    if line=null then do
+      say '*** Sourceline not found:' tok.line 'in' prog.source.getName()
+      iterate
+      end
+
+    /* edit control characters */
+    loop i=0 to line.length-1
+      if line[i]<' ' then do
+        if line[i]='\t' then line[i]=' '   -- so '^' will line up
+                        else line[i]='?'
+        end
+      end i
+    rxt.say(Rexx(tok.line).right(numwidth) eyecatch line)
+    start=tok.pos
+    if start>0 & start<=line.length+1 then do
+      if tok.len<1 then len=1; else len=tok.len
+      rxt.say(pad eyecatch||Rexx(' ').copies(start)Rexx('^').copies(len))
+      end
+
+--  out(pad eyecatch head[level]':' message)
+    end f
+
+ /* toString -- temp */
+ method toString returns String
+  if signalobj=null then return 'Exit'
+  if signalobj<=RxSignalPend then signalobj=(RxSignalPend signalobj).signalobj
+  if signalobj<=Object[]     then return 'Precall:object-array'
+  if signalobj<=Throwable then return 'Throwable:'signalobj.toString()
+  return 'UnThrowable:'signalobj.toString()
+
+
+/* Class representing a position.
+   When created, it automatically adds itself to its parent RxSignal
+   frames list. */
+class RxSignal.Frame dependent
+ properties shared
+  frameprogram=RxProgram      -- program
+  frametoken  =RxToken        -- token in program
+  framefield  =RxField        -- field describing the method called
+
+ /* constructor */
+ method Frame(p=RxProgram, f=RxField, t=RxToken)
+  frameprogram=p
+  framefield  =f
+  frametoken  =t
+  parent.signalframes.addElement(this)
+
+

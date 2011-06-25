@@ -1,0 +1,117 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrReturn                                                           */
+/*                                                                    */
+/*   An object that represents a parsed Return instruction            */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.09 Initial                                                 */
+/* 2000.02.21 Add interpretation                                      */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Return instruction            */
+class NrReturn implements RxClauseParser uses RxCursor, RxExpr
+ properties private
+  rxt    =RxTranslator             -- root
+  parser =RxParser                 -- local reference
+  pcursor=RxCursor                 -- local reference
+  tokens =RxToken[]                -- local reference
+
+  expr    =RxExpr                  -- expression [null if none]
+
+ /** Construct an object from the current clause */
+ method NrReturn(newrxt=RxTranslator)
+  rxt    =newrxt                   -- the boss
+  parser =rxt.program.parser       -- our parser
+  pcursor=parser.cursor            -- our parsing cursor
+  tokens =pcursor.curclause.tokens -- local reference
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrReturn', pass)
+
+  converter=rxt.converter     -- spin doctor
+  parser.thislevel.terminal=1 -- followers are unreachable
+
+  if tokens[1].type=RxToken.END then do
+    /* Simple return.  Make sure it's allowed */
+    if pcursor.curmethod.methodrettype\=RxType.VOID_TYPE then
+     if \pcursor.curmethod.methodconstructor then
+      signal RxError(rxt, tokens[1], 'return.expression.expected',-
+                     rxt.program.babel.typeString(pcursor.curmethod.methodrettype))
+    expr=null                 -- no expression
+    return
+    end
+
+  /* We do have an expression */
+  if pcursor.curmethod.methodconstructor then /* constructor */ do
+    /* Only 'return this;' is allowed */
+    if tokens[1].type=RxToken.SP then
+     if tokens[2].type=RxToken.SYM then
+     if parser.iskey(tokens[2].value, 'THIS') then do
+      expr=null               -- not really an expression
+      return
+      end
+    /* otherwise no can do */
+    signal RxError(rxt, tokens[2], 'constructor.can.only.return.this')
+    end
+
+  if tokens[1].type=RxToken.SP then begin=2; else begin=1
+
+  if pcursor.curmethod.methodrettype=RxType.VOID_TYPE then
+   signal RxError(rxt, tokens[begin], 'method.cannot.return.value',-
+                  pcursor.curmethod.toConciseString())
+
+  code=rxt.eparser.parseexpr(pcursor, 0, begin, null, null)
+  -- [might be nice to be able to return a type]
+  expr=RxExpr(rxt, pcursor, RETURN_EXPR, code)
+
+  -- optimize when types just right
+  if pcursor.curmethod.methodrettype=code.type then conv=RxConvert null
+   else do
+    conv=converter.assigncost(pcursor, pcursor.curmethod.methodrettype, code.type)
+    if conv.cost>rxt.program.flag.maxassign then /* oops */
+      signal RxError(rxt, tokens[begin], 'cannot.assign.to.return.type',-
+                     rxt.program.babel.typeString(code.type),-
+                     rxt.program.babel.typeString(pcursor.curmethod.methodrettype))
+    converter.convertcode(pcursor, pcursor.curmethod.methodrettype, conv.proc, code)
+    end
+  expr.type=pcursor.curmethod.methodrettype
+  expr.conv=conv
+  -- [TERMINAL is set above]
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  if expr=null then rxt.program.streamer.out('return;')
+               else rxt.program.streamer.out('return' expr.code.javacode';')
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor)
+  if cursor.curacttype=CUR_RETURN then do
+    -- only warn, for now, as Java allows return-replacement, quietly...
+    RxWarn(rxt, tokens[0], 'return.already.active')
+    -- [in fact the above is now inhibited by RxWarn]
+    end
+
+  if expr\=null then do
+    code=expr.evaluate(cursor)          -- re-evaluate as needed
+    cursor.curreturn=code.value         -- RxCode's value
+    end
+  -- [constructor must leave curreturn unchanged, as does return;]
+  cursor.curact=1                       -- alert
+  cursor.curacttype=CUR_RETURN
+

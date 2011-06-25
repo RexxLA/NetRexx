@@ -1,0 +1,59 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2004.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxQuit                                                             */
+/*                                                                    */
+/*   Process a Quit (terminal error).                                 */
+/*   When an RxQuit is constructed, an error message is displayed     */
+/*   and (if DIAG) an error traceback is also displayed.              */
+/*   RxError does not extend this because it doesn't need the same    */
+/*   behaviour.                                                       */
+/*                                                                    */
+/*   Errors are usually non-terminal; Quits are terminal and should   */
+/*   always be signalled.                                             */
+/*                                                                    */
+/*   [RxQuit is temporarily allowed to happen during .exec; later     */
+/*   we should use a special Exception for that purpose (internal     */
+/*   error, or not running 1.2)]                                      */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.10.07 Initial, from old RxError                               */
+/* 1999.09.30 Java generation suppression added                       */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxQuit extends RuntimeException
+
+ /* The empty constructor is simply an 'abort' request */
+ method RxQuit
+
+ /* RxQuit -- construct and display an error message [etc.]
+    Arg1 is translator context (rxt)
+    Arg2 is token context (null if unknown)
+    Arg3 is message identifier (name)
+    Arg4 - Arg7 are optional inserts
+    */
+ method RxQuit(rxt=RxTranslator, c=RxToken, id=String,-
+                i1=Rexx "", i2=Rexx "", i3=Rexx "", i4=Rexx "")
+
+  if id.startsWith('internal.error', 0) then level=RxMessage.SEVERE   -- bump
+                                        else level=RxMessage.ERROR    -- usual
+  RxMessage(rxt.program, level, c, id, i1, i2, i3, i4)
+  rxt.program.errorcount=rxt.program.errorcount+1
+  rxt.program.flag.java=0                         -- don't need Java anymore
+
+  if rxt.program.flag.diag | level=RxMessage.SEVERE then do
+    if rxt.program.parser\=null then
+     if rxt.program.parser.cursor\=null then
+     if rxt.program.parser.cursor.curclause\=null then
+      say '# Tokens:' rxt.program.parser.cursor.curclause.showtokens()
+    Exception("# RxQuit traceback for" id).printStackTrace()
+    end
+

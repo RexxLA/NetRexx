@@ -1,0 +1,219 @@
+options binary strictcase strictargs
+package COM.ibm.netrexx.process
+import java.net.
+/**
+ * Copyright (c) 2011- RexxLA                                          
+ * Nrx: NetRexx compiler server, client part
+ * Class Nrx opens a socket
+ * on the NetRexxS server and passes the name and arguments over it. The
+ * compiler server stays in the memory of another process and does not
+ * have to be reloaded. This has obvious performance benefits, and is
+ * usable from a makefile, contrary to the -prompt approach. The port
+ * number is variable and can be specified on the commandline. It
+ * defaults to 2001.
+ * <p>
+ * Extra options:
+ * <ul>
+ *   <li><b>-pfpn</b> If it is specified, the output from the compiler
+ *                    is prepended with the program name.
+ *   <li><b>-shutdown</b> Shuts down the compiler server
+ *   <li><b>-start</b> Start a class in the server's virtual machine
+ * </ul>
+ * <p>
+ */
+class Nrx
+  properties indirect
+  returnCode
+
+  properties private
+  errstd
+  start = int
+
+  /**
+   * the default no-arg constructor
+   */
+  method Nrx()
+
+  /**
+   * The constructor takes a String array which contains the command
+   * line arguments with which the client is started.
+   */
+  method Nrx(s_=String[])
+    line = ''
+    port = ''
+    this.errstd = 0
+    loop i=0 to s_.length-1
+      select
+   when (Rexx s_[i]).datatype('N') then
+   do
+     port = Rexx s_[i]
+     iterate
+   end
+      when s_[i] = "-pfpn" then do
+   this.errstd = 1
+   iterate
+      end
+      when s_[i] = "-start" then do
+   this.start = 1
+   iterate
+      end
+      otherwise line = line s_[i]
+    end
+    end
+    if port = '' then port = 2001
+    sock = createSocket(port, line)
+    if this.start = 0 then processFile(line.trim(), sock)
+    if this.start then startFile(line, sock)
+    return this
+
+  /**
+   * method createSocket creates a client socket on the local host,
+   * for the specified port. When this does not succeed, it prints a
+   * message and compiles locally, using the specified commandline.
+   */
+  method createSocket(port_,s_) returns Socket
+    do
+      addr = InetAddress.getLocalHost()
+      return Socket(addr,port_)
+    catch IOException
+      if this.start then
+   do
+     say "There is no JVM ready to start this program; Nrx will start it."
+     child = Runtime.getRuntime().exec("java " s_)
+     in   = BufferedReader(InputStreamReader(child.getInputStream()))
+     line = in.readLine()
+     loop while line \= null
+       say line
+       line = in.readLine()
+     end
+     child.waitFor()
+     exit
+   catch IOException
+   catch InterruptedException
+     say 'exception encountered'
+     exit
+   end
+
+      say "NRX: The compiler server is not listening on port" port_"."
+      say "NRX: This is by no means necessary, but using it will speed up things considerably."
+      say 'NRX: Start it by running:"java COM.ibm.netrexx.proces.Nrx"'
+      say
+      --NetRexxC.main(s_)
+      exit
+    end
+
+  /**
+   * method processFile passes the specified commandline over the
+   * specified socket, and receives translator output back over its
+   * inputstream.
+   */
+  method processFile(s_, sock_=Socket)
+
+    do
+      s = this.toCanonicalPaths(s_)
+      dir = this.pathToDir(s)
+      wr = BufferedWriter(OutputStreamWriter(sock_.getOutputStream()))
+      wr.write(s,0,s.length())
+      wr.newLine()
+      wr.flush()
+      rd = BufferedReader(InputStreamReader(sock_.getInputStream()))
+      line = rd.readLine()
+      program = ''
+      if this.errstd then
+   do
+     say "Entering directory `"dir"'"
+     loop while line <> null
+       if (Rexx line).word(1) = "@#!retcode" then
+         do
+      this.returnCode = (Rexx line).word(2)
+      return (Rexx line).word(2)
+         end
+       if (Rexx line).word(1) = "Program" then program = (Rexx line).subword(2)": "
+       if this.errstd then say program||(Rexx line).translate('','+')
+       else say line
+       line = rd.readLine()
+     end
+   end
+      else
+   do
+     loop while line <> null
+       if (Rexx line).word(1) = "@#!retcode" then
+         do
+      this.returnCode = (Rexx line).word(2)
+      return (Rexx line).word(2)
+         end
+       say line
+       line = rd.readLine()
+     end
+   end
+
+    catch IOException
+    end
+    return 0
+
+  method startFile(s_, sock_=Socket)
+    do
+      wr = BufferedWriter(OutputStreamWriter(sock_.getOutputStream()))
+      s  = "-startRequest" s_
+      wr.write(s,0,s.length())
+      wr.newLine()
+      wr.flush()
+
+      oStream = sock_.getOutputStream();
+      bytes = byte[]
+      bytes = (String s_).getBytes();
+      oStream.write(bytes.length);
+      oStream.write(bytes);
+      oStream.close();
+      rd = BufferedReader(InputStreamReader(sock_.getInputStream()))
+      line = rd.readLine()
+      loop while line <> null
+   say line
+      end
+
+      catch IOException
+    end
+    return
+
+  method toCanonicalPaths(s_) returns String signals IOException
+  --  trace results
+    if s_.countstr(".nrx") = 1 then return File(s_).getCanonicalPath().toString()
+    else
+      do
+   retStr = StringBuffer()
+   loop while s_ <>""
+     parse s_ fn ".nrx" s_
+     if fn.strip().left(1) = '-' then retStr.append(String(' 'fn))
+     else retStr.append(String(' '||File(fn.strip()||".nrx").getCanonicalPath().toString()))
+   end
+      end
+    return String(retStr)
+
+  /**
+   * Takes the output of {@link #toCanonicalPaths} and returns the
+   * directory path from it.
+   * @param s is a String formed by {@link #toCanonicalPaths}
+   * @return String containing the directory contained in
+   *         <code>s</code>.
+   */
+  method pathToDir(s = String) returns String
+    endIndex = s.indexOf(".nrx")
+    if endIndex > 0 then
+      do
+   fileSep = java.io.File.separator
+   s = s.substring(0, endIndex)
+   fileSepIndex = s.lastIndexOf(fileSep)
+   s = s.substring(0, fileSepIndex)
+      end -- if do
+
+    return s
+
+  /**
+   * Method main starts the compiler client.
+   * @param args is a String[]
+   * @see #Nrx
+   */
+  method main(args=String[]) static
+    Nrx(args)
+
+
