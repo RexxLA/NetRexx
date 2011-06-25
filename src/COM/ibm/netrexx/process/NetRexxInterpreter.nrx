@@ -1,0 +1,90 @@
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 2000.        All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NetRexxA                                                           */
+/*                                                                    */
+/*  NetRexx API external interface.                                   */
+/*                                                                    */
+/* Parse and run one or more NetRexx programs.                        */
+/*                                                                    */
+/* See external documentation.                                        */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2000.04.19 Initial [from NetRexxC]                                 */
+/* ------------------------------------------------------------------ */
+package COM.ibm.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class NetRexxInterpreter
+
+   properties private
+      translator=RxTranslator         -- It.
+      started=boolean 0               -- 1 if exec state begun
+
+   /* Constructor: build a translator object */
+
+   method NetRexxInterpreter public
+      translator=RxTranslator()        -- construct translator
+      langs=[Rexx 'Nr']                -- languages supported
+      translator.setlanguages(langs)   -- should always work
+
+   /* parse -- parse a set of files, under specified flags
+    Arg1 is list of files
+    Arg2 is list of flags
+    returns 1 if no error
+    */
+   method parse(filestrings=String[], flagstrings=String[]) returns boolean
+      if started then do
+         started=0
+         translator.endexec()
+         end
+      outfile=System.out
+      logfile=PrintWriter null
+      exec=boolean 1
+
+      -- copy the arrays
+      flags=Rexx[flagstrings.length+1]
+      loop i=0 for flagstrings.length
+         flags[i]=Rexx(flagstrings[i])
+         end i
+      flags[flags.length-1]='nojava'   -- force
+
+      files=Rexx[filestrings.length]
+      loop i=0 for filestrings.length
+         files[i]=Rexx(filestrings[i])
+         end i
+
+      return translator.translate(flags, files, outfile, logfile, \exec)
+
+
+   method parse(filesources=RxSource[], flags=Rexx[], outfile=PrintStream System.out, logfile=PrintWriter null) returns boolean
+      if started then do
+         started=0
+         translator.endexec()
+         end
+
+      return translator.translate(flags, filesources, outfile, logfile, 0)
+
+
+   /* getClassObject -- in interpretation context
+    Arg1 is the package (null if 'generic), dotted
+    Arg2 is the class name (dotted for minor classes)
+    Arg3 is the dimension required for an array (default 0)
+    returns the class object or nul if not found
+    */
+   method getClassObject(pack=String, name=String, dim=int 0) returns Class
+      if \started then do
+         translator.startexec()
+         started=1
+         end
+
+      if pack=null then
+         rpack=Rexx null
+      else
+         rpack=Rexx(pack)
+      rname=Rexx(name)
+      type=RxType(rpack, rname, dim)
+
+      return type.getClassObject(translator.loader)
+

@@ -23,7 +23,6 @@
 /* 2000.03.10 Move much code down to generate, and use .constant      */
 /* 2000.03.11 Implement OVER for interpretation                       */
 /* 2001.05.22 Until code stepped control variable in wrong place      */
-/* 2011.06.22 Added support for Iterables (Collections) in LOOP OVER sections - Kermit Kiser    */
 /* ------------------------------------------------------------------ */
 package COM.ibm.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -60,7 +59,6 @@ class NrLoop extends NrBlock implements RxClauseParser-
   overterm  =RxCode                -- code OVER term [null if none]
   overtype  =RxType                -- OVER collection type
   overrexx  =boolean 0             -- stepping over a Rexx indexed string
-  iterable  =boolean 0             -- stepping over a Java Collection or such
 
   looplabel =''                    -- explicit label
   firsttriv =boolean 1             -- firstpart is trivial assignment
@@ -75,7 +73,6 @@ class NrLoop extends NrBlock implements RxClauseParser-
 
  properties private constant
   dicttype  =RxType('java.util.Dictionary', 0)
-  iterabletype  =RxType('java.lang.Iterable', 0)
 
  /** Construct an object from the current clause */
  method NrLoop(newrxt=RxTranslator)
@@ -222,8 +219,6 @@ class NrLoop extends NrBlock implements RxClauseParser-
           signal RxError(rxt, tok, 'cannot.loop.over.type')
         /* syntax is OK */
         /* It must either extend Rexx or Dictionary */
-
-	iterable=0			--		adds support for Java Collections, etc. 
         select
           when rxt.classer.issubclass(pcursor, overterm.type, RxType.REXX_TYPE,-
                                       tokens[n]) then do
@@ -234,14 +229,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
                                       dicttype, tokens[n]) then do
             overtype=RxType.OBJECT_TYPE
             overrexx=0
-	    end
-	  when rxt.classer.issubclass(pcursor, overterm.type,-
-               iterabletype, tokens[n]) then do
-		 overtype=RxType.OBJECT_TYPE
-		 overrexx=0
-		 iterable=1		--	flag as Java iterable type
-               end
-
+            end
           otherwise
             signal RxError(rxt, tokens[n], 'cannot.loop.over',-
                            rxt.program.babel.typeString(overterm.type))
@@ -549,11 +537,11 @@ class NrLoop extends NrBlock implements RxClauseParser-
     if overterm.group=S_VAR
      then stemname=overterm.javacode
      else do
-       pcursor.curclass.uniques=pcursor.curclass.uniques+1
-       stemname='$'pcursor.curclass.uniques
-       begpart=begpart||overterm.type.toJava() stemname'='overterm.javacode';'
-     end
-     if \iterable then do label noiterate 	-- 	if iterable we do not need preliminary loop to make an array of objects and recover them
+      pcursor.curclass.uniques=pcursor.curclass.uniques+1
+      stemname='$'pcursor.curclass.uniques
+      begpart=begpart||overterm.type.toJava() stemname'='overterm.javacode';'
+      end
+
     /* Initialize variables */
     begpart=begpart||RxType.INT_CLASS workname'=0;'
     if overrexx then begpart=begpart||RxType.VECTOR_CLASS vectname'=new'-
@@ -579,15 +567,13 @@ class NrLoop extends NrBlock implements RxClauseParser-
                      ||vectname'.removeElementAt('workname');'-
                      ||'continue;}'
       end
-     begpart=begpart||workname'++;}}'     -- second '}' is for synchronized
-					 -- at end of snapshot loop, workname variable is true count of elements
-     
-     /* Now set up the code for within the main loop */
-     allpart=allpart||'if(--'workname'<0)break;'    -- decrement and test
-      -- we'll need a code object for conversions [could move earlier]
-  end noiterate
-  code=RxCode(S_EXPR, overtype, null)
-  if iterable then  code.javacode='('overtype.toJava()')' workname'.next()' ; else -
+    begpart=begpart||workname'++;}}'     -- second '}' is for synchronized
+    -- at end of snapshot loop, workname variable is true count of elements
+
+    /* Now set up the code for within the main loop */
+    allpart=allpart||'if(--'workname'<0)break;'    -- decrement and test
+    -- we'll need a code object for conversions [could move earlier]
+    code=RxCode(S_EXPR, overtype, null)
     if \overrexx then                              -- recover item
       code.javacode='('overtype.toJava()')'vectname'['workname']'
      else
@@ -863,9 +849,6 @@ class NrLoop extends NrBlock implements RxClauseParser-
   rxt.program.tracer.traceclause(pcursor.curclause, tracelevel, tracenames)
   rxt.program.streamer.outpart(begpart)
   labelchunk=rxt.program.streamer.chunks     -- record where we might add label
-  if iterable then -
-  rxt.program.streamer.outpart('for(java.util.Iterator' workname'='overterm.javacode'.iterator();' workname'.hasNext();){')
-  else -
   rxt.program.streamer.outpart('for(;'forseg2';'forseg3'){')
   rxt.program.streamer.outpart(firstpar1)
   -- add iteration2+ trace code if needed
@@ -967,16 +950,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
             if termr.testnode(ro) then snap.addElement(ro)
             end
           end
-    else do
-      if iterable then do		--		performance not issue in interpret mode so use the original loop type code for collections here
-        termit=java.lang.Iterable termo
-        titer=Iterator termit.iterator()
-        snap=Vector(100, 0)
-        loop while titer.hasNext()
-          snap.addElement(titer.next())
-        end
-      end
-    else do label notiter     
+         else do
           termd=Dictionary termo
           -- We know exactly how big the Vector needs to be for this
           -- non-Rexx case.
@@ -984,9 +958,8 @@ class NrLoop extends NrBlock implements RxClauseParser-
           it=termd.keys()
           loop for termd.size()
             snap.addElement(it.nextElement())
+            end
           end
-    end notiter
-    end
         level.oversnap=snap                  -- snapshot of objects
         level.forcount=snap.size()             -- this will terminate the loop
         end -- protected snapshot
