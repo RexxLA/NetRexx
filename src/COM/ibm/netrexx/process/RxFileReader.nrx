@@ -17,6 +17,7 @@
 /* ------------------------------------------------------------------ */
 /* Change list (see RxLanguage for master change list)                */
 /* 2000.04.30 Initial, from RxStreamer (see change history there)     */
+/* 2011.07.22 modified to read programs from memory as well as from files (Kermit Kiser)   */
 /* ------------------------------------------------------------------ */
 /* UTF8 coding is applied on a per-line basis.  This isn't 'perfect', */
 /* which would be on a per-clause basis, but it realizes conversions  */
@@ -43,6 +44,7 @@ class RxFileReader implements RxSource
   infilepath =Rexx            -- input file directory, with trailing
                               -- local separator
   infileob =File              -- input file fileob
+  inmemob =String null   -- input string to hold a program 
   inhandle =BufferedReader    -- input file handle, non-null if open
   inopen   =boolean 0         -- input file has been opened
   inread   =boolean 0         -- input file has been read
@@ -65,6 +67,12 @@ class RxFileReader implements RxSource
     (Note this checks, but does not actually open, the file.  See
     comments in getLine.)
     */
+	 
+ method openfile(inname=Rexx,pstring=String)
+ 	 inmemob=pstring
+ 	 infile=inname
+ 	 infilepath=null
+ 	 
  method openfile(inname=Rexx)
   if inname.right(5).OpEq(null,'.java') then
     signal RxQuit(rxt, null, 'cannot.translate.java', inname)
@@ -178,6 +186,8 @@ class RxFileReader implements RxSource
 
   if \inopen then do label openfile          -- need to open the file
     inopen=1                                 -- show done
+	  if inmemob\=null then inhandle=BufferedReader(StringReader(inmemob))
+	  	  else -
     do                                       -- open the file
       instream=FileInputStream(infileob)
       if \rxt.superflag.utf8
