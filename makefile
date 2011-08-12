@@ -15,9 +15,9 @@ tests:
 
 .PHONY: clean
 clean: 
-		java -jar ant/ant-launcher.jar clean
+	java -jar ant/ant-launcher.jar clean
 
 .PHONY: doc
 doc:
-		java -jar ant/ant-launcher.jar apidocs
+	java -jar ant/ant-launcher.jar apidocs
 
