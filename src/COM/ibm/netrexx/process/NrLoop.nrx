@@ -57,8 +57,8 @@ class NrLoop extends NrBlock implements RxClauseParser-
   untilexpr =RxExpr                -- UNTIL expression
   byonecode =RxCode                -- code for '1' if BY is defaulted
   overterm  =RxCode                -- code OVER term [null if none]
-  overtype  =RxType                -- OVER collection type
-  overrexx  =boolean 0             -- stepping over a Rexx indexed string
+  overCollType =RxType             -- OVER collection type
+  overIterType =RxType             -- OVER iterator type
 
   looplabel =''                    -- explicit label
   firsttriv =boolean 1             -- firstpart is trivial assignment
@@ -72,7 +72,8 @@ class NrLoop extends NrBlock implements RxClauseParser-
   tokvar    =RxToken null          -- token for control variable
 
  properties private constant
-  dicttype  =RxType('java.util.Dictionary', 0)
+  DICT_TYPE     =RxType('java.util.Dictionary', 0)
+  ITERABLE_TYPE =RxType('java.lang.Iterable', 0)
 
  /** Construct an object from the current clause */
  method NrLoop(newrxt=RxTranslator)
@@ -194,7 +195,16 @@ class NrLoop extends NrBlock implements RxClauseParser-
           leave named              -- we have all the repetitor
           end
 
-        /* Only keyword possibility now is OVER form; we are at the name */
+        /* Only keyword possibility now is OVER form; we are at the type or name */
+        iterterm=rxt.tparser.parseterm(pcursor, n, 1)
+        if iterterm.group=S_TYPE then do
+          if rxt.superflag.diag then
+             say '# LOOP OVER itertype:'iterterm.type
+          overIterType=iterterm.type
+          n=iterterm.endoff+1; tok=tokens[n]; tn=tok.type
+          if tn<>RxToken.SP then signal RxError(rxt, tok, 'variable.name.expected')
+          n=n+1; tok=tokens[n]; tn=tok.type  -- eat whitespace after type declaration
+          end
         parser.thislevel.dropout=1 -- is leavable loop
         tokvar=tok                 -- save the name coordinates
         varname=tok.value          -- and the name
@@ -203,10 +213,15 @@ class NrLoop extends NrBlock implements RxClauseParser-
         -- 2000.06.28: this next message more helpful than blank.expected
         if tn<>RxToken.SP then signal RxError(rxt, tok, 'over.keyword.expected')
         n=n+1; tok=tokens[n]; tn=tok.type
-        if \parser.iskey(tok.value, 'OVER') then
+
+
+        if \parser.iskey(tok.value, 'OVER') then               -- we should be at the over keyword now.
           signal RxError(rxt, tok, 'over.keyword.expected')
         n=n+1; tok=tokens[n]; tn=tok.type
-        if tn=RxToken.SP then do; n=n+1; tok=tokens[n]; tn=tok.type; end
+        if tn=RxToken.SP then do
+           n=n+1; tok=tokens[n]; tn=tok.type                   -- eat whitespace after 'over'
+           end
+
         /* Now at the term to iterate over */
         overterm=rxt.tparser.parseterm(pcursor, n, 1) -- is an RHS reference
         next=overterm.endoff+1
@@ -218,22 +233,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
         if overterm.group=S_TYPE then
           signal RxError(rxt, tok, 'cannot.loop.over.type')
         /* syntax is OK */
-        /* It must either extend Rexx or Dictionary */
-        select
-          when rxt.classer.issubclass(pcursor, overterm.type, RxType.REXX_TYPE,-
-                                      tokens[n]) then do
-            overtype=RxType.REXX_TYPE
-            overrexx=1                            -- for faster tests
-            end
-          when rxt.classer.issubclass(pcursor, overterm.type,-
-                                      dicttype, tokens[n]) then do
-            overtype=RxType.OBJECT_TYPE
-            overrexx=0
-            end
-          otherwise
-            signal RxError(rxt, tokens[n], 'cannot.loop.over',-
-                           rxt.program.babel.typeString(overterm.type))
-          end
+
         /* Check we are allowed this control variable */
         parser.checkdupconvar(varname, tokvar)
         parser.thislevel.loopvarname=varname -- save for check
@@ -247,8 +247,34 @@ class NrLoop extends NrBlock implements RxClauseParser-
         var=pooler.findvar(pcursor, varname, tokvar, 0, 0, 2)
         if var<>null then lhtype=var.vartype      -- we know it
                      else lhtype=null
+        /* It must either extend Rexx or Dictionary */
+        select
+          when rxt.classer.issubclass(pcursor, overterm.type, RxType.REXX_TYPE, tokens[n]) then do
+            overCollType=RxType.REXX_TYPE
+            overIterType=RxType.REXX_TYPE
+            end
+          when rxt.classer.issubclass(pcursor, overterm.type, DICT_TYPE, tokens[n]) then do
+            overCollType=DICT_TYPE
+            overIterType=RxType.OBJECT_TYPE
+            end
+          when  rxt.classer.issubclass(pcursor, overterm.type, ITERABLE_TYPE, tokens[n]) then do
+            overCollType=ITERABLE_TYPE
+            if overIterType=null then
+               if var<>null then             -- iter var was defined already
+                  overIterType=var.vartype
+               else                          -- no var defined, no explicit type, we take object.
+                  overIterType=RxType.OBJECT_TYPE
+            end
+          when overterm.type.isarray() then do
+            overCollType=overterm.type
+            overIterType=overterm.type.basetype(0) -- non-array type
+            end
+          otherwise
+            signal RxError(rxt, tokens[n], 'cannot.loop.over',-
+                           rxt.program.babel.typeString(overterm.type))
+          end
         var=pooler.checkvar(pcursor, RxVariable.VAR_LOCAL, varname,-
-                            lhtype, tokvar, overtype, tokens[n], 0)
+                            lhtype, tokvar, overIterType, tokens[n], 0)
         varname=var.varspell                      -- get real spelling
         tracename=varname                         -- request tracing
         varcode=RxCode(S_VAR, var.vartype, null)  -- in case trace during
@@ -542,47 +568,60 @@ class NrLoop extends NrBlock implements RxClauseParser-
       begpart=begpart||overterm.type.toJava() stemname'='overterm.javacode';'
       end
 
-    /* Initialize variables */
-    begpart=begpart||RxType.INT_CLASS workname'=0;'
-    if overrexx then begpart=begpart||RxType.VECTOR_CLASS vectname'=new'-
-                                      RxType.VECTOR_CLASS'(100,0);'
-                else begpart=begpart||RxType.OBJECT_CLASS'[]' vectname'=new'-
-                                      RxType.OBJECT_CLASS'['stemname'.size()];'
-
-    /* Protect the object during snapshot, and get enumerator. */
-    begpart=begpart||'synchronized('stemname'){'
-    begpart=begpart||RxType.ENUM_CLASS enumname'='stemname'.keys();'
-    /* the snapshot loop... */
-    begpart=begpart||'for(;;){'
-    if \overrexx then do
-      begpart=begpart||'if('workname'=='vectname'.length)break;'
-      begpart=begpart||vectname'['workname']='enumname'.nextElement();'
-      end
-     else /* is Rexx */ do
-      begpart=begpart||'if(!'enumname'.hasMoreElements())break;'
-      begpart=begpart||vectname'.addElement('enumname'.nextElement());'
-      /* Is a Rexx collection, so discard and ignore item if it's unreal */
-      begpart=begpart||'if(!'stemname'.testnode(('RxType.REXX_CLASS')('-
-                     ||vectname'.elementAt('workname')))){'-
-                     ||vectname'.removeElementAt('workname');'-
-                     ||'continue;}'
-      end
-    begpart=begpart||workname'++;}}'     -- second '}' is for synchronized
-    -- at end of snapshot loop, workname variable is true count of elements
-
-    /* Now set up the code for within the main loop */
-    allpart=allpart||'if(--'workname'<0)break;'    -- decrement and test
     -- we'll need a code object for conversions [could move earlier]
-    code=RxCode(S_EXPR, overtype, null)
-    if \overrexx then                              -- recover item
-      code.javacode='('overtype.toJava()')'vectname'['workname']'
-     else
-      code.javacode='('overtype.toJava()')'vectname'.elementAt('workname')'
+    code=RxCode(S_EXPR, overIterType, null)
+
+    /* Initialize variables */
+    select
+      when overCollType==RxType.REXX_TYPE then do
+        begpart=begpart||RxType.INT_CLASS workname'=0;'-
+                       ||RxType.VECTOR_CLASS vectname'=new 'RxType.VECTOR_CLASS'(100,0);'-
+                       ||'synchronized('stemname'){'-          -- protect the object during snapshot
+                       ||  RxType.ENUM_CLASS enumname'='stemname'.keys();'-
+                       ||  'for(;;){'-
+                       ||    'if(!'enumname'.hasMoreElements())break;'-
+                       ||    vectname'.addElement('enumname'.nextElement());'-
+                       ||    'if(!'stemname'.testnode(('RxType.REXX_CLASS')('- -- ignore unreal items
+                       ||      vectname'.elementAt('workname')))){'-
+                       ||      vectname'.removeElementAt('workname');'-
+                       ||      'continue;}'-
+                       ||    workname'++;'-
+                       ||  '}'-  -- for
+                       ||'}'     -- synchronized
+        allpart=allpart||'if(--'workname'<0)break;'    -- decrement and test
+        code.javacode='('overIterType.toJava()')'vectname'.elementAt('workname')'
+        end
+      when overCollType==DICT_TYPE then do
+        begpart=begpart||RxType.INT_CLASS workname'=0;'-
+                       ||RxType.OBJECT_CLASS'[]' vectname'=new 'RxType.OBJECT_CLASS'['stemname'.size()];'-
+                       ||'synchronized('stemname'){'-          -- protect the object during snapshot
+                       ||  RxType.ENUM_CLASS enumname'='stemname'.keys();'-
+                       ||  'for(;;){'-
+                       ||    'if('workname'=='vectname'.length)break;'-
+                       ||    vectname'['workname']='enumname'.nextElement();'-
+                       ||    workname'++;'-
+                       ||  '}'-  -- for
+                       ||'}'     -- synchronized
+        allpart=allpart||'if(--'workname'<0)break;'    -- decrement and test
+        code.javacode='('overIterType.toJava()')'vectname'['workname']'
+        end
+      when overCollType==ITERABLE_TYPE then do
+        begpart=begpart||'java.util.Iterator 'enumname'='stemname'.iterator();'
+        allpart=allpart||'if(!'enumname'.hasNext())break;'
+        code.javacode='('overIterType.toJava()')' enumname'.next()'
+        end
+      when overCollType.isarray() then do
+        begpart=begpart||RxType.INT_CLASS workname'=0;'
+        allpart=allpart||'if('workname'>='stemname'.length)break;'
+        code.javacode='('overIterType.toJava()')'stemname'['workname'++]'
+        end
+      end
+
     if maytrace then                               -- add tracing if necessary
       rxt.program.tracer.tracecode(code, pcursor.curclause.tokens[0],-
         var.tracetag(), RexxTrace.VAR, var.varname)  -- VAR as setting
     /* Convert the RHS as required (usually not); we know it's safe */
-    conv=converter.assigncost(pcursor, var.vartype, overtype)
+    conv=converter.assigncost(pcursor, var.vartype, overIterType)
     converter.convertcode(pcursor, var.vartype, conv.proc, code)
     allpart=allpart||varname'='code.javacode';'    -- set the tail variable
     end overgen
@@ -940,24 +979,40 @@ class NrLoop extends NrBlock implements RxClauseParser-
       item=rxt.tparser.evalterm(cursor, overterm.begoff, 1) -- this is an RHS term
       termo=item.value                       -- the term object
       do protect termo                       -- while we snapshot
-        if overrexx then do
-          termr=Rexx termo
-          snap=Vector(100, 0)
-          it=termr.keys()
-          loop while it.hasMoreElements()
-            ro=Rexx it.nextElement()
-            -- add it to the vector iff it's real
-            if termr.testnode(ro) then snap.addElement(ro)
+        select
+          when overCollType==RxType.REXX_TYPE then do
+            termr=Rexx termo
+            snap=Vector(100, 0)
+            it=termr.keys()
+            loop while it.hasMoreElements()
+              ro=Rexx it.nextElement()
+              -- add it to the vector iff it's real
+              if termr.testnode(ro) then snap.addElement(ro)
+              end
             end
-          end
-         else do
-          termd=Dictionary termo
-          -- We know exactly how big the Vector needs to be for this
-          -- non-Rexx case.
-          snap=Vector(termd.size())
-          it=termd.keys()
-          loop for termd.size()
-            snap.addElement(it.nextElement())
+          when overCollType==DICT_TYPE then do
+            termd=Dictionary termo
+            -- We know exactly how big the Vector needs to be for this
+            -- non-Rexx case.
+            snap=Vector(termd.size())
+            it=termd.keys()
+            loop for termd.size()
+              snap.addElement(it.nextElement())
+              end
+            end
+          when overCollType==ITERABLE_TYPE then do -- FIXME: This will behave different from compiled code...
+            snap=Vector()
+            titer=(Iterable termo).iterator()
+            loop while titer.hasNext()
+               snap.addElement(titer.next())
+               end
+            end
+          when overCollType.isarray() then do
+            terma=Object[] termo
+            snap=Vector(terma.length)
+            loop i=0 to terma.length-1
+               snap.add(terma[i])
+               end
             end
           end
         level.oversnap=snap                  -- snapshot of objects

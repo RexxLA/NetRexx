@@ -121,6 +121,15 @@ class RxParser uses RxCode
     ass=boolean 0                                 -- assigny
     if tok2.type=RxToken.OP then if tok2.value[0]='=' then ass=1
 
+    if tok.type=RxToken.AT then do                -- annotations outside a class body
+      if rxt.pass0 then iterate
+      if rxt.pass1 then do
+         cursor.curclause.lookaside=NrAnnotation(rxt)
+         rxt.program.pendanno.addElement(cursor.curclause)
+         end
+      iterate
+      end
+
     if tok.type=RxToken.SYM then select label sym -- symbol
       when ass then nop                           -- not a keyword
       when tok2.type=RxToken.LPAR then nop        -- not a keyword
@@ -291,6 +300,14 @@ class RxParser uses RxCode
       if tok.type=RxToken.SYM then if tok2.type=RxToken.SP then
        if Rexx(tok.value).OpEq(null,'class') then return 1 -- [caseless compare]
       iterate mainloop
+      end
+
+    if tok.type=RxToken.AT then do                -- annotations within a class body
+      if rxt.pass1 then do
+         cursor.curclause.lookaside=NrAnnotation(rxt)
+         rxt.program.pendanno.addElement(cursor.curclause)
+         end
+      iterate
       end
 
     /* --- Here only for pass1 and pass2 --- */
@@ -522,6 +539,13 @@ class RxParser uses RxCode
       end pass1
 
     /* --- Pass 2 -- real processing to be done on a clause --- */
+
+    if tok.type=RxToken.AT then do                -- annotations within a method body
+      cursor.curclause.lookaside=NrAnnotation(rxt)
+      rxt.program.pendanno.addElement(cursor.curclause)
+      iterate
+      end
+
     /* Handle the 'enders' -- CLASS or METHOD -- up front */
     if t=RxToken.SYM then do label endercheck
       if t2\=RxToken.SP then
@@ -803,7 +827,7 @@ class RxParser uses RxCode
   -- They are ignored inside interface classes.
   if rxt.program.pendtrace.size()=0 then
    if rxt.program.pendnumeric.size()=0 then return       -- nowt pending
-  if cursor.curclass.classinfo.isinterface then return -- not allowed
+  if cursor.curclass.classinfo.isinterface then return -- not allowed -- fixme: annotations for interfaces
 
   indention=1                              -- for formatting
   saveclause=cursor.curclause
@@ -832,6 +856,20 @@ class RxParser uses RxCode
     end n
   cursor.curclause=saveclause
   return
+
+ method deferredAnno private
+  loop a=0 for rxt.program.pendanno.size()
+    c=RxClause rxt.program.pendanno.elementAt(a)
+    anno=NrAnnotation c.lookaside
+    anno.scan(rxt.pass)
+    if rxt.pass2 then
+       if rxt.program.flag.java then anno.generate()
+   catch e=RxError
+    -- if we get an error then throw away pending numerics so not reprocessed
+    rxt.program.pendanno.removeAllElements()
+    signal e   -- rethrow
+    end a
+
 
  /* CROSSCLASS -- parse cross-class references                        */
  -- this processes classes (superclass, etc.) referenced in the CLASS
