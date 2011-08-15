@@ -1,5 +1,5 @@
 COMPILE_COMMAND = nrc
-COMPILE_OPTIONS =  -sourcedir -time -comments -keep -replace -compact -format -warnexit0
+COMPILE_OPTIONS =  -sourcedir -time -comments -keep -replace -compact -format -warnexit0 -nocrossref
 
 NRX_SRC		:= $(wildcard *.nrx)
 NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
