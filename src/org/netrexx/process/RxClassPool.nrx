@@ -1,0 +1,389 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2001.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxClassPool                                                        */
+/*                                                                    */
+/*   This is the pool of RxClassInfo objects                          */
+/*   Unlike Hashtable, this does not need to be protected [and,       */
+/*   conversely, it is not thread-safe]                               */
+/*                                                                    */
+/*   [Later, we could separate the objects in the classpool (used for */
+/*    lookup) from the objects used to represent loaded classes.      */
+/*    This would be cleaner (as each class could be represented by    */
+/*    only one RxClassInfo block), but would actually be a little     */
+/*    more costly.]                                                   */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1997.03.28 Initial  [AA 174, RDU-LGW]                              */
+/* 1997.04.28 Separate lookup by program, for multiple compilation    */
+/* 1997.06.28 Change Entry to be File plus optional Entry             */
+/* 1998.02.08 Support minor class names [$ becomes . in class names]  */
+/* 1998.11.17 Allow explicitly-imported classes to disambiguate       */
+/* 2000.03.22 Add discard [AA 23 BHX-ORD]                             */
+/* 2000.04.16 Take program as parameter on find()                     */
+/* 2001.04.01 Lazy info creation; better invalidation mechanism       */
+/* ------------------------------------------------------------------ */
+/* We manage our own hashtable, as we may have more than one          */
+/* class with the same caseless short name (which is what we use      */
+/* to hash the class), and we are single-thread (and so can avoid     */
+/* monitor overheads).                                                */
+/*                                                                    */
+/* Registering the class often takes place due to an import, and      */
+/* duplicates are possible; we defer decisions on ambiguity as late   */
+/* as possible.                                                       */
+/*                                                                    */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   This is the pool of RxClassInfo objects                          */
+class RxClassPool
+
+ properties private constant
+  tablesize=2003
+  maxint=Integer.MAX_VALUE
+
+ properties private
+  rxt=RxTranslator                 -- the boss
+  table=RxClassInfo[tablesize]     -- the hashtable
+  hiddenlist=Vector(10)            -- records invalidated classes
+
+ /** Constructor */
+ method RxClassPool(newrxt=RxTranslator)
+  rxt=newrxt
+
+ /** ------------------------------------------------------------------ */
+ /* REGISTER                                                           */
+ /* ------------------------------------------------------------------ */
+ /* register -- register a class in our table
+    Arg1 is package name (null string if generic (none))
+    Arg2 is class full name (exact case)
+            At present, we allow both dollars and dot separators in
+            dependent class names
+    Arg3 is file object (null if none)
+            This is a File or ZipFile object containing the class, or
+            null if this class has no valid binary form (i.e., is in the
+            program being compiled, or is a primitive class)
+    Arg4 is entry name (null if none)
+            This is a ZipEntry object corresponding to the
+            class, iff Arg3 is a ZipFile.
+    Arg5 is 1 if the class may be referred to without package (see find)
+    Arg6 is owning program iff Arg5=1 (see under find for description)
+    Arg7 is 1 if the class was imported explicitly (including class name)
+    returns the RxClassInfo object for the class
+
+    The hash table is keyed by the lowercase (case-independent) short
+      name, regardless of the setting of strictcase.
+    Duplicate registrations are allowed (only one object represents, if
+      they share the same scope (program or global).  This also quietly
+      handles two identical classes in the classpath -- first one wins.
+    We also keep a record of all the packages we have seen.
+    */
+ method register(pack=String, name=String, file=Object, entry=Object,-
+                 nickable=boolean, importer=RxProgram, explicit=boolean)-
+                returns RxClassInfo
+  ambcheck=boolean 0               -- 1 if info needs check later
+
+  if rxt.superflag.diag then
+   if rxt.superflag.verbose>4 then do
+    if importer=null then a='[null]'; else a=importer.programname
+    say '#   cp.register ['pack']' name nickable a explicit
+    end
+
+  -- note that we don't check syntax of the name
+  name=name.replace('$', '.') -- convert dollars to dots
+
+  lowname=name.toLowerCase()
+  hash=(lowname.hashCode() & maxint)//tablesize  -- hash the key
+
+  /* If the table entry is null (very common) we're definitely new, so
+     we are ready to save saving */
+  tableentry=table[hash]
+  if tableentry\=null then do
+    /* Already one or more in the list .. add to chain (unless a duplicate).
+       Since we have to spin through the list to check for duplicates, we
+         also note possible (not definite) ambiguities, too.
+       [duplicates won't affect ambiguity settings]
+       1998.09.17: preserve explicit flag
+       */
+    te=tableentry        -- work
+    loop label te until te=null
+      if te.hidden then do; te=te.next; iterate; end -- ignore hiddens
+      if name==te.fullname then do
+        /* If it's a duplicate then ignore it completely -- precedence. */
+        -- Note that it's not a duplicate if nickable, explicit, or
+        -- importer settings differ (but when the one already there is
+        -- globally imported we can assume it's nickable)
+        if pack==te.packname then
+         if explicit==te.explicit then
+          do
+          if te.importer=null then return te
+          if importer==te.importer then
+           if nickable==te.nickable then return te
+          end
+        -- remember if we need to check for ambiguity later
+        -- (i.e., a packageless reference is allowed and may confuse)
+        if nickable then if te.nickable then do
+          ambcheck=1; te.ambcheck=1
+          end
+        end
+       else do   -- full names not exact match
+        -- remember if we need to check for ambiguity later
+        if nickable then if te.nickable
+         then if lowname==te.lowname then do
+          ambcheck=1; te.ambcheck=1
+          end
+        end
+      te=te.next
+      end te
+    /* To get here, we're not a complete duplicate */
+    end
+  -- It's a new one.  Create it and record possible ambiguity
+  info=RxClassInfo(pack, name, file, entry, nickable, importer, explicit)
+  info.ambcheck=ambcheck
+  info.next=tableentry   -- add to chain
+  table[hash]=info       -- ..
+  return info
+
+  /*** -- this warning removed 1998.06.04, as meaningless when >1 program
+  if \info.ambcheck then return info    -- cannot be ambiguous, so we're done
+  /* Diag Verbose message, if required */
+  if \rxt.superflag.diag then return info         -- no thanks
+  if rxt.superflag.verbose<5 then return info     -- no thanks
+  say '# Warning: More than one class "'name'" in package "'pack'"'
+  return info
+  ***/
+
+
+ /** ------------------------------------------------------------------ */
+ /* FIND                                                               */
+ /* ------------------------------------------------------------------ */
+ /* find -- find a class
+    Arg1 is current program context (null if none)
+    Arg2 is exact package name (null if unknown, null string if 'generic')
+    Arg3 is class fullname (dotted)
+    Arg4 is 1 for an exact-case lookup, 0 otherwise
+    returns RxClassInfo object, or null if not found
+
+    A class can be referred to without a qualifying package (i.e., with
+    Arg2 null) only if the RxClassinfo.nickable bit is set.
+    This happens if:
+
+      a) It is a local class
+
+      b) It is imported -- either:
+           i)   globally (by initial defaults)
+           ii)  by a specific IMPORT in the current program
+           iii) by being part of the same PACKAGE as the current program
+                (PACKAGE carries out an IMPORT)
+
+    In these cases, the RxClassInfo.importer field describes the program
+    to which the class was registered (imported); this must match or be
+    null: the latter case applies to the 'global' standard (default)
+    imports.
+
+    Similarly, if the program context is null, then we don't disqualify
+    a program for a non-match (i.e., we are doing a global, not
+    program-dependent, lookup).
+
+    If the lookup was ambiguous (more than one match), under all
+      constraints, then the 'ambiguous' flag is set in the returned
+      RxClassInfo object
+    */
+ method find(program=RxProgram, pack=String, name=String, exact=boolean)-
+             returns RxClassInfo
+  /**
+  if rxt.superflag.diag then do
+    if program=null then pp='[null]'; else pp=program.programname
+    if pack=null then ps='[null]'; else ps=pack
+    say '# CP.find:' pp ps name exact
+    end
+  **/
+
+  lowname=name.toLowerCase()
+  hash=(lowname.hashCode() & maxint)//tablesize     -- hash the key
+  tableentry=table[hash]
+  -- If the table entry is null it's unheard of
+  if tableentry=null then return null
+
+  -- look for the match, as requested
+  te=tableentry          -- work
+  loop until te=null
+    if te.hidden then do; te=te.next; iterate; end     -- ignore hiddens
+    -- program mismatch disqualifies if target has importer
+    if te.importer\=null then if program\=null then
+      if te.importer\==program then do; te=te.next; iterate; end
+
+    -- class name mismatch always disqualifies
+    if exact then do
+      if name\==te.fullname then do; te=te.next; iterate; end
+      end
+     else do
+      if lowname\==te.lowname then do; te=te.next; iterate; end
+      end
+
+    -- package mismatch always disqualifies if package name supplied
+    if pack\=null then do label packagegiven
+      if pack\==te.packname then do; te=te.next; iterate; end
+      end packagegiven
+     else do label nopackage       -- pack=null: no-package lookup
+      -- can use short name on this one?
+      if \te.nickable then do; te=te.next; iterate; end
+      -- is target globally imported, or context is global??
+      if te.importer=null then leave nopackage -- is OK for this lookup
+      if program=null then leave nopackage     -- ..
+      -- is target imported for the same program as us?
+      if te.importer==program then leave nopackage
+      te=te.next
+      iterate
+      end nopackage
+    leave                -- get here if found
+    end
+  if te=null then return null           -- no match found
+
+  /* So far, so good, it seems we have a candidate */
+  if \te.ambcheck then return te        -- it's definitely safe
+  if te.explicit then return te         -- it's disambiguated
+
+  /* check for ambiguous needed -- search remaining possibilities */
+  -- this repeats the rules above, with the addition of testing for an
+  -- explicitly imported class (which disambiguates).  We have to check
+  -- all the possibilities in case of an explicit import down the chain.
+  tfound=te         -- the one we found
+  te=te.next        -- for checking the remaining possibilities
+  count=1           -- matches found
+  loop while te\=null
+    if te.hidden then do; te=te.next; iterate; end -- ignore hiddens
+    if te.importer\=null then if program\=null then
+      if te.importer\==program then do; te=te.next; iterate; end
+    if exact then do
+      if name\==te.fullname then do; te=te.next; iterate; end
+      end
+     else do
+      if lowname\==te.lowname then do; te=te.next; iterate; end
+      end
+    if pack\=null then do label packagegiven
+      if pack\==te.packname then do; te=te.next; iterate; end
+      end packagegiven
+     else do label nopackage            -- pack=null
+      if \te.nickable then do; te=te.next; iterate; end
+      if te.importer=null then leave nopackage
+      if program=null then leave nopackage
+      if te.importer==program then leave nopackage
+      te=te.next
+      iterate
+      end nopackage
+    -- get here iff we have a match
+    if te.explicit then return te       -- found a good one; return it
+    count=count+1                       -- new match
+
+    /***
+    if rxt.superflag.diag then do
+      if tfound.importer=null then a='[null]'; else a=tfound.importer.programname
+      say '# found:' tfound.type a tfound.ambcheck
+      if te.importer=null then a='[null]'; else a=te.importer.programname
+      say '#   amb:' te.type a te.ambcheck
+      signal RuntimeException
+     catch rte=RuntimeException
+      rte.printstacktrace
+      end
+    ***/
+
+    -- could leave here, as no point in continuing search now
+    te=te.next                          -- keep looking
+    end
+
+  if count>1 then do                    -- >1 if found a non-explicit
+    tfound.ambiguous=1                  -- second match, so mark it
+    -- say '### ambiguous:' tfound.type te.type tfound te
+    end
+  return tfound
+
+ /** discard -- remove class from the pool
+    Arg1 is the class to drop
+
+    Drops the class, unless it was globally imported.  It can only be
+    reinstated by explicit import or a new local class definition.
+    */
+ method discard(info=RxClassInfo)
+  name=info.fullname
+  lowname=name.toLowerCase()
+
+  -- find the info and drop it
+  hash=(lowname.hashCode() & maxint)//tablesize     -- hash the key
+  tableentry=table[hash]
+  tlast=RxClassInfo null           -- back pointer
+  te=tableentry                    -- work
+  loop while te\=null
+    if te==info then do
+      if te.importer=null then if \te.local then leave -- global imports stay
+      -- remove from the chain
+      if tlast=null then table[hash]=te.next
+                    else tlast.next=te.next
+      leave
+      end
+    tlast=te
+    te=te.next
+    end
+  -- if te=null then say '# surprise discard'
+  return
+
+ /** invalidatenonlocal -- invalidate non-local incarnations of this class
+    Arg1 is exact package name
+    Arg2 is exact class full name
+
+    Any entries (global or per-program, perhaps from current directory)
+    for this class are invalidated (set to hidden) in the pool.  This
+    is used to discard 'old' class entries in favour of new ones in the
+    program or programs being compiled.
+    */
+ method invalidatenonlocal(pack=String, name=String)
+  lowname=name.toLowerCase()
+  hash=(lowname.hashCode() & maxint)//tablesize     -- hash the key
+  tableentry=table[hash]
+  -- If the table entry is null it's unheard of
+  if tableentry=null then return
+
+  -- look for any matches, and invalidate them
+  te=tableentry          -- work
+  loop until te=null
+    if name==te.fullname then
+     if pack==te.packname then
+     if \te.local then do
+      te.hidden=1
+      hiddenlist.addElement(te)    -- save it for later reset
+      end
+    te=te.next
+    end
+
+ /* unhide -- restore any hidden classes */
+ method unhide
+  loop i=0 for hiddenlist.size()
+    info=RxClassInfo hiddenlist.elementAt(i)
+    info.hidden=0
+    end i
+  hiddenlist=Vector(10)            -- clear list
+  return
+
+ /* stats -- display statistics */
+ -- note these include hidden classes
+ method stats
+  chains=0     -- counter
+  infos=0      -- ..
+  loop i=0 for tablesize
+    te=table[i]
+    if te\=null then do
+      chains=chains+1
+      loop until te=null
+        infos=infos+1
+        te=te.next
+        end
+      end
+    end
+  pc=Rexx(chains*100/table.length).format(null, 1)
+  say '#' infos 'classes in classpool table [load='pc'%]'

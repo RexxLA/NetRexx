@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 
-<project name="netrexx" basedir="." default="dist">
+<project name="NetRexx" basedir="." default="dist">
 
   <!-- =================================================================== -->
   <!-- NetRexx default settings                                            -->
@@ -23,7 +23,7 @@
   <property name="ant.netrexxc.suppressMethodArgumentNotUsed"  value="true"/>
   <property name="ant.netrexxc.suppressPrivatePropertyNotUsed" value="true"/>
   <property name="ant.netrexxc.suppressVariableNotUsed"        value="false"/>
-  <property name="ant.netrexxc.verbose"                        value="verbose0"/>
+  <property name="ant.netrexxc.verbose"                        value="verbose1"/>
 
 
   <!-- =================================================================== -->
@@ -31,7 +31,7 @@
   <!-- =================================================================== -->
 
   <property name="name"         value="NetRexx"/>
-  <property name="version"      value="3.0"/>
+  <property name="version"      value="3.01alpha"/>
 
   <property name="root"          location="."/>
   <property name="sources"       value="${root}/src"/>
@@ -40,9 +40,25 @@
   <property name="build.classes" value="${build}/classes"/>
 
   <property name="runtimeDir"  value="netrexx/lang"/>
-  <property name="compilerDir" value="COM/ibm/netrexx/process"/>
-  <property name="testsDir"    value="COM/ibm/netrexx/diag"/>
+  <property name="compilerDir" value="org/netrexx/process"/>
+  <property name="testsDir"    value="org/netrexx/diag"/>
 
+  <property name="oldAPI" value="COM/ibm/netrexx/process"/>  
+  <property name="project.tools" value="/usr/lib/jvm/java-6-openjdk/lib/tools.jar" description="Set to find sun.tools stuff on Linux"/>
+  <property name="RUNTIME" value="${build.classes}/netrexx/lang/" description="Runtime directory"/>
+  <property name="RUNTIMENAME" value="netrexx.lang" description="Runtime prefix"/>
+  <property name="COMPILER" value="${build.classes}/org/netrexx/process/" />
+  <property name="COMPILERNAME" value="org.netrexx.process"/> 
+  <property name="DIAG" value="${build.classes}/org/netrexx/diag/"/>
+  <property name="DIAGNAME" value="org.netrexx.diag"/>  
+  
+  <property name="DOCPATH" value="${build}/javadocs"/>
+  <property name="DOCTITLE" value="NetRexx documentation:"/>
+	
+  <property name="WINDOWTITLE" value="NetRexx Javadocs"/>
+  <property name="HEADER" value="NetRexx class documentation"/>
+  <property name="BOTTOM" value="Provided by RexxLA - The Rexx Language Association"/>
+  <property name="build.sysclasspath"  value="ignore"/>
 
   <!-- =================================================================== -->
   <!-- Preparation / creating build directories                            -->
@@ -77,32 +93,47 @@
       </fileset>
       <pathelement path="${build.classes}"/>
     </path>
-    <property name="build.classpath" refid="build.class.path"/>
+    <pathconvert property="build.classpath" refid="build.class.path"/>
 
-    <!-- Test Classpath has build.classes prepended, but NetRexxC.jar excluded, we don't want to pollute the fresh compiler -->
+    <!-- Test Classpath now uses the fresh NetRexxC.jar being built -->
     <path id="test.class.path">
       <path refid="common.class.path"/>
+      <pathelement path="${build.lib}${file.separator}NetRexxC.jar"/>
       <pathelement path="${build.classes}"/>
       <fileset dir="${root}/lib">
         <include name="**/*.jar"/>
         <exclude name="NetRexxC.jar"/>
       </fileset>
     </path>
-    <property name="test.classpath" refid="test.class.path"/>
+    <pathconvert property="test.classpath" refid="test.class.path"/>
 
     <!-- two netrexx compilers, one for building, later the built one for testing -->
-    <taskdef name="buildnrc" classname="org.apache.tools.ant.taskdefs.optional.NetRexxC" classpathref="build.class.path"/>
-    <taskdef name="testnrc"  classname="org.apache.tools.ant.taskdefs.optional.NetRexxC" classpathref="test.class.path"/>
+    <taskdef name="buildnrc" classname="org.apache.tools.ant.taskdefs.optional.NetRexxC" classpath="${build.classpath}"/>
 
   </target>
-
+  
+  <target name="post.jar.prepare" depends="prepare" description="compile runtime">  
+    <taskdef name="testnrc"  classname="org.apache.tools.ant.taskdefs.optional.NetRexxC" classpath="${test.classpath}"/>
+  </target>
 
   <target name="compile.runtime" depends="prepare" description="compile runtime">
-    <buildnrc srcDir="${sources}/${runtimeDir}" destDir="${build.classes}/${runtimeDir}" classpath="${test.classpath}"
+	
+	<pathconvert pathsep="${line.separator}|   |-- "
+				 property="echo.path.compile"
+				 refid="build.class.path">
+	</pathconvert>
+	
+	<echo message="|   |"/>
+	<echo message="|-- compile classpath"/>
+	<echo message="|   |"/>
+	<echo message="|   |-- ${echo.path.compile}"/>
+	<echo message="|   |"/>
+	  
+    <buildnrc srcDir="${sources}/${runtimeDir}" destDir="${build.classes}/${runtimeDir}" classpath="${build.classpath}"
       includes="*.nrx" excludes="RexxDictionary.nrx"/>
   </target>
 
-  <target name="clean.runtime" depends="prepare" description="delete built runtime files">
+  <target name="clean.runtime"  description="delete built runtime files">
     <delete dir="${build.classes}/netrexx/lang"/>
   </target>
 
@@ -112,22 +143,37 @@
          dependencies. As the latter will be fixed in the future, I hope, this two-step compile get's things up
          and running for the moment.
     -->
-    <buildnrc srcDir="${sources}/${compilerDir}" destDir="${build.classes}/${compilerDir}" classpath="${test.classpath}"
+    <buildnrc srcDir="${sources}/${compilerDir}" destDir="${build.classes}/${compilerDir}" classpath="${build.classpath}"
       includes="RxChunk.nrx RxConvert.nrx RxFixup.nrx RxProcessor.nrx RxSource.nrx RxToken.nrx
                 RxSignalPend.nrx RxType.nrx RxMessageOutput.nrx RxMessage.nrx"/>
-    <buildnrc srcDir="${sources}/${compilerDir}" destDir="${build.classes}/${compilerDir}" classpath="${test.classpath}"
-      includes="*.nrx" excludes="NetRexxS.nrx"/>
+    <buildnrc srcDir="${sources}/${compilerDir}" destDir="${build.classes}/${compilerDir}" classpath="${build.classpath}"
+      includes="*.nrx" excludes="NetRexxS.nrx,NetRexxInterpreter.nrx,Nrx.nrx"/>
+    <buildnrc srcDir="${sources}/${oldAPI}" destDir="${build.classes}/${oldAPI}" classpath="${build.classpath}"
+      includes="*.nrx" />      
     <copy file="${sources}/${compilerDir}/NetRexxC.properties" todir="${build.classes}/${compilerDir}"/>
   </target>
 
-  <target name="clean.process" depends="prepare" description="delete built translator files">
+  <target name="clean.process"  description="delete built translator files">
     <delete dir="${build.classes}/${compilerDir}"/>
+    <delete dir="${build.classes}/${oldAPI}"/>
   </target>
 
   <target name="compile" depends="compile.process" description="compile all (except tests)"/>
 
 
-  <target name="compile.tests" depends="compile" description="compile tests">
+  <target name="compile.tests" depends="compile, jars,post.jar.prepare" description="compile tests">
+
+	<pathconvert pathsep="${line.separator}|   |-- "
+				 property="echo.path.test"
+				 refid="test.class.path">
+	</pathconvert>
+	
+	<echo message="|   |"/>
+	<echo message="|-- test classpath"/>
+	<echo message="|   |"/>
+	<echo message="|   |-- ${echo.path.test}"/>
+	<echo message="|   |"/>
+	     
     <testnrc srcDir="${sources}/${testsDir}" destDir="${build.classes}/${testsDir}" classpath="${test.classpath}" strictcase="no" strictargs="no" strictsignal="no"
       includes="DiagX.nrx"/>
     <testnrc srcDir="${sources}/${testsDir}" destDir="${build.classes}/${testsDir}" classpath="${test.classpath}" strictcase="no" strictargs="no" strictsignal="no"
@@ -147,11 +193,11 @@
   </target>
 
   <target name="run.tests" depends="-checkRunTestsRequired" unless="noRunTestsRequired">
-    <java classname="COM.ibm.netrexx.diag.DiagAll" classpath="${test.classpath}"/>
+    <java classname="org.netrexx.diag.DiagAll" classpath="${test.classpath}"/>
     <touch file="${build.classes}/${testsDir}/lastTestRun.ts"/>
   </target>
 
-  <target name="clean.tests" depends="prepare" description="delete test files">
+  <target name="clean.tests"  description="delete test files">
     <delete dir="${build.classes}/${testsDir}"/>
   </target>
 
@@ -166,16 +212,31 @@
       <fileset dir="${root}">
         <include name="LICENSE"/>
       </fileset>
+			 <manifest>
+			  <attribute name="Implementation-Vendor" value="Rexx Language Association"/>
+			  <attribute name="Implementation-Title" value="NetRexx"/>
+			  <attribute name="Implementation-Version" value="${version}"/>
+			  <attribute name="Implementation-Build" value="${build.id.string}"/>
+			</manifest>
     </jar>
     <jar jarfile="${build.lib}/NetRexxC.jar" compress="yes" filesonly="true" manifest="${sources}/manifest">
       <fileset dir="${build.classes}">
         <include name="${runtimeDir}/*.class"/>
         <include name="${compilerDir}/*.class"/>
+        <include name="${oldAPI}/*.class"/>
         <include name="${compilerDir}/*.properties"/>
       </fileset>
       <fileset dir="${root}">
         <include name="LICENSE"/>
       </fileset>
+					
+			 <manifest>
+			  <attribute name="Implementation-Vendor" value="Rexx Language Association"/>
+			  <attribute name="Implementation-Title" value="NetRexx"/>
+			  <attribute name="Implementation-Version" value="${build.id.string}"/>
+			  <attribute name="Implementation-Build" value="${build.id.string}"/>
+			  <attribute name="Main-Class" value="org.netrexx.process.NetRexxC"/>
+			</manifest>
     </jar>
   </target>
 
@@ -184,11 +245,59 @@
   </target>
 
   <target name="apidocs" depends="compile" description="create API documentation">
+		 <javadoc source="1.4" maxmemory="128M" private="true" Author="true" Version="true" breakiterator="yes" Use="true" destdir="${DOCPATH}"
+		 		bottom="${BOTTOM}" Header="${HEADER}"  Windowtitle="${WINDOWTITLE}" sourcepath="${build.classes}" packagenames="${COMPILERNAME},${RUNTIMENAME}" 
+		 		classpath=".${path.separator}${RUNTIME}${path.separator}${COMPILER}${path.separator}${project.tools}"  Verbose="false"
+		 		>
+			 <doctitle>${DOCTITLE} ${RUNTIMENAME} ${COMPILERNAME}</doctitle>
+		 </javadoc>
   </target>
 
-  <target name="clean" depends="clean.runtime, clean.process, clean.tests, clean.jar" description="delete all built files"/>
+  <target name="clean" depends="clean.runtime, clean.process, clean.tests, clean.jar,clean.javadocs" description="delete all built files">
+    <delete dir="${build}"/>
+  </target>  
 
-  <target name="dist" depends="compile, tests, jars, apidocs" description="build distribution"/>
+  <target name="dist" depends="init,compile, jars, tests, apidocs" description="build distribution"/>
 
 
+  <target name="clean.javadocs" description="delete built javadocs">
+    <delete dir="${DOCPATH}"/>
+  </target>
+	
+	<target name="init"  description="Set build number and document version level">
+		<tstamp/>
+		<buildnumber file="./build.number"/>
+		<property name="build.id.string"
+			value="${ant.project.name} ${version}, build ${build.number}-${DSTAMP}-${TSTAMP}"/>
+		<echo level="info" message="Starting build for ${build.id.string}"/>
+	</target>
+    
+   <target name="showprops" depends="prepare" description="Displays default property settings">
+   
+      <echoproperties />
+   
+	<!-- get the source compile classpath in a printable form -->
+	
+	<pathconvert pathsep="${line.separator}|   |-- "
+				 property="echo.path.compile"
+				 refid="build.class.path">
+	</pathconvert>
+	
+	<echo message="|   |"/>
+	<echo message="|-- compile classpath"/>
+	<echo message="|   |"/>
+	<echo message="|   |-- ${echo.path.compile}"/>
+
+	<pathconvert pathsep="${line.separator}|   |-- "
+				 property="echo.path.test"
+				 refid="test.class.path">
+	</pathconvert>
+	
+	<echo message="|   |"/>
+	<echo message="|-- test classpath"/>
+	<echo message="|   |"/>
+	<echo message="|   |-- ${echo.path.test}"/>
+	   
+    </target>    
+  
 </project>

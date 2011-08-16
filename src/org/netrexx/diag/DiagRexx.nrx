@@ -1,0 +1,979 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagRexx                                                           */
+/*                                                                    */
+/*   An object that tests documented Rexx methods.                    */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.08.25 Initial                                                 */
+/* ------------------------------------------------------------------ */
+package org.netrexx.diag
+options nobinary    -- NB
+
+class DiagRexx
+
+ /* Construct a set of tests; raise DiagX exception if error */
+
+ properties static
+ count=int 0        -- for sanity check
+
+ /*-- R E X X -----------------------------------------------------*/
+ method DiagRexx
+  /* invoke all the test methods.  If reach end, all worked OK. */
+  abbrev; abs; b2x; centre; changestr; compare; copies; copyindexed;
+  countstr; c2d; c2x; datatype; delstr; delword; d2c; d2x; exists;
+  format; insert; lastpos; left; length; lower; max; min; overlay; pos;
+  reverse; right; sequence; sign; space; strip; substr; subword;
+  translate; trunc; upper; verify; word; wordindex; wordlength; words;
+  wordpos; x2b; x2c; x2d;
+  nonlanguage; -- non-language methods
+
+  /*--------------------------------------------------------------------*/
+  say 'DiagRexx: OK ! Rexx methods ['count']'
+  return
+
+ /*-- A B B R E V -------------------------------------------------*/
+ method abbrev static
+  flag=boolean 1; count=count+1
+  p1='Print'; p2='PRINT'
+  flag=flag & (p1.abbrev('Pri')=='1')
+  flag=flag & (p2.abbrev('Pri')=='0')
+  flag=flag & (p2.abbrev('PRI',2)=='1')
+  flag=flag & (p2.abbrev('PRI',3)=='1')
+  flag=flag & (p2.abbrev('PRI',4)=='0')
+  flag=flag & (p2.abbrev('PRY')=='0')
+  flag=flag & (p2.abbrev('')=='1')
+  flag=flag & (p2.abbrev('',0)=='1')
+  flag=flag & (p2.abbrev('',1)=='0')
+  if \flag then signal DiagX('Rexx abbrev')
+  return
+
+ /*-- A B S -------------------------------------------------------*/
+ method abs static
+  flag=boolean 1; count=count+1
+  flag=flag & '-1'.abs                  =='1'
+  flag=flag &  '0'.abs                  =='0'
+  flag=flag & '+1'.abs                  =='1'
+  flag=flag & ' - 12345678        '.abs =='12345678'
+  flag=flag & ' - 123456789       '.abs =='123456789'
+  flag=flag & ' - 1234567890      '.abs =='1234567890'
+  flag=flag & ' - 12345678900     '.abs =='12345678900'
+  flag=flag & '123.45E+16'.abs          =='1.2345E+18'
+  flag=flag & '- 1234567.7654321'.abs   =='1234567.7654321'
+  if \flag then signal DiagX('Rexx abs')
+  return
+
+ /*-- B 2 X -------------------------------------------------------*/
+ method b2x static
+  flag=boolean 1; count=count+1
+  flag=flag &     '0'.b2x=='0'
+  flag=flag &     '1'.b2x=='1'
+  flag=flag &    '10'.b2x=='2'
+  flag=flag &   '101'.b2x=='5'
+  flag=flag &  '1011'.b2x=='B'
+  flag=flag & '10101'.b2x=='15'
+  if \flag then signal DiagX('Rexx b2x')
+  return
+
+ /*-- C E N T R E / C E N T E R -----------------------------------*/
+ method centre static
+  flag=boolean 1; count=count+1
+  a='abc'; b='The blue sky'; n=''
+  flag=flag & (a.centre(7)=='  abc  ')
+  flag=flag & (a.center(7)=='  abc  ')
+  flag=flag & (a.centre(7,'-')=='--abc--')
+  flag=flag & (a.centre(8,'-')=='--abc---')
+  flag=flag & (b.centre(8)=='e blue s')
+  flag=flag & (b.centre(7)=='e blue ')
+  flag=flag & (b.centre(0)=='')
+  flag=flag & (n.centre(0)=='')
+  flag=flag & (n.centre(1)==' ')
+  flag=flag & (n.centre(2)=='  ')
+  flag=flag & (n.centre(3)=='   ')
+  flag=flag & (n.centre(4)=='    ')
+  if \flag then signal DiagX('Rexx centre')
+  return
+
+ /*-- C H A N G E S T R -------------------------------------------*/
+ method changestr static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v2='abcabc'; w3='aa bbb cccc'
+  flag=flag & (v.changestr(1,2)==v)
+  flag=flag & (v.changestr('a','xx')=='xxbcdef')
+  flag=flag & (v.changestr('cd','x')=='abxef')
+  flag=flag & (v2.changestr('a','A')=='AbcAbc')
+  flag=flag & (v2.changestr('cd','z')==v2)
+  flag=flag & (v2.changestr('bc','')=='aa')
+  flag=flag & (w3.changestr('', 'z')==w3)
+  if \flag then signal DiagX('Rexx changestr')
+  return
+
+ /*-- C O M P A R E -----------------------------------------------*/
+ method compare static
+  flag=boolean 1; count=count+1
+  flag=flag & ('abc'.compare('abc')      == 0)
+  flag=flag & ('abc'.compare('ak')       == 2)
+  flag=flag & ('abc'.compare('ab')       == 3)
+  flag=flag & ( 'ab'.compare('abc')      == 3)
+  flag=flag & (   ''.compare('abc')      == 1)
+  flag=flag & (  'd'.compare('')         == 1)
+  flag=flag & ('ab '.compare('ab')       == 0)
+  flag=flag & ('ab '.compare('ab',' ')   == 0)
+  flag=flag & ('ab '.compare('ab','x')   == 3)
+  flag=flag & ('ab-- '.compare('ab','-') == 5)
+  if \flag then signal DiagX('Rexx compare')
+  return
+
+ /*-- C O P I E S -------------------------------------------------*/
+ method copies static
+  flag=boolean 1; count=count+1
+  v='abcdef'; c='c'
+  flag=flag & (v.copies(0)=='')
+  flag=flag & (c.copies(1)==c)
+  flag=flag & (v.copies(1)==v)
+  flag=flag & (v.copies(2)==v||v)
+  flag=flag & (v.copies(2)=='abcdefabcdef')
+  flag=flag & (c.copies(5)=="ccccc")
+  if \flag then signal DiagX('Rexx copies')
+  return
+
+ /*-- C O P Y I N D E X E D ---------------------------------------*/
+ method copyindexed static
+  flag=boolean 1; count=count+1
+  x='floop'
+  x[1]='11'
+  x[2]='22'
+  y='newdef'
+  y[0]='00'
+  xstart=x x[0] x[1] x[2] x[3]
+  ystart=y y[0] y[1] y[2] y[3]
+  y.copyIndexed(x)
+  xend=x x[0] x[1] x[2] x[3]
+  yend=y y[0] y[1] y[2] y[3]
+  flag=flag & xstart=='floop floop 11 22 floop'
+  flag=flag & xstart==xend                             -- X unchanged
+  flag=flag & ystart=='newdef 00 newdef newdef newdef'
+  flag=flag & yend  =='newdef 00 11 22 newdef'
+
+  -- from NRL/Supplement:
+  foo='def'
+  foo['a']=1
+  foo['b']=2
+  bar='ghi'
+  bar['b']='B'
+  bar['c']='C'
+  merged=foo.copyIndexed(bar)
+  flag=flag &merged['a'] == '1'
+  flag=flag &merged['b'] == 'B'
+  flag=flag &merged['c'] == 'C'
+  flag=flag &merged['d'] == 'def'
+
+  if \flag then signal DiagX('Rexx copyIndexed')
+  return
+
+ /*-- C O U N T S T R ---------------------------------------------*/
+ method countstr static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v2='abcabc'; w3='aa bbb cccc'
+  flag=flag & (v.countstr(1)==0)
+  flag=flag & (v.countstr('a')==1)
+  flag=flag & (v.countstr('cd')==1)
+  flag=flag & (v2.countstr('a')==2)
+  flag=flag & (v2.countstr('cd')==0)
+  flag=flag & (v2.countstr('bc')==2)
+  flag=flag & (w3.countstr(' ')==2)
+  if \flag then signal DiagX('Rexx countstr')
+  return
+
+ /*-- C 2 D -------------------------------------------------------*/
+ method c2d static
+  flag=boolean 1; count=count+1
+  flag=flag & 'M'.c2d=='77'
+  flag=flag & '\0'.c2d=='0'
+  if \flag then signal DiagX('Rexx c2d')
+  return
+
+ /*-- C 2 X -------------------------------------------------------*/
+ method c2x static
+  flag=boolean 1; count=count+1
+  flag=flag & '\u0123'.c2x=='123'
+  flag=flag & '\ubeef'.c2x=='BEEF'
+  flag=flag & 'M'.c2x=='4D'
+  flag=flag & '\0'.c2x=='0'
+  if \flag then signal DiagX('Rexx c2x')
+  return
+
+ /*-- D A T A T Y P E ---------------------------------------------*/
+ method datatype static
+  flag=boolean 1; count=count+1
+  a='Mixed21'
+  b='0100110'
+  d='987032'
+  l='foobar'
+  m='BiCap'
+  n='21.3'
+  s='Fred_21'
+  u='SHOUT'
+  w='1234'
+  x='deadBEEF0123'
+  z='**(^^&'
+
+  flag=flag & (a.datatype('a')=='1')
+  flag=flag & (b.datatype('a')=='1')
+  flag=flag & (d.datatype('a')=='1')
+  flag=flag & (l.datatype('a')=='1')
+  flag=flag & (m.datatype('a')=='1')
+  flag=flag & (n.datatype('a')=='0')
+  flag=flag & (s.datatype('a')=='0')
+  flag=flag & (u.datatype('a')=='1')
+  flag=flag & (w.datatype('a')=='1')
+  flag=flag & (x.datatype('a')=='1')
+  flag=flag & (z.datatype('a')=='0')
+
+  flag=flag & (a.datatype('b')=='0')
+  flag=flag & (b.datatype('b')=='1')
+  flag=flag & (d.datatype('b')=='0')
+  flag=flag & (l.datatype('b')=='0')
+  flag=flag & (m.datatype('b')=='0')
+  flag=flag & (n.datatype('b')=='0')
+  flag=flag & (s.datatype('b')=='0')
+  flag=flag & (u.datatype('b')=='0')
+  flag=flag & (w.datatype('b')=='0')
+  flag=flag & (x.datatype('b')=='0')
+  flag=flag & (z.datatype('b')=='0')
+
+  flag=flag & (a.datatype('d')=='0')
+  flag=flag & (b.datatype('d')=='1')
+  flag=flag & (d.datatype('d')=='1')
+  flag=flag & (l.datatype('d')=='0')
+  flag=flag & (m.datatype('d')=='0')
+  flag=flag & (n.datatype('d')=='0')
+  flag=flag & (s.datatype('d')=='0')
+  flag=flag & (u.datatype('d')=='0')
+  flag=flag & (w.datatype('d')=='1')
+  flag=flag & (x.datatype('d')=='0')
+  flag=flag & (z.datatype('d')=='0')
+
+  flag=flag & (a.datatype('l')=='0')
+  flag=flag & (b.datatype('l')=='0')
+  flag=flag & (d.datatype('l')=='0')
+  flag=flag & (l.datatype('l')=='1')
+  flag=flag & (m.datatype('l')=='0')
+  flag=flag & (n.datatype('l')=='0')
+  flag=flag & (s.datatype('l')=='0')
+  flag=flag & (u.datatype('l')=='0')
+  flag=flag & (w.datatype('l')=='0')
+  flag=flag & (x.datatype('l')=='0')
+  flag=flag & (z.datatype('l')=='0')
+
+  flag=flag & (a.datatype('m')=='0')
+  flag=flag & (b.datatype('m')=='0')
+  flag=flag & (d.datatype('m')=='0')
+  flag=flag & (l.datatype('m')=='1')
+  flag=flag & (m.datatype('m')=='1')
+  flag=flag & (n.datatype('m')=='0')
+  flag=flag & (s.datatype('m')=='0')
+  flag=flag & (u.datatype('m')=='1')
+  flag=flag & (w.datatype('m')=='0')
+  flag=flag & (x.datatype('m')=='0')
+  flag=flag & (z.datatype('m')=='0')
+
+  flag=flag & (a.datatype('n')=='0')
+  flag=flag & (b.datatype('n')=='1')
+  flag=flag & (d.datatype('n')=='1')
+  flag=flag & (l.datatype('n')=='0')
+  flag=flag & (m.datatype('n')=='0')
+  flag=flag & (n.datatype('n')=='1')
+  flag=flag & (s.datatype('n')=='0')
+  flag=flag & (u.datatype('n')=='0')
+  flag=flag & (w.datatype('n')=='1')
+  flag=flag & (x.datatype('n')=='0')
+  flag=flag & (z.datatype('n')=='0')
+
+  flag=flag & (a.datatype('s')=='1')
+  flag=flag & (b.datatype('s')=='0')
+  flag=flag & (d.datatype('s')=='0')
+  flag=flag & (l.datatype('s')=='1')
+  flag=flag & (m.datatype('s')=='1')
+  flag=flag & (n.datatype('s')=='0')
+  flag=flag & (s.datatype('s')=='1')
+  flag=flag & (u.datatype('s')=='1')
+  flag=flag & (w.datatype('s')=='0')
+  flag=flag & (x.datatype('s')=='1')
+  flag=flag & (z.datatype('s')=='0')
+
+  flag=flag & (a.datatype('u')=='0')
+  flag=flag & (b.datatype('u')=='0')
+  flag=flag & (d.datatype('u')=='0')
+  flag=flag & (l.datatype('u')=='0')
+  flag=flag & (m.datatype('u')=='0')
+  flag=flag & (n.datatype('u')=='0')
+  flag=flag & (s.datatype('u')=='0')
+  flag=flag & (u.datatype('u')=='1')
+  flag=flag & (w.datatype('u')=='0')
+  flag=flag & (x.datatype('u')=='0')
+  flag=flag & (z.datatype('u')=='0')
+
+  flag=flag & (a.datatype('w')=='0')
+  flag=flag & (b.datatype('w')=='1')
+  flag=flag & (d.datatype('w')=='1')
+  flag=flag & (l.datatype('w')=='0')
+  flag=flag & (m.datatype('w')=='0')
+  flag=flag & (n.datatype('w')=='0')
+  flag=flag & (s.datatype('w')=='0')
+  flag=flag & (u.datatype('w')=='0')
+  flag=flag & (w.datatype('w')=='1')
+  flag=flag & (x.datatype('w')=='0')
+  flag=flag & (z.datatype('w')=='0')
+
+  flag=flag & (a.datatype('x')=='0')
+  flag=flag & (b.datatype('x')=='1')
+  flag=flag & (d.datatype('x')=='1')
+  flag=flag & (l.datatype('x')=='0')
+  flag=flag & (m.datatype('x')=='0')
+  flag=flag & (n.datatype('x')=='0')
+  flag=flag & (s.datatype('x')=='0')
+  flag=flag & (u.datatype('x')=='0')
+  flag=flag & (w.datatype('x')=='1')
+  flag=flag & (x.datatype('x')=='1')
+  flag=flag & (z.datatype('x')=='0')
+
+  if \flag then signal DiagX('Rexx datatype')
+  return
+
+ /*-- D E L S T R -------------------------------------------------*/
+ method delstr static
+  flag=boolean 1; count=count+1
+  flag=flag & ('abcd'.delstr(3)    == 'ab')
+  flag=flag & ('abcde'.delstr(3,2) == 'abe')
+  flag=flag & ('abcde'.delstr(6)   == 'abcde')
+  flag=flag & ('abcde'.delstr(9)   == 'abcde')
+  flag=flag & ('abcde'.delstr(1,0) == 'abcde')
+  flag=flag & (''.delstr(1,0) == '')
+  flag=flag & (''.delstr(1,2) == '')
+  if \flag then signal DiagX('Rexx delstr')
+  return
+
+ /*-- D E L W O R D -----------------------------------------------*/
+ method delword static
+  flag=boolean 1; count=count+1
+  flag=flag & ('Now is the  time'.delword(1,2) == 'the  time')
+  flag=flag & ('Now is the  time'.delword(2,2) == 'Now time')
+  flag=flag & ('Now is the time '.delword(3)   == 'Now is ')
+  flag=flag & ('Now  time'.delword(5)          == 'Now  time')
+  if \flag then signal DiagX('Rexx delword')
+  return
+
+ /*-- D 2 C -------------------------------------------------------*/
+ method d2c static
+  flag=boolean 1; count=count+1
+  flag=flag & '77'.d2c=='M'
+  flag=flag & '+77'.d2c=='M'
+  flag=flag & '0'.d2c=='\0'
+  if \flag then signal DiagX('Rexx d2c')
+  return
+
+ /*-- D 2 X -------------------------------------------------------*/
+ method d2x static
+  flag=boolean 1; count=count+1
+  flag=flag & ('9'.d2x       == '9')
+  flag=flag & ('129'.d2x     == '81')
+  flag=flag & ('129'.d2x(1)  == '1')
+  flag=flag & ('129'.d2x(2)  == '81')
+  flag=flag & ('127'.d2x(3)  == '07F')
+  flag=flag & ('129'.d2x(4)  == '0081')
+  flag=flag & ('257'.d2x(2)  == '01')
+  flag=flag & ('-127'.d2x(2) == '81')
+  flag=flag & ('-127'.d2x(4) == 'FF81')
+  flag=flag & ('12'.d2x(0)   == '')
+  flag=flag & ('8947848'.d2x == '888888')
+  flag=flag & ('8947848'.d2x(4) == '8888')
+  flag=flag & ('8947848'.d2x(5) == '88888')
+  flag=flag & ('8947848'.d2x(6) == '888888')
+  flag=flag & ('8947848'.d2x(7) == '0888888')
+  flag=flag & ('8947848'.d2x(8) == '00888888')
+  flag=flag & ('-7829368'.d2x(4) == '8888')
+  flag=flag & ('-7829368'.d2x(5) == '88888')
+  flag=flag & ('-7829368'.d2x(6) == '888888')
+  flag=flag & ('-7829368'.d2x(7) == 'F888888')
+  flag=flag & ('-7829368'.d2x(8) == 'FF888888')
+  if \flag then signal DiagX('Rexx d2x')
+  return
+
+ /*-- E X I S T S -------------------------------------------------*/
+ method exists static
+  flag=boolean 1; count=count+1
+  vowel=0
+  vowel['a']=1
+  vowel['b']=1
+  vowel['b']=null -- drops previous assignment
+  flag=flag & (vowel.exists('a') == '1')
+  flag=flag & (vowel.exists('b') == '0')
+  flag=flag & (vowel.exists('c') == '0')
+  if \flag then signal DiagX('Rexx exists')
+  return
+
+ /*-- F O R M A T -------------------------------------------------*/
+ method format static
+  flag=boolean 1; count=count+1
+
+  flag=flag & ('12.3'.format             == 12.3)
+  flag=flag & (' - 12.73'.format         == '-12.73')
+  flag=flag & ('0.000'.format            == '0')
+  flag=flag & ('3'.format(4)             == '   3')
+  flag=flag & ('1.73'.format(4,0)        == '   2')
+  flag=flag & ('1.73'.format(4,1)        == '   1.7')
+  flag=flag & ('1.75'.format(4,1)        == '   1.8')
+  flag=flag & ('1.73'.format(4,2)        == '   1.73')
+  flag=flag & ('1.73'.format(4,3)        == '   1.730')
+  flag=flag & ('-.76'.format(4,1)        == '  -0.8')
+  flag=flag & ('3.03'.format(4)          == '   3.03')
+  flag=flag & (' - 12.73'.format(null,4) == '-12.7300')
+  flag=flag & ('3.03'.format(4,null,3)   == '   3.03     ')
+  flag=flag & ('3.03'.format(null,null,3)== '3.03     ')
+
+  flag=flag & ('0.05'.format(4,1)        == '   0.1')
+  flag=flag & ('0.005'.format(4,0)       == '   0')
+  flag=flag & ('0.005'.format(4,1)       == '   0.0')
+  flag=flag & ('0.005'.format(4,2)       == '   0.01')
+  flag=flag & ('0.005'.format(4,3)       == '   0.005')
+  flag=flag & ('0.005'.format(4,4)       == '   0.0050')
+  flag=flag & ('0'.format(4,0)           == '   0')
+  flag=flag & ('0'.format(4,1)           == '   0.0')
+  flag=flag & ('0'.format(4,2)           == '   0.00')
+
+  flag=flag & ('0.4'.format(null,0)      == '0')
+  flag=flag & ('-0.4'.format(null,0)     == '0')
+  flag=flag & ('0.444'.format(null,0)     == '0')
+  flag=flag & ('-0.444'.format(null,0)     == '0')
+
+  flag=flag & ('12345.73'.format(null,null,null,3) == '1.234573E+4')
+  flag=flag & ('12345.73'.format(null,null,null,4) == '1.234573E+4')
+  flag=flag & ('12345.73'.format(null,null,null,5) == '12345.73')
+  flag=flag & ('12345.73'.format(null,null,null,6) == '12345.73')
+
+  flag=flag & ('12345.73'.format(null,8,null,3)    == '1.23457300E+4')
+  flag=flag & ('12345.73'.format(null,7,null,3)    == '1.2345730E+4')
+  flag=flag & ('12345.73'.format(null,6,null,3)    == '1.234573E+4')
+  flag=flag & ('12345.73'.format(null,5,null,3)    == '1.23457E+4')
+  flag=flag & ('12345.73'.format(null,4,null,3)    == '1.2346E+4')
+  flag=flag & ('12345.73'.format(null,3,null,3)    == '1.235E+4')
+  flag=flag & ('12345.73'.format(null,2,null,3)    == '1.23E+4')
+  flag=flag & ('12345.73'.format(null,1,null,3)    == '1.2E+4')
+  flag=flag & ('12345.73'.format(null,0,null,3)    == '1E+4')
+
+  flag=flag & ('99999.99'.format(null,6,null,3)    == '9.999999E+4')
+  flag=flag & ('99999.99'.format(null,5,null,3)    == '1.00000E+5')
+  flag=flag & ('99999.99'.format(null,2,null,3)    == '1.00E+5')
+  flag=flag & ('99999.99'.format(null,1,null,3)    == '1.0E+5')
+  flag=flag & ('99999.99'.format(null,0,null,3)    == '1E+5')
+  flag=flag & ('99999.99'.format(3,0,null,3)       == '  1E+5')
+
+  flag=flag & ('12345.73'.format(null,null,2,2) == '1.234573E+04')
+  flag=flag & ('12345.73'.format(null,3,null,0) == '1.235E+4')
+  flag=flag & ('1.234573'.format(null,3,null,0) == '1.235')
+  flag=flag & ('123.45'.format(null,3,2,0)      == '1.235E+02')
+
+  flag=flag & ('1234.5'.format(null,3,2,0,'e')  == '1.235E+03')
+  flag=flag & ('12345'.format(null,3,3,0,'e')   == '12.345E+003')
+  flag=flag & ('12345'.format(null,3,3,0,'s')   == '1.235E+004')
+  flag=flag & ('1234.5'.format(4,3,2,0,'e')     == '   1.235E+03')
+  flag=flag & ('12345'.format(5,3,3,0,'e')      == '   12.345E+003')
+  flag=flag & ('12345'.format(6,3,3,0,'s')      == '     1.235E+004')
+
+  flag=flag & ('1.2345'.format(null,3,2,0)      == '1.235    ')
+  flag=flag & ('12345.73'.format(null,null,3,6) == '12345.73     ')
+  flag=flag & ('12345e+5'.format(null,0)        == '1234500000')
+  flag=flag & ('12345e+5'.format(null,1)        == '1234500000.0')
+  flag=flag & ('12345e+5'.format(null,2)        == '1234500000.00')
+  flag=flag & ('12345e+5'.format(null,3)        == '1234500000.000')
+  flag=flag & ('12345e+5'.format(null,4)        == '1234500000.0000')
+
+  /* The ANSI nasties [Dallas, Nov. 1998] */
+  flag=flag & ('99.999'.format(null,2,null,2)   == '100.00')
+  flag=flag & ('0.99999'.format(null,4,2,2)     == '1.0000    ')
+
+  if \flag then signal DiagX('Rexx format')
+  return
+
+ /*-- I N S E R T -------------------------------------------------*/
+ method insert static
+  flag=boolean 1; count=count+1
+  flag=flag & (''.insert('')  == '')
+  flag=flag & ('abc'.insert('123')         == '123abc')
+  flag=flag & ('abcdef'.insert(' ',3)      == 'abc def')
+  flag=flag & ('abc'.insert('123',5,6)     == 'abc  123   ')
+  flag=flag & ('abc'.insert('123',5,6,'+') == 'abc++123+++')
+  flag=flag & ('abc'.insert('123',0,5,'-') == '123--abc')
+  if \flag then signal DiagX('Rexx insert')
+  return
+
+ /*-- L A S T P O S -----------------------------------------------*/
+ method lastpos static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v2='abcabc'; n=''
+  flag=flag & (v.lastpos('x')     =='0')
+  flag=flag & (v.lastpos('a')     =='1')
+  flag=flag & (v.lastpos('ab')    =='1')
+  flag=flag & (v.lastpos('c')     =='3')
+  flag=flag & (v2.lastpos('a')    =='4')
+  flag=flag & (v2.lastpos('ab')   =='4')
+  flag=flag & (v2.lastpos('c')    =='6')
+  flag=flag & (v2.lastpos('c',8)  =='6')
+  flag=flag & (v2.lastpos('c',6)  =='6')
+  flag=flag & (v2.lastpos('c',4)  =='3')
+  flag=flag & (v2.lastpos('c',2)  =='0')
+  flag=flag & (n.lastpos('x')     =='0')
+  flag=flag & (n.lastpos('x',4)   =='0')
+  if \flag then signal DiagX('Rexx lastpos')
+  return
+
+ /*-- L E F T -----------------------------------------------------*/
+ method left static
+  flag=boolean 1; count=count+1
+  v='abcdef'
+  flag=flag & (v.left(0)      =='')
+  flag=flag & (v.left(2)      =='ab')
+  flag=flag & (v.left(7)      =='abcdef ')
+  flag=flag & (v.left(7,'!')  =='abcdef!')
+  if \flag then signal DiagX('Rexx left')
+  return
+
+ /*-- L E N G T H -------------------------------------------------*/
+ method length static
+  flag=boolean 1; count=count+1
+  v='abcdef'; c='c'; n='';
+  flag=flag & (n.length()==0)
+  flag=flag & (c.length()=='1')
+  flag=flag & (v.length()==6)
+  if \flag then signal DiagX('Rexx length')
+  return
+
+ /*-- L O W E R ---------------------------------------------------*/
+ method lower static
+  flag=boolean 1; count=count+1
+  flag=flag & ''.lower==''
+  flag=flag & 'abc'.lower=='abc'
+  flag=flag & 'abC'.lower=='abc'
+  flag=flag & 'ABC'.lower=='abc'
+  flag=flag & 'FRED'.lower(1)=='fred'
+  flag=flag & 'FRED'.lower(2)=='Fred'
+  flag=flag & 'FRED'.lower(3)=='FRed'
+  flag=flag & 'FRED'.lower(4)=='FREd'
+  flag=flag & 'FRED'.lower(5)=='FRED'
+  flag=flag & 'FRED'.lower(6)=='FRED'
+  flag=flag & 'FRED'.lower(1,2)=='frED'
+  flag=flag & 'FRED'.lower(2,2)=='FreD'
+  flag=flag & 'FRED'.lower(3,1)=='FReD'
+  flag=flag & 'FRED'.lower(4,1)=='FREd'
+  flag=flag & 'FRED'.lower(5,1)=='FRED'
+  flag=flag & 'FRED'.lower(1,1)=='fRED'
+  flag=flag & 'FRED'.lower(1,0)=='FRED'
+  if \flag then signal DiagX('Rexx lower')
+  return
+
+ /*-- M A X -------------------------------------------------------*/
+ method max static
+  flag=boolean 1; count=count+1
+  flag=flag & '1'.max(2)        ==2
+  flag=flag & '2'.max(1)        ==2
+  flag=flag & 2.max(1)          ==2
+  flag=flag & '-1'.max(1)       ==1
+  flag=flag & '+1'.max(-1)      ==1
+  flag=flag & 1.0.max(1.00)     =='1.0'
+  flag=flag & 1E+0.max(1.00)    =='1'
+  flag=flag & '1.0'.max(1.00)   =='1.0'
+  flag=flag & '1.00'.max(1.0)   =='1.00'
+  flag=flag & '1234567.7654321'.max(1234567.7654320) == '1234567.7654321'
+  flag=flag & '1234567.7654320'.max(1234567.7654321) == '1234567.7654321'
+
+  flag=flag & '123456700000'.max(1234567E+5)   == '123456700000'
+  flag=flag & '1234567E+5'.max('123456700000') == '1.234567E+11'
+  if \flag then signal DiagX('Rexx max')
+  return
+
+ /*-- M I N -------------------------------------------------------*/
+ method min static
+  flag=boolean 1; count=count+1
+  flag=flag & '1'.min(2)        ==1
+  flag=flag & '2'.min(1)        ==1
+  flag=flag & '-1'.min(1)       =='-1'
+  flag=flag & '+1'.min(-1)      =='-1'
+  flag=flag & '1.0'.min(1.00)   =='1.0'
+  flag=flag & '1.00'.min(1.0)   =='1.00'
+  flag=flag & '1234567.7654321'.min(1234567.7654320) == '1234567.7654320'
+  flag=flag & '1234567.7654320'.min(1234567.7654321) == '1234567.7654320'
+
+  flag=flag & '123456700000'.min(1234567E+5)   == '123456700000'
+  flag=flag & '1234567E+5'.min('123456700000') == '1.234567E+11'
+  if \flag then signal DiagX('Rexx min')
+  return
+
+ /*-- O V E R L A Y -----------------------------------------------*/
+ method overlay static
+  flag=boolean 1; count=count+1
+  flag=flag & (''.overlay('')  == '')
+  flag=flag & ('abcdef'.overlay(' ',3)      == 'ab def')
+  flag=flag & ('abcdef'.overlay('.',3,2)    == 'ab. ef')
+  flag=flag & ('abcd'.overlay('qq')         == 'qqcd')
+  flag=flag & ('abcd'.overlay('qq',4)       == 'abcqq')
+  flag=flag & ('abc'.overlay('123',5,6,'+') == 'abc+123+++')
+  if \flag then signal DiagX('Rexx overlay')
+  return
+
+ /*-- P O S -------------------------------------------------------*/
+ method pos static
+  flag=boolean 1; count=count+1
+  v='abcdef'; n=''
+  flag=flag & (v.pos('x')     =='0')
+  flag=flag & (v.pos('a')     =='1')
+  flag=flag & (v.pos('ab')    =='1')
+  flag=flag & (v.pos('c')     =='3')
+  flag=flag & (v.pos('c',2)   =='3')
+  flag=flag & (v.pos('c',4)   =='0')
+  flag=flag & (v.pos('c',14)  =='0')
+  flag=flag & (n.pos('x')     =='0')
+  flag=flag & (n.pos('x',4)   =='0')
+  if \flag then signal DiagX('Rexx pos')
+  return
+
+ /*-- R E V E R S E -----------------------------------------------*/
+ method reverse static
+  flag=boolean 1; count=count+1
+  v='abcdef'; c='c'; n=''
+  flag=flag & (v.reverse() =='fedcba')
+  flag=flag & (c.reverse() =='c')
+  flag=flag & (n.reverse() =='')
+  if \flag then signal DiagX('Rexx reverse')
+  return
+
+ /*-- R I G H T ---------------------------------------------------*/
+ method right static
+  flag=boolean 1; count=count+1
+  v='abcdef'
+  flag=flag & (v.right(0)      =='')
+  flag=flag & (v.right(2)      =='ef')
+  flag=flag & (v.right(7)      ==' abcdef')
+  flag=flag & (v.right(7,'!')  =='!abcdef')
+  flag=flag & (v.right(9,'!')  =='!!!abcdef')
+  if \flag then signal DiagX('Rexx right')
+  return
+
+ /*-- S E Q U E N C E ---------------------------------------------*/
+ method sequence static
+  flag=boolean 1; count=count+1
+  flag=flag & ('a'.sequence('f')=='abcdef')
+  flag=flag & ('\x03'.sequence('\x05')=='\x03\x04\x05')
+-- Next line commented out as it shows up a bug in javac when this class
+-- is next loaded
+--flag=flag & ('\ufffe'.sequence('\uffff')=='\ufffe\uffff')
+  if \flag then signal DiagX('Rexx sequence')
+  return
+
+ /*-- S I G N -----------------------------------------------------*/
+ method sign static
+  flag=boolean 1; count=count+1
+  numm1='-1'; numz =' 0 '; nump1='+1'
+  flag=flag & (numm1.sign()   =='-1')
+  flag=flag & (numz.sign()    =='0')
+  flag=flag & (nump1.sign()   =='1')
+  if \flag then signal DiagX('Rexx sign')
+  return
+
+ /*-- S P A C E ---------------------------------------------------*/
+ method space static
+  flag=boolean 1; count=count+1
+  v='abcdef'; w3='aa bbb cccc'; w4=' xxx    yy  z '
+  flag=flag & (v.space(1)=='abcdef')
+  flag=flag & (w3.space(1)==w3)
+  flag=flag & (w4.space(0)=='xxxyyz')
+  flag=flag & (w4.space(1)=='xxx yy z')
+  flag=flag & (w4.space(2)=='xxx  yy  z')
+  flag=flag & (w4.space(0,'#')=='xxxyyz')
+  flag=flag & (w4.space(1,'x')=='xxxxyyxz')
+  flag=flag & (w4.space(2,'p')=='xxxppyyppz')
+  if \flag then signal DiagX('Rexx space')
+  return
+
+ /*-- S T R I P ---------------------------------------------------*/
+ method strip static
+  flag=boolean 1; count=count+1
+  v2='abcabc'; v3='  xxx  '; n=''; b='b'; a='a'
+  flag=flag & ( n.strip()    =='')
+  flag=flag & (v3.strip()    =='xxx')
+  flag=flag & (v3.strip('B') =='xxx')
+  flag=flag & (v3.strip('L') =='xxx  ')
+  flag=flag & (v3.strip('t') =='  xxx')
+  flag=flag & (v2.strip(b,a) =='bcabc')
+  if \flag then signal DiagX('Rexx strip')
+  return
+
+ /*-- S U B S T R -------------------------------------------------*/
+ method substr static
+  flag=boolean 1; count=count+1
+  v='abcdef'; n=''
+  flag=flag & (n.substr(1)  =='')
+  flag=flag & (v.substr(1)  ==v)
+  flag=flag & (v.substr(1,2)=='ab')
+  flag=flag & (v.substr(2,2)=='bc')
+  flag=flag & (v.substr(6,2)=='f ')
+  flag=flag & (v.substr(6,2,'*')=='f*')
+  flag=flag & (v.substr(10,4)=='    ')
+  flag=flag & (v.substr(10,4,'*')=='****')
+  flag=flag & (v.substr(10)=='')
+  if \flag then signal DiagX('Rexx substr')
+  return
+
+ /*-- S U B W O R D -----------------------------------------------*/
+ method subword static
+  flag=boolean 1; count=count+1
+  v='abcdef'; n=''; v3='  xxx  '; w3='aa bbb cccc'
+  flag=flag & (v3.subword(1)=='xxx')
+  flag=flag & (v.subword(1)=='abcdef')
+  flag=flag & (n.subword(1)=='')
+  flag=flag & ('  xxx  '.subword(1)=='xxx')
+  flag=flag & ('abcdef'.subword(1)=='abcdef')
+  flag=flag & (''.subword(1)=='')
+  flag=flag & (w3.subword(1)=='aa bbb cccc')
+  flag=flag & (w3.subword(2)=='bbb cccc')
+  flag=flag & (w3.subword(3)=='cccc')
+  flag=flag & (w3.subword(4)=='')
+  flag=flag & (w3.subword(1,2)=='aa bbb')
+  flag=flag & (w3.subword(2,2)=='bbb cccc')
+  flag=flag & (w3.subword(2,3)=='bbb cccc')
+  flag=flag & (w3.subword(6,1)=='')
+  if \flag then signal DiagX('Rexx subword')
+  return
+
+ /*-- T R A N S L A T E -------------------------------------------*/
+ method translate static
+  flag=boolean 1; count=count+1
+  flag=flag & ('abbc'.translate('&','b')           == 'a&&c')
+  flag=flag & ('abcdef'.translate('12','ec')       == 'ab2d1f')
+  flag=flag & ('abcdef'.translate('12','abcd','.') == '12..ef')
+  flag=flag & ('4123'.translate('abcd','1234')     == 'dabc')
+  flag=flag & ('4123'.translate('hods','1234')     == 'shod')
+  flag=flag & (''.translate('hods','1234')         == '')
+  flag=flag & ('321'.translate('','1234','x')      == 'xxx')
+  flag=flag & ('321'.translate('ij', '', 'x')      == '321')
+  if \flag then signal DiagX('Rexx translate')
+  return
+
+ /*-- T R U N C ---------------------------------------------------*/
+ method trunc static
+  flag=boolean 1; count=count+1
+  flag=flag & ('12.3'.trunc         == 12)
+  flag=flag & ('127.09782'.trunc(3) == 127.097)
+  flag=flag & ('127.1'.trunc(3)     == 127.100)
+  flag=flag & ('127'.trunc(2)       == 127.00)
+  flag=flag & ('12.7'.trunc(2)      ==  12.70)
+  flag=flag & ('1.27'.trunc(2)      ==   1.27)
+  flag=flag & ('.127'.trunc(2)      ==   0.12)
+  flag=flag & ('0.127'.trunc(2)     ==   0.12)
+  flag=flag & ('0.0197'.trunc(2)    ==   0.01)
+  flag=flag & ('0.00927'.trunc(2)   ==   0.00)
+  flag=flag & ('0.000927'.trunc(2)  ==   0.00)
+  flag=flag & ('0'.trunc(2)         == 0.00)
+  flag=flag & ('1E+11'.trunc(2)     == 100000000000.00)
+  flag=flag & ('1E-1 '.trunc(2)     == 0.10)
+  flag=flag & ('1E-11'.trunc(2)     == 0.00)
+  if \flag then signal DiagX('Rexx trunc')
+  return
+
+ /*-- U P P E R ---------------------------------------------------*/
+ method upper static
+  flag=boolean 1; count=count+1
+  flag=flag & ''.upper==''
+  flag=flag & 'abc'.upper=='ABC'
+  flag=flag & 'abC'.upper=='ABC'
+  flag=flag & 'ABC'.upper=='ABC'
+  flag=flag & 'fred'.upper(1)=='FRED'
+  flag=flag & 'fred'.upper(2)=='fRED'
+  flag=flag & 'fred'.upper(3)=='frED'
+  flag=flag & 'fred'.upper(4)=='freD'
+  flag=flag & 'fred'.upper(5)=='fred'
+  flag=flag & 'fred'.upper(6)=='fred'
+  flag=flag & 'fred'.upper(1,2)=='FRed'
+  flag=flag & 'fred'.upper(2,2)=='fREd'
+  flag=flag & 'fred'.upper(3,1)=='frEd'
+  flag=flag & 'fred'.upper(4,1)=='freD'
+  flag=flag & 'fred'.upper(5,1)=='fred'
+  flag=flag & 'fred'.upper(1,1)=='Fred'
+  flag=flag & 'fred'.upper(1,0)=='fred'
+  if \flag then signal DiagX('Rexx upper')
+  return
+
+ /*-- V E R I F Y -------------------------------------------------*/
+ method verify static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v2='abcabc';
+  flag=flag & (v.verify('abc')==4          )
+  flag=flag & (v.verify('abc', 'n')==4     )
+  flag=flag & (v.verify('cde', 'm')==3     )
+  flag=flag & (v2.verify('ab', 'n', 4)==6  )
+  flag=flag & (v.verify('cde', 'm', 4)==4  )
+  if \flag then signal DiagX('Rexx verify')
+  return
+
+ /*-- W O R D -----------------------------------------------------*/
+ method word static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v3='  xxx  '; n=''; w3='aa bbb cccc'
+  flag=flag & (v3.word(1)=='xxx')
+  flag=flag & (v.word(1)=='abcdef')
+  flag=flag & (n.word(1)=='')
+  flag=flag & (w3.word(1)=='aa')
+  flag=flag & (w3.word(2)=='bbb')
+  flag=flag & (w3.word(3)=='cccc')
+  flag=flag & (w3.word(4)=='')
+  flag=flag & (w3.word(5)=='')
+  if \flag then signal DiagX('Rexx word')
+  return
+
+ /*-- W O R D I N D E X -------------------------------------------*/
+ method wordindex static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v3='  xxx  '; n=''; w3='aa bbb cccc'
+  flag=flag & (v3.wordindex(1)==3)
+  flag=flag & (v.wordindex(1)==1)
+  flag=flag & (n.wordindex(1)==0)
+  flag=flag & (w3.wordindex(1)==1)
+  flag=flag & (w3.wordindex(2)==4)
+  flag=flag & (w3.wordindex(3)==8)
+  flag=flag & (w3.wordindex(4)==0)
+  if \flag then signal DiagX('Rexx wordindex')
+  return
+
+ /*-- W O R D L E N G T H -----------------------------------------*/
+ method wordlength static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v3='  xxx  '; n=''; w3='aa bbb cccc'
+  flag=flag & (v3.wordlength(1)==3)
+  flag=flag & (v.wordlength(1)==6)
+  flag=flag & (n.wordlength(1)==0)
+  flag=flag & (w3.wordlength(1)==2)
+  flag=flag & (w3.wordlength(2)==3)
+  flag=flag & (w3.wordlength(3)==4)
+  flag=flag & (w3.wordlength(4)==0)
+  if \flag then signal DiagX('Rexx wordlength')
+  return
+
+ /*-- W O R D P O S -----------------------------------------------*/
+ method wordpos static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v3='  xxx  '; n=''; w3='aa bbb cccc'
+  flag=flag &  (n.wordpos(v)=='0')
+  flag=flag &  (v.wordpos(v)=='1')
+  flag=flag &  (w3.wordpos('aa')=='1')
+  flag=flag &  (w3.wordpos('bbb')=='2')
+  flag=flag &  (w3.wordpos(' bbb')=='2')
+  flag=flag &  (w3.wordpos('bbb ')=='2')
+  flag=flag &  (w3.wordpos(' bbb ')=='2')
+  flag=flag &  (w3.wordpos('cccc')=='3')
+  flag=flag &  (w3.wordpos('aa bbb')=='1')
+  flag=flag &  (w3.wordpos('aa bbb cccc')=='1')
+  flag=flag &  (w3.wordpos('bbb cccc')=='2')
+  flag=flag &  (w3.wordpos('bBb')=='0')
+  flag=flag &  (v3.wordpos('xxx')=='1')
+  flag=flag &  (v3.wordpos(v3)=='1')
+  flag=flag &  ('to be or not to be'.wordpos('be')=='2')
+  flag=flag &  ('to be or not to be'.wordpos('be',1)=='2')
+  flag=flag &  ('to be or not to be'.wordpos('be',2)=='2')
+  flag=flag &  ('to be or not to be'.wordpos('be',3)=='6')
+  flag=flag &  ('to be or not to be'.wordpos('be',4)=='6')
+  flag=flag &  ('to be or not to be'.wordpos('be',5)=='6')
+  flag=flag &  ('to be or not to be'.wordpos('be',6)=='6')
+  flag=flag &  ('to be or not to be'.wordpos('be',7)=='0')
+  flag=flag &  ('to be or not to be'.wordpos('be',8)=='0')
+  if \flag then signal DiagX('Rexx wordpos')
+  return
+
+ /*-- W O R D S ---------------------------------------------------*/
+ method words static
+  flag=boolean 1; count=count+1
+  v='abcdef'; v3='  xxx  '; n=''; w3='aa bbb cccc'
+  flag=flag & (v3.words()==1)
+  flag=flag & (v.words()==1)
+  flag=flag & (n.words()==0)
+  flag=flag & (w3.words()==3)
+  if \flag then signal DiagX('Rexx words')
+  return
+
+ /*-- X 2 B -------------------------------------------------------*/
+ method x2b static
+  flag=boolean 1; count=count+1
+  flag=flag &   '0'.x2b=='0000'
+  flag=flag &  '4d'.x2b=='01001101'
+  flag=flag & '04d'.x2b=='000001001101'
+  if \flag then signal DiagX('Rexx x2b')
+  return
+
+ /*-- X 2 C -------------------------------------------------------*/
+ method x2c static
+  flag=boolean 1; count=count+1
+  flag=flag & '4d'.x2c=='M'
+  flag=flag & '4D'.x2c=='M'
+  flag=flag & '004D'.x2c=='M'
+  flag=flag & '00004D'.x2c=='M'
+  flag=flag & '00Beef'.x2c=='\ubEEf'
+  flag=flag & '0'.x2c=='\0'
+  if \flag then signal DiagX('Rexx x2c')
+  return
+
+ /*-- X 2 D -------------------------------------------------------*/
+ method x2d static
+  flag=boolean 1; count=count+1
+  flag=flag & (''.x2d      == 0)
+  flag=flag & ('0'.x2d     == 0)
+  flag=flag & ('0E'.x2d    == 14)
+  flag=flag & ('81'.x2d    == 129)
+  flag=flag & ('F81'.x2d   == 3969)
+  flag=flag & ('FF81'.x2d  == 65409)
+  flag=flag & ('c6f0'.x2d  == 50928)
+  flag=flag & ('81'.x2d(2)   == -127)
+  flag=flag & ('81'.x2d(4)   == 129)
+  flag=flag & ('F081'.x2d(6) == 61569)
+  flag=flag & ('F081'.x2d(5) == 61569)
+  flag=flag & ('F081'.x2d(4) == -3967)
+  flag=flag & ('F081'.x2d(3) == 129)
+  flag=flag & ('F081'.x2d(2) == -127)
+  flag=flag & ('F081'.x2d(1) == 1)
+  flag=flag & ('F081'.x2d(0) == 0)
+  flag=flag & ('F081'.x2d    == 61569)
+  flag=flag & ('0031'.x2d(0) == 0)
+  flag=flag & ('777777777'.x2d=='32069089143')
+  flag=flag & ('fffFFffff'.x2d(9)=='-1')
+  flag=flag & ('800000000'.x2d(9)=='-34359738368')
+  flag=flag & ('7fffffffF'.x2d(9)=='34359738367')
+  if \flag then signal DiagX('Rexx x2d')
+  return
+
+ /* ================================================================ */
+ /* Note: the above tests the Language-defined methods.              */
+ /* Others are not tested unless they appear below here.             */
+ /* ================================================================ */
+
+ /*-- NonLanguage -------------------------------------------------*/
+ method nonlanguage static
+  -- none yet
+  return
+
+
+ /* ================================================================ */
+ /* Scaffolding for stand-alone test                                 */
+ /* ================================================================ */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagRexx()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage'"'
+  end

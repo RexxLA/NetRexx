@@ -1,0 +1,86 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrFinally                                                          */
+/*                                                                    */
+/*   An object that represents a parsed Finally clause.               */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.10 Initial                                                 */
+/* 2000.02.24 Add interpretation                                      */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Finally clause.               */
+class NrFinally implements RxClauseParser uses NrLevel
+ properties private
+  rxt      =RxTranslator      -- root
+  parser   =RxParser          -- local reference
+  tokens   =RxToken[]         -- local reference
+  topblock =NrBlock           -- owning block
+
+ /** Construct an object from the current clause */
+ method NrFinally(newrxt=RxTranslator)
+  rxt      =newrxt                           -- the boss
+  parser   =rxt.program.parser               -- our parser
+  tokens   =parser.cursor.curclause.tokens   -- local reference
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrFinally', pass)
+  if tokens[1].type\=RxToken.END then signal RxQuit(rxt, tokens[1], 'internal.error', 'NrFinally 2')
+
+  if parser.level<=2
+   then signal RxQuit(rxt, tokens[0], 'unexpected.finally')
+  if       parser.thislevel.key\=='DO'
+   then if parser.thislevel.key\=='LOOP'
+   then if parser.thislevel.key\=='SELECT'
+   then signal RxQuit(rxt, tokens[0], 'unexpected.finally')
+
+  if parser.thislevel.trystate=TRY_FINAL
+    then signal RxQuit(rxt, tokens[0], 'final.after.final')
+
+  -- save reference to us
+  topblock=NrBlock parser.thislevel.clause.lookaside -- the owning NrBlock
+  topblock.finclause=parser.cursor.curclause
+
+  parser.endblock()                       -- end the block as needed at this point
+
+  parser.cursor.curclause.skipend=1     -- drop into this clause causes skip
+
+  parser.thislevel.trystate=TRY_FINAL
+  parser.thislevel.terminal=0           -- followers are reachable
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  /* Add 'try' at the start, if needed */
+  if parser.thislevel.trychunk<>0 then do
+    -- if we didn't have a protection brace then add a brace now
+    if topblock.protcode=null then add='{try'
+                              else add='try'
+    rxt.program.streamer.outinsertpart(add, parser.thislevel.trychunk)
+    parser.thislevel.trychunk=0         -- add once only
+    parser.thislevel.tryadded=1         -- remember added
+    end
+  parser.indention=parser.indention-1
+  rxt.program.streamer.out('}', 1)
+  rxt.program.streamer.out('finally{')
+  parser.indention=parser.indention+1
+  rxt.program.tracer.traceclause(parser.cursor.curclause) -- add trace code if needed
+
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  -- we get here only when deliberately ending a block
+  -- trystate has already been set for us to get here, so FINALLY is a nop

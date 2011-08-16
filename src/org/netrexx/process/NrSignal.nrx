@@ -1,0 +1,111 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrSignal                                                           */
+/*                                                                    */
+/*   An object that represents a parsed Signal instruction            */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.09 Initial                                                 */
+/* 1996.08.30 Register exceptions                                     */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Signal instruction            */
+class NrSignal implements RxClauseParser uses RxCode
+ properties private
+  rxt    =RxTranslator   -- root
+  parser =RxParser       -- local reference
+  tokens =RxToken[]      -- local reference
+  term   =RxCode         -- evaluated term
+  field  =RxField        -- field describing constructor (if Signalling a Type)
+
+ properties private constant
+  noargs =RxCode[0]      -- empty arguments array for reuse
+
+ /** Construct an object from the current clause */
+ /* [PARSESIGNAL -- handle SIGNAL clause] */
+ /* Syntax: signal term; */
+ method NrSignal(newrxt=RxTranslator)
+  rxt      =newrxt                           -- the boss
+  parser   =rxt.program.parser               -- our parser
+  tokens   =parser.cursor.curclause.tokens   -- local reference
+  if tokens[1].type=RxToken.END then signal RxError(rxt, tokens[1], 'signal.term.expected')
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrSignal', pass)
+
+  classer  =rxt.classer                 -- our classer
+
+  parser.thislevel.terminal=1           -- followers are unreachable
+
+  if tokens[1].type<>RxToken.SP then begin=1; else begin=2
+  tok=tokens[begin]
+  term=rxt.tparser.parseterm(parser.cursor, begin, 1) -- this is an RHS reference
+  if term.group=T_UNKNOWN then signal RxError(rxt, tok, 'unknown.variable')
+  n=term.endoff+1
+  if tokens[n].type<>RxToken.END then signal RxError(rxt, tokens[n], 'junk.on.end')
+  sigtype=term.type                     -- the signal type (signature)
+  if sigtype.isarray() then
+    signal RxError(rxt, tok, 'simple.exception.expected')
+  if \rxt.classer.issubclass(parser.cursor, sigtype, RxType.THROWABLE_TYPE, tok)
+   then signal RxError(rxt, tok, 'type.not.exception', sigtype.classname)
+  /* If a simple type, then there had better be a default constructor */
+  if term.group=S_TYPE then do
+    siginfo=classer.findclass(parser.cursor, sigtype, tok, 0)
+    methname=siginfo.shortname
+    field=classer.findfield(parser.cursor, 1, 1, 0, 0, siginfo,-
+                            methname, RxType[] null, null)
+    if field=null then do
+      field=classer.findfield(parser.cursor, 1, 1, 0, 0, siginfo, methname,-
+                              RxType[] null, null, 0)
+      if field=null then
+        signal RxError(rxt, tok, 'constructor.not.found', methname'()',-
+                       sigtype.classname)
+       else -- unlikely
+        signal RxError(rxt, tok, 'constructor.not.accessible',-
+                       field.toConciseString(rxt.program),-
+                       field.fieldhidden.type.classname)
+      end
+    -- [ambiguous test not needed]
+    end
+
+  /* Looks good */
+  parser.addexceptions(1, term.exceptions, tok)   -- any from the evaluation
+  parser.addexceptions(1, term.type.toSig(), tok)   -- any the result itself
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation */
+ method generate
+  if term.group=S_TYPE
+   then /* type: make a constructor, using qualified type */
+    siggen='new' term.javacode'()'      -- [could use signature]
+   else /* not just type */
+    siggen=term.javacode
+  rxt.program.streamer.out('throw' siggen';')
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+
+  if term.group=S_TYPE then do          -- make from default constructor
+    code=term
+    code.value=rxt.interpreter.callMethod(null, field, noargs, tokens[0])
+    end
+   else /* had non-type term */ do
+    -- re-evaluate always
+    code=rxt.tparser.evalterm(cursor, term.begoff, 1) -- this is an RHS term
+    end
+
+  signal RxSignal(cursor, code.value, tokens[0])  -- wrap 'n raise

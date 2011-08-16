@@ -1,0 +1,128 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagArrays                                                         */
+/*                                                                    */
+/*   An object that tests arrays.                                     */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.03.15 Initial [as testarrays]                                 */
+/* 2000.02.04 Add partial array assignment                            */
+/* ------------------------------------------------------------------ */
+package org.netrexx.diag
+options binary
+
+class DiagArrays
+
+--trace all
+
+ /* --- declarations --- */
+  a  = String
+  b  = String[]
+  c  = String[3]
+  is = int[3]
+  d  = 4
+  e  = 5+is[1]                     -- that is, 5 + 0
+  foo=[1, 2, 3, 300, 1456, 129]
+  g  = long[3]
+  h
+  j  = 1
+  k  = int[3,4]
+  m  = int 7
+  ch = char[] "rice"
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ method DiagArrays
+  /* g     */  /* not allowed in method */
+  /* hh[]  */
+  /* h[]   */
+  ok='OK'
+  flag=1
+  flag=flag & (ch[2]=='c')
+  a2  = String;   a2=a2
+  b2  = String[]; b2=b2
+  c   = String[3]
+  flag=flag & (c.length=3)
+  flag=flag & (c[0]==null)
+  c[0]="zero"
+  c[1]="one"
+  c[2]='two'
+  flag=flag & (c[1]=='one')
+  flag=flag & (c[1].length=='3')
+  d   = 5
+  e   = 7
+  e   = is[2]
+  c[2]= 3
+  flag=flag & (c[2]=='3')
+
+  j   = 1
+  k[1,1] = 101
+  k[1,2] = m
+  k[2,2] = 22
+  flag=flag & (k[1,2]==7 & k[2,2]==22 & k[ 1 , 1 ]==101)
+
+  fs=multi(c, k)
+  flag=flag & (fs[1,1] = k[1,1])
+  flag=flag & (fs[2,2] = 4)
+  flag=flag & (fs.length=5)
+  flag=flag & (fs[1].length=7)
+
+  bar=['a', 'bb', 'c']
+  bar2=[String 'a', 'bb', 'c']
+  more=[3,4].length
+  subs=[[1,2], [3,4]]
+  flag=flag & (foo[5] bar[1] bar2[2] more)=='129 bb c 2'
+  flag=flag & (subs[0,0] subs[0,1] subs[1,0] subs[1,1]) == '1 2 3 4'
+  flag=flag & int[7].length==7
+
+  -- now a partial assignment (sub-array) test
+  ks=short[3,4]
+  ks[1,1]=101
+  ks[1,2]=102
+  ks[2,2]=202
+
+  flag=flag& (ks[1,1]=101)
+  flag=flag& (ks[1,2]=102)
+  flag=flag& (ks[2,2]=202)
+
+  v=[short 91, 92, 93, 94]
+  ks[1]=v
+
+  flag=flag& (ks[1,1]=92)
+  flag=flag& (ks[1,2]=93)
+  flag=flag& (ks[2,2]=202)
+
+  flag=flag& (ks[0,1]=0 )
+  flag=flag& (ks[1,1]= 92)
+  flag=flag& (ks[2,1]=0)
+
+  -- try .class on a (compiled) array...
+  flag=flag & String[,,].class.toString=='class [[[Ljava.lang.String;'
+
+  if flag  then ok=ok '!' 'Arrays'
+           else signal DiagX('Arrays')
+  say 'DiagArrays:' ok
+  return
+
+ /* method to test pass and return of multi-dimension arrays */
+ method multi(s=String[], p=int[,]) returns float[,]
+  work=float[5,7]
+  work[1,1]=p[1,1]
+  work[2,2]=s[0].length
+  return work
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+  say version '/' source -- say what level we are running under
+  do
+    DiagArrays()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage'"'
+  end

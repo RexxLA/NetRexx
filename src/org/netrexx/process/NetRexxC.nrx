@@ -1,0 +1,333 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2001.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NetRexxC                                                           */
+/*                                                                    */
+/*  A command shell to run the translator and compile.                */
+/*                                                                    */
+/* Translate and compile one or more NetRexx programs.                */
+/*                                                                    */
+/* use as:  NETREXXC hello[.nrx] goodbye[.nrx]                        */
+/*                                                                    */
+/*   which will use the NetRexx translator to translate hello.nrx     */
+/*     to hello.java                                                  */
+/*   then will use JAVAC to compile hello.java to hello.class         */
+/*   and then repeats this for each file listed (unless error).       */
+/*                                                                    */
+/* Output files are placed in the current directory (they do not      */
+/* overwrite files in the classes hierarchy, unless that's the        */
+/* current directory).                                                */
+/*                                                                    */
+/* If any translate or compile fails, all processing stops.           */
+/*                                                                    */
+/* Any NetRexxT (translator) flags may be used, along with the        */
+/* following extra flags (and their inverses):                        */
+/*                                                                    */
+/*   -arg       = take rest of command line as arguments; imply -exec */
+/*   -nocompile = do not compile, and retain the .java file           */
+/*   -noconsole = do not display messages to console                  */
+/*   -exec      = interpret the first program                         */
+/*   -keep      = keep the java file after successful compilation (as */
+/*                xxx.java.keep).  This is assumed if an error during */
+/*                javac compilation.                                  */
+/*   -prompt    = prompt after first processing                       */
+/*   -savelog   = save messages to NetRexxC.log                       */
+/*   -time      = display timings if successful.                      */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.14 Initial                                                 */
+/* 1996.07.03 Add specific usage description                          */
+/* 1996.12.08 Add main(Rexx) returns int, for call-from-Java          */
+/* 1997.04.20 Interface to translator is now an array of filenames    */
+/* 1998.05.18 Add -console and -savelog                               */
+/* 1999.08.13 Allow ".. .." in main(Rexx,p); add main2(String[],p)    */
+/* 2000.02.08 Extend help to list all options                         */
+/* 2000.03.22 Add -prompt loop [AA 23 BHX-ORD]                        */
+/* 2000.10.16 Properly ignore -savelog if Printwriter specified       */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class NetRexxC
+
+ properties private constant
+  logfilename='NetRexxC.log'
+
+ properties private
+  -- variables corresponding to our flags
+  argarray=String[] null           -- arguments for -exec [iff not null]
+  compile =boolean 1               -- compile if translation OK
+  console =boolean 1               -- display to console
+  exec    =boolean 0               -- interpret after parsing
+  keep    =boolean 0               -- keep the java file
+  prompt  =boolean 0               -- prompt after first execution
+  time    =boolean 0               -- display timings
+  savelog =boolean 0               -- need PrintWriter
+  warnexit0 = boolean 0            -- exit with zero return code on warnings
+  -- next two are set by parseline
+  files    =Vector(10)             -- collects file specifications
+  flags    =Vector(10)             -- collects translator flags
+
+  -- others
+  madelog  =boolean 0              -- 1 if we made the logfile
+  testflag =RxFlag()               -- used only for testing if flags valid
+  usageone =boolean 1              -- 1 to show general usage information
+                                   -- 0 after prompting
+
+ /** get here when called from java.exe */
+ method main(arg=String[]) static
+  exit main2(arg, null)
+
+ /** standard constructor for private instance */
+ method NetRexxC inheritable
+  return
+
+ /** public call-from-Java entry
+    Arg1 is command argument string which has words which are flags or
+         file specifications, or "...." for a file specification which
+         may have embedded blanks.
+    Arg2 is PrintWriter file (forces -savelog if specified)
+    */
+ method main(arg=Rexx, logfile=PrintWriter null) constant returns int
+  -- Convert words into a string array then call the string array
+  -- entry point.
+  words=Vector(10)
+  loop while arg\==''
+    parse arg argword arg               -- get next word
+    if argword.left(1)=='"' then do     -- handle quoted word(s)
+      arg=argword.substr(2) arg         -- reconstitute without leading '"'
+      if arg.pos('"')=='0' then
+        say 'Quote " assumed at end of argument string'
+      parse arg argword '"' arg     -- works for end case like 'CD'
+      end
+    str=argword.toString()
+    words.addElement(str)
+    end
+  array=String[words.size()]         -- make correct-sized array
+  words.copyInto(array)            -- .. and copy the references
+  return main2(array, logfile)
+
+ /** public call-from-Java entry
+    Arg1 is array of argument strings (each containing a flag or a file
+         specification, which may have embedded blanks)
+    Arg2 is PrintWriter file (forces -savelog if specified)
+    -- this cannot be called just 'main' as it then clashes with the
+    -- primary entrypoint
+    */
+ method main2(arg=String[], logfile=PrintWriter null) constant returns int
+   it=NetRexxC()                    -- make private object
+   rc = int it.process(arg, logfile)
+   if it.warnexit0 then if rc=1 then return 0
+   return rc
+
+
+ /** actual processing is done here, with a private copy of flags, etc. */
+ -- arguments as main2
+ method process(arg=String[], logfile=PrintWriter null) private returns int
+  -- lastmemuse=long 0                            -- last memory usage
+  rt=Runtime.getRuntime()                         -- runtime instance
+
+  translator=RxTranslator()                       -- construct translator
+
+  parseline(arg)    -- collect initial flags and file specification
+
+  langs=[Rexx 'Nr']                               -- languages supported
+
+  if \translator.setlanguages(langs) then usage() -- select languages
+   else loop label process forever                -- OK languages
+    filecount=files.size()
+    if filecount=0 then usage()    -- flags summary, if no files
+     else do label havefiles       -- have some files to process
+      if savelog then                        -- need a PrinterWriter file
+       if logfile=null then do label needlog -- .. and none supplied
+         lfile=File(logfilename)
+         lfstream=FileOutputStream(lfile)
+         logfile=PrintWriter(lfstream, 1)
+         madelog=1                 -- remember that we made it
+        catch IOException
+         console=1                 -- revert to console
+         say 'Error occurred while opening '''logfilename''''
+         end needlog
+
+      if console then outfile=System.out
+                 else outfile=null
+
+      -- copy translator flags & files into arrays
+      filearray=Rexx[filecount]    -- set up array of file specifications
+      files.copyInto(filearray)    -- ..
+
+      flagcount=flags.size()
+      flagarray=Rexx[flagcount]    -- set up array of flags
+      flags.copyInto(flagarray)    -- ..
+
+      ptime=long 0                 -- parse time
+      etime=long 0                 -- execution time
+      ctime=long 0                 -- compilation
+
+      -- carry out parsing, optionally with translation
+      if time then pstart=System.currentTimeMillis() -- timer
+      ok=translator.translate(flagarray, filearray, outfile, logfile, \exec)
+      if time then ptime=System.currentTimeMillis()-pstart
+
+      if exec & ok then do                        -- interpretation wanted
+        if time then estart=System.currentTimeMillis()
+        translator.exec(argarray)                 -- .. so interpret
+        if time then etime=System.currentTimeMillis()-estart
+        -- note interpretation success has no effect on compilation
+        end /* interpretation */
+
+      if compile & ok then do                     -- compile wanted
+        if time then cstart=System.currentTimeMillis()
+        translator.compile(0)                     -- .. so compile
+        if time then ctime=System.currentTimeMillis()-cstart
+        end /* compilation */
+
+      translator.dispose(keep)     -- dispose of .java files
+      translator.summary(exec)     -- summarise
+
+      if time then do
+        t10=tenth(ptime)
+        e10=tenth(etime)
+        c10=tenth(ctime)
+        tot=t10.OpAdd(null, e10).OpAdd(null, c10)
+        wid=tot.length()
+        say                           'Translate time:' t10.right(wid)'s'
+        if exec & etime>0    then say 'Interpret time:' e10.right(wid)'s'
+        if compile & ctime>0 then say '    javac time:' c10.right(wid)'s'
+        if etime>0 | ctime>0 then say '    Total time:' tot.right(wid)'s'
+        end -- time
+      end havefiles
+
+    -- we're done unless prompting (and not exiting)
+    if \prompt, translator.exiting then leave process
+
+    /* Begin prompt sequence */
+    usageone=0                               -- no longer show all flags
+    loop label prompt
+      say "\nEnter new files and additional options, '=' to repeat, 'exit' to end:"
+      rt.gc()                                -- good moment to garbage-collect
+      response=ask
+      if response.OpNotEq(null, '') then leave -- something to process
+      usage()
+      end prompt
+    -- say 'Mem:' rt.totalmemory rt.freememory 'Used:' rt.totalmemory-rt.freememory
+    RexxTrace.reset()      -- reset trace flagging
+    if response.OpEq(null, '=') then iterate -- simply repeat
+    if response.OpEq(null, 'exit') then leave process -- done
+    -- otherwise convert string of words to an array of Strings
+    rwords=String[response.words().toint()]
+    loop i=0 for rwords.length
+      parse response word response
+      rwords[i]=word.toString()
+      end i
+    parseline(rwords)    -- flags accumulate; new files replace old
+    end process
+
+  if logfile\=null then do
+    if logfile.checkError() then
+      say 'Error occurred while writing '''logfilename''''
+    logfile.flush()
+    if madelog then logfile.close()
+    end
+
+  return translator.getexitvalue()
+
+ /* TENTH -- convert ms to 0.1s */
+ -- this could use format()
+ method tenth(n=long) constant returns Rexx private
+  n=(n+50)%100           -- round to tenths
+  s=n%10; d=n//10        -- split
+  return s'.'d
+
+ /** PARSELINE -- collect the flags and file specifications from string
+    Arg1 is the string array to parse
+    This is a list of option flags (-xxx) and file specifications
+    files and flags are updated.  Flags accumulate, new files (if any)
+    replace all old files.
+    */
+  method parseline(arg=String[]) private
+  newfiles=Vector(10)              -- collects new file specifications
+  loop a=0 for arg.length
+    argword=Rexx arg[a]            -- get next word
+    if argword.left(1)\=='-'       -- not a flag
+     then newfiles.addElement(argword) -- but a file to compile
+     else /* a flag */ do
+      arglow=argword.substr(2).lower()    -- drop '-' and lowercase
+      select
+        when arglow=='nocompile' then do; compile=0; keep=1; end
+        when arglow=='compile'   then do; compile=1; end
+        when arglow=='exec'      then exec=1
+        when arglow=='noexec'    then exec=0
+        when arglow=='keep'      then keep=1
+        when arglow=='nokeep'    then keep=0
+        when arglow=='time'      then time=1
+        when arglow=='notime'    then time=0
+        when arglow=='savelog'   then savelog=1
+        when arglow=='nosavelog' then savelog=0
+        when arglow=='console'   then console=1
+        when arglow=='noconsole' then console=0
+        when arglow=='prompt'    then prompt=1
+        when arglow=='noprompt'  then prompt=0
+   when arglow=='warnexit0' then warnexit0=1
+   when arglow=='nowarnexit0' then warnexit0=0
+        when arglow=='noarg' then do
+          exec=1    -- implied
+          argarray=String[0]
+          end
+        when arglow=='arg' then do
+          exec=1    -- implied
+          -- remaining words become argstring array
+          alen=arg.length-a-1
+          argarray=String[alen]
+          loop i=0 for alen
+            argarray[i]=arg[a+1+i]
+            end
+          leave a                  -- no more flags or files
+          end
+        otherwise
+          if \testflag.setFlag(arglow) then
+            say ' +++ Warning: Unknown command option '''argword''' ignored'
+           else do
+            if arglow=='nojava' then compile=0    -- economy
+            flags.addElement(argword)   -- It's OK, but not one of ours
+            end
+        end
+      end
+    end a
+  if newfiles.size()>0 then files=newfiles
+  return
+
+ /** USAGE -- display usage hints */
+ method usage returns int private
+  if usageone then do
+	vv=this.getClass().getPackage().getImplementationVersion()
+	if vv \= null then say 'NetRexx portable processor' vv
+  	  else -
+    say 'NetRexx portable processor'    -- version is in NrBabel
+    say RxProcessor.copyright'\n'
+    say 'Arguments are: in_file_specification... [-option]...\n'
+    end
+  say 'In brief, NetRexxC-specific options are:\n'
+  say '  -arg words    -- interpret; remaining words are arguments'
+  say '  -compile      -- compile (default; -nocompile implies -keep)'
+  say '  -console      -- display messages on console (default)'
+  say '  -exec         -- interpret with no argument words'
+  say '  -keep         -- keep any completed .java file (as xxx.java.keep)'
+  say '  -prompt       -- prompt for new request after processing'
+  say '  -reset        -- reset cached classpath information if resident'
+  say '  -resident     -- keep the compiler in storage for faster compiles'
+  say '  -savelog      -- save messages in NetRexxC.log'
+  say '  -time         -- display timings'
+  say '  -warnexit0    -- exit with a zero returncode on warnings\n'
+  say "Any NetRexx options may also be added; these are:\n"
+  RxFlag.usage()
+  say "\nAll options may have prefix 'no' added for the inverse effect."
+  say '\nPlease see the NetRexx Language definition and Supplement at'
+  say 'http://www2.hursley.ibm.com/netrexx for more details.'
+  return 0

@@ -1,0 +1,291 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagParse                                                          */
+/*                                                                    */
+/*   An object that tests the Parse instruction.                      */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.23 Initial                                                 */
+/* 1996.07.19 Testcases from NRL added                                */
+/* ------------------------------------------------------------------ */
+package org.netrexx.diag
+options nobinary decimal
+
+class DiagParse
+
+ /* Construct a set of tests; raise DiagX exception if error */
+ /* Uses multiple methods to avoid the javac limit of 63 local
+    variables */
+
+ classsource=source      -- source outside method
+
+ method DiagParse
+  ok='OK'
+
+  /*-- P A R S E ---------------------------------------------------*/
+  h='come'
+  h='Awful'h 'its time'
+  parse h h1 .
+  parse Rexx('l  m  n o').upper f1 f2 f3
+  flag= h1='Awfulcome' & f1=='L' & f2=='M' & f3==' N O'
+  parse 'l m n o' e1 e2
+  parse '' e3 e4
+  x='aa' 1+2+3 'bb'; parse x e5
+  flag=flag & e1='l' & e2='m n o' & e3='' & e4='' & e5='aa 6 bb'
+
+  delim='x'                        -- needs to be initialized
+  parse 'c/my string/1 10' verb 2 delim +1 str (delim) rest
+  flag=flag & verb=='c' & delim=='/' & str=='my string' & rest=='1 10'
+
+  nl='\x15'; ffuts='abcd'nl'MFC rest'
+  parse ffuts (nl) wordx . +20
+  if wordx\==nl'MFC' then delflag=0; else delflag=1
+  flag=flag & delflag
+
+  missy='abcdefghijk'; null=''
+  parse missy '' -4 last4 (null) -3 last3
+  parse missy '' -4 (null) -3 last3b +2
+  flag=flag & last4='hijk' & last3='ijk' & last3b='ij'
+
+  if flag then ok=ok '! Parse'
+          else signal DiagX('Parse')
+
+  flag=1
+  fred=''
+  parse fred 6 x  /* has unearthed a bug in the past */
+  flag=flag & x=''
+  fred='Now is the time for all good men'
+  parse fred  6 x 12
+  flag=flag & x=='s the '
+  parse fred  6 x +6
+  flag=flag & x=='s the '
+  parse 333 x 1 y 1 z
+  flag=flag & x==333 & y==333 & z==333
+  parse fred  6 x +6  -3 y +4
+  flag=flag & x=='s the ' & y=='he t'
+  parse fred  12  -8 y +4  2 z 3 -5 a 10
+  flag=flag & y==' is ' & z=='o' & a='Now is th'
+  parse fred a 'the' . -6 y +4 .
+  flag=flag & y=='ow i'
+  parse fred  ' the' +1 x +8 y +8
+  flag=flag & x=='the time' & y ==' for all'
+  parse fred 2 x +10 y + 10 z +10 a +4
+  flag=flag & z=='ll good me' & a=='n'
+  parse fred   ' ti' +1 time  ' '  -
+                 1 ' pr' +1 print ' '
+  flag=flag & time=='time' & print==''
+  parse "a,b,c" p ',' q +1 r
+  parse "12345678" s '123' t +5
+  flag=flag & p='a' & q==',' & r=='b,c' & s=='' & t=='12345'
+
+  /* Check mixed string/numeric trigger (the famous SP3/SP4 bug fix) */
+  parse '12345678' '34' me +3
+  flag=flag & me=='345'
+
+  if flag  then ok=ok '! Numeric Parse '
+           else signal DiagX('Numeric Parse')
+
+  flag=flag & versource
+
+  if flag then ok=ok '! Parse version/source'
+          else signal DiagX('Parse version/source')
+
+  say 'DiagParse:' ok
+
+  parse2            -- time for some more
+
+ method versource returns boolean
+  /* Version, source, sourceline */
+   flag=1
+   parse VERSION what v d m y .
+   flag=flag & what.left(7)=='NetRexx' & what.pos('.')==0 -
+			 & v.datatype('n') & d.datatype('w') -
+			 & m.length()==3 & y.datatype('w') & y>=1996
+   parse classSource sys what me
+   flag=flag& (sys=='Java' & what=='class' & me='DiagParse.nrx')
+   parse Source sys what me
+   flag=flag& (sys=='Java' & what=='method' & me='DiagParse.nrx')
+   
+  -- don't know what line we are, but at least ensure sourceline is a number
+  parse sourceline num rest
+  flag=flag& (num.datatype('D') & num>0 & rest=='')
+  return flag
+
+
+ method parse2
+
+  ok='OK'
+  flag=1
+
+  /* Now some comments in parse/parsing templates... */
+  flag=1
+  j='1 2 3 4 5'
+  parse    j j1 j2
+  parse/**/j j3 j4
+  parse    /**/j j5 j6/**/
+  parse    j/**/j7 j8
+  parse    j    j9/**/j10
+  jf= j1==1 & j2='2 3 4 5'-
+    & j3==1 & j4='2 3 4 5'-
+    & j5==1 & j6='2 3 4 5'-
+    & j7==1 & j8='2 3 4 5'-
+    & j9==1 & j10=='2 3 4 5'
+  flag=flag & jf
+  if flag then ok=ok '! Parse comments'
+          else signal DiagX('Parse comments')
+
+  /* Now testcases from testparse.nrx */
+  foo='now is  my time'
+  vi='i'; vmy='my'
+  i=3; j=1; n=0
+  sa=String; cb=char[]; cc=char[]
+  /*say 'a=<'a'>'; say 'b=<'b'>'; say 'c=<'c'>'*/
+  flag=1
+  parse foo a b c;                         flag=flag& (a=='now' & b=='is' & c==' my time')
+  parse foo sa cb cc;                      flag=flag& (sa=='now' & cb=='is' & cc==' my time')
+  parse foo a . . c;                       flag=flag& (a=='now' & c=='time')
+  parse foo a 'my' c;                      flag=flag& (a=='now is  ' & c==' time')
+  parse foo 'i' a 'i' c;                   flag=flag& (a=='s  my t' & c=='me')
+  parse foo '\x69' a '\u0069' c;           flag=flag& (a=='s  my t' & c=='me')
+  parse foo (vi) a (vmy) c;                flag=flag& (a=='s  ' & c==' time')
+  parse foo =(j) a =(i) b 'my' +(n) c;     flag=flag& (a=='no' & b=='w is  ' & c=='my time')
+  parse foo =(i) a -(j) b +(i) c +(i);     flag=flag& (a=='w is  my time' & b=='ow ' & c=='is ')
+  parse foo =(i) a . -(j) b . -(j) c +(i); flag=flag& (a=='w' & b=='ow' & c=='now')
+  parse foo =1 a 3 b 'my' +0 c;            flag=flag& (a=='no' & b=='w is  ' & c=='my time')
+  parse foo 3 a -1 b +3 c +3;              flag=flag& (a=='w is  my time' & b=='ow ' & c=='is ')
+  parse foo =3 a . -1 b . -1 c . +6;       flag=flag& (a=='w' & b=='ow' & c=='now')
+  parse foo 15 a +1 b +1;                  flag=flag& (a=='e' & b=='')
+  parse foo 'o' a +1 'i' b +2;             flag=flag& (a=='o' & b=='is')
+
+  if flag  then ok=ok '! Extra Parse '
+           else signal DiagX('Extra Parse')
+
+  flag=bookparse         -- and some more
+  if flag  then ok=ok '! Book Parse '
+           else signal DiagX('Book Parse')
+
+  say 'DiagParse:' ok
+
+  /* Sneak this one in here .. needs NoBinary */
+  if '\-'=' ' then signal DiagX("Parse bad null")
+
+ /* Testcases from NRL */
+ method bookparse returns boolean
+  flag=1
+
+  /* Introductory examples */
+  Parse 'This is a sentence.'     v1 v2 v3
+  flag=flag& (v1=='This') & (v2=='is') & (v3=='a sentence.')
+  Parse 'To be, or not to be?'    w1 ',' w2
+  flag=flag& (w1=='To be') & (w2==' or not to be?')
+  Parse 'To be, or not to be?'    w1 ',' w2 w3 w4
+  flag=flag& (w1=='To be') & (w2=='or') & (w3=='not') & (w4=='to be?')
+  c=','
+  Parse 'To be, or not to be?'    w1 (c) w2 w3 w4
+  flag=flag& (w1=='To be') & (w2=='or') & (w3=='not') & (w4=='to be?')
+  Parse 'Flying pigs have wings'  x1 5 x2
+  flag=flag& (x1=='Flyi') & (x2=='ng pigs have wings')
+  Parse 'Flying pigs have wings'  x1 5 x2 10 x3
+  flag=flag& (x1=='Flyi') & (x2=='ng pi') & (x3=='gs have wings')
+  Parse 'Flying pigs have wings'  x1 5 x2 +5 x3
+  flag=flag& (x1=='Flyi') & (x2=='ng pi') & (x3=='gs have wings')
+  start=5; length=5; data='Flying pigs have wings'
+  Parse data x1 =(start) x2 +(length) x3
+  flag=flag& (x1=='Flyi') & (x2=='ng pi') & (x3=='gs have wings')
+
+  /* Definition examples */
+  in='This is  the text which, I think,  is scanned.'
+  Parse in w1 ',' w2 ',' rest
+  flag=flag & (w1=='This is  the text which')
+  flag=flag & (w2==' I think')
+  flag=flag & (rest=='  is scanned.')
+
+  Parse in w1 ',' w2 ',' w3 ',' rest
+  flag=flag & (w1=='This is  the text which')
+  flag=flag & (w2==' I think')
+  flag=flag & (w3=='  is scanned.')
+  flag=flag & (rest=='')
+
+  Parse in w1 w2 w3 rest
+  flag=flag & (w1=='This')
+  flag=flag & (w2=='is')
+  flag=flag & (w3=='the')
+  flag=flag & (rest=='text which, I think,  is scanned.')
+
+  Parse in w1 w2 w3 rest ','
+  flag=flag & (w1=='This')
+  flag=flag & (w2=='is')
+  flag=flag & (w3=='the')
+  flag=flag & (rest=='text which')
+
+  Parse in w1 ' ' w2 ' ' w3 ' ' rest ','
+  flag=flag & (w1=='This')
+  flag=flag & (w2=='is')
+  flag=flag & (w3=='')
+  flag=flag & (rest=='the text which')
+
+  Parse 'a bb ccc dddd eeeee' . . . word4 .
+  flag=flag & (word4=='dddd')
+
+  Parse in s1 10 s2 20 s3
+  flag=flag & (s1=='This is  ')
+  flag=flag & (s2=='the text w')
+  flag=flag & (s3=='hich, I think,  is scanned.')
+
+  /* statement sequences ... */
+  a = '123456789'
+  parse a  3 w1 +3 w2 3 w3
+  flag=flag & (w1=='345')
+  flag=flag & (w2=='6789')
+  flag=flag & (w3=='3456789')
+
+  x=' abc '
+  parse x 1 w1 1 w2 1 w3
+  flag=flag & (w1==x)
+  flag=flag & (w2==x)
+  flag=flag & (w3==x)
+
+  fred='abc,def'
+  parse fred',' -1 x +1
+  flag=flag & (x=='c')
+  fred='abcdef'
+  parse fred',' -1 x +1
+  flag=flag & (x=='f')
+
+  opts='primer'
+  parse (' 'opts).upper ' PR' +1 prword ' '
+  flag=flag & (prword=='PRIMER')
+  opts="peter's pretty primer"
+  parse (' 'opts).upper ' PR' +1 prword ' '
+  flag=flag & (prword=='PRETTY')
+  opts=' wonderful pyx'
+  parse (' 'opts).upper ' PR' +1 prword ' '
+  flag=flag & (prword=='')
+
+  delim='?'                   -- shouldn't really be needed
+  input="L/look for/1 10"
+  parse input verb 2 delim +1 part (delim) rest
+  flag=flag & (verb=='L')
+  flag=flag & (delim=='/')
+  flag=flag & (part=='look for')
+  flag=flag & (rest=='1 10')
+
+  /*--------------------------------------------------------------------*/
+  return flag
+
+ /* Scaffolding for stand-alone test */
+ method main(s=String[]) static
+   say version '/' source -- say what level we are running under
+  do
+    DiagParse()
+  catch dx=DiagX
+    say 'Failed: "'dx.getMessage'"'
+  end
