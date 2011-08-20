@@ -1,0 +1,1041 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxConverter                                                        */
+/*                                                                    */
+/*   A maker object that costs and effects conversions.               */
+/*                                                                    */
+/*   Conversions are applied to whichever (or both) javacode and      */
+/*   values which exist.  It is not an error for neither to exist.    */
+/*                                                                    */
+/*   [addconstant is probably an anomaly and should be moved.]        */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.31 Initial                                                 */
+/* 1996.06.18 char type promoted to always a string-like conversion.  */
+/* 1996.11.16 primitives to Rexx can all now use Rexx class [better]  */
+/* 1996.07.18 pass-through nulls in String->Rexx, etc.                */
+/* 1996.08.09 move LITEXPR here (was in RxExpression)                 */
+/* 1998.04.15 allow conversion to an interface iff source not final   */
+/* 1999.09.15 calls to convertcode also convert values, if present    */
+/* 1999.09.19 use 'wrapped' flag in RxCode for wrap optimization      */
+/* 2000.02.28 add token for Convertcode for use during interpretation */
+/* 2000.03.05 Convertcode works independently on values and javacode  */
+/* 2000.04.15 make cursor-based                                       */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxConverter uses RxCode
+ properties public constant
+  MAXASSIGN=int 25            -- maximum safe assign value
+
+ properties private constant
+  /* The conversion constants are locally-known identifiers for the
+     various conversion procedures that we can handle.
+
+     Except for NOP, the names are constructed from two of the following
+     indicators:
+
+       B  - boolean
+       C  - char
+       CA - char[]
+       N  - null or reference cast
+       O  - any java.lang.Object
+       P  - numeric primitive [not boolean or char]
+       R  - netrexx.lang.Rexx
+       S  - java.lang.String
+       W  - widening cast
+
+     hence CONVERT_PR means 'convert from primitive to Rexx'
+
+   */
+
+  CONVERT_XXX=100   -- undefined
+  CONVERT_BCA=101   -- boolean -> char[]
+  CONVERT_BC =102   -- boolean -> char
+  CONVERT_BP =103   -- boolean -> primitive
+  CONVERT_BR =104   -- boolean -> Rexx
+  CONVERT_BS =105   -- boolean -> String
+  CONVERT_CAB=106   -- char[] -> boolean
+  CONVERT_CAC=107   -- char[] -> char
+  CONVERT_CAP=108   -- char[] -> primitive
+  CONVERT_CAR=109   -- char[] -> Rexx
+  CONVERT_CAS=110   -- char[] -> String
+  CONVERT_CB =111   -- char -> boolean
+  CONVERT_CCA=112   -- char -> char[]
+  CONVERT_CP =113   -- char -> primitive
+  CONVERT_CR =114   -- char -> Rexx
+  CONVERT_CS =115   -- char -> String
+  CONVERT_NO =116   -- cast (narrowing or widening) on null or reference
+  CONVERT_NOP=117   -- no change
+  CONVERT_NP =118   -- cast (narrowing conversion) on primitives
+--CONVERT_OC =xxx   -- class string value -> char     (nyi)
+  CONVERT_OCA=120   -- class string value -> char[]
+  CONVERT_OR =121   -- class string value -> Rexx
+  CONVERT_OS =122   -- class string value -> String
+  CONVERT_PB =123   -- primitive -> boolean
+  CONVERT_PC =124   -- primitive -> char
+  CONVERT_PCA=125   -- primitive -> char[]
+  CONVERT_PR =126   -- primitive -> Rexx
+  CONVERT_PS =127   -- primitive -> String
+  CONVERT_RB =128   -- Rexx -> boolean
+  CONVERT_RP =129   -- Rexx -> primitive
+  CONVERT_RS =130   -- Rexx -> String
+  CONVERT_RC =131   -- Rexx -> char
+  CONVERT_RCA=132   -- Rexx -> char[]
+  CONVERT_SB =133   -- String -> boolean
+  CONVERT_SC =134   -- String -> char
+  CONVERT_SCA=135   -- String -> char[]
+  CONVERT_SP =136   -- String -> primitive
+  CONVERT_SR =137   -- String -> Rexx
+  CONVERT_WO =138   -- free cast (widening conversion) on classes
+  CONVERT_WP =139   -- free cast (widening conversion) on primitives
+
+  /* Tuning value */
+  MAXCONLEN  = 12   -- maximum length literal that will be made a constant
+
+  -- immutables
+  int0       =Integer(0)
+  int1       =Integer(1)
+
+  /* character strings that don't need wrapping only have these characters */
+  wrapok=Rexx('[]"''.$_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890')
+  -- don't allow parentheses: consider
+  -- (java.lang.String)x [to be followed by .equals(y)]
+  /* [this is conservative .. exotics will always get wrapped] */
+
+ properties private
+  rxt    =RxTranslator             -- the boss
+  classer=RxClasser                -- class manager
+
+ /* Construct a converter object from the current context */
+ method RxConverter(newrxt=RxTranslator)
+  rxt    =newrxt                   -- the boss
+  classer=rxt.classer              -- class manager
+
+
+ /** --------------------------------------------------------------------
+    ASSIGNCOST -- return cost of assigning one type to another
+    Arg1 is context cursor [only needed for subclass resolution]
+    Arg2 is LHS type  (LHS <= RHS)
+    Arg3 is RHS type
+
+    Costs are as follows [range 0-100]:
+
+       0 -- exact match, or null assigned to reference
+     1-5 -- free conversion (widening primitive)
+      10 -- safe conversion or superclass cast
+            These conversions can only fail if out of space
+            11-12: boolean -> primitive, etc.
+            14: String/Rexx -> char[]
+            15: char and char[]->String/Rexx/char[] widening conversions
+                with cost (except char->char[])
+            17: Other Rexx/String/char[] conversions
+      20 -- safe conversion (new object) required, risk of space error, or
+            string out of bounds (iff String -> char) (A safe conversion
+            will raise runtime exception if loss of information)
+            This includes primitive -> boolean
+      25 <= boundary for automatic conversions
+      30 -- primitive cast required
+      40 -- class cast required (e.g., to subclass), risk involved
+         -- conversion (new object) required, risk of space or conversion
+            error, or potential loss of information, i.e., toString
+      50 <= boundary for explicit conversions
+     100 -- conversion impossible (e.g., dissimilar types, or dimensions
+            mismatch)
+
+    If returns <100 then ASSIGNPROC is set to indicate the procedure
+      (algorithm) to be used for effecting the conversion (defined and
+      for use by CONVERTCODE).
+    If returns 100 then ASSIGNPROC is undefined.
+
+    Note that method assign and true assign are treated the same at the
+    moment, but in fact they may differ slightly (e.g., byte<->int); we
+    may want to expose or hide this later.
+ -------------------------------------------------------------------- */
+ method assigncost(cursor=RxCursor, lhtype=RxType, rhtype=RxType)-
+                   returns RxConvert
+  -- if rxt.superflag.diag then
+  --   say '# assigncost' lhtype.toSig() rhtype.toSig()
+
+  /* exact match is always valid, and no cost */
+  if lhtype=rhtype then return RxConvert(0, CONVERT_NOP)
+
+  lisp=lhtype.isPrimitive()                    -- test for primitive
+  risp=rhtype.isPrimitive()                    -- ..
+  if lisp & risp then do label bothprim      -- both primitive
+    /* here if both primitives */
+    if rhtype=RxType.BOOL_TYPE then do           -- from boolean cannot fail
+      if lhtype=RxType.CHAR_TYPE then            -- ..
+        return RxConvert(11, CONVERT_BC)
+       else
+        return RxConvert(11, CONVERT_BP)
+      end
+    if lhtype=RxType.BOOL_TYPE then do           -- to boolean requires check
+      if rhtype=RxType.CHAR_TYPE then
+        return RxConvert(20, CONVERT_CB)
+       else
+        return RxConvert(20, CONVERT_PB)
+      end
+    if rhtype=RxType.CHAR_TYPE then              -- treat char as a short string
+      return RxConvert(20, CONVERT_CP)       -- [1996.06.18]
+    if lhtype=RxType.CHAR_TYPE then              -- ..
+      return RxConvert(20, CONVERT_PC)
+
+    series=Rexx 'byte short int long float double'
+    lp=series.wordpos(lhtype.classname).toint()
+    rp=series.wordpos(rhtype.classname).toint()
+    if rp<lp then do                         -- upwards cast
+      if lp<=4 | rp >4 then
+        return RxConvert(lp-rp, CONVERT_WP)  -- essentially free
+      -- int->float conversions can lose precision
+      return RxConvert(10+lp-rp, CONVERT_NP)
+      end
+    /* it's a narrowing  (lossy) primitive conversion */
+    return RxConvert(30, CONVERT_NP)
+    end bothprim
+
+  if lisp | risp then do label oneprim       -- mixed primitive/reference
+    if rhtype=RxType.CHAR_TYPE then do           -- char -> [widening strings]
+      if lhtype=RxType.STRING_TYPE then          --      -> String
+        return RxConvert(15, CONVERT_CS)     --
+      if lhtype=RxType.REXX_TYPE then        --      -> Rexx
+        return RxConvert(15, CONVERT_CR)
+      if lhtype=RxType.CHARARRAY_TYPE then       --      -> char[]
+        return RxConvert(17, CONVERT_CCA)
+      end
+    if lhtype=RxType.CHAR_TYPE then do           -- String, Rexx, char[] -> char OK
+      if rhtype=RxType.CHARARRAY_TYPE then
+        return RxConvert(20, CONVERT_CAC)
+      if rhtype=RxType.STRING_TYPE then
+        return RxConvert(20, CONVERT_SC)
+      if rhtype=RxType.REXX_TYPE then
+        return RxConvert(19, CONVERT_RC)     -- (safer)
+      end
+
+    if rhtype=RxType.BOOL_TYPE then do           -- boolean -> [strings]
+      if lhtype=RxType.STRING_TYPE then          --         -> String
+        return RxConvert(11, CONVERT_BS)     --
+      if lhtype=RxType.REXX_TYPE then        --         -> Rexx
+        return RxConvert(15, CONVERT_BR)
+      if lhtype=RxType.CHARARRAY_TYPE then       --         -> char[]
+        return RxConvert(17, CONVERT_BCA)
+      end
+    if lhtype=RxType.BOOL_TYPE then do           -- String, Rexx, char[] -> boolean
+      if rhtype=RxType.CHARARRAY_TYPE then
+        return RxConvert(20, CONVERT_CAB)
+      if rhtype=RxType.STRING_TYPE then
+        return RxConvert(20, CONVERT_SB)
+      if rhtype=RxType.REXX_TYPE then
+        return RxConvert(20, CONVERT_RB)
+      end
+
+    if lhtype=RxType.REXX_TYPE then          -- primitive -> Rexx
+      return RxConvert(20, CONVERT_PR)
+    if lhtype=RxType.STRING_TYPE then            -- primitive -> String
+      return RxConvert(20, CONVERT_PS)
+    if lhtype=RxType.CHARARRAY_TYPE then         -- primitive -> char[]
+      return RxConvert(20, CONVERT_PCA)
+    if rhtype=RxType.REXX_TYPE then          -- Rexx->primitive
+      return RxConvert(20, CONVERT_RP)
+    if rhtype=RxType.STRING_TYPE then            -- String->primitive
+      return RxConvert(20, CONVERT_SP)
+    if rhtype=RxType.CHARARRAY_TYPE then         -- char[]->primitive
+      return RxConvert(20, CONVERT_CAP)
+    return RxConvert(100, CONVERT_XXX)       -- no can do other mixed (yet)
+                                             -- e.g., Foo[] to int
+    end oneprim /* mixed primitive/non-primitive */
+
+  /* References (Class or primitive array) assignment */
+  -- Test for the 'supported' inter-stringies conversions
+  if lhtype=RxType.REXX_TYPE then do
+    if rhtype=RxType.CHARARRAY_TYPE  then return RxConvert(15, CONVERT_CAR)
+    if rhtype=RxType.STRING_TYPE     then return RxConvert(17, CONVERT_SR)
+    end
+  if lhtype=RxType.STRING_TYPE then do
+    if rhtype=RxType.CHARARRAY_TYPE  then return RxConvert(15, CONVERT_CAS)
+    if rhtype=RxType.REXX_TYPE   then return RxConvert(17, CONVERT_RS)
+    end
+  if lhtype=RxType.CHARARRAY_TYPE    then do
+    if rhtype=RxType.REXX_TYPE   then return RxConvert(14, CONVERT_RCA)
+    if rhtype=RxType.STRING_TYPE     then return RxConvert(14, CONVERT_SCA)
+    end
+  /* We can always assign null to references, or references to Object */
+  if rhtype=RxType.NULL_TYPE         then return RxConvert(0, CONVERT_NO)
+  if lhtype=RxType.OBJECT_TYPE       then return RxConvert(10, CONVERT_NO)
+  /* Object may be downcast to arrays of any kind (even primitives) */
+  if rhtype=RxType.OBJECT_TYPE then if lhtype.isarray() then return RxConvert(40, CONVERT_NO)
+
+  /* Almost all hopes of cross-dimension assignment have now been tested
+     for, so check dimensions before we generalize any more, and
+     superclass cast if we can */
+  if lhtype.dimension=rhtype.dimension then do label objects
+    -- try for superclass cast (almost free)
+    linfo=classer.findclass(cursor, lhtype.classname, null, 0)
+    if linfo=null then leave objects
+    rinfo=classer.findclass(cursor, rhtype.classname, null, 0)
+    if rinfo=null then leave objects
+    if classer.issubclass(cursor, rinfo, linfo, null) then
+      return RxConvert(10, CONVERT_WO)
+    -- [implements-hierarchy is also tested by that]
+    -- try for subclass cast [downcast, expensive, may raise exception]
+    -- [Note: this must come before toString version -- consider
+    --  String hashtable.get(xx)]
+    if classer.issubclass(cursor, linfo, rinfo, null) then
+      return RxConvert(40, CONVERT_NO)
+    -- (implements-hierarchy is also tested by that)
+    -- [1998.04.15] allow conversion to an interface iff source class not final
+    if linfo.isinterface then if \rinfo.isfinal then return RxConvert(40, CONVERT_NO)
+    end objects
+
+  -- well, anything can go to a Rexx/String/char[], at a price
+  if lhtype=RxType.REXX_TYPE  then return RxConvert(40, CONVERT_OR)
+  if lhtype=RxType.STRING_TYPE    then return RxConvert(40, CONVERT_OS)
+  if lhtype=RxType.CHARARRAY_TYPE then return RxConvert(40, CONVERT_OCA)
+
+  return RxConvert(100, CONVERT_XXX)    -- this path for the resolute
+
+
+ /** --------------------------------------------------------------------
+    CONVERTCODE -- update code with conversion if needed
+    Arg1 is context cursor
+    Arg2 is target ('left hand') type
+    Arg3 is indicator for conversion procedure
+    Arg4 is the RxCode object to be converted
+    Arg5 is the token, in case of error.  This is not required during
+            parsing, but must be supplied during interpretation.
+    returns the same RxCode object with javacode (if present), type, and
+      value (if present), updated as required.
+      code.wrapped reflects the javcode (if present).
+
+    Conversion types are a private agreement with ASSIGNCOST, and are
+    defined above.
+
+    If the new code is not indivisible (e.g., a cast) then the code
+    object is unwrapped; similarly if it is (perhaps wrapped in a method
+    call) then wrapped can be set.
+
+ -------------------------------------------------------------------- */
+ method convertcode(cursor=RxCursor, lhtype=RxType, proc=int, code=RxCode,-
+                    tokrun=RxToken null) returns RxCode
+  rhtype=code.type
+  if cursor.curprogram.flag.diag then if proc\=CONVERT_NOP then
+    say '# convertcode:' lhtype.toSig() '<'proc'<' rhtype.toSig()
+
+  select label gen case proc
+    when CONVERT_NOP then nop
+
+    when CONVERT_PR  then do                 -- primitive -> Rexx
+      -- try for constant string first
+      jcode=primstring(code)
+      if code.javacode\=null then do label java
+        if jcode\=null then do
+          -- optimization: unless it's a simple int constant, go via string
+          if jcode.verify('0123456789')\=='0', jcode.length().toint()>9
+           then code.javacode='"'jcode'"'
+           else code.javacode=jcode
+          end
+        code.javacode='new' RxType.REXX_CLASS'('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        -- use the clean string if possible, to preserve zeros in constants
+        if jcode\=null then code.value=jcode
+         else select
+          when code.value<=Integer then
+            code.value=Rexx((Integer code.value).intValue())
+          when code.value<=Long then
+            code.value=Rexx((Long code.value).longValue())
+          when code.value<=Double then
+            code.value=Rexx((Double code.value).doubleValue())
+          end
+        end doit
+      end
+
+    when CONVERT_PCA then do                 -- primitive -> char[]
+      -- try for constant string first
+      jcode=primstring(code)
+      if code.javacode\=null then do label java
+        if jcode\=null then do
+          -- optimization: unless it's a simple int constant, go via string
+          if jcode.verify('0123456789')\=='0', jcode.length().toint()>9
+          then code.javacode='"'jcode'"'
+           else code.javacode=jcode
+          end
+        code.javacode='new' RxType.REXX_CLASS'('code.javacode').toCharArray()'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        -- use the clean string if possible, to preserve zeros in constants
+        if jcode\=null then code.value=jcode.toCharArray()
+         else select
+          when code.value<=Integer then
+            code.value=Rexx((Integer code.value).intValue()).toCharArray()
+          when code.value<=Long then
+            code.value=Rexx((Long code.value).longValue()).toCharArray()
+          when code.value<=Double then
+            code.value=Rexx((Double code.value).doubleValue()).toCharArray()
+          end
+        end doit
+      end
+    when CONVERT_PC then do                  -- primitive -> char
+      if code.javacode\=null then do label java
+        if code.javacode.length()==1-
+         & RexxWords.pos(code.javacode, '0123456789', 1)>0 then
+          code.javacode=''''code.javacode''''     -- trivial case
+         else if rhtype=RxType.BOOL_TYPE then         -- from boolean
+          code.javacode="("code.javacode"?'1':'0')"
+         else /* something needs a conversion */ do
+          code.javacode='new' RxType.REXX_CLASS'('code.javacode')'
+          javawrap(code)
+          code.javacode=code.javacode'.tochar()'
+          end
+        code.wrapped=1                            -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        -- could fail; toChar will check
+        select
+          when code.value<=Integer then
+            c1=Rexx((Integer code.value).intValue()).tochar()
+          when code.value<=Long then
+            c1=Rexx((Long code.value).longValue()).tochar()
+          when code.value<=Double then
+            c1=Rexx((Double code.value).doubleValue()).tochar()
+          end
+        code.value=Rexx(c1)
+        end doit
+      end
+    when CONVERT_PS then do                  -- primitive -> String
+      -- try for constant string first
+      jcode=primstring(code)
+      if code.javacode\=null then do label java
+        if jcode\=null then code.javacode='"'jcode'"'
+        -- we don't want true/false for boolean...
+        if rhtype=RxType.BOOL_TYPE then code.javacode='('code.javacode'?"1":"0")'
+                               else code.javacode=RxType.STRING_CLASS'.valueOf('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        -- use the clean string if possible, to preserve zeros in constants
+        if jcode\=null then code.value=jcode.toString()
+         else select
+          when code.value<=Integer then
+            code.value=String.valueOf((Integer code.value).intValue())
+          when code.value<=Long then
+            code.value=String.valueOf((Long code.value).longValue())
+          when code.value<=Double then
+            code.value=String.valueOf((Double code.value).doubleValue())
+          end
+        end doit
+      end
+    when CONVERT_BS then do                  -- boolean to String
+      if code.javacode\=null then do label java
+        code.javacode='('code.javacode'?"1":"0")'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        code.value=String.valueOf((Integer code.value).intValue())
+        end doit
+      end
+    when CONVERT_BC then do                  -- boolean to char
+      if code.javacode\=null then do label java
+        code.javacode='('code.javacode"?'1':'0')"
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        code.value=Rexx((Integer code.value).intValue())
+        end doit
+      end
+    when CONVERT_BR then do                  -- boolean to Rexx
+      if code.javacode\=null then do label java
+        code.javacode='new' RxType.REXX_CLASS'('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        code.value=Rexx((Integer code.value).intValue())
+        end doit
+      end
+    when CONVERT_BCA then do                 -- boolean to char[]
+      if code.javacode\=null then do label java
+        code.javacode='new' RxType.REXX_CLASS'('code.javacode').toCharArray()'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then do label doit
+        if (Integer code.value).intValue()=1 then code.value=[char '1']
+                                           else code.value=[char '0']
+        end doit
+      end
+    when CONVERT_PB then do                  -- primitive to boolean
+      tobool(cursor, code)                   -- use common routine
+      end
+    when CONVERT_CAB then do                 -- char[] to boolean
+      tobool(cursor, code)                   -- use common routine
+      end
+    when CONVERT_CB then do                  -- char to boolean
+      tobool(cursor, code)                   -- use common routine
+      end
+    when CONVERT_RB then do                  -- Rexx to boolean
+      tobool(cursor, code)                   -- use common routine
+      end
+    when CONVERT_SB then do                  -- String to boolean
+      tobool(cursor, code)                   -- use common routine
+      end
+    when CONVERT_RP then do                  -- Rexx -> primitive
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode=code.javacode'.to'lhtype.classname'()'
+        end java
+      if code.value\=null then valueRP(code, lhtype)
+      end
+    when CONVERT_CP then do                  -- char -> primitive
+      torexx(cursor, code,1)
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode=code.javacode'.to'lhtype.classname'()'
+        end
+      if code.value\=null then valueRP(code, lhtype)
+      end
+    when CONVERT_SP then do                  -- String -> primitive
+      torexx(cursor, code, 1)                -- go via Rexx type
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode=code.javacode'.to'lhtype.classname'()'
+        end java
+      if code.value\=null then valueRP(code, lhtype)
+      end
+    when CONVERT_CAP then do                 -- char[] -> primitive
+      torexx(cursor, code, 1)                -- go via Rexx type
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode=code.javacode'.to'lhtype.classname'()'
+        end java
+      if code.value\=null then valueRP(code, lhtype)
+      end
+    when CONVERT_BP then do                  -- boolean to primitive
+      if code.javacode\=null then do label java
+        code.javacode='('lhtype.toJava()')('code.javacode'?1:0)'
+        code.wrapped=0
+        end java
+      if code.value\=null then do label doit
+        code.value=Rexx((Integer code.value).intValue())
+        valueRP(code, lhtype)
+        end doit
+      end
+    when CONVERT_NP then do                  -- narrowing/float primitives
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode='('lhtype.toJava()')'code.javacode
+        code.wrapped=0
+        end java
+      if code.value\=null then do label doit
+        select case lhtype.classname
+          when RxType.INT_CLASS    then
+            code.value=Integer(int (Number code.value).intValue())
+          when RxType.BYTE_CLASS   then
+            code.value=Integer((Number code.value).byteValue())
+          when RxType.SHORT_CLASS  then
+            code.value=Integer((Number code.value).shortValue())
+          when RxType.LONG_CLASS   then
+            code.value=Long((Number code.value).longValue())
+          when RxType.FLOAT_CLASS  then
+            code.value=Double(int (Number code.value).floatValue())
+          when RxType.DOUBLE_CLASS then
+            code.value=Double(int (Number code.value).doubleValue())
+          end
+        end doit
+      end
+    when CONVERT_SR then do                  -- String -> Rexx
+      if code.javacode\=null then do label java
+        code.javacode=RxType.REXX_CLASS'.toRexx('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end
+      if code.value\=null then
+do
+if code.value.getClass().getName()\=='java.lang.String' then do
+say '_SR' code.value.getClass().getName() code.value.toString()
+code.value=code.value.toString()
+end
+        code.value=Rexx(String code.value)
+end
+      end
+    when CONVERT_RS then do                  -- Rexx -> String
+      if code.javacode\=null then do label java
+        code.javacode=RxType.REXX_CLASS'.toString('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end
+      if code.value\=null then code.value=(Rexx code.value).toString()
+      end
+    when CONVERT_SC  then do                 -- String -> char
+      tochar(code)
+      if code.value\=null then do label doit
+        c1=Rexx(String code.value).tochar()
+        code.value=Rexx(c1)
+        end doit
+      end
+    when CONVERT_RC  then do                 -- Rexx -> char
+      tochar(code)
+      if code.value\=null then do label doit
+        c1=(Rexx code.value).tochar()
+        code.value=Rexx(c1)
+        end doit
+      end
+    when CONVERT_CAC then do                 -- char[] -> char
+      tochar(code)
+      if code.value\=null then do label doit
+        c1=Rexx(char[] code.value).tochar()
+        code.value=Rexx(c1)
+        end doit
+      end
+    when CONVERT_OS then do                  -- class -> String
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode=code.javacode'.toString()'
+        end java
+      if code.value\=null then code.value=code.value.toString()
+      end
+    when CONVERT_NO then do                  -- narrowing reference or null
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode='('lhtype.toJava()')'code.javacode
+        code.wrapped=0
+        end java
+      -- doesn't affect the value object (or null)
+      end
+    when CONVERT_WP then do                  -- widen primitive
+      -- This is only used if both sides integral or both real
+      if code.javacode\=null then do label java
+        -- Optimization: explicit cast not required as widening
+        -- javawrap(code)
+        -- code.javacode='(('lhtype.toJava')'code.javacode')'
+        -- [expression parser must apply the cast if user-supplied]
+        -- Cosmetic: if widening an integer literal then drop cast (carefully)
+        if code.group=S_LIT then select
+          when code.javacode.left(6)=='(byte)' & rhtype\=RxType.SHORT_TYPE then
+            code.javacode=code.javacode.substr(7)
+          when code.javacode.left(7)=='(short)' then
+            code.javacode=code.javacode.substr(8)
+          when code.javacode.left(5)=='(int)' then
+            code.javacode=code.javacode.substr(6)
+          otherwise nop
+          end
+        -- Accuracy: if code is a float ending in F, make it a double
+        if rhtype=RxType.FLOAT_TYPE then
+         if code.group=S_LIT then
+          if code.javacode.right(1)=='F' then
+           code.javacode=code.javacode.left(code.javacode.length().toint()-1)'D'
+        end java
+      -- Value is only affected (repackaged) when target is long
+      if code.value\=null then if lhtype=RxType.LONG_TYPE then
+        code.value=Long((Integer code.value).intValue())
+      end
+    when CONVERT_WO then do                  -- superclass cast
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode='('lhtype.toJava()')'code.javacode
+        code.wrapped=0
+        end
+      -- doesn't affect the value object
+      end
+    when CONVERT_CS  then do                 -- char   -> String
+      tostr(code)
+      if code.value\=null then code.value=(Rexx code.value).toString()
+      end
+    when CONVERT_CAS then do                 -- char[] -> String
+      tostr(code)
+      if code.value\=null then code.value=String(char[] code.value)
+      end
+    when CONVERT_CR then do                  -- char -> Rexx
+      if code.javacode\=null then do label java
+        code.javacode='new' RxType.REXX_CLASS'('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end java
+      -- doesn't affect value object [char is held as Rexx]
+      end
+    when CONVERT_OR then do                  -- class -> Rexx
+      -- construct Rexx from general object's string value
+      if code.javacode\=null then do label java
+        code.javacode='new' RxType.REXX_CLASS'('RxType.STRING_CLASS'.valueOf('code.javacode'))'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then code.value=Rexx(code.value.toString())
+      end
+    when CONVERT_OCA then do                 -- class -> char[]
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode=code.javacode'.toString().toCharArray()'
+        end java
+      if code.value\=null then code.value=code.value.toString().toCharArray()
+      end
+    when CONVERT_CAR then do                 -- char[] -> Rexx
+      if code.javacode\=null then do label java
+        code.javacode=RxType.REXX_CLASS'.toRexx('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end java
+
+--    if code.value\=null then code.value=Rexx(char[] code.value)
+
+      if code.value\=null then
+do
+if \(code.value<=char[]) then do
+ say '_CAR' code.value.getClass().getName() code.value.toString()
+ code.value=code.value.toString().toCharArray()
+ end
+        code.value=Rexx(char[] code.value)
+end
+
+      end
+    when CONVERT_SCA then do                 -- String -> char[]
+      if code.javacode\=null then do label java
+        javawrap(code)
+        code.javacode=code.javacode'.toCharArray()' -- [fails if null]
+        end java
+      if code.value\=null then code.value=(String code.value).toCharArray()
+      end
+    when CONVERT_RCA then do                 -- Rexx -> char[]
+      if code.javacode\=null then do label java
+        code.javacode=RxType.REXX_CLASS'.tochararray('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end java
+      if code.value\=null then code.value=(Rexx code.value).toCharArray()
+      end
+    when CONVERT_CCA then do                 -- char -> char[]
+      if code.javacode\=null then do label java
+        code.javacode=RxType.REXX_CLASS'.tochararray('code.javacode')' -- use helper function
+        code.wrapped=1                       -- it's atomic
+        end
+      if code.value\=null then code.value=(Rexx code.value).toCharArray()
+      end
+    when CONVERT_XXX then do                 -- impossible
+      /* get here for Date[] -> int and the like */
+      /* Open whether this should be Error or Quit */
+      if rxt.exec then badtok=tokrun
+                  else badtok=cursor.curclause.tokens[0]
+      signal RxError(rxt, badtok, 'cannot.convert',-
+                     cursor.curprogram.babel.typeString(rhtype),-
+                     cursor.curprogram.babel.typeString(lhtype))
+      end
+    otherwise
+      signal RxQuit(rxt, cursor.curclause.tokens[0], 'internal.error', 'conversion proc' proc)
+
+    catch e=RuntimeException
+      -- this should only happen during interpretation (e.g., conversion
+      -- overflow).  Other cases are compile-time errors.
+      if \rxt.exec then do
+        if code.value=null then val='[null]'
+         else val=rxt.interpreter.stringvalue(code)
+        signal RxError(rxt, cursor.curclause.tokens[0],-
+                       'cannot.convert.constant', val,-
+                       cursor.curprogram.babel.typeString(lhtype))
+        end
+      -- must be runtime
+      signal RxSignal(cursor, e, tokrun) -- wrap and send
+    end gen
+  code.type=lhtype  -- it now has this type
+  return code
+
+ /** valueRP -- change code.value to a wrapped primitive
+    Arg1 is the RxCode object, with non-null value to be changed
+    Arg2 is the target type - a numeric primitive */
+ method valueRP(code=RxCode, type=RxType) private
+   rvalue=Rexx code.value
+   select case type.classname
+     when RxType.INT_CLASS    then code.value=Integer(rvalue.toint())
+     when RxType.BYTE_CLASS   then code.value=Integer(rvalue.tobyte())
+     when RxType.SHORT_CLASS  then code.value=Integer(rvalue.toshort())
+     when RxType.LONG_CLASS   then code.value=Long(rvalue.tolong())
+     when RxType.FLOAT_CLASS  then code.value=Double(rvalue.tofloat())
+     when RxType.DOUBLE_CLASS then code.value=Double(rvalue.todouble())
+     end
+   return
+
+ /** TOSTR -- Convert generated javacode to a String
+    Arg1 is code-so-far, type char or char[]
+    Returns the same code object, with conversion applied if necessary
+    Does not affect value.
+    */
+ method tostr(code=RxCode) private returns RxCode
+  -- optimize for the common case of a single-character literal
+  -- [escapes will already be in C/Java form]
+  if code.javacode=null then return code
+  parse code.javacode c1 +1 c2 +1 c3 +1
+  if c1\=='''' then explen=-1
+   else select
+    when c2\=='\\' then explen=3              -- expected length
+    when c3=='u'   then explen=8
+    when c3=='0'   then explen=6              -- e.g., NetRexx \0 or \x77
+    when c3=='1'   then explen=6
+    when c3=='2'   then explen=6
+    when c3=='3'   then explen=6
+    otherwise           explen=4
+    end
+  if code.javacode.length()\==explen then do    -- complicated case
+    code.javacode=RxType.STRING_CLASS'.valueOf('code.javacode')' -- [fails if CA is null]
+    end
+   else /* single-character literal */ do
+    code.javacode='"'code.javacode.substr(2, code.javacode.length().toint()-2)'"'
+    end
+  code.wrapped=1                             -- it's atomic
+  return code
+
+ /** TOCHAR -- Convert javacode (if any) to a char
+    Arg1 is code-so-far, type String, Rexx, or char[]
+    Returns the same code object, with conversion applied if necessary
+    Does not convert value.
+    */
+ method tochar(code=RxCode) private returns RxCode
+  -- this one's often used, as we have no char literal
+  -- optimize for the common case of a single-character literal
+  if code.javacode=null then return code     -- nowt to do
+  parse code.javacode c1 +1 c2 +1 c3 +1
+  if c1\=='"' then explen=-1
+   else select
+    when c2\=='\\' then explen=3              -- expected length
+    when c3=='u'   then explen=8
+    when c3=='0'   then explen=6              -- e.g., NetRexx \0 or \x77
+    when c3=='1'   then explen=6
+    when c3=='2'   then explen=6
+    when c3=='3'   then explen=6
+    otherwise           explen=4
+    end
+  if code.javacode.length()\==explen then do    -- complicated case
+    if code.type=RxType.REXX_TYPE then do
+      javawrap(code)
+      code.javacode=code.javacode'.tochar()'
+      end
+     else /* String or char[] */
+      code.javacode=RxType.REXX_CLASS'.tochar('code.javacode')'
+    end
+   else /* single-character literal */ do
+    parse code.javacode '"'c1'"'
+    code.javacode=''''c1''''
+    end
+  code.wrapped=1
+  return code
+
+ /** TOBOOL -- Convert generated code/expression to boolean
+              (more relaxed than Java, but must be 0/1)
+    Arg1 is context cursor
+    Arg2 is code-so-far, type P, C, CA, S, or R
+    Returns the same code object, with conversion applied if necessary
+    Updates the value, if any. */
+ method tobool(cursor=RxCursor, code=RxCode) private returns RxCode
+  if code.javacode\=null then do label java
+    jcode=code.javacode                        -- before toRexx
+    /* optimize constants */
+    select
+      -- first six are 'basic/cast literal' and 'litexpr literal' for 0 and 1
+      when jcode=='1'                               then code.javacode='true'
+      when jcode=='0'                               then code.javacode='false'
+      when jcode=='(byte)1'                         then code.javacode='true'
+      when jcode=='(byte)0'                         then code.javacode='false'
+      when jcode=='((int)1)'                        then code.javacode='true'
+      when jcode=='((int)0)'                        then code.javacode='false'
+      when jcode=='"1"' | jcode=="'1'" | jcode=='1' then code.javacode='true'
+      when jcode=='"0"' | jcode=="'0'" | jcode=='0' then code.javacode='false'
+      otherwise -- go via Rexx
+        torexx(cursor, code, 1) -- make it type Rexx if it isn't
+        -- if code.value\=null then say 'after tor:' -
+        --   code.value.getclass.getname code.value.tostring
+        javawrap(code)          -- probably redundant now
+        code.javacode=code.javacode'.toboolean()'
+      end
+    code.wrapped=1
+    end java
+
+  if code.value\=null then do label doit
+    if code.javacode\=null then do label javacode
+      if code.javacode=='true', code.javacode=='1' then do
+        code.value=int1
+        leave doit
+        end
+      if code.javacode=='false', code.javacode=='0' then do
+        code.value=int0
+        leave doit
+        end
+      end javacode
+    if (Rexx code.value).toboolean() then code.value=int1
+                                     else code.value=int0
+    end doit
+  return code
+
+ /** TOREXX -- convert primitives and string-likes to Rexx
+    Arg1 is context cursor
+    Arg2 is code-so-far
+    Arg3 is 1 if it is safe to use a constant for the result of the
+            conversion (for example, it's an operand that cannot be
+            assigned to a variable)
+
+    returns the same RxCode object, unchanged or with conversion.
+    No errors raised.
+
+    This corrects even 'perfect' conversions (char[], String), as
+    otherwise x='' won't end up as type Rexx.
+
+    Notes on using torexx:
+      1. To avoid infinite recursion, torexx must not be called for
+         conversions to Rexx in convertcode
+      2. It is only safe to set the 'can constant' bit (on the call to
+         torexx) when the Rexx object is immediately qualified or used
+         in an operation.
+ */
+ method torexx(cursor=RxCursor, code=RxCode, canconst=boolean) returns RxCode
+  type=code.type
+  if type=RxType.REXX_TYPE then return code
+  /* need conversion, even if group S_LIT, in case float notation */
+
+  /* See if might be a constant [only if generating Java] */
+  if canconst then if code.javacode\=null then do
+    -- Allow if a shortish literal or a numeric-only expression
+    -- [Long literals are unlikely to be re-used]
+    if (code.group=S_LIT & code.javacode.length().toint()<=MAXCONLEN) -
+     | code.javacode.verify('1234567890+*-/%()"''')==0 -- [not $,F,D]
+     then do label makeconst
+      -- if cursor.curprogram.flag.diag then
+      --   say '# torexx, addconstant:' type code.javacode
+      oldjava=code.javacode
+      code=addconstant(cursor, RxType.REXX_TYPE, code)
+      -- if failed to make constant, then still need conversion
+      if oldjava==code.javacode then leave makeconst
+      return code
+      end makeconst
+    end
+
+  /* Need a fresh conversion/object */
+  /* As a special case, force a specific conversion if sig is Object, as
+     otherwise the converter will simply (and correctly) apply a
+     downcast, as Rexx extends Object. */
+  if type=RxType.OBJECT_TYPE then conv=RxConvert(40, CONVERT_OR)
+                         else conv=assigncost(cursor, RxType.REXX_TYPE, type)
+  return convertcode(cursor, RxType.REXX_TYPE, conv.proc, code)
+
+ /** ADDCONSTANT -- find/add a constant to the class
+    Arg1 is context cursor
+    Arg2 is type for the resulting constant
+    Arg3 is the constant (that is, RxCode object for the constant)
+
+    Returns the same RxCode object, referring to the constant variable,
+    which always begins with '$0'.
+
+    At present, we don't check the signature for a re-use.
+
+    Notes:
+
+    1. This is a code-generation routine only [or should be]
+
+    2. If we are in a minor class then the constant is added to the
+       top-level class, to avoid the 'no statics' restriction on Java
+       1.1 inner classes.
+
+    3. This routine could be improved, or made semi-automatic, now we
+       have code.constant flag updated correctly
+   */
+ method addconstant(cursor=RxCursor, lhtype=RxType, code=RxCode) returns RxCode
+  -- first convert the code to the requested type [must do this, so
+  -- value will be updated correctly, too]
+  conv=assigncost(cursor, lhtype, code.type)
+  if conv.cost>MAXASSIGN then
+    signal RxQuit(rxt, null, 'internal.error',-
+                  'RxConverter: AddConst bad' lhtype.toSig() code.type.toSig())
+  convertcode(cursor, lhtype, conv.proc, code)
+
+  -- find the top class (usually us)
+  topinfo=cursor.curclass.classinfo
+  loop while topinfo.parentinfo\=null
+    topinfo=topinfo.parentinfo
+    end
+
+  topclass=topinfo.localclass
+  name=topclass.constants[code.javacode]
+  if name=='' then do                        -- don't already know it
+    /* new constant */
+    topclass.constant=topclass.constant+1
+    name='$0'topclass.constant               -- build name
+    topclass.constants[code.javacode]=name   -- record it
+    /* Generate a code object for the constant, if pass2.  First add any
+       conversion that's needed */
+    if rxt.pass2 then do
+      -- Form the declaration.
+      atts='private static final'
+      constjavacode=atts lhtype.toJava() name'='code.javacode';'
+      -- insert it
+      cursor.curprogram.streamer.outinsert(constjavacode, topclass.constantchunk, 1)
+      end
+    end
+  -- here, either way, name is the name of the constant variable
+  code.group=S_CCONST                   -- class constant
+  code.type=lhtype                      -- requested type
+  code.javacode=name                    -- now simply by name
+  code.wrapped=1                        -- it's atomic
+  -- [positional information and value unchanged]
+  return code
+
+ /** LITEXPR -- Prepare a literal expression for assignment
+    Arg1 is context cursor
+    Arg2 is input code-so-far.
+    returns adjusted code, possibly no longer a literal
+
+    A utility that's used when we get to choose the type, when
+    code.group is S_LIT
+
+    The signature is chosen and the same RxCode object is returned,
+      modified with conversion if need be.
+    'null' always remains a literal.
+    */
+ method litexpr(cursor=RxCursor, code=RxCode) returns RxCode
+   if code.group\=S_LIT then
+     signal RxQuit(rxt, null, 'internal.error', 'litexpr' code.group)
+   if code.type=RxType.NULL_TYPE then return code     -- always literal
+   if cursor.curbinary then do
+     /* promote smalls to int, and char to String (the latter so
+        it may be variable length) */
+     if       code.type=RxType.BYTE_TYPE  then newtype=RxType.INT_TYPE
+      else if code.type=RxType.SHORT_TYPE then newtype=RxType.INT_TYPE
+      else if code.type=RxType.CHAR_TYPE  then newtype=RxType.STRING_TYPE
+      else newtype=null
+     if newtype\=null then do  -- apply conversion to the code
+       -- for byte/short this is really just cosmetic
+       conv=assigncost(cursor, newtype, code.type)
+       convertcode(cursor, newtype, conv.proc, code)
+       if newtype=RxType.STRING_TYPE then code.group=S_EXPR -- no longer literal
+       end
+     end
+    else /* non-binary */ do
+     torexx(cursor, code, 0)  -- adjust
+     code.group=S_EXPR        -- no longer a true literal
+     end
+   return code
+
+ /** PRIMSTRING -- make primitive literal code into a clean string
+    Arg1 is code so far (type is a primitive constant)
+    returns clean string (as from source code) if available and simple
+      constant, or null otherwise.
+    We back-form the string from the token value, as this will have
+    already processed hexbin integers, etc.
+    */
+ method primstring(code=RxCode) private returns Rexx
+  if \code.constant then return null
+  if \code.type.isPrimitive() then return null
+  if code.group\=S_LIT then return null      -- compound
+  if code.begclause=null then return null    -- no associated clause
+  if code.javacode.pos('(')\=='0' then return null -- has been wrapped for trace
+  return Rexx code.begclause.tokens[code.begoff].value
+
+ /** JAVAWRAP -- wrap Java code in parentheses if necessary
+    Arg1 is code object to check javacode and wrap
+    Returns nothing
+    (This could be a lot more sophisticated)
+    */
+ method javawrap(code=RxCode)
+  if code.wrapped then return
+  -- +++ The verify check may not actually be of any use now
+  if code.javacode.verify(wrapok)\==0 then code.javacode='('code.javacode')'
+  code.wrapped=1
+  return
+

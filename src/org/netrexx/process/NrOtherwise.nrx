@@ -1,0 +1,80 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrOtherwise                                                        */
+/*                                                                    */
+/*   An object that represents a parsed Otherwise clause.             */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.10 Initial                                                 */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Otherwise clause.             */
+class NrOtherwise implements RxClauseParser
+ properties private
+  rxt    =RxTranslator                            -- root
+  parser =RxParser                                -- local reference
+  tokens =RxToken[]                               -- local reference
+  startsel=NrSelect                               -- containing SELECT
+
+ /** Construct an object from the current clause */
+ method NrOtherwise(newrxt=RxTranslator)
+  rxt      =newrxt                      -- the boss
+  parser   =rxt.program.parser          -- our parser
+  tokens   =parser.cursor.curclause.tokens -- local reference
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrOtherwise', pass)
+
+  if tokens[1].type\=RxToken.END then signal RxQuit(rxt, tokens[1], 'internal.error', 'NrOtherwise')
+
+  if parser.thislevel.key=='SELECT' then
+   if parser.thislevel.selstate=NrLevel.SEL_ALLOK then do
+    parser.thislevel.selstate=NrLevel.SEL_OTHER
+    startsel =NrSelect parser.thislevel.clause.lookaside -- locate SELECT
+    startsel.other=parser.cursor.curclause   -- tell it that we exist
+    return
+    end
+  -- say '# selstate:'parser.level'='parser.thislevel.selstate
+  signal RxError(rxt, tokens[0], 'unexpected.otherwise')
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  streamer=rxt.program.streamer
+
+  -- output code (or queue up Pending pieces)
+  parser.indention=parser.indention-1
+  if parser.thislevel.innerwraps then wrap='}'
+                                 else wrap=''
+
+  if startsel.mayswitch then do
+    if parser.thislevel.lastterm then br=''
+                                 else br='break;'
+    startsel.Pending(streamer.chunks, '', wrap||br)
+    streamer.out('')
+    end
+
+  elcode=wrap'else{'
+  if startsel.mayswitch
+   then startsel.Pending(streamer.chunks, elcode, 'default:{')
+   else streamer.out(elcode)
+
+  parser.indention=parser.indention+1
+  rxt.program.tracer.traceclause(parser.cursor.curclause)-- add trace code if needed
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  -- it's a nop

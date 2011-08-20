@@ -1,0 +1,65 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrElse                                                             */
+/*                                                                    */
+/*   An object that represents a parsed Else clause.                  */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.10 Initial                                                 */
+/* 2000.02.24 Add interpretation                                      */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Else clause.                  */
+class NrElse implements RxClauseParser
+ properties private
+  rxt    =RxTranslator                            -- root
+  parser =RxParser                                -- local reference
+  tokens =RxToken[]                               -- local reference
+
+ /** Construct an object from the current clause */
+ method NrElse(newrxt=RxTranslator)
+  rxt      =newrxt                           -- the boss
+  parser   =rxt.program.parser               -- our parser
+  tokens   =parser.cursor.curclause.tokens   -- local reference
+
+  if tokens[1].type\=RxToken.END then signal RxQuit(rxt, tokens[1], 'internal.error', 'NrElse')
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrElse', pass)
+  if parser.thislevel.key=='IF' then
+   if parser.thislevel.ifstate=NrLevel.IF_ELSEOK then do
+    parser.thislevel.ifstate=NrLevel.IF_ELSE
+    topif=NrIf parser.thislevel.clause.lookaside -- the owning NrIf
+    topif.elseclause=parser.cursor.curclause
+    return
+    end
+  signal RxQuit(rxt, parser.cursor.curclause.tokens[0], 'unexpected.else')
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  parser.indention=parser.indention-1
+  if parser.thislevel.innerwraps then   -- we need inner wrappers
+    rxt.program.streamer.out('}else{')
+   else
+    rxt.program.streamer.out('else ')   -- keyword needs white space
+  parser.indention=parser.indention+1
+  rxt.program.tracer.traceclause(parser.cursor.curclause) -- add trace code if needed
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  -- request execute one clause
+  cursor.curlevel.nextone=1

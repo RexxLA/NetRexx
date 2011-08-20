@@ -1,0 +1,116 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrEnd                                                              */
+/*                                                                    */
+/*   An object that represents a parsed END clause.                   */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.06.10 Initial                                                 */
+/* 1996.11.04 Error recovery allows adding ENDs                       */
+/* 2000.02.24 Add interpretation                                      */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed END clause.                   */
+class NrEnd implements RxClauseParser
+ properties private
+  rxt       =RxTranslator               -- root
+  parser    =RxParser                   -- local reference
+  tokens    =RxToken[]                  -- local reference
+  reachable =boolean                    -- was this clause reachable?
+  oldlevel  =NrLevel                    -- level pre-pop
+  isprotect =boolean 0                  -- 1 if block is protected
+  istry     =boolean 0                  -- 1 if block had try
+
+ /** Construct an object from the current clause */
+ method NrEnd(newrxt=RxTranslator)
+  rxt      =newrxt                           -- the boss
+  parser   =rxt.program.parser               -- our parser
+  tokens   =parser.cursor.curclause.tokens   -- local reference
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrEnd', pass)
+  if parser.level<=2 then signal RxError(rxt, tokens[0], 'unexpected.end')
+  if       parser.thislevel.key\=='DO'
+   then if parser.thislevel.key\=='LOOP'
+   then if parser.thislevel.key\=='SELECT'
+   then signal RxError(rxt, tokens[0], 'unexpected.end')
+  reachable=\parser.thislevel.terminal  -- remember if we can reach
+  parser.cursor.curclause.skipend=1     -- drop into this clause causes skip
+
+  -- save reference to us
+  topblock=NrBlock parser.thislevel.clause.lookaside -- the owning NrBlock
+  topblock.endclause=parser.cursor.curclause
+  if topblock.protcode\=null then isprotect=1     -- we are protected
+  if parser.thislevel.tryadded then istry=1       -- we had a try chunk
+
+  parser.endblock()                            -- end the block as needed now
+
+  if tokens[1].type=RxToken.END then nop     -- plain end
+   else /* label expected */ select label labelcheck
+    when tokens[1].type\=RxToken.SP then
+      RxError(rxt, tokens[1], 'blank.expected')
+    when tokens[2].type\=RxToken.SYM then
+      RxError(rxt, tokens[2], 'block.label.expected')
+    when tokens[3].type\=RxToken.END then
+      RxError(rxt, tokens[3], 'junk.on.end')
+    when parser.thislevel.blocklabel.OpNotEq(null,tokens[2].value) then do
+      -- here if the label doesn't match
+      /* If we can find label above us, all well and good.  Otherwise
+         quit as we will surely have trouble below */
+      pops=0
+      loop until parser.level<=2
+        if parser.thislevel.needend then pops=pops+1
+        parser.poplevel()
+        if parser.thislevel.blocklabel.OpEq(null,tokens[2].value) then do
+          if pops=1 then RxError(rxt, tokens[2], 'block.label.found.one.above')
+                    else RxError(rxt, tokens[2], 'block.label.found.above', pops)
+          leave labelcheck
+          end
+        end
+      signal RxQuit(rxt, tokens[2], 'block.label.not.found')
+      end
+    otherwise nop                  -- label is OK
+    end
+
+  oldlevel=parser.thislevel        -- save for code generation
+  parser.poplevel()                  -- done with the whole block
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  -- if there's a SYNCHRONIZE or TRY block, end it
+  if isprotect, istry then rxt.program.streamer.outpart('}')
+
+  -- add trace code if END can be executed and tracing needed
+  if reachable, oldlevel.dropout then        -- END is traceable
+    rxt.program.tracer.traceclause(parser.cursor.curclause)
+
+--parser.indention=parser.indention-1
+  if oldlevel.blocklabel\=='' then add='/*'oldlevel.blocklabel'*/'
+                              else add=''
+  rxt.program.streamer.out('}'add)      -- complete the main block
+--parser.indention=parser.indention+1
+
+ /** Interpretation */
+ -- note that we always go through the END before leaving a block
+ -- when looping, we do not go through it at the 'bottom' of the loop,
+ -- as it is flagged as a skipend clause.
+ method interpret(cursor=RxCursor null)
+  -- Here when finally exiting a block.  If it was protected, then set
+  -- the alert (so interpreter can drop out of protection level)
+  if isprotect then cursor.curendprot=1
+  rxt.interpreter.poplevel(cursor) -- and we're done with the level

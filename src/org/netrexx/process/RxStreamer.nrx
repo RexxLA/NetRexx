@@ -1,0 +1,591 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 2005.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxStreamer                                                         */
+/*                                                                    */
+/*   This class manages the output streams for a program.             */
+/*                                                                    */
+/*   All .java or .crossref file output is done through the routines  */
+/*   here, including the collection for data for deferred output.     */
+/*                                                                    */
+/*   Data written out (using out or outpart) are queued as chunks;    */
+/*   this allows inserts to be included later, when the output file   */
+/*   is actually written.                                             */
+/*                                                                    */
+/*   Any errors here must be terminal (RxQuits).                      */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1996.05.04 Initial                                                 */
+/* 1996.05.23 New file read [5x faster than DataInputStream]          */
+/* 1996.07.02 Drop EOF character                                      */
+/* 1996.09.22 Add UTF8 input option; lines parsed on demand           */
+/* 1996.12.13 Add crossref output file                                */
+/* 1997.02.08 Localize the source, .java, and .crossref streams       */
+/* 1997.06.27 Change to Java 1.1 Readers and Writers for NLS          */
+/* 1997.10.18 Use RxChunk objects and support comment write-through   */
+/* 1998.04.17 Now no longer language-specific                         */
+/* 2000.02.12 Heed \flag.java [but for now we still open/close file]  */
+/* 2000.04.30 Move input file processing to RxFileReader              */
+/* 2005.01.14 Cosmetic lines were being written if comments=1         */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxStreamer
+
+ properties constant private
+  blank       =Rexx(' ')      -- blank for working with
+  linesep     =Rexx(System.getProperty('line.separator'))
+  linesepchars=linesep.toCharArray()
+  jcomstart   =char[] '//'    -- Java line comment start
+  jncomstart  =char[] '(-'    -- Java nested comment start [NB no *]
+  jncomend    =char[] '-)'    -- Java nested comment end   [NB no *]
+
+ properties public
+  outfile    =Rexx ''    -- output file name (without path)
+  outfilefull=Rexx ''    -- fully qualified output file name
+  chunks     =0          -- count of chunks (m)
+
+ properties private
+
+  -- output .java file things
+  outfileob   =File                -- output file file object
+  outhandle   =OutputStreamWriter  -- output file handle, non-null if open
+  lastinlineno=0                   -- last input linenumber seen by OUT/OUTPART
+  chunklist   =Vector(250,500)     -- list of RxChunks (0->chunks-1)
+  outnewline  =boolean 1           -- next chunk starts a new line
+  maxindent   =int 1               -- maximum indention required [>=1]
+
+  -- outpout .crossref file things
+  xrffile  =Rexx ''                -- crossref file name (generated)
+  xrffileob=File                   -- crossref file fileob
+  xrfhandle=OutputStreamWriter     -- crossref file handle, non-null if open
+
+  -- Miscellaneous things
+  rxt=RxTranslator                 -- the usual
+  program=RxProgram                -- to which we belong
+
+ /* RXSTREAMER -- Constructor
+    Arg1 is the translator (root) object
+    Arg2 is the program to which we belong
+    */
+ method RxStreamer(translator=RxTranslator, prog=RxProgram)
+  rxt=translator              -- save
+  program=prog
+
+ /* OPENFILES -- Setup the files we need, defaulting as needed
+    Arg1 is the Java output (.java) file specification
+            [note: this must usually be in the source file directory and
+            have correct name, so is best defaulted by passing null]
+    Arg2 is the cross-reference (.crossref) file specification
+            [same recommendation]
+
+    If the SOURCEDIR option is specified, the directory for output files
+    will be the source directory, otherwise it will be the current
+    directory.  This only affects the .class files (others go to source
+    directory anyway), and is effected by RxTranslator.
+    */
+ method openfiles(outname=Rexx, xrfname=Rexx)
+
+  if \program.flag.java then if \program.flag.crossref then return
+
+  inname=Rexx program.source.getName()              -- get the real name
+  inpath=program.source.getPath()                   -- .. and path
+  if inpath=null then inpath=''                   -- so can concatenate
+
+  /* Find the name stub for the program */
+  lastdot=inname.lastpos('.').toint()
+  if lastdot=0 then instub=inname
+   else instub=inname.left(lastdot-1)
+
+  /* Create output name and file if needed */
+  if program.flag.java then do
+    if outname\==null then outfile=outname
+                      else outfile=instub'.java'  -- default output file
+    if outfile.pos('.').toint()=0 then outfile=outfile'.java' -- be kind
+
+    if outfile.right(5)\=='.java' then
+      signal RxQuit(rxt, null, 'output.extension.not.java', outfile)
+    outfilefull=inpath||outfile                   -- will be in source directory
+    outfileob=File(outfilefull)                   -- handle
+    end
+
+  /* Create crossref file name and file if needed */
+  if program.flag.crossref then do
+    if xrfname==null then xrffile=instub'.crossref' -- default crossref file
+                     else xrffile=xrfname
+    if xrffile.pos('.').toint()=0 then xrffile=xrffile'.crossref'  -- be kind
+    xrffileob=File(inpath||xrffile)
+    end
+
+  return
+
+ /* -----------------------------------------------------------------
+    OUTINSERT and OUTINSERTPART -- add an insert to the chunks' list
+    Like OUT and OUTPART, below, these are used to add a line-oriented
+    or in-line insert.
+    ----------------------------------------------------------------- */
+
+ /* OUTINSERT -- add an insert line to the inserts list for a chunk
+    Arg1 is the insert string
+    Arg2 is the number of the chunk to add the insert after
+    Arg3 is the indention to use if this is to be formatted
+    */
+ method outinsert(insert=Rexx, after=int, indent=int)
+  if \program.flag.java then return
+  if \rxt.pass2 then do
+    if program.flag.diag then say '# *** outi:' insert
+    return                        -- [ignore]
+    end
+  /* if program.flag.diag then say '# outinsert' after insert indent */
+  if program.flag.format then do
+    parser=program.parser
+    if parser.cursor.curclass\=null then
+      indent=indent+parser.cursor.curclass.classinfo.parents
+    insert=linesep||blank.copies(indent)insert
+    end
+  -- [if not formatting, appends asis]
+  outinsertpart(insert, after)
+  return
+
+ /* OUTINSERTPART -- add insert characters to the inserts list for a chunk
+    Arg1 is the insert string
+    Arg2 is the number of the chunk to add the insert after
+         [may be 0 after an error, in which case we ignore.]
+    */
+ method outinsertpart(insert=Rexx, after=int)
+  if \program.flag.java then return
+  if \rxt.pass2 then do
+    if program.flag.diag then say '# *** outip:' insert
+    return                        -- [ignore]
+    end
+  if after=0 then return
+  afterchunk=RxChunk chunklist.elementAt(after-1)
+  if afterchunk.insert=null then afterchunk.insert=insert   -- first insert
+   else afterchunk.insert=afterchunk.insert||insert         -- second+ insert
+  return
+
+ /* -----------------------------------------------------------------
+    OUT and OUTPART -- queue output chunk
+    12.Feb.1996  These routines are called when the translator has code
+    for output.  Originally, these immediately wrote the output file,
+    but now the chunks are simply added to a queue, and the actual
+    file is written only when the whole program has been processed.
+    This allows the insertion of code at earlier points in a program
+    without requiring an extra pass.
+
+    FORMAT     if 0: CRLF(s) is(are) added to keep output line numbers
+                     the same as input line numbers as far as possible
+               if 1: CRLF(s) is (are) determined by the logical
+                     structure of the program, rather than by the actual
+                     layout.
+
+    OUTPART    is called to enqueue a chunk of data.
+    OUT        is called to enqueue a chunk of data which would end in a
+                 CRLF if FORMAT is in effect.
+    NOLINE     may be set on both for output with no associated sourceline.
+    OUTWRITE   is called, just once (at the end of translation) to write
+                 the output file.
+    ----------------------------------------------------------------- */
+
+ /* OUT -- enqueue Java code that might end a formatted line
+    Arg1 is line to write out, or null for a cosmetic spacing line
+    Arg2 is 1 if no associated sourceline
+    iff pass two */
+ method out(line=Rexx, noline=boolean 0)
+  if \program.flag.java then return
+  if \rxt.pass2 then do
+    if program.flag.diag then say '# *** out:' line
+    return                         -- [ignore]
+    end
+  chunk(line, 1, noline)
+  return
+
+ /* OUTPART -- enqueue Java code, iff pass two
+    Arg1 is part line to write out
+    Arg2 is 1 if no associated sourceline
+    iff pass two */
+ method outpart(part=Rexx, noline=boolean 0)
+  if \program.flag.java then return
+  if \rxt.pass2 then do
+    if program.flag.diag then say '# *** outp:' part
+    return                         -- [ignore]
+    end
+  chunk(part, 0, noline)
+  return
+
+ /* CHUNK -- add a chunk to the list of chunks
+    Arg1 is the chunk
+    Arg2 is 1 if this chunk ends a logical line, or 0 otherwise
+    Arg3 is 1 if no associated sourceline
+  */
+ method chunk(data=Rexx, logicalline=boolean, noline=boolean) private
+
+  /* Determine input (source) linenumber associated with current chunk */
+  num=0                            -- not in real lines yet or after EOS
+  indent=-1                        -- absolute indention for chunk
+  postindent=-1                    -- indention after chunk
+  parser=program.parser            -- local reference
+  if \noline then
+   if parser.cursor<>null then
+   if parser.cursor.curclause<>null then
+   if parser.cursor.curclause.tokens<>null then
+    num=parser.cursor.curclause.tokens[0].line
+
+  if program.flag.format then do
+    if outnewline then do
+      indent=parser.indention                     -- [else stays as -1]
+      if parser.cursor.curclass\=null then do
+        indent=indent+parser.cursor.curclass.classinfo.parents
+        end
+      if indent>maxindent then maxindent=indent   -- high water mark
+      end
+    if logicalline then do
+      select
+        when num=lastinlineno then nop
+        when num=0 then nop
+        when data=null then nop
+        when data.verify(' }{')=='0' then nop
+        otherwise
+          lastinlineno=num
+        end
+      outnewline=1
+      postindent=parser.level                          -- [else stays as -1]
+      if postindent>maxindent then maxindent=postindent-- high water mark
+      end
+     else outnewline=0
+    end
+
+  /* enqueue, as a chunk */
+  chunklist.addElement(RxChunk(data, num, logicalline, indent, postindent))
+  chunks=chunks+1                            -- update public count
+  if program.flag.diag then do
+    if data=null then do
+      say '#      ---' blank.copies(parser.indention)'[null]'
+      end
+     else if data\=='' then do
+      data=data.changestr('\r', ' ')           -- blank out any CR or LF
+      data=data.changestr('\n', ' ')
+      say '#      ---' blank.copies(parser.indention)data.strip()
+--    say '#      -p-' indent /*parser.cursor.curclass.classinfo.parents*/  '\-'
+--    say              logicalline postindent
+      end
+     else do -- empty or blank
+      say '#      ---' blank.copies(parser.indention)'['data']'
+      end
+    end
+  return
+
+ /* OUTWRITE -- actually write out the .java file, with any insertions */
+ method outwrite
+  if \program.flag.java then return     -- just in case
+  if chunks=0 then return               -- nothing to write
+  if outhandle=null then                -- first call
+    do                                  -- open the file
+      if outfileob=null then return     -- file invalidated
+      outstream=FileOutputStream(outfileob)
+      outhandle=OutputStreamWriter(outstream)
+    catch e=IOException
+      outfileob=null                    -- no longer valid
+      signal RxQuit(rxt, null, 'error.opening.file', outfile, e.getMessage())
+    end
+
+  synch=boolean 1                       -- 1 if synchronizing lines
+  if program.flag.format then do
+    synch=0
+    -- need array of blanks for indention
+    blanks=char[maxindent]
+    loop i=0 for maxindent
+      blanks[i]=' '
+      end
+    end
+
+  outline=1                             -- number of current logical output line
+  lastchunk=RxChunk null                -- last-processed chunk
+  lastsep=boolean 0                     -- last comment write was a separator
+  lastindent=0                          -- last requested indention
+
+  comments=program.flag.comments        -- 1 if comment copy-through
+  if comments then do
+    srcline=1                           -- number of current source line
+    srcnest=0                           -- comment nesting at start of line
+    srccomm=0                           -- comment start in line
+    -- add a dummy chunk at the end, to force trailing comments to be written
+    chunklist.addElement(RxChunk('', program.source.getLineCount()+1))
+    chunks=chunks+1                     -- update count
+    -- may need some blanks
+    if blanks=null then do
+      blanks=char[1]                    -- need a blanks array
+      blanks[0]=' '
+      end
+    -- may need a tab [currently for test only]
+    -- tabs=char[1]
+    -- tabs[0]='\t'
+    end
+
+  loop c=0 for chunks
+    chunk=RxChunk chunklist.elementAt(c)
+    -- insert comments if requested
+    -- this also brings line numbers up to match
+    if comments then do label comments
+      chunkline=chunk.line
+      if chunkline=0 then               -- this chunk synthetic
+       if \synch then                   -- and formatting
+       if lastchunk\=null then          -- and last chunk ..
+       if lastchunk.sep then            --   .. ends with separator
+        chunkline=lastchunk.line+1      -- let this chunk force comments
+
+      if chunkline>srcline then do label fillcomments
+
+        if chunk.datachars=null then    -- cosmetic spacer
+         if \synch then do
+          outhandle.write(linesepchars, 0, linesepchars.length)
+          -- say ':: chunk null at' c':' chunkline srcline
+          end
+
+        lastsep=0
+        -- now write all comments, updating srcline
+        srcind=0                        -- indent for block comments
+        loop label fills forever
+          line=program.source.getLine(srcline)
+          if line=null then leave
+          -- virtual comment start is leftmost of srcind and first non-blank
+          srccomm=srcind                -- where comment is deemed to start
+          loop i=0 for line.length
+            if line[i]=' ' then iterate i
+            if srccomm>i then srccomm=i
+            leave i
+            end i
+          if lastsep then               -- canonical indent
+            outhandle.write(blanks, 0, lastindent) -- [blanks has enough]
+
+          quote=char ' '                -- keeps track of quotes
+          loop i=0 to line.length-2     -- comment starts always 2-character
+            cc=line[i]                  -- get next character
+            if quote\=' ' then do       -- in quotes
+              if cc=quote then          -- matching quote
+               if line[i-1]\='\\' then  -- unescaped
+                quote=' '               -- .. means string ended
+              iterate i
+              end
+            if srcnest>0 then do label inblock
+              lastsep=0                      -- we'll be writing data
+              -- we know it is correctly matched or we would have quit earlier
+              if cc=='*' then
+               if line[i+1]=='/' then do     -- ending block comment
+                srcnest=srcnest-1
+                if srcnest=0 then do         -- not nested anymore
+                  -- write the comment
+                  outhandle.write(line, srccomm, i+2-srccomm)
+                  i=i+1                      -- step past '/'
+                  iterate i
+                  end
+                -- still nested .. convert the */ to -) for Java
+                outhandle.write(line, srccomm, i-srccomm)
+                outhandle.write(jncomend, 0, jncomend.length)
+                i=i+1
+                srccomm=i+1
+                end
+              if cc=='/' then
+               if line[i+1]=='*' then do     -- nested block comment
+                srcnest=srcnest+1
+                -- still nested .. convert the /* to (- for Java
+                outhandle.write(line, srccomm, i-srccomm)
+                outhandle.write(jncomstart, 0, jncomstart.length)
+                i=i+1
+                srccomm=i+1
+                end
+              if i>=line.length-2 then do    -- reached end of line
+                outhandle.write(line, srccomm, line.length-srccomm)
+                leave i                      -- fast exit
+                end
+              iterate i
+              end inblock
+
+            if cc='''' | cc='"' then do      -- starting a string
+              quote=cc
+              iterate i
+              end
+
+            if cc=='-' then
+             if line[i+1]=='-' then do       -- line comment
+              -- if it's at the start of the line, already indented,
+              -- otherwise add one blank or tab
+              if \lastsep then do
+                -- if program.flag.test then space=tabs
+                --                          else
+                space=blanks
+                outhandle.write(space, 0, 1)
+                -- [tabs and blanks have at least one]
+                end
+              outhandle.write(jcomstart, 0, jcomstart.length)
+              outhandle.write(line, i+2, line.length-(i+2))
+              lastsep=0                      -- we wrote data
+              leave i
+              end
+
+            if cc=='/' then
+             if line[i+1]=='*' then do       -- block comment
+              -- we know it is correctly matched or we would have quit earlier
+              srcind =i                      -- indent of open block
+              srccomm=i                      -- comment start
+              srcnest=1                      -- .. and nesting
+              -- already indented if new line
+              i=i+1                          -- step past '*'
+              if i>=line.length-2 then do    -- reached end of line
+                outhandle.write(line, srccomm, line.length-srccomm)
+                lastsep=0                    -- we wrote data
+                leave i                      -- fast exit
+                end
+              end
+            end i
+          -- done with the line
+          srcline=srcline+1
+
+          /* end line .. even if formatting, to preserve empty lines */
+          if srcline<=chunk.line then do
+            outhandle.write(linesepchars, 0, linesepchars.length)
+            lastsep=1
+            end
+
+          if srcline>=chunk.line then if srcnest=0 then leave
+          end fills
+
+        outline=srcline
+        end fillcomments
+      end comments
+
+    -- insert requested trailing separator if formatting and the last
+    -- chunk requested it [delayed so line comments work], and we
+    -- didn't just add one after a comment
+    if \synch then do
+      if lastchunk\=null then if lastchunk.sep then if \lastsep then
+        outhandle.write(linesepchars, 0, linesepchars.length)
+      lastchunk=chunk
+      end
+
+    if chunk.line>outline then do
+      -- insert any needed line separators if not formatting
+      -- [if formatting, line separators have already been added]
+
+      -- Enabling next line and test means source becomes one-line
+      -- [17% smaller class file]
+      -- if \program.flag.test then
+      if synch then loop for chunk.line-outline
+        outhandle.write(linesepchars, 0, linesepchars.length)
+        end
+      outline=chunk.line         -- update logical line
+      end
+
+    if chunk.indent>=0 then do   -- add indention [only if format]
+      outhandle.write(blanks, 0, chunk.indent)
+      lastindent=chunk.indent
+      end
+
+    -- now write the data
+    chars=chunk.datachars
+    if chars\=null then outhandle.write(chars, 0, chars.length)
+
+    if chunk.insert\==null then do
+      chars=chunk.insert.toCharArray()
+      outhandle.write(chars, 0, chars.length)
+      end
+    lastsep=0                    -- just wrote data
+
+    if chunk.postindent>=0 then  -- update indention [only if format]
+      lastindent=chunk.postindent
+
+  catch e=IOException
+    signal RxQuit(rxt, null, 'error.writing.file', outfile, e.getMessage())
+    end c
+  do; outhandle.close(); catch IOException; end     -- close [ignore error]
+  outhandle=null    -- no longer open
+  chunklist=null    -- used all chunks
+  return
+
+ /* POSTINDENT -- set postindent in last chunk */
+ method postindent(indent=int)
+  i=chunklist.size()
+  if i=0 then return
+--if program.flag.diag then say '# pi:' indent
+  chunk=RxChunk chunklist.elementAt(i-1)
+  chunk.postindent=indent
+
+ /* CHECKOUTFILE -- check for an output file clash */
+ method checkoutfile
+  /* Simply raises signal RxQuit if output file already exists -- prevents
+     accidental overwrite.
+     This is not called until the first class is started, so OPTIONS
+     REPLACE can work */
+  if outfileob=null then return /* we're not even going to write it */
+  if \outfileob.exists() then return /* no problem */
+  if \program.flag.replace then do
+    outfileob=null            -- show that we don't own it
+    signal RxQuit(rxt, null, 'output.file.already.exists', outfile)
+    end
+  if \outfileob.canWrite() then do
+    outfileob=null            -- show that we don't own it
+    signal RxQuit(rxt, null, 'file.may.not.be.written', outfile)
+    end
+  /* output file will be erased when opened */
+  return
+
+ /* DISPOSEOUTPUTFILE -- erase or rename the output file
+    Arg1 is 1 to erase, 0 to rename
+    This must only dispose of the file if *we* opened it (as otherwise
+    the check for file-already-exists could cause it to be erased).
+    */
+ method disposeoutputfile(erase=boolean)
+  if outfileob=null, \outfileob.exists() then return     -- don't waste time...
+  if erase then do                                     -- easy
+    outfileob.delete()
+    return
+    end
+  -- rename, please
+  newfile=File(outfileob.getAbsolutePath()'.keep')  -- the new file
+  newfile.delete()                                  -- erase any old one
+  outfileob.renameTo(newfile)                     -- and rename
+
+ /* CROSSREF -- write a line to the crossref file
+    Arg1 is string to write as a line
+    */
+ method crossref(line=Rexx)
+  if xrfhandle=null then                     -- first call
+    do                                       -- open the file
+      xrfstream=FileOutputStream(xrffileob)
+      xrfhandle=OutputStreamWriter(xrfstream)
+    catch e=IOException
+      signal RxQuit(rxt, null, 'error.opening.file', xrffile, e.getMessage())
+    end
+   else line=linesep||line                   -- subsequent calls
+  do
+    chars=line.toCharArray()
+    xrfhandle.write(chars, 0, chars.length)
+  catch e=IOException
+    signal RxQuit(rxt, null, 'error.writing.file', xrffile, e.getMessage())
+  end
+  /* [File is closed by closefiles] */
+
+ /* CLOSEFILES -- close any open files */
+ method closefiles
+  if program.flag.diag then say '# closefiles'
+  if outhandle\=null then do
+    outhandle.close();
+    catch IOException              -- [ignore error]
+    finally outhandle=null
+    end
+  if xrfhandle\=null then do
+    xrfhandle.close();
+    catch IOException              -- [ignore error]
+    finally xrfhandle=null
+    end
+  return
+

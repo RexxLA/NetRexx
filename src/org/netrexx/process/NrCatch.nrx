@@ -1,0 +1,210 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrCatch                                                            */
+/*                                                                    */
+/*   An object that represents a parsed Catch clause.                 */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 1996.06.10 Initial                                                 */
+/* 1996.08.30 Exceptions processing                                   */
+/* 2000.02.24 Add interpretation                                      */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Catch clause.                 */
+class NrCatch implements RxClauseParser uses RxCode, NrLevel, RxCursor
+ properties private
+  rxt      =RxTranslator      -- root
+  parser   =RxParser          -- local reference
+  pooler   =RxVarpool         -- variables manager
+  pcursor  =RxCursor          -- local reference
+  tokens   =RxToken[]         -- local reference
+
+  catinfo  =RxClassInfo       -- exception info
+  catname  =Rexx              -- visible variable name [null if none]
+  cattemp  =Rexx              -- temporary variable name
+  catassign=Rexx              -- assignment (if any)
+  tokname  =RxToken           -- name token (null if none)
+  topblock =NrBlock           -- owning block
+
+ /** Construct an object from the current clause */
+ method NrCatch(newrxt=RxTranslator)
+  rxt      =newrxt                      -- the boss
+  parser   =rxt.program.parser          -- our parser
+  pooler   =rxt.program.pooler          -- our variables manager
+  pcursor  =parser.cursor               -- our parsing cursor
+  tokens   =pcursor.curclause.tokens    -- local reference
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrCatch', pass)
+
+  if parser.level<=2 then signal RxError(rxt, tokens[0], 'unexpected.catch')
+  if       parser.thislevel.key\=='DO'
+   then if parser.thislevel.key\=='LOOP'
+   then if parser.thislevel.key\=='SELECT'
+   then signal RxError(rxt, tokens[0], 'unexpected.catch')
+
+  if parser.thislevel.trystate=TRY_FINAL
+    then signal RxError(rxt, tokens[0], 'catch.after.final')
+
+  -- save reference to us
+  topblock=NrBlock parser.thislevel.clause.lookaside -- the owning NrBlock
+  if topblock.catches=null then topblock.catches=Vector(5)
+  topblock.catches.addElement(parser.cursor.curclause)
+
+  pcursor.curclause.skipend=1           -- drop into this clause causes skip
+
+  parser.endblock()                     -- end the block as needed at this point
+
+  /* Syntax:
+       catch  type
+       catch  var=type
+       [catch var removed, as mistyped exception name becomes var]
+
+     In all cases we have to go via a unique temporary variable in
+     order to bypass Java quirks (must always have a variable, which
+     must be new) */
+  if tokens[1].type=RxToken.SP then begin=2; else begin=1
+  tok=tokens[begin]
+  tokname=RxToken null             -- Name token (null if none)
+  catname=null                     -- Variable name (if any)
+  if tok.type=RxToken.END then signal RxError(rxt, tok, 'exception.or.variable.expected')
+  if tok.type=RxToken.SYM then
+   if tokens[begin+1].type=RxToken.OP then
+    if tokens[begin+1].value[0]='=' then do label havevar   -- var= found
+    tokname=tokens[begin]
+    catname=tokens[begin].value
+    begin=begin+2
+    end havevar
+  /* We expect an Exception term, now, starting at 'begin' */
+  toksig=tokens[begin]
+  term=rxt.tparser.parseterm(pcursor, begin, 1) -- "ONRHS" as Type allowed (expected!)
+  if term.group\=S_TYPE then signal RxError(rxt, toksig, 'exception.type.expected')
+  if term.type.isarray() then signal RxError(rxt, toksig, 'simple.exception.expected')
+  catinfo=rxt.classer.findclass(pcursor, term.type, toksig, 1)
+  if \rxt.classer.issubclass(pcursor, catinfo, RxType.THROWABLE_TYPE, toksig) then
+    signal RxError(rxt, toksig, 'type.not.exception',-
+                   rxt.program.babel.typeString(catinfo.type))
+  n=term.endoff+1
+  if tokens[n].type\=RxToken.END then RxError(rxt, tokens[n], 'junk.on.end')
+
+  /* Check not already caught by a previous CATCH */
+  caught=parser.thislevel.caught
+  if caught\=null then /* a previous */ do
+    num=caught.size(); list=RxException[num]; caught.copyInto(list)
+    loop i=0 to num-1
+      e=list[i]          -- one from list
+      if rxt.classer.issubclass(pcursor, catinfo, e.excepinfo, e.exceptok) then
+        do
+        RxError(rxt, toksig, 'exception.caught.earlier', e.exceptok.line)
+        -- carry on so rest of CATCH block works
+        leave i
+        end
+      end i
+    end
+  /* Add new exception to the 'caught' list */
+  parser.addexceptions(0, catinfo.type.toSig(), toksig)
+
+  /* Now delete items from the signals list that are caught by this clause */
+  signals=parser.thislevel.signals
+  removed=0                   -- this exception definitely catches
+  issub=boolean 0             -- this exception is a subclass of a present
+  if signals\=null then /* are pending signals */ do
+    num=signals.size(); elist=RxException[num]; signals.copyInto(elist)
+    loop i=num-1 to 0 by -1   -- work from right, as list collapses
+      e=elist[i]              -- one from list
+      -- say '# issubclass' e.excepinfo.type.toSig() catinfo.type.toSig()
+      if rxt.classer.issubclass(pcursor, e.excepinfo, catinfo, e.exceptok)
+       then do
+        signals.removeElementAt(i)
+        removed=removed+1     -- count may be interesting in future
+        end
+       else do                -- maybe we are a subclass of it
+        if rxt.classer.issubclass(pcursor, catinfo, e.excepinfo, e.exceptok)
+         then issub=1         -- yes, we are, so don't trigger error
+        end
+      end i
+    end
+  /* If none, and hard, and not a subclass, it's an error.  Constructing
+     an RxException tests hardness.  We can carry on though, as we quite
+     possibly refer to a variable. */
+  if removed=0 then
+   if \issub then
+   if RxException(pcursor, catinfo, toksig).excephard then
+    RxError(rxt, toksig, 'exception.not.signalled.in.block', parser.thislevel.key.upper())
+
+  /* Generate a unique temporary variable, for Java */
+  pcursor.curclass.uniques=pcursor.curclass.uniques+1
+  cattemp='$'pcursor.curclass.uniques
+
+  /* If a no-name, no copy required.  If there was a given name,
+     then we have to create/register the variable and generate an
+     assignment for the catch */
+  if catname=null then catassign=''
+   else /* assign needed */ do
+    var=pooler.findvar(pcursor, catname, tokname, 0, 0, 2)
+    if var<>null then lhtype=var.vartype
+                 else lhtype=null
+    var=pooler.checkvar(pcursor, RxVariable.VAR_LOCAL, catname,-
+                        lhtype, tokname, catinfo.type, toksig, 0)
+    catname=var.varspell                -- get real spelling
+    catassign=catname'='cattemp';'
+    end
+
+  parser.thislevel.trystate=TRY_CATCH
+  parser.thislevel.terminal=0 -- followers are reachable
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** Code generation [only] */
+ method generate
+  /* Now add 'try' at the start, if needed */
+  if parser.thislevel.trychunk\=0 then do
+    -- if we didn't have a protection brace then add a brace now
+    if topblock.protcode=null then add='{try'
+                              else add='try'
+    rxt.program.streamer.outinsertpart(add, parser.thislevel.trychunk)
+    parser.thislevel.trychunk=0         -- add once only
+    parser.thislevel.tryadded=1         -- remember added
+    end
+
+  parser.indention=parser.indention-1
+  rxt.program.streamer.out('}', 1)
+  rxt.program.streamer.out('catch ('catinfo.type.toJava() cattemp'){'catassign)
+  parser.indention=parser.indention+1
+  rxt.program.tracer.traceclause(pcursor.curclause)  -- add trace code if needed
+
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  -- get here only when an exception has been raised and identified
+  cursor.curlevel.trystate=TRY_CATCH         -- now in catch block
+  if catname\=null then do                   -- assignment needed
+    var=pooler.refindvar(cursor, catname)    -- find the variable
+    -- assign the Exception
+    rxt.interpreter.setVar(cursor, var, tokname,-
+                           (RxSignal cursor.curreturn).signalobj)
+    end
+  cursor.curacttype=CUR_NOACT -- we caught it
+  cursor.curreturn=null       -- done with the exception
+  return
+
+ /** canCatch -- test whether this CATCH can catch an exception
+    Arg1 is context cursor
+    Arg2 is the exception signalled
+    returns 1 if this CATCH can accept it
+    */
+ method canCatch(cursor=RxCursor, sig=RxSignal) returns boolean
+   if sig.signalinfo=null then return 0      -- cannot catch Exit
+   return rxt.classer.issubclass(cursor, sig.signalinfo, catinfo, null)
+
