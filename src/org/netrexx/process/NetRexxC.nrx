@@ -50,6 +50,7 @@
 /* 2000.02.08 Extend help to list all options                         */
 /* 2000.03.22 Add -prompt loop [AA 23 BHX-ORD]                        */
 /* 2000.10.16 Properly ignore -savelog if Printwriter specified       */
+/* 2011.08.20 Update to allow compiling programs from memory strings - Kermit Kiser       */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -80,6 +81,9 @@ class NetRexxC
   usageone =boolean 1              -- 1 to show general usage information
                                    -- 0 after prompting
 
+properties private static
+  programstrings = String[]		--	allows programs to be passed in memory strings
+                                   
  /** get here when called from java.exe */
  method main(arg=String[]) static
   exit main2(arg, null)
@@ -88,10 +92,32 @@ class NetRexxC
  method NetRexxC inheritable
   return
 
- /** public call-from-Java entry
+ /** public call-from-Java entry,
     Arg1 is command argument string which has words which are flags or
          file specifications, or "...." for a file specification which
-         may have embedded blanks.
+         may have embedded blanks,
+    Arg2 is a String containing a program in memory,
+    Arg3 is PrintWriter file (forces -savelog if specified)
+    */
+ method main(arg=Rexx, programstring=String, logfile=PrintWriter null) constant returns int
+ 	 exit main(arg,[String programstring],logfile)
+
+ /** public call-from-Java entry,
+    Arg1 is command argument string which has words which are flags or
+         file specifications, or "...." for a file specification which
+         may have embedded blanks,
+    Arg2 is a array of Strings containing programs in memory (no more than the number of file names passed in Arg1),
+    Arg3 is PrintWriter file (forces -savelog if specified)
+    */
+ method main(arg=Rexx, programarray=String[], logfile=PrintWriter null) constant returns int
+ 	 
+ 	 programstrings=programarray	--	save array of program strings 
+ 	 exit main(arg,logfile)
+ 	 
+ /** public call-from-Java entry,
+    Arg1 is command argument string which has words which are flags or
+         file specifications, or "...." for a file specification which
+         may have embedded blanks,
     Arg2 is PrintWriter file (forces -savelog if specified)
     */
  method main(arg=Rexx, logfile=PrintWriter null) constant returns int
@@ -113,10 +139,22 @@ class NetRexxC
   words.copyInto(array)            -- .. and copy the references
   return main2(array, logfile)
 
- /** public call-from-Java entry
+ /** public call-from-Java entry,
     Arg1 is array of argument strings (each containing a flag or a file
-         specification, which may have embedded blanks)
-    Arg2 is PrintWriter file (forces -savelog if specified)
+         specification, which may have embedded blanks),
+	Arg2 is a array of Strings containing programs in memory (no more than the number of file names passed in Arg1),
+    Arg3 is PrintWriter file (forces -savelog if specified),
+    -- this cannot be called just 'main' as it then clashes with the
+    -- primary entrypoint
+    */
+ method main2(arg=String[], programarray=String[], logfile=PrintWriter null) constant returns int
+	 programstrings=programarray	--	save array of program strings 
+ 	 exit main2(arg,logfile)
+ 	 
+ /** public call-from-Java entry,
+    Arg1 is array of argument strings (each containing a flag or a file
+         specification, which may have embedded blanks),
+    Arg2 is PrintWriter file (forces -savelog if specified),
     -- this cannot be called just 'main' as it then clashes with the
     -- primary entrypoint
     */
@@ -170,8 +208,20 @@ class NetRexxC
       etime=long 0                 -- execution time
       ctime=long 0                 -- compilation
 
+      if programstrings\=null then do
+      	  programsources=RxSource[filecount]			--	create array of program sources 
+      	  loop i=0 for filecount
+      	  	  tf=RxFileReader(translator)
+      	  	  if i>=programstrings.length then tf.openfile(Rexx(filearray[i]))
+														  else tf.openfile(Rexx(filearray[i]),programstrings[i])
+			  programsources[i]=tf
+      	  	  end
+      	 end
+      
       -- carry out parsing, optionally with translation
       if time then pstart=System.currentTimeMillis() -- timer
+      if programstrings\=null then ok=translator.translate(flagarray, programsources, outfile, logfile, \exec)
+      	  else -
       ok=translator.translate(flagarray, filearray, outfile, logfile, \exec)
       if time then ptime=System.currentTimeMillis()-pstart
 
@@ -236,6 +286,8 @@ class NetRexxC
     if madelog then logfile.close()
     end
 
+  programstrings=null		--		clear memory of any program strings in case we are called again
+    
   return translator.getexitvalue()
 
  /* TENTH -- convert ms to 0.1s */
