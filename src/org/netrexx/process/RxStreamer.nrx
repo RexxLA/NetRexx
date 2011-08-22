@@ -93,41 +93,49 @@ class RxStreamer
     directory.  This only affects the .class files (others go to source
     directory anyway), and is effected by RxTranslator.
     */
- method openfiles(outname=Rexx, xrfname=Rexx)
-
-  if \program.flag.java then if \program.flag.crossref then return
-
-  inname=Rexx program.source.getName()              -- get the real name
-  inpath=program.source.getPath()                   -- .. and path
-  if inpath=null then inpath=''                   -- so can concatenate
-
-  /* Find the name stub for the program */
-  lastdot=inname.lastpos('.').toint()
-  if lastdot=0 then instub=inname
-   else instub=inname.left(lastdot-1)
-
-  /* Create output name and file if needed */
-  if program.flag.java then do
-    if outname\==null then outfile=outname
-                      else outfile=instub'.java'  -- default output file
-    if outfile.pos('.').toint()=0 then outfile=outfile'.java' -- be kind
-
-    if outfile.right(5)\=='.java' then
-      signal RxQuit(rxt, null, 'output.extension.not.java', outfile)
-    outfilefull=inpath||outfile                   -- will be in source directory
-    outfileob=File(outfilefull)                   -- handle
+  method openfiles(outname=Rexx, xrfname=Rexx)
+    if \program.flag.java then if \program.flag.crossref then return
+    inname=Rexx program.source.getName()              -- get the real name
+    inpath=program.source.getPath()                   -- .. and path
+    if inpath=null then inpath=''                   -- so can concatenate
+    
+    /* Find the name stub for the program */
+    lastdot=inname.lastpos('.').toint()
+    if lastdot=0 then instub=inname
+    else instub=inname.left(lastdot-1)
+    
+    /* Create output name and file if needed */
+    if program.flag.java then do
+      if outname\==null then outfile=outname
+      else outfile=instub'.java'  -- default output file
+      if outfile.pos('.').toint()=0 then outfile=outfile'.java' -- be kind
+      
+      if outfile.right(5)\=='.java' then
+	signal RxQuit(rxt, null, 'output.extension.not.java', outfile)
+      outfilefull=inpath||outfile                   -- will be in source directory
+      outfileob=File(outfilefull)                   -- handle
+    end -- if program
+    xrffileob = this.createCrossrefFile(xrfname)
+    return
+    
+  method createCrossrefFile(xrfname=Rexx) returns File
+    /* Create crossref file name and file if needed */
+    if program.flag.crossref then do
+      inname=Rexx program.source.getName()              -- get the real name
+      inpath=program.source.getPath()                   -- .. and path
+      if inpath=null then inpath=''                   -- so can concatenate
+      /* Find the name stub for the program */
+      lastdot=inname.lastpos('.').toint()
+      if lastdot=0 then instub=inname
+      else instub=inname.left(lastdot-1)
+      
+      if xrfname==null then xrffile=instub'.crossref' -- default crossref file
+      else xrffile=xrfname
+      if xrffile.pos('.').toint()=0 then xrffile=xrffile'.crossref'  -- be kind
+      xrffileob=File(inpath||xrffile)
     end
-
-  /* Create crossref file name and file if needed */
-  if program.flag.crossref then do
-    if xrfname==null then xrffile=instub'.crossref' -- default crossref file
-                     else xrffile=xrfname
-    if xrffile.pos('.').toint()=0 then xrffile=xrffile'.crossref'  -- be kind
-    xrffileob=File(inpath||xrffile)
-    end
-
-  return
-
+    return xrffileob
+    
  /* -----------------------------------------------------------------
     OUTINSERT and OUTINSERTPART -- add an insert to the chunks' list
     Like OUT and OUTPART, below, these are used to add a line-oriented
@@ -557,21 +565,28 @@ class RxStreamer
  /* CROSSREF -- write a line to the crossref file
     Arg1 is string to write as a line
     */
- method crossref(line=Rexx)
-  if xrfhandle=null then                     -- first call
-    do                                       -- open the file
-      xrfstream=FileOutputStream(xrffileob)
-      xrfhandle=OutputStreamWriter(xrfstream)
+  method crossref(line=Rexx)
+    if xrfhandle=null then                     -- first call
+      do
+        do -- open the file
+	  xrfstream=FileOutputStream(xrffileob)
+	catch NullPointerException
+	  RxWarn(rxt, null, 'conflicting.crossref.options', outfile)
+	  xrffileob=this.createCrossrefFile(null)
+	  xrfstream=FileOutputStream(xrffileob)
+	end
+	xrfhandle=OutputStreamWriter(xrfstream)
+      catch e=IOException
+	signal RxQuit(rxt, null, 'error.opening.file', xrffile, e.getMessage())
+      end
+    else line=linesep||line                   -- subsequent calls
+    do
+      chars=line.toCharArray()
+      xrfhandle.write(chars, 0, chars.length)
     catch e=IOException
-      signal RxQuit(rxt, null, 'error.opening.file', xrffile, e.getMessage())
+      signal RxQuit(rxt, null, 'error.writing.file', xrffile, e.getMessage())
     end
-   else line=linesep||line                   -- subsequent calls
-  do
-    chars=line.toCharArray()
-    xrfhandle.write(chars, 0, chars.length)
-  catch e=IOException
-    signal RxQuit(rxt, null, 'error.writing.file', xrffile, e.getMessage())
-  end
+    
   /* [File is closed by closefiles] */
 
  /* CLOSEFILES -- close any open files */
