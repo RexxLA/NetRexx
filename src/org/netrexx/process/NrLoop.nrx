@@ -23,6 +23,7 @@
 /* 2000.03.10 Move much code down to generate, and use .constant      */
 /* 2000.03.11 Implement OVER for interpretation                       */
 /* 2001.05.22 Until code stepped control variable in wrong place      */
+/* 2011.08.10 Added support for Iterables (Collections) and 1D arrays in LOOP OVER sections - Kermit Kiser    */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -59,6 +60,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
   overterm  =RxCode                -- code OVER term [null if none]
   overtype  =RxType                -- OVER collection type
   overrexx  =boolean 0             -- stepping over a Rexx indexed string
+  iterable  =boolean 0             -- stepping over a Java Collection or such
 
   looplabel =''                    -- explicit label
   firsttriv =boolean 1             -- firstpart is trivial assignment
@@ -73,6 +75,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
 
  properties private constant
   dicttype  =RxType('java.util.Dictionary', 0)
+  iterabletype  =RxType('java.lang.Iterable', 0)
 
  /** Construct an object from the current clause */
  method NrLoop(newrxt=RxTranslator)
@@ -219,6 +222,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
           signal RxError(rxt, tok, 'cannot.loop.over.type')
         /* syntax is OK */
         /* It must either extend Rexx or Dictionary */
+        iterable=0			--		adds support for Java Collections, etc. 
         select
           when rxt.classer.issubclass(pcursor, overterm.type, RxType.REXX_TYPE,-
                                       tokens[n]) then do
@@ -227,6 +231,16 @@ class NrLoop extends NrBlock implements RxClauseParser-
             end
           when rxt.classer.issubclass(pcursor, overterm.type,-
                                       dicttype, tokens[n]) then do
+            overtype=RxType.OBJECT_TYPE
+            overrexx=0
+            end
+          when rxt.classer.issubclass(pcursor, overterm.type,-
+                                      iterabletype, tokens[n]) then do
+            overtype=RxType.OBJECT_TYPE
+            overrexx=0
+            iterable=1		--	flag as Java iterable type
+            end
+          when overterm.type.isarray() then do
             overtype=RxType.OBJECT_TYPE
             overrexx=0
             end
@@ -247,6 +261,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
         var=pooler.findvar(pcursor, varname, tokvar, 0, 0, 2)
         if var<>null then lhtype=var.vartype      -- we know it
                      else lhtype=null
+      if (\iterable & \overterm.type.isarray()) | var=null then -
         var=pooler.checkvar(pcursor, RxVariable.VAR_LOCAL, varname,-
                             lhtype, tokvar, overtype, tokens[n], 0)
         varname=var.varspell                      -- get real spelling
@@ -546,16 +561,21 @@ class NrLoop extends NrBlock implements RxClauseParser-
     begpart=begpart||RxType.INT_CLASS workname'=0;'
     if overrexx then begpart=begpart||RxType.VECTOR_CLASS vectname'=new'-
                                       RxType.VECTOR_CLASS'(100,0);'
+        else if overterm.type.isarray() then begpart=begpart||RxType.OBJECT_CLASS'[]' vectname'=new' RxType.OBJECT_CLASS'['stemname'.length];'
                 else begpart=begpart||RxType.OBJECT_CLASS'[]' vectname'=new'-
                                       RxType.OBJECT_CLASS'['stemname'.size()];'
 
     /* Protect the object during snapshot, and get enumerator. */
     begpart=begpart||'synchronized('stemname'){'
+    if iterable then begpart=begpart||"java.util.Iterator" enumname'='stemname'.iterator();';else -
+    	if overterm.type.isarray() then nop;else -
     begpart=begpart||RxType.ENUM_CLASS enumname'='stemname'.keys();'
     /* the snapshot loop... */
     begpart=begpart||'for(;;){'
     if \overrexx then do
       begpart=begpart||'if('workname'=='vectname'.length)break;'
+      if iterable then begpart=begpart||vectname'['workname']='enumname'.next();';else -
+      if overterm.type.isarray() then begpart=begpart||vectname'['workname']='stemname'['stemname'.length-1-'workname'];';else -
       begpart=begpart||vectname'['workname']='enumname'.nextElement();'
       end
      else /* is Rexx */ do
@@ -951,6 +971,23 @@ class NrLoop extends NrBlock implements RxClauseParser-
             end
           end
          else do
+         	 if overterm.type.isarray() then do
+					terma=Object[] termo
+					snap=Vector(terma.length)
+					loop i=terma.length-1 to 0 by -1
+					   snap.add(terma[i])
+					   end
+				   end
+			else -
+         	 if iterable then do		--		performance not issue in interpret mode so use the original loop type code for collections here
+         	 	 termit=java.lang.Iterable termo
+         	 	 titer=Iterator termit.iterator()
+         	 	 snap=Vector(100, 0)
+         	 	 loop while titer.hasNext()
+         	 	 	 snap.addElement(titer.next())
+         	 	 	 end
+         	 	 end
+			else do label notiter     	 	 	 
           termd=Dictionary termo
           -- We know exactly how big the Vector needs to be for this
           -- non-Rexx case.
@@ -959,6 +996,7 @@ class NrLoop extends NrBlock implements RxClauseParser-
           loop for termd.size()
             snap.addElement(it.nextElement())
             end
+            end notiter
           end
         level.oversnap=snap                  -- snapshot of objects
         level.forcount=snap.size()             -- this will terminate the loop
