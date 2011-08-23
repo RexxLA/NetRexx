@@ -17,9 +17,10 @@
 /*                                                                    */
 /* ------------------------------------------------------------------ */
 /* 2000.04.19 Initial [from NetRexxC]                                 */
+/* 2011.08.19 add new apis for interpret,eval (Kermit Kiser)         */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
-options binary nodecimal strictcase strictargs
+options binary decimal strictcase strictargs
 
 /**  NetRexx API external interface.                                   */
 class NetRexxA
@@ -27,6 +28,7 @@ class NetRexxA
  properties private
    translator=RxTranslator         -- It.
    started=boolean 0               -- 1 if exec state begun
+   savedprogram=String ""		--	save fast program interpret
 
  /** Constructor: build a translator object */
 
@@ -64,6 +66,99 @@ class NetRexxA
     end i
   return translator.translate(flags, files, outfile, logfile, \exec)
 
+ /** parse -- parse a set of files, under specified flags,
+    Arg1 is list of program names,
+    Arg2 is list of program strings, 
+    Arg3 is list of flags,
+    returns 1 if no error
+    */
+ method parse(filestrings=String[], programstrings=String[], flagstrings=String[]) returns boolean
+ 	 
+  if started then do
+    started=0
+    translator.endexec()
+    end
+
+  outfile=System.out
+  logfile=PrintWriter null
+  exec=boolean 1
+  -- copy the arrays
+  flags=Rexx[flagstrings.length+1]
+  loop i=0 for flagstrings.length
+    flags[i]=Rexx(flagstrings[i])
+    end i
+  flags[flags.length-1]='nojava'   -- force
+
+  filesources=RxFileReader[filestrings.length]
+  loop i=0 for filestrings.length
+	  tf=RxFileReader(translator)
+	  if i>=programstrings.length then tf.openfile(Rexx(filestrings[i]))
+												  else tf.openfile(Rexx(filestrings[i]),programstrings[i])
+	  filesources[i]=tf  	  
+    end i
+  return translator.translate(flags, filesources, outfile, logfile, \exec)
+																														  
+ /** interpret -- a convenience method to interpret a single NetRexx program in a string,
+    Arg1 is the program name,
+    Arg2 is the program string,
+    Arg3 is the argument string  (optional),
+    Arg4 is the translator flags string  (optional),
+    returns 1 if no parse error, default flag is -verbose0
+    */
+ method interpret(programname=String, programstring=String, argstring=String "", flagstring=String "") returns boolean
+ 	 
+ 	 if savedprogram\=programstring then do
+ 	 	 savedprogram=programstring
+ 	 	 rexxflags=Rexx(flagstring)
+ 	 	 flagstrings=String[rexxflags.words()+1]
+ 	 	 flagstrings[0]="-verbose0"
+ 	 	 loop i=1 for rexxflags.words()
+ 	 	 	 flagstrings[i]=rexxflags.word(i).toString()
+ 	 	 	 end
+		 ok=this.parse([programname],[programstring],flagstrings)
+		 end
+	else ok=1
+		
+	if ok=1 then do
+		  argarray=[String argstring]            -- arguments for -exec [iff not null]
+		  translator.exec(argarray)                 -- .. so interpret
+		  end
+		  
+	return ok
+																														  
+ /** eval -- a convenience method to interpret a method from a NetRexx program in a string and return an object,
+    Arg1 is the program name,
+    Arg2 is the program string,
+    Arg3 is the method name to call, method must accept String array like main methods, 
+    Arg4 is the argument string  (optional),
+    Arg5 is the translator flags string  (optional),
+    returns an object if no error, default flag is -verbose0
+    */
+ method eval(programname=String, programstring=String, methodname=String, argstring=String "", flagstring=String "") returns Object  SIGNALS NoSuchMethodException,IllegalAccessException,InvocationTargetException
+ 	 
+ 	 if savedprogram\=programstring then do
+ 	 	 savedprogram=programstring
+ 	 	 rexxflags=Rexx(flagstring)
+ 	 	 flagstrings=String[rexxflags.words()+1]
+ 	 	 flagstrings[0]="-verbose0"
+ 	 	 loop i=1 for rexxflags.words()
+ 	 	 	 flagstrings[i]=rexxflags.word(i).toString()
+ 	 	 	 end
+		 ok=this.parse([programname],[programstring],flagstrings)
+		 end
+	else ok=1
+		
+	if ok=1 then do
+	  argarray=[String argstring]            -- arguments for -exec [iff not null]
+	  evalClass=getClassObject(null,programname)
+      classes=[getClassObject('java.lang', 'String', 1)]
+      evalMethod=evalClass.getMethod(methodname, classes)
+      passarg=[Object argarray]
+      return Object evalMethod.invoke(null, passarg)
+	  end
+		  
+	return Object Boolean(ok)
+	
  /** getClassObject -- in interpretation context
     Arg1 is the package (null if 'generic), dotted
     Arg2 is the class name (dotted for minor classes)
