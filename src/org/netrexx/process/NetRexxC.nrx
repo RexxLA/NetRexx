@@ -51,6 +51,7 @@
 /* 2000.03.22 Add -prompt loop [AA 23 BHX-ORD]                        */
 /* 2000.10.16 Properly ignore -savelog if Printwriter specified       */
 /* 2011.08.20 Update to allow compiling programs from memory strings - Kermit Kiser       */
+/* 2011.08.22 add option to supress rename of java files to .keep - Kermit Kiser       */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -71,6 +72,7 @@ class NetRexxC
   time    =boolean 0               -- display timings
   savelog =boolean 0               -- need PrintWriter
   warnexit0 = boolean 0            -- exit with zero return code on warnings
+  keepasjava = boolean 0            -- keep java output and do not rename it to .keep
   -- next two are set by parseline
   files    =Vector(10)             -- collects file specifications
   flags    =Vector(10)             -- collects translator flags
@@ -238,7 +240,7 @@ properties private static
         if time then ctime=System.currentTimeMillis()-cstart
         end /* compilation */
 
-      translator.dispose(keep)     -- dispose of .java files
+      translator.dispose(keep, keepasjava)     -- dispose of .java files
       translator.summary(exec)     -- summarise
 
       if time then do
@@ -328,6 +330,8 @@ properties private static
         when arglow=='noprompt'  then prompt=0
    when arglow=='warnexit0' then warnexit0=1
    when arglow=='nowarnexit0' then warnexit0=0
+   when arglow=='keepasjava' then do; keepasjava=1; keep=1; end
+   when arglow=='nokeepasjava' then keepasjava=0
         when arglow=='noarg' then do
           exec=1    -- implied
           argarray=String[0]
@@ -371,6 +375,7 @@ properties private static
   say '  -console      -- display messages on console (default)'
   say '  -exec         -- interpret with no argument words'
   say '  -keep         -- keep any completed .java file (as xxx.java.keep)'
+  say '  -keepasjava    -- keep any completed .java file (as xxx.java)'
   say '  -prompt       -- prompt for new request after processing'
 --  say '  -reset        -- reset cached classpath information if resident'
 --  say '  -resident     -- keep the compiler in storage for faster compiles'

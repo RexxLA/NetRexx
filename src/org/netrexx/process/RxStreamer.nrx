@@ -36,6 +36,7 @@
 /* 2000.02.12 Heed \flag.java [but for now we still open/close file]  */
 /* 2000.04.30 Move input file processing to RxFileReader              */
 /* 2005.01.14 Cosmetic lines were being written if comments=1         */
+/* 2011.08.22 skip rename of java to .keep if keepasjava requested - Kermit Kiser       */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -553,16 +554,18 @@ class RxStreamer
     This must only dispose of the file if *we* opened it (as otherwise
     the check for file-already-exists could cause it to be erased).
     */
- method disposeoutputfile(erase=boolean)
+ method disposeoutputfile(erase=boolean, keepasjava=boolean 0)
   if outfileob=null, \outfileob.exists() then return     -- don't waste time...
   if erase then do                                     -- easy
     outfileob.delete()
     return
     end
+  if \keepasjava then do
   -- rename, please
   newfile=File(outfileob.getAbsolutePath()'.keep')  -- the new file
   newfile.delete()                                  -- erase any old one
   outfileob.renameTo(newfile)                     -- and rename
+  end
 
  /* CROSSREF -- write a line to the crossref file
     Arg1 is string to write as a line
