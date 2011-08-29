@@ -1,1 +1,0 @@
-call nrc -nocrossref ExtTest

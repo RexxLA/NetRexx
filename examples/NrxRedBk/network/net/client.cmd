@@ -1,1 +1,0 @@
-Java ClntSock loopback 80 GET /test.html

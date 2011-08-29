@@ -1,1 +1,0 @@
-call nrc -nocrossref Game Game2 Game3 Input NonJava
