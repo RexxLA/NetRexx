@@ -27,6 +27,8 @@
 /* 1996.09.02 -- handle Warnings from NetRexxC (rc=1)  */
 /* 1996.12.14 -- use COM.ibm.netrexx.process           */
 /* 1998.05.25 -- pass NETREXX_JAVA setting to java.exe */
+/* 2011.09.01 -- use org.netrexx.process               */
+/* 2011.09.01 -- remove -xms4M                         */
 
 parse arg args
 w=wordpos('-run', args)
@@ -52,7 +54,7 @@ select                             /* system-specific options */
     javaopts=value('NETREXX_JAVA',,'ENVIRONMENT')
   end
 
-'java -ms4M' javaopts 'COM.ibm.netrexx.process.NetRexxC' args
+'java ' javaopts 'org.netrexx.process.NetRexxC' args
 
 /* ----- Run ----- */
 if rc<=1 & run then do

@@ -27,13 +27,16 @@
 @REM :-----------------------------------------------------------------
 @REM : 1996.12.28 -- initial version derived from NetRexxC.cmd
 @REM : 1998.05.25 -- use NETREXX_JAVA as options to java.exe
+@REM : 2011.09.01 -- use org.netrexx.process               
+@REM : 2011.09.01 -- remove -xms4M
+
 @echo off
 set netrexxc.bat_run=no
 if not '%1'=='-run' goto compile
   set netrexxc.bat_run=yes
   shift
 :compile
-java -ms4M %netrexx_java% COM.ibm.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
+java %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
 if errorlevel 2 goto quit
 if %netrexxc.bat_run%==no goto quit
 echo Running %1...
