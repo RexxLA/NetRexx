@@ -17,6 +17,8 @@ The 3.01 will mark the first official RexxLA release. Changes are:
 
 - a bug in 2.05 (and probably dating back to earlier releases) which a translator commandline option of '-nocrossref' that was overridden by a program option of 'crossref' led to a NullPointerException in RxStreamer.crossref() has been resolved (NETREXX-28). A warning for conflicting options is issued, while the crossref file object pointer is allocated.
 
+- the option '-keepasjava' is added, which removes the necessity to rename *.java.keep files to *.java when used
+
 - the translator displays a build date on startup
 
 - addition of several NetRexx examples from the RosettaCode.org site ( http://rosettacode.org ) and the IBM Redbook
