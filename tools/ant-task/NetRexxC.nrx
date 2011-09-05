@@ -1,4 +1,4 @@
-package org.netrexx
+package org.apache.tools.ant.taskdefs.optional
 /**
  * Rewrite of the optional ANT task (originally by dIon Gillard) NetRexxc in NetRexx.
  * @author Rene Vincent Jansen <a href="mailto:rvjansen@xs4all.nl">rvjansen@xs4all.nl</a>
@@ -25,6 +25,8 @@ import org.apache.tools.ant.DirectoryScanner
 import org.apache.tools.ant.Project
 import org.apache.tools.ant.taskdefs.MatchingTask
 import org.apache.tools.ant.types.EnumeratedAttribute
+import org.apache.tools.ant.types.Reference
+import org.apache.tools.ant.types.Path
 import org.apache.tools.ant.taskdefs.
 import org.netrexx.
 /**
@@ -63,6 +65,7 @@ import org.netrexx.
  * <li>suppressVariableNotUsed</li>
  * <li>suppressExceptionNotSignalled</li>
  * <li>suppressDeprecation</li>
+ * <li>removeKeepExtension</li>
  * </ul>
  * Of these arguments, the <b>srcdir</b> argument is required.
  *
@@ -82,14 +85,16 @@ import org.netrexx.
  * like to have it
  * Original NetRexxC Ant task dumps all over the place when doing this
  * Down the road, we compare directory paths and skip unneccesary actions
+ *
+ * Kermit Kiser 20110904 - updated to fix errors, add missing code from Apache version, 
+ *   use main2 entry to handle file names with spaces, add nested classpath support.
  */
 
-
-class Nrxc extends MatchingTask
+class NetRexxC extends MatchingTask
 
   properties indirect
   binary       = boolean
-  classpath    = String
+
   comments     = boolean
   compact      = boolean 0
   compile      = boolean 1
@@ -105,7 +110,7 @@ class Nrxc extends MatchingTask
   logo	       = boolean 1
   replace      = boolean
   savelog      = boolean
-  srcDir       = file
+  srcDir       = File
   sourcedir    = boolean 1 -- Should this be the default for ant?
   strictargs   = boolean
   strictassign = boolean
@@ -116,12 +121,12 @@ class Nrxc extends MatchingTask
   symbols      = boolean
   time	       = boolean
   utf8	       = boolean
-  pfpn	       = boolean -- 2002-11-27 RVJ
   suppressMethodArgumentNotUsed	 = boolean 0
   suppressPrivatePropertynotUsed = boolean 0
   suppressVariableNotUsed	 = boolean 0
   suppressExceptionNotSignalled	 = boolean 0
   suppressDeprecation		 = boolean 0
+  removeKeepExtension		 = boolean 0
   /* other implementation variables */
   compileList  = Vector()
   filecopyList = Hashtable()
@@ -129,12 +134,12 @@ class Nrxc extends MatchingTask
 
   /* properties that need an extra setter method 
    */
-  properties private unused
-
-  verbose      =  String "verbose3"
   
   properties private
   trace_       =  String "trace2"
+  verbose     =  String "verbose3"
+  compileClasspath = Path
+  classpath    = String
   
   /* Constants for the messages to suppress by flags and their corresponding
    * propperties.
@@ -146,6 +151,43 @@ class Nrxc extends MatchingTask
   MSG_EXCEPTION_NOT_SIGNALLED	= String "is in SIGNALS list but is not signalled within the method"
   MSG_DEPRICATION		= String "has been deprecated"
 
+     /**
+     * Set the classpath to be used for this compilation.
+     *
+     * @param classpath an Ant Path object containing the compilation classpath.
+     */
+    method setClasspath(superclasspath=Path) 
+        if (compileClasspath = null) then compileClasspath = superclasspath
+        	else compileClasspath.append(superclasspath)
+ 
+    /**
+     * Gets the classpath to be used for this compilation.
+     * @return the class path
+     */
+     method getClasspath() returns Path
+        return compileClasspath
+
+    /**
+     * Adds a path to the classpath.
+     * @return a class path to be configured
+     */
+    method createClasspath() returns Path
+        if (compileClasspath = null) then compileClasspath = Path(getProject())
+        return compileClasspath.createPath()
+
+    /**
+     * Adds a reference to a classpath defined elsewhere.
+     * @param r a reference to a classpath
+     */
+    method setClasspathRef(r=Reference)
+        createClasspath().setRefid(r)
+
+        -----------------------------------------------
+       		
+    method setClasspath(cp=String)
+        classpath = cp
+  
+        	        
   /**
    * Set whether the NetRexx compiler should compile the generated java code
    * Valid true values are "on" or "true". Anything else sets the flag to
@@ -181,9 +223,6 @@ class Nrxc extends MatchingTask
 
     prj = this.getProject()
     
-    p = prj.getProperty("ant.netrexxc.pfpn")
-    if p \= null then this.pfpn = Project.toBoolean(p)
-
     p = prj.getProperty("ant.netrexxc.binary")
     if p \= null then this.binary = Project.toBoolean(p)
 
@@ -220,7 +259,7 @@ class Nrxc extends MatchingTask
     if p \= null then this.java_ = Project.toBoolean(p)
 
     p = prj.getProperty("ant.netrexxc.keep")
-    if p \= null then this.keep = Project.toboolean(p)
+    if p \= null then this.keep = Project.toBoolean(p)
 
     p = prj.getProperty("ant.netrexxc.logo")
     if p \= null then this.logo = Project.toBoolean(p)
@@ -262,13 +301,13 @@ class Nrxc extends MatchingTask
     if p \= null then this.utf8 = Project.toBoolean(p)
 
     p = prj.getProperty("ant.netrexxc.verbose")
-    if p \= null then this.setverbose(p)
+    if p \= null then this.setVerbose(p)
 
     p = prj.getProperty("ant.netrexxc.suppressMethodArgumentNotUsed")
     if p \= null then this.suppressMethodArgumentNotUsed = Project.toBoolean(p)
 
     p = prj.getProperty("ant.netrexxc.suppressPrivatePropertyNotUsed")
-    if p \= null then this.suppressPrivatePropertyNotUsed = Project.toBoolean(p)
+    if p \= null then this.suppressPrivatePropertynotUsed = Project.toBoolean(p)
 
     p = prj.getProperty("ant.netrexxc.suppressVariableNotUsed")
     if p \= null then this.suppressVariableNotUsed = Project.toBoolean(p)
@@ -278,6 +317,9 @@ class Nrxc extends MatchingTask
 
     p = prj.getProperty("ant.netrexxc.suppressDeprecation")
     if p \= null then this.suppressDeprecation = Project.toBoolean(p)
+
+    p = prj.getProperty("ant.netrexxc.removeKeepExtension")
+    if p \= null then this.removeKeepExtension = Project.toBoolean(p)
 
     return
 
@@ -312,6 +354,8 @@ class Nrxc extends MatchingTask
 	  log("Compiling" compileList.size() "source files to" destDir)
 
 	doNetRexxCompile()
+		
+	  if (removeKeepExtension & (\compile | keep)) then removeKeepExtensions()		
       end
 
     return
@@ -332,13 +376,22 @@ class Nrxc extends MatchingTask
        * if it's a source file, see if the destination class file needs
        * to be recreated via compilation
        */
-      if filename.toLowerCase().endsWith(".nrx") then
+      if fileName.toLowerCase().endsWith(".nrx") then
 	do
-	  classFile = File(destDir_, fileName.substring(0, filename.lastIndexOf('.'))".class")
+	  classFile = File(destDir_, fileName.substring(0, fileName.lastIndexOf('.'))".class")
 
-	  if \compile | srcFile.lastModified() > classFile.lastModified() then
+	  javaFile = File(destDir_, fileName.substring(0, fileName.lastIndexOf('.'))||'.java.keep .java'.word((removeKeepExtension)+1))
+
+	                 --// nocompile case tests against .java[.keep] file
+      if (\compile & (srcFile.lastModified() > javaFile.lastModified())) then do
+                    filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath());
+                    compileList.addElement(destFile.getAbsolutePath());
+					end
+                   --// compile case tests against .class file
+                else -
+	  if compile & (srcFile.lastModified() > classFile.lastModified()) then
 	    do
-	      filecopyList.put(srcFile.getAbsolutePath(), destfile.getAbsolutePath())
+	      filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath())
 	      compileList.addElement(destFile.getAbsolutePath())
 	    end
 	end
@@ -369,27 +422,57 @@ class Nrxc extends MatchingTask
     
     enum_ = filecopyList.keys()
     loop while enum_.hasMoreElements()
-      fromFile = File(String enum_.nextElement())
-      toFile   = File(String filecopyList.get(fromFile))
+      fromFilename = String enum_.nextElement()
+--      say fromFilename
+      fromFile = File(fromFilename)
+      toFilename  = String filecopyList.get(fromFilename)
+--      say toFilename
+      if toFilename=null then say "toFilename is null"
+      toFile   = File(toFilename)
       
-/*       do */
-	cp = Copy()
-	Cp.setFile(fromFile)
-	Cp.setToFile(toFile)
-	Cp.execute()
-/* 	this.getProject().copyfile(fromFile, toFile) */
- /*      catch ioe = IOException */
-/* 	msg = "Failed to copy" fromfile "to" toFile "due to" ioe.getMessage() */
-/* 	signal BuildException(msg, ioe) */
-/*       end */
+		do
+	/*  probably best to use this arcane syntax to call the Copy task
+		   as there was an effort in 2006 to remove the deprecated Project.copyfile methods   */
+		   
+		Cp = Copy()
+		Cp.setFile(fromFile)
+		Cp.setTofile(toFile)
+		Cp.execute()
+	/*
+		this.getProject().copyfile(fromFile, toFile)
+		  catch ioe = IOException
+			msg = "Failed to copy" fromfile "to" toFile "due to" ioe.getMessage()
+			signal BuildException(msg, ioe)
+			end
+	 */     
+		end
     end
-
     return
+
+    /**
+     * Rename .java.keep files (back) to .java. The netrexxc renames all
+     * .java files to .java.keep if either -keep or -nocompile option is set.
+     */
+   method removeKeepExtensions()
+        if (compileList.size() > 0) then do
+            log("Removing .keep extension on " compileList.size() " file"||'s'.word((compileList.size() = 1)+1))
+            e = compileList.elements()
+            loop while (e.hasMoreElements()) 
+                nrxName = String e.nextElement()
+                baseName = nrxName.substring(0, nrxName.lastIndexOf('.'))
+                fromFile = File(baseName".java.keep")
+                toFile = File(baseName".java")
+                if (fromFile.renameTo(toFile)) then -
+                    log("Successfully renamed "  fromFile " to " toFile, Project.MSG_VERBOSE)
+					else log("Failed to rename " fromFile " to " toFile)
+				end
+			end
+    
 
   method doNetRexxCompile() signals BuildException private
     log("Using NetRexx compiler", Project.MSG_VERBOSE)
 
-    classpath	   = getCompileClassPath()
+    classpath	   = getCompileClasspath()
     compileOptions = StringBuffer()
 /*     fileList	   = StringBuffer() */
 
@@ -408,15 +491,20 @@ class Nrxc extends MatchingTask
     end
 
     /* create a single array of arguments for the compiler */
-    compileArgs = String[compileOptionsArrayList.size() -1 + fileListArray.length]
+--    compileArgs = String[compileOptionsArrayList.size() -1 + fileListArray.length]
+    compileArgs = String[compileOptionsArrayList.size() + fileListArray.length]
 
     loop i = 0 to compileOptionsArrayList.size() -1
       compileArgs[i] = String compileOptionsArrayList.get(i)
     end
 
     loop i = 0 to fileListArray.length -1
-      compileArgs[i + compileOptionsArrayList.size() -1] = fileListArray[i]
+      compileArgs[i + compileOptionsArrayList.size()] = fileListArray[i]
+--      compileArgs[i + compileOptionsArrayList.size() -1] = fileListArray[i]
     end
+
+--    say "compileClasspath="compileClasspath.toString()
+--    say "classpath="classpath.toString()
 
     -- print nice output about what we are doing for the log
     compileOptions.append("Compilation args: ")
@@ -429,7 +517,7 @@ class Nrxc extends MatchingTask
     log(compileOptions.toString(), Project.MSG_VERBOSE)
 
     eol = System.getProperty("line.separator")
-    niceSourceList = StringBuffer("Files to be compiled" eol)
+    niceSourceList = StringBuffer(String ("Files to be compiled"||eol))
 
     loop i = 0 to compileList.size() -1
       niceSourceList.append("    ")
@@ -442,22 +530,24 @@ class Nrxc extends MatchingTask
     -- need to set java.class.path property and restore it later
     -- since the NetRexx compiler has no option for the classpath
     currentClassPath = System.getProperty("java.class.path")
-    currentProperties = system.getProperties()
+    currentProperties = System.getProperties()
     currentProperties.put("java.class.path", classpath)
 
     do
-      nrx_ = org.netrexx.Nrx(compileArgs)
+--      nrx_ = org.netrexx.Nrx(compileArgs)
+      nrx_ = org.netrexx.process.NetRexxC.main2(compileArgs)
 /*     catch ioe = Exception */
 /*       signal BuildException("Unexpected Exception while playing with Strings", ioe) */
 /*     finally */
       -- need to reset java.class.path property
-      -- since the NetRexx compiler has on option for the classpath
+      -- since the NetRexx compiler has no option for the classpath
 /*       currentProperties = System.getProperties() */
       currentProperties.put("java.class.path", currentClassPath)
     end
-    if nrx_.getReturnCode() > 0 then
+--    if nrx_.getReturnCode() > 0 then
+    if nrx_ > 1 then
       do
-	signal BuildException
+	signal  BuildException("Compile failed, messages should have been provided.")
       end
     return
 
@@ -474,10 +564,13 @@ class Nrxc extends MatchingTask
     -- add our classpath to the mix
     if this.classpath \= null then
       addExistingToClasspath(cp, this.classpath)
+      
+	if this.compileClasspath \= null then
+      addExistingToClasspath(cp, this.compileClasspath.toString())
 
 /*     -- add the system classpath */
 /*     addExsistingToClasspath(classpath, system.getProperty("java.class.path") */
-    return cp.toString
+    return cp.toString()
 
     /**
       * This
@@ -485,9 +578,6 @@ class Nrxc extends MatchingTask
   method getCompileOptionsAsArrayList() returns ArrayList
 
     opt = ArrayList()
-
-    if pfpn then opt.add(String "-pfpn")
-    else opt.add(String "-nopfpn")
 
     if binary then opt.add(String "-binary")
     else opt.add(String "-nobinary")
@@ -565,6 +655,8 @@ class Nrxc extends MatchingTask
 
     if utf8 then opt.add(String "-utf8")
     else opt.add(String "-noutf8")
+    
+    opt.add(String ("-"||verbose))
 
     return opt
     
@@ -594,27 +686,3 @@ class Nrxc extends MatchingTask
     end
 
     return
-
-class TraceAttr extends EnumeratedAttribute 
-
-  method getValues() returns String[]
-    strArray = String[4]
-    strArray[0] = "trace"
-    strArray[1] = "trace1"
-    strArray[2] = "trace2"
-    strArray[3] = "notrace"
-    return strArray
-
-class VerboseAttr extends EnumeratedAttribute
-
-  method getValues() returns String[]
-    strArray = String[8]
-    strArray[0] = "verbose"
-    strArray[1] = "verbose0"
-    strArray[3] = "verbose1"
-    strArray[4] = "verbose2"
-    strArray[5] = "verbose3"
-    strArray[6] = "verbose4"
-    strArray[7] = "verbose5"
-    strArray[8] = "noverbose"
-    return strArray
