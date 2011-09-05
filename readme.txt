@@ -1,9 +1,13 @@
 This is the directory structure of the NetRexx codebase:
 
-COM/ibm/netrexx/process/
+/org/netrexx/process
 This contains the source code for the NetRexx language translator
 
-/COM/ibm/netrexx/diag/
+COM/ibm/netrexx/process/
+This contains the source code for backward-compatible stub to enable
+the NetRexx language translator to be used with the old package names
+
+/org/netrexx/diag/
 Contains test cases to be run during development
 
 netrexx/lang/
