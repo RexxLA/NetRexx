@@ -28,6 +28,7 @@
 /* 2000.02.28 add token for Convertcode for use during interpretation */
 /* 2000.03.05 Convertcode works independently on values and javacode  */
 /* 2000.04.15 make cursor-based                                       */
+/* 2011.09.02 add conversions for CharSequences - Kermit Kiser        */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -51,6 +52,7 @@ class RxConverter uses RxCode
        P  - numeric primitive [not boolean or char]
        R  - netrexx.lang.Rexx
        S  - java.lang.String
+       CSQ  - java.lang.CharSequence
        W  - widening cast
 
      hence CONVERT_PR means 'convert from primitive to Rexx'
@@ -97,6 +99,9 @@ class RxConverter uses RxCode
   CONVERT_SR =137   -- String -> Rexx
   CONVERT_WO =138   -- free cast (widening conversion) on classes
   CONVERT_WP =139   -- free cast (widening conversion) on primitives
+  CONVERT_RCSQ =140   -- Rexx -> CharSequence
+  CONVERT_CSQR =141   -- CharSequence -> Rexx 
+  CONVERT_CSQS =142   -- CharSequence -> String 
 
   /* Tuning value */
   MAXCONLEN  = 12   -- maximum length literal that will be made a constant
@@ -258,10 +263,15 @@ class RxConverter uses RxCode
   if lhtype=RxType.REXX_TYPE then do
     if rhtype=RxType.CHARARRAY_TYPE  then return RxConvert(15, CONVERT_CAR)
     if rhtype=RxType.STRING_TYPE     then return RxConvert(17, CONVERT_SR)
+    if rhtype=RxType.CHARSEQUENCE_TYPE     then return RxConvert(17, CONVERT_CSQR)
     end
+  if lhtype=RxType.CHARSEQUENCE_TYPE then do
+    if rhtype=RxType.REXX_TYPE   then return RxConvert(17, CONVERT_RCSQ)
+    end    
   if lhtype=RxType.STRING_TYPE then do
     if rhtype=RxType.CHARARRAY_TYPE  then return RxConvert(15, CONVERT_CAS)
     if rhtype=RxType.REXX_TYPE   then return RxConvert(17, CONVERT_RS)
+    if rhtype=RxType.CHARSEQUENCE_TYPE     then return RxConvert(17, CONVERT_CSQS)
     end
   if lhtype=RxType.CHARARRAY_TYPE    then do
     if rhtype=RxType.REXX_TYPE   then return RxConvert(14, CONVERT_RCA)
@@ -565,6 +575,20 @@ end
         code.value=Rexx(String code.value)
 end
       end
+   when CONVERT_CSQR then do                  -- CharSequence -> Rexx
+      if code.javacode\=null then do label java
+        code.javacode=RxType.REXX_CLASS'.toRexx('code.javacode'.toString())'
+        code.wrapped=1                       -- it's atomic
+        end
+      if code.value\=null then code.value=Rexx(String code.value.toString())
+      end  
+   when CONVERT_CSQS then do                  -- CharSequence -> String
+      if code.javacode\=null then do label java
+        code.javacode=code.javacode'.toString()'
+        code.wrapped=1                       -- it's atomic
+        end
+      if code.value\=null then code.value=String code.value.toString()
+      end       
     when CONVERT_RS then do                  -- Rexx -> String
       if code.javacode\=null then do label java
         code.javacode=RxType.REXX_CLASS'.toString('code.javacode')'
@@ -572,6 +596,13 @@ end
         end
       if code.value\=null then code.value=(Rexx code.value).toString()
       end
+    when CONVERT_RCSQ then do                  -- Rexx -> CharSequence
+      if code.javacode\=null then do label java
+        code.javacode=RxType.REXX_CLASS'.toString('code.javacode')'
+        code.wrapped=1                       -- it's atomic
+        end
+      if code.value\=null then code.value=(Rexx code.value).toString()
+      end      
     when CONVERT_SC  then do                 -- String -> char
       tochar(code)
       if code.value\=null then do label doit
