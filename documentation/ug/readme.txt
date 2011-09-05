@@ -7,7 +7,7 @@ This is RC1 and not the released package. Specifically, the following is incompl
 - there is no building procedure for all the examples
 - addition of the open sourced njPipes package, which implements CMS/TSO (Hartmann) Pipelines in NetRexx and Java.
 
-This RC1 is meant for experienced users. The NetRexxC.jar and NetRexxR.jar files have been tested and are fit for use. New features might be changed and/or repealed until the official version is issued.
+This RC1 is meant for experienced users. The NetRexxC.jar and NetRexxR.jar files have been tested and are fit for use. New features might be changed and/or repealed until the official version is issued. The LICENSE file can be found in both product jars.
 
 The 3.01 will mark the first official RexxLA release. Changes are:
 
