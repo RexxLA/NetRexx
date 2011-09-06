@@ -33,5 +33,9 @@ The 3.01 will mark the first official RexxLA release. Changes are:
 
 - a solution for NETREXX-18, Universal build support with an ant task. NetRexx can now be built on any Java SDK in a platform independent way; bootstrap compiler is in the version repository (Patric Bechtel, Kermit Kiser)
 
+- an updated Ant NetRexxC task (ant-netrexx.jar) is included with support for file names containing spaces and for nested classpath elements.
+
+- The Java CharSequence class is now recognized by NetRexx and treated like the Java String class with automatic conversions to and from Rexx objects as needed.
+
 This package structure will be built upon in the coming releases. For remarks, corrections and suggestions, please use developers@netrexx.kenai.com.
 
