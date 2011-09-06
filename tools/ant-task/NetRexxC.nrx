@@ -103,6 +103,7 @@ class NetRexxC extends MatchingTask
   format       = boolean
   java_	       = boolean
   keep	       = boolean
+  keepasjava = boolean 0            -- keep java output and do not rename it to .keep  
   logo	       = boolean 1
   replace      = boolean
   savelog      = boolean
@@ -257,6 +258,9 @@ class NetRexxC extends MatchingTask
     p = prj.getProperty("ant.netrexxc.keep")
     if p \= null then this.keep = Project.toBoolean(p)
 
+    p = prj.getProperty("ant.netrexxc.keepasjava")
+    if p \= null then this.keepasjava = Project.toBoolean(p)
+    	
     p = prj.getProperty("ant.netrexxc.logo")
     if p \= null then this.logo = Project.toBoolean(p)
 
@@ -427,21 +431,21 @@ class NetRexxC extends MatchingTask
       toFile   = File(toFilename)
       
 		do
-	/*  probably best to use this arcane syntax to call the Copy task
-		   as there was an effort in 2006 to remove the deprecated Project.copyfile methods   */
+	/*  probably better to use this arcane syntax to call the Copy task
+		   as there was an effort in 2006 to remove the deprecated Project.copyfile methods   
+		   but it causes extra copy lines in the Ant output for every file copied!
 		   
 		Cp = Copy()
 		Cp.setFile(fromFile)
 		Cp.setTofile(toFile)
 		Cp.execute()
-	/*
-		this.getProject().copyfile(fromFile, toFile)
+	*/
+		this.getProject().copyFile(fromFile, toFile)
 		  catch ioe = IOException
-			msg = "Failed to copy" fromfile "to" toFile "due to" ioe.getMessage()
+			msg = "Failed to copy" fromFile "to" toFile "due to" ioe.getMessage()
 			signal BuildException(msg, ioe)
-			end
-	 */     
 		end
+	      
     end
     return
 
@@ -522,6 +526,8 @@ class NetRexxC extends MatchingTask
     end
 
     log(niceSourceList.toString(), Project.MSG_VERBOSE)
+    
+    log("Classpath:"classpath, Project.MSG_VERBOSE)
 
     -- need to set java.class.path property and restore it later
     -- since the NetRexx compiler has no option for the classpath
@@ -610,6 +616,9 @@ class NetRexxC extends MatchingTask
 
     if keep then opt.add(String "-keep")
     else opt.add(String "-nokeep")
+
+    if keepasjava then opt.add(String "-keepasjava")
+    else opt.add(String "-nokeepasjava")
 
     if logo then opt.add(String "-logo")
     else opt.add(String "-nologo")
