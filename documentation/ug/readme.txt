@@ -9,6 +9,11 @@ This is RC2 and not the released package. Specifically, the following is incompl
 
 This release candidate is meant for experienced users. The NetRexxC.jar and NetRexxR.jar files have been tested and are fit for use. New features might be changed and/or repealed until the official version is issued. The LICENSE file can be found in both product jars.
 
+Changes between RC1 and RC2:
+
+- changed wording and addition of some license related information, in anticipation of IBM's response to our query
+- added Rosettacode.org examples by Alan Sampson.
+
 The 3.01 release will mark the first official RexxLA release. Changes are:
 
 - the package name for the translator has been changed from COM.ibm.netrexx.process to org.netrexx.process. This is the first package name change since release 0.90 (17 Dec 1996) when the translator package name was changed from netrexx.process to COM.ibm.netrexx.process; this was to comply with a short-lived naming convention for Java in which the first qualifier should be an uppercased top-level domain name; NetRexx was one of the few packages that followed this advice.
