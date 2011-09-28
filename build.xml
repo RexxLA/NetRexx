@@ -2,6 +2,10 @@
 
 <project name="NetRexx" basedir="." default="dist">
 
+  <property name="version"      value="3.01RC2"/>
+  <property name="PACKAGE_NAME"    value="NetRexx-3.01RC2.zip"/>
+  <property name="examples"    value="../examples"  description="directory location to find the NetRexx examples" />
+  
   <!-- =================================================================== -->
   <!-- NetRexx default settings                                            -->
   <!-- =================================================================== -->
@@ -34,11 +38,11 @@
   <!-- =================================================================== -->
 
   <property name="name"         value="NetRexx"/>
-  <property name="version"      value="3.01RC2"/>
 
   <property name="root"          location="."/>
   <property name="sources"       value="${root}/src"/>
   <property name="build"         value="${root}/build"/>
+  <property name="package"    value="${root}/package"/>
   <property name="build.lib"     value="${build}/lib"/>
   <property name="build.classes" value="${build}/classes"/>
 
@@ -50,7 +54,6 @@
 
   <property name="oldAPI" value="COM/ibm/netrexx/process"/>  
   <property name="oldAPINAME" value="COM.ibm.netrexx.process"/>  
-  <property name="project.tools" value="/usr/lib/jvm/java-6-openjdk/lib/tools.jar" description="Set to find sun.tools stuff on Linux"/>
   <property name="RUNTIME" value="${build.classes}/netrexx/lang/" description="Runtime directory"/>
   <property name="RUNTIMENAME" value="netrexx.lang" description="Runtime prefix"/>
   <property name="COMPILER" value="${build.classes}/org/netrexx/process/" />
@@ -271,7 +274,7 @@
   <target name="apidocs" depends="compile" description="create API documentation">
 		 <javadoc source="1.4" maxmemory="128M" private="true" Author="true" Version="true" breakiterator="yes" Use="true" destdir="${DOCPATH}"
 		 		bottom="${BOTTOM}" Header="${HEADER}"  Windowtitle="${WINDOWTITLE}" sourcepath="${build.classes}" packagenames="${COMPILERNAME},${RUNTIMENAME},${oldAPINAME}" 
-		 		classpath=".${path.separator}${RUNTIME}${path.separator}${COMPILER}${path.separator}${project.tools}"  Verbose="false"
+		 		classpath=".${path.separator}${RUNTIME}${path.separator}${COMPILER}${path.separator}${build.classpath}"  Verbose="false"
 		 		>
 			 <doctitle>${DOCTITLE} ${RUNTIMENAME} ${COMPILERNAME}</doctitle>
 		 </javadoc>
@@ -283,7 +286,43 @@
 
   <target name="dist" depends="init,compile, jars, tests, apidocs" description="build distribution"/>
 
-
+  <target name="package" depends="clean,compile, jars" description="build distribution package">
+    <delete dir="${package}"/>
+	<mkdir  dir="${package}${file.separator}bin"/>
+	<copy todir="${package}${file.separator}bin">
+		<fileset dir="bin"/>
+	</copy>
+	<mkdir  dir="${package}/lib"/>
+	<mkdir  dir="${package}/runlib"/>
+	<mkdir  dir="${package}/examples"/>
+	<mkdir  dir="${package}/documents"/>
+	<copy file="build/lib/NetRexxC.jar" todir="${package}/lib"/>
+	<copy file="build/lib/NetRexxR.jar" todir="${package}/runlib"/>
+	<copy todir="${package}/documents">
+		<fileset dir="documentation/ug" includes="*.pdf"/>
+		<fileset dir="documentation/nrl" includes="*.pdf"/>
+	 </copy>
+	<copy file="documentation/ug/releasenotes.txt" todir="${package}"/>
+	<copy file="documentation/ug/readme.txt" todir="${package}"/>
+	<copy file="LICENSE" todir="${package}"/>
+	<mkdir  dir="${package}/tools"/>
+	<mkdir  dir="${package}/tools/emacs"/>
+	<mkdir  dir="${package}/tools/ant-task"/>
+	<copy file="lib/ant-netrexx.jar" todir="${package}/tools/ant-task"/>
+	<copy file="tools/emacs-mode/netrexx-mode.el" todir="${package}/tools/emacs"/>
+	<copy todir="${package}/examples">
+		<fileset dir="${examples}" />
+	 </copy>
+   <jar jarfile="${PACKAGE_NAME}" compress="yes" filesonly="true">
+      <fileset dir="${package}"/>
+			 <manifest>
+			  <attribute name="Implementation-Vendor" value="Rexx Language Association"/>
+			  <attribute name="Implementation-Title" value="NetRexx"/>
+			  <attribute name="Implementation-Version" value="${version}"/>
+			</manifest>
+    </jar>	
+  </target>
+	
   <target name="clean.javadocs" description="delete built javadocs">
     <delete dir="${DOCPATH}"/>
   </target>
