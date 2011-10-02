@@ -29,6 +29,7 @@
 @REM : 1998.05.25 -- use NETREXX_JAVA as options to java.exe
 @REM : 2011.09.01 -- use org.netrexx.process               
 @REM : 2011.09.01 -- remove -xms4M
+@REM : 2011.09.29 -- add error msg for -run with x.nrx name format 
 
 @echo off
 set netrexxc.bat_run=no
@@ -40,5 +41,5 @@ java %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
 if errorlevel 2 goto quit
 if %netrexxc.bat_run%==no goto quit
 echo Running %1...
-java %1
-:quit
+IF EXIST %1.class (java %1) ELSE echo -run error: class file not found - do not add .nrx to name
+:quit:quit
