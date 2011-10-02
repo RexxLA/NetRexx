@@ -28,6 +28,7 @@
 #  Reminder: to make this executable: chmod 751 NetRexxC.sh
 # -----------------------------------------------------------------
 #  2000.08.20 -- initial version derived from NetRexxC.bat
+#  2011.09.29 -- add error message for -run with .nrx case
 
 if test $# -eq 0; then
   echo 'Usage:' $0 '[-run] [other options] filename'
@@ -40,10 +41,14 @@ if test "$1"  = "-run"; then
   netrexx_run=yes
 fi
 
-java -ms4M $NETREXX_JAVA COM.ibm.netrexx.process.NetRexxC $*
+java org.netrexx.process.NetRexxC $*
 if test $? -eq 0; then
   if test "$netrexx_run" = "yes"; then
     echo "Running $1..."
+    if [ ! -f $1".class" ];	then
+		echo "-run error: class file not found - do not add .nrx to name"
+		exit
+		fi
     java $1
   fi
 fi
