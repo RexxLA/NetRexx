@@ -45,9 +45,15 @@
   <target name="prepare">
     <mkdir dir="org/apache/tools/ant/taskdefs/optional"/>
 
-    <!-- Common Classpath -->
-    <path id="common.class.path">
-      <fileset dir="${java.home}/lib">
+    <!-- Build Classpath has all libs included -->
+    <path id="build.class.path">
+      <fileset dir="${root}/../lib" erroronmissingdir="false">
+        <include name="**/*.jar"/>
+      </fileset>
+	  <fileset dir="${root}/../../lib" erroronmissingdir="false">
+        <include name="**/*.jar"/>
+      </fileset>
+      <fileset dir="${java.home}/lib" erroronmissingdir="false">
         <include name="tools.jar"/>
       </fileset>
       <fileset dir="${java.home}/../lib" erroronmissingdir="false">
@@ -59,23 +65,17 @@
       <fileset dir="${java.home}/bundle/Classes" erroronmissingdir="false">
         <include name="*.jar"/>
       </fileset>
-      <fileset dir="${ant.home}/lib"  erroronmissingdir="false">
+      <fileset dir="${root}/../../ant"  erroronmissingdir="false">
         <include name="ant.jar"/>
       </fileset>
-    </path>
-
-    <!-- Build Classpath has all libs included -->
-    <path id="build.class.path">
-      <path refid="common.class.path"/>
-      <fileset dir="${root}/../lib" erroronmissingdir="false">
-        <include name="**/*.jar"/>
-      </fileset>
-	  <fileset dir="${root}/../../lib" erroronmissingdir="false">
-        <include name="**/*.jar"/>
-      </fileset>
+      <fileset dir="${ant.home}/lib"  erroronmissingdir="false">
+        <include name="ant.jar"/>
+      </fileset>      
     </path>
     
     <pathconvert property="build.classpath" refid="build.class.path"/>
+    
+    <taskdef name="nrc" classname="org.apache.tools.ant.taskdefs.optional.NetRexxC" classpath="${build.classpath}"/>
     
   </target>    
 
@@ -92,16 +92,16 @@
 	<echo message="|   |-- ${echo.path.compile}"/>
 	<echo message="|   |"/>
 	  
-    <netrexxc srcDir="." destDir="org/apache/tools/ant/taskdefs/optional" classpath="${build.classpath}" includes="*.nrx" />
+    <nrc srcDir="." destDir="org/apache/tools/ant/taskdefs/optional" classpath="${build.classpath}" includes="*.nrx" />
     
   </target>
 
   <target name="jar" depends="init,compile" description="create ant-netrexx.jar">
     <jar jarfile="ant-netrexx.jar" compress="yes" filesonly="true">
-      <fileset dir="org">
-        <include name="**/*.class"/>
+      <fileset dir=".">
+        <include name="org/**/*.class"/>
       </fileset>
-      <fileset dir="${root}/..">
+      <fileset dir="${root}/../..">
         <include name="LICENSE"/>
       </fileset>
 			 <manifest>
