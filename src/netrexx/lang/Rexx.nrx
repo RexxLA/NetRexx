@@ -884,6 +884,17 @@ class Rexx implements RexxOperators, Serializable
     if ind>=0 then return this.OpPlus(set) -- make canonical
     return this.OpMinus(set)
 
+  /** B2d binary to decimal conversion.  */
+  method b2d(bil=Rexx 0) returns Rexx
+  	  bl=bil.toint()
+  	  if bl=0 then return this.b2x().x2d()
+  	  if bl<0 then bl=this.intlength()
+  	  if bl>this.intlength() then first=this.left(1)
+  	  	  else first=this.right(bl).left(1)
+  	  newb=this.right(bl,first)
+  	  if bl//4\=0 then ble=bl+4-bl//4;else ble=bl
+  	  return newb.right(ble,first).b2x().x2d(ble%4)
+
   /** B2x binary to hexadecimal conversion.  */
   method b2x returns Rexx
     if chars=null then chars=layout()
@@ -938,7 +949,34 @@ class Rexx implements RexxOperators, Serializable
       start=start+len
       end
     return Rexx(res, 1)
-
+   
+  /** isIndexed returns a boolean flag that indicates if indexed subvalues are present in the
+     Rexx object (explicitly set).  */
+  method isIndexed() protect returns Rexx
+    if this.size(1)==0 then return 0
+    	else return 1
+        
+  /** Size returns the number of indexed subvalues in the
+     Rexx object (explicitly set).  */
+  method size(check=0) protect returns Rexx
+    -- Note that the whole operation is protected (atomic)
+    if coll=null then return 0     -- that was easy [probably rare]
+    do protect coll
+	  icount=0
+      it=coll.keys()
+      loop label collcount while it.hasMoreElements()
+        key=Rexx it.nextElement()
+        node=RexxNode coll.get(key)   -- get the node for the key
+        -- ignore if dropped or never set explicitly
+        if node.leaf=null then iterate collcount   -- a dropped item
+        if Object node.leaf==Object node.initleaf then iterate collcount
+        -- it's a reference that we want to count
+        icount=icount+1
+        if check then return 1
+        end collcount
+      end
+    return icount
+    
   /** CopyIndexed merges the collection of indexed strings with
      the collection of (explicitly-set) indexed strings from another
      Rexx object, and returns the current object.  */
@@ -1039,6 +1077,13 @@ class Rexx implements RexxOperators, Serializable
     if chars=null then chars=layout()
     return Rexx RexxWords.delword(chars, start, len)
 
+  /** D2b decimal to binary coded conversion.  */
+  method d2b(dil=Rexx 0) returns Rexx
+  	  dl=dil.toint()
+  	  if dl=0 then return this.d2x().x2b()
+  	  if dl//4\=0 then dle=dl+4-dl//4;else dle=dl
+  	  return this.d2x(dle%4).x2b().right(dl)
+    
   /** D2c decimal to coded conversion.  */
   method d2c returns Rexx
     i=this.toint()
