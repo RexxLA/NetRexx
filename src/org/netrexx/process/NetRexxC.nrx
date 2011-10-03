@@ -78,6 +78,9 @@ class NetRexxC
   flags    =Vector(10)             -- collects translator flags
 
   -- others
+  compileexplicit = boolean 0	--	record if compile was explicitly requested
+  javaexplicit = boolean 0			--	record if java was explicitly requested
+  crossrefexplicit = boolean 0	--	record if crossref was explicitly requested
   madelog  =boolean 0              -- 1 if we made the logfile
   testflag =RxFlag()               -- used only for testing if flags valid
   usageone =boolean 1              -- 1 to show general usage information
@@ -315,9 +318,15 @@ properties private static
       arglow=argword.substr(2).lower()    -- drop '-' and lowercase
       select
         when arglow=='nocompile' then do; compile=0; keep=1; end
-        when arglow=='compile'   then do; compile=1; end
-        when arglow=='exec'      then exec=1
+        when arglow=='compile'   then do; compile=1; compileexplicit=1; end
+        when arglow=='exec'      then do; exec=1; 
+			if \compileexplicit then compile=0 
+			if \javaexplicit then flags.addElement(Rexx("-nojava")) 
+			if \crossrefexplicit then flags.addElement(Rexx("-nocrossref")) 
+			end
         when arglow=='noexec'    then exec=0
+        when arglow=='java'      then do; javaexplicit=1; flags.addElement(Rexx("-java"));end
+        when arglow=='crossref'      then do; crossrefexplicit=1; flags.addElement(Rexx("-crossref"));end
         when arglow=='keep'      then keep=1
         when arglow=='nokeep'    then keep=0
         when arglow=='time'      then time=1
@@ -338,6 +347,9 @@ properties private static
           end
         when arglow=='arg' then do
           exec=1    -- implied
+			if \compileexplicit then compile=0 
+			if \javaexplicit then flags.addElement(Rexx("-nojava")) 
+			if \crossrefexplicit then flags.addElement(Rexx("-nocrossref")) 
           -- remaining words become argstring array
           alen=arg.length-a-1
           argarray=String[alen]
