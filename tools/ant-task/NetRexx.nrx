@@ -131,7 +131,7 @@ class NetRexx extends MatchingTask
   utf8	       = boolean
   warnexit0  = boolean
   suppressMethodArgumentNotUsed	 = boolean 0
-  suppressPrivatePropertynotUsed = boolean 0
+  suppressPrivatePropertyNotUsed = boolean 0
   suppressVariableNotUsed	 = boolean 0
   suppressExceptionNotSignalled	 = boolean 0
   suppressDeprecation		 = boolean 0
@@ -157,11 +157,12 @@ class NetRexx extends MatchingTask
    * propperties.
    */
   properties static 
+--    // constants for the messages to suppress by flags and their corresponding properties
   MSG_METHOD_ARGUMENT_NOT_USED	= String "Warning: Method argument is not used"
   MSG_PRIVATE_PROPERTY_NOT_USED	= String "Warning: Private property is defined but not used"
   MSG_VARIABLE_NOT_USED		= String "Warning: Variable is set but not used"
   MSG_EXCEPTION_NOT_SIGNALLED	= String "is in SIGNALS list but is not signalled within the method"
-  MSG_DEPRICATION		= String "has been deprecated"
+  MSG_DEPRECATION		= String "has been deprecated"
 
      /**
      * Set the classpath to be used for this compilation.
@@ -337,7 +338,7 @@ class NetRexx extends MatchingTask
     if p \= null then this.suppressMethodArgumentNotUsed = Project.toBoolean(p)
 
     p = prj.getProperty("ant.netrexxc.suppressPrivatePropertyNotUsed")
-    if p \= null then this.suppressPrivatePropertynotUsed = Project.toBoolean(p)
+    if p \= null then this.suppressPrivatePropertyNotUsed = Project.toBoolean(p)
 
     p = prj.getProperty("ant.netrexxc.suppressVariableNotUsed")
     if p \= null then this.suppressVariableNotUsed = Project.toBoolean(p)
@@ -636,15 +637,39 @@ class NetRexx extends MatchingTask
     currentProperties.put("java.class.path", classpath)
 
     do
+	   out = StringWriter()
 --      nrx_ = org.netrexx.Nrx(compileArgs)
-      nrx_ = org.netrexx.process.NetRexxC.main2(compileArgs)
-/*     catch ioe = Exception */
-/*       signal BuildException("Unexpected Exception while playing with Strings", ioe) */
-/*     finally */
+      nrx_ = org.netrexx.process.NetRexxC.main2(compileArgs, PrintWriter(out))
+      
+       in = BufferedReader(StringReader(out.toString()))
+       loop forever
+		   il = in.readLine()
+		   if il=null then leave
+			l=Rexx(il)		   	   
+		   if suppressMethodArgumentNotUsed & l.pos(MSG_METHOD_ARGUMENT_NOT_USED)>0 then 
+                    log(l, Project.MSG_VERBOSE)
+			else if suppressPrivatePropertyNotUsed & l.pos(MSG_PRIVATE_PROPERTY_NOT_USED)>0 then
+                    log(l, Project.MSG_VERBOSE)
+            else if suppressVariableNotUsed & l.pos(MSG_VARIABLE_NOT_USED)>0 then 
+                    log(l, Project.MSG_VERBOSE)
+            else if suppressExceptionNotSignalled & l.pos(MSG_EXCEPTION_NOT_SIGNALLED)>0 then
+                    log(l, Project.MSG_VERBOSE)
+            else if suppressDeprecation & l.pos(MSG_DEPRECATION)>0 then 
+                    log(l, Project.MSG_VERBOSE)
+            else if l.pos("Error:") >0 then
+                    log(l, Project.MSG_ERR)		--// error level logging for compiler errors
+            else if l.pos("Warning:") >0 then 
+                    log(l, Project.MSG_WARN)		--// warning for all warning messages
+            else log(l, Project.MSG_INFO)		-- // info level for the rest.
+            end
+            
+     catch ioe = Exception
+         signal BuildException("Unexpected Exception while playing with Strings", ioe) 
+     finally 
+      currentProperties.put("java.class.path", currentClassPath)
       -- need to reset java.class.path property
       -- since the NetRexx compiler has no option for the classpath
 /*       currentProperties = System.getProperties() */
-      currentProperties.put("java.class.path", currentClassPath)
     end
 --    if nrx_.getReturnCode() > 0 then
     if nrx_ > 1 then
