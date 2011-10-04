@@ -53,6 +53,8 @@
 /* 2004.07.04 Import all jre\lib classes for IBM JVM 1.4.1            */
 /* 2004.12.18 Protect against 1.4 loop on looping EXTENDS             */
 /* 2008.02.25 Add standard location for classes.jar on MacOSX         */
+/* 2011.10.03 Add compare costs of superclass methods to subclass in searchfield method - KK  (issue 55)  */
+/* 2011.10.04 modify unimplemented method to check return signatures for superclass/interface match - KK  (issue 17)  */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -1457,17 +1459,13 @@ class RxClasser
 
   /* Didn't find in the requested class -- try superclass and implements
      lists, unless we were asked for just a local search */
-  if local then 
-  	  if gotfield \=null then return gotfield
-  	  	  else return null                       -- no spin up
+  if local then return gotfield              -- no spin up
 
   -- [2000.02.07] If we are a constructor then the actual constructor
   -- must exist in the class of the same name; we're not allowed to use
   -- a superclass or superinterface  constructor as the resulting type
   -- would be wrong.
-  if isconstructor then 
-	  if gotfield \=null then return gotfield
-		  else return null
+  if isconstructor then return gotfield
 
   -- we can skip the superclass search if we are an interface class, as
   -- the superclass of an interface is always Object (which is not an interface)
@@ -1658,7 +1656,20 @@ class RxClasser
       select
         when newfield=null                       then bad=boolean 1
         when newfield.isAbstract()                 then bad=1
-        when newfield.fieldtype\=field.fieldtype then bad=1
+        when newfield.fieldtype\=field.fieldtype then do
+        		bad=1		--		KK  this is wrong! must also check against super types!
+        		returnclass=findclass(cursor,newfield.fieldtype,null,0)
+        		loop while returnclass.superinfo\=null
+        			if returnclass.type=field.fieldtype then do;bad=0;leave;end
+        			ii=returnclass.impinfos
+        			loop n=0 for ii.length
+        				if ii[n]=null then iterate
+        				if ii[n].type=field.fieldtype then do;bad=0;leave;end
+        				end
+        			if bad=0 then leave
+        			returnclass=returnclass.superinfo
+        			end
+        		end
         -- if it was generated for us then it's not really there
         -- [1998.04.25 check removed .. indirect property is just fine]
         -- when newfield.isSynthetic-
