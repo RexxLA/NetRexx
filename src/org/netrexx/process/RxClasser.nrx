@@ -1363,6 +1363,7 @@ class RxClasser
       end proplook
 
     if lookmeth then /* we're doing a method lookup */ do label methodlook
+      gotfield=RxField null
       /**
       if flag.diag then do
         sigargs=argtlist(argtypearray)
@@ -1447,19 +1448,26 @@ class RxClasser
           if field.fieldexcep\=null then say '# +excep:' field.fieldexcep
           if field.fieldambig then say '# Ambiguous'
           end
-        return field; end
+        gotfield = field
+        leave exact
+--        return field; 
+        end
       end methodlook
     end exact
 
   /* Didn't find in the requested class -- try superclass and implements
      lists, unless we were asked for just a local search */
-  if local then return null                       -- no spin up
+  if local then 
+  	  if gotfield \=null then return gotfield
+  	  	  else return null                       -- no spin up
 
   -- [2000.02.07] If we are a constructor then the actual constructor
   -- must exist in the class of the same name; we're not allowed to use
   -- a superclass or superinterface  constructor as the resulting type
   -- would be wrong.
-  if isconstructor then return null
+  if isconstructor then 
+	  if gotfield \=null then return gotfield
+		  else return null
 
   -- we can skip the superclass search if we are an interface class, as
   -- the superclass of an interface is always Object (which is not an interface)
@@ -1470,7 +1478,7 @@ class RxClasser
     newfield=searchfield(cursor, 0, lookmeth, lookprop, statics,-
                          infofrom, superinfo, lookname,-
                          argtypearray, tok, checkacc, isconstructor)
-    if newfield\=null then return newfield        -- found in superclass
+--    if newfield\=null then return newfield        -- found in superclass
     end
 
   -- Now try the implements list
@@ -1478,13 +1486,22 @@ class RxClasser
   if infostart.impinfos=null then findimps(cursor, infostart, tok)
   loop i=0 for infostart.impinfos.length
     impinfo=infostart.impinfos[i]
-    newfield=searchfield(cursor, 0, lookmeth, lookprop, statics,-
+    newfield2=searchfield(cursor, 0, lookmeth, lookprop, statics,-
                          infofrom, impinfo, exactname,-
                          argtypearray, tok, checkacc, isconstructor)
-    if newfield\=null then return newfield        -- found in interface class
+--    if newfield2\=null then return newfield2        -- found in interface class
     end i
 
-  return null                                     -- not found
+  if gotfield = null then gotfield=newfield
+  	  else if newfield \= null then
+  	  	  if newfield.fieldcost<gotfield.fieldcost then gotfield=newfield
+  	  
+  if gotfield = null then gotfield=newfield2
+  	  else if newfield2 \= null then
+  	  	  if newfield2.fieldcost<gotfield.fieldcost then gotfield=newfield2
+    
+  return gotfield                                     -- not found or found
+--  return null                                     -- not found
 
  /** ARGTLIST -- return RxType array as a list string */
  -- for diag only
