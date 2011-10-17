@@ -98,38 +98,44 @@ class NetRexx extends MatchingTask
 
   properties indirect
   arg            = String
-  binary       = boolean
+  binary       = String
 
-  comments     = boolean
-  compact      = boolean 0
-  compile      = boolean 1
-  console      = boolean
-  crossref     = boolean
-  decimal      = boolean 1
+  comments     = String
+  compact      = String
+  compile      = String
+  compile_b  = boolean
+  console      = String
+  crossref     = String
+  decimal      = String
   destDir      = File
-  diag	       = boolean
-  explicit     = boolean
-  exec        = boolean
-  format       = boolean
-  java_	       = boolean
+  diag	       = String
+  explicit     = String
+  exec        = String
+  exec_b      = boolean
+  format       = String
+  java_	       = String
+  java_b      = boolean
   javaDir	   = File
-  keep	       = boolean
-  keepasjava = boolean 0            -- keep java output and do not rename it to .keep  
-  logo	       = boolean 1
-  replace      = boolean
-  savelog      = boolean
+  keep	       = String
+  keep_b     = boolean
+  keepasjava 	 = String           	 -- keep java output and do not rename it to .keep  
+  keepasjava_b = boolean            -- keep java output and do not rename it to .keep  
+  logo	       = String
+  replace      = String
+  savelog      = String
   srcDir       = File
-  sourcedir    = boolean 1 -- Should this be the default for ant?
-  strictargs   = boolean
-  strictassign = boolean
-  strictcase   = boolean
-  strictimport = boolean
-  strictprops  = boolean
-  strictsignal = boolean
-  symbols      = boolean
-  time	       = boolean
-  utf8	       = boolean
-  warnexit0  = boolean
+  sourcedir    = String			 -- Should this be the default for ant?
+  sourcedir_b = boolean		 -- Should this be the default for ant?
+  strictargs   = String
+  strictassign = String
+  strictcase   = String
+  strictimport = String
+  strictprops  = String
+  strictsignal = String
+  symbols      = String
+  time	       = String
+  utf8	       = String
+  warnexit0  = String
   suppressMethodArgumentNotUsed	 = boolean 0
   suppressPrivatePropertyNotUsed = boolean 0
   suppressVariableNotUsed	 = boolean 0
@@ -142,7 +148,6 @@ class NetRexx extends MatchingTask
   /* other implementation variables */
   compileList  = Vector()
   filecopyList = Hashtable()
-  oldClasspath = System.getProperty("java.class.path")
 
   /* properties that need an extra setter method 
    */
@@ -207,12 +212,13 @@ class NetRexx extends MatchingTask
    * false. The default value is true. Setting this flag to false, will
    * automatically set the keep flag to true.
    */
-  method setCompile(compile_ = boolean) 
+/*   
+  method setCompile(compile_ = String) 
     this.compile = compile_;
-    if \(this.compile | this.keep) then
-      this.keep = 1
+    if \(Project.toBoolean(this.compile) | Project.toBoolean(this.keep)) then
+      this.keep = "1"
     return
-
+*/
   method setTrace(t = String)
   	if "trace trace1 trace2 notrace".wordpos(t)=0 then do
   		log("Trace value not recognized - changing to trace")
@@ -236,10 +242,15 @@ class NetRexx extends MatchingTask
     this.setVerbose(v.getValue())
     return
 */
-  method setJava(b = boolean)
+
+  method setJava(b = String)
     this.setJava_(b)
     return
-
+/*    
+  method setExec(b = String)
+    this.setExec_(b)
+    return
+*/       
   method init()
 
     prj = this.getProject()
@@ -248,91 +259,91 @@ class NetRexx extends MatchingTask
     if p \= null then this.setArg(p)
    
     p = prj.getProperty("ant.netrexxc.binary")
-    if p \= null then this.binary = Project.toBoolean(p)
+    if p \= null then this.binary = p
 
     p = prj.getProperty("ant.netrexxc.comments")
-    if p \= null then this.comments = Project.toBoolean(p)
+    if p \= null then this.comments = p
 
     p = prj.getProperty("ant.netrexxc.compact")
-    if p \= null then this.compact = Project.toBoolean(p)
+    if p \= null then this.compact = p
 
     p = prj.getProperty("ant.netrexxc.compile")
-    if p \= null then this.compile = Project.toBoolean(p)
+    if p \= null then this.compile = p
 
     p = prj.getProperty("ant.netrexxc.console")
-    if p \= null then this.console = Project.toBoolean(p)
+    if p \= null then this.console = p
 
     p = prj.getProperty("ant.netrexxc.crossref")
-    if p \= null then this.crossref = Project.toBoolean(p)
+    if p \= null then this.crossref = p
 
     p = prj.getProperty("ant.netrexxc.decimal")
-    if p \= null then this.decimal = Project.toBoolean(p)
+    if p \= null then this.decimal = p
 
     p = prj.getProperty("ant.netrexxc.diag")
-    if p \= null then this.diag = Project.toBoolean(p)
+    if p \= null then this.diag = p
 
     p = prj.getProperty("ant.netrexxc.explicit")
-    if p \= null then this.explicit = Project.toBoolean(p)
+    if p \= null then this.explicit = p
 
     p = prj.getProperty("ant.netrexxc.exec")
-    if p \= null then this.exec = Project.toBoolean(p)
+    if p \= null then this.exec = p
 
     p = prj.getProperty("ant.netrexxc.format")
-    if p \= null then this.format = Project.toBoolean(p)
+    if p \= null then this.format = p
 
     p = prj.getProperty("ant.netrexxc.java")
-    if p \= null then this.java_ = Project.toBoolean(p)
+    if p \= null then this.java_ = p
 
     p = prj.getProperty("ant.netrexxc.keep")
-    if p \= null then this.keep = Project.toBoolean(p)
+    if p \= null then this.keep = p
 
     p = prj.getProperty("ant.netrexxc.keepasjava")
-    if p \= null then this.keepasjava = Project.toBoolean(p)
+    if p \= null then this.keepasjava = p
     	
     p = prj.getProperty("ant.netrexxc.logo")
-    if p \= null then this.logo = Project.toBoolean(p)
+    if p \= null then this.logo = p
 
     p = prj.getProperty("ant.netrexxc.replace")
-    if p \= null then this.replace = Project.toBoolean(p)
+    if p \= null then this.replace = p
 
     p = prj.getProperty("ant.netrexxc.savelog")
-    if p \= null then this.replace = Project.toBoolean(p)
+    if p \= null then this.replace = p
 
     p = prj.getProperty("ant.netrexxc.strictargs")
-    if p \= null then this.strictargs = Project.toBoolean(p)
+    if p \= null then this.strictargs = p
 
     p = prj.getProperty("ant.netrexxc.strictassign")
-    if p \= null then this.strictassign = Project.toBoolean(p)
+    if p \= null then this.strictassign = p
 
     p = prj.getProperty("ant.netrexxc.strictcase")
-    if p \= null then this.strictcase = Project.toBoolean(p)
+    if p \= null then this.strictcase = p
 
     p = prj.getProperty("ant.netrexxc.strictimport")
-    if p \= null then this.strictimport = Project.toBoolean(p)
+    if p \= null then this.strictimport = p
 
     p = prj.getProperty("ant.netrexxc.strictprops")
-    if p \= null then this.strictprops = Project.toBoolean(p)
+    if p \= null then this.strictprops = p
 
     p = prj.getProperty("ant.netrexxc.strictsignal")
-    if p \= null then this.strictsignal = Project.toBoolean(p)
+    if p \= null then this.strictsignal = p
 
     p = prj.getProperty("ant.netrexxc.symbols")
-    if p \= null then this.symbols = Project.toBoolean(p)
+    if p \= null then this.symbols = p
 
     p = prj.getProperty("ant.netrexxc.time")
-    if p \= null then this.time = Project.toBoolean(p)
+    if p \= null then this.time = p
 
     p = prj.getProperty("ant.netrexxc.trace")
     if p \=null then this.setTrace(p)
 
     p = prj.getProperty("ant.netrexxc.utf8")
-    if p \= null then this.utf8 = Project.toBoolean(p)
+    if p \= null then this.utf8 = p
 
     p = prj.getProperty("ant.netrexxc.verbose")
     if p \= null then this.setVerbose(p)
     	
     p = prj.getProperty("ant.netrexxc.warnexit0")
-    if p \= null then this.warnexit0=Project.toBoolean(p)
+    if p \= null then this.warnexit0 = p
     	
     p = prj.getProperty("ant.netrexxc.suppressMethodArgumentNotUsed")
     if p \= null then this.suppressMethodArgumentNotUsed = Project.toBoolean(p)
@@ -357,6 +368,29 @@ class NetRexx extends MatchingTask
 
     return
 
+  method checkoptions() 		--	analyze NetRexx options used internally by this Ant task 
+    
+  	  if compile=null then compile_b=0; else compile_b=Project.toBoolean(compile) 
+  	  if exec=null then exec_b=0; else exec_b=Project.toBoolean(exec) 
+  	  if java_=null then java_b=0; else java_b=Project.toBoolean(java_) 
+  	  if keep=null then keep_b=0; else keep_b=Project.toBoolean(keep) 
+  	  if keepasjava=null then keepasjava_b=0; else keepasjava_b=Project.toBoolean(keepasjava) 
+  	  if sourcedir=null then do;sourcedir_b=1; sourcedir="true"; end; else sourcedir_b=Project.toBoolean(sourcedir) 	--	default sourcedir to true
+  	  if crossref=null then crossref="false" 						--			default crossref to false 
+  	  if console=null then console="false" 						--			default console to false 
+ /* 
+  	  if compile=null then 		--		no compile option was given
+  	  	  if java_b then do		--		java output was requested
+  	  	  	  compile="false"		--		default to no Java compile (translate only)
+  	  	  	  compile_b=0
+  	  	  	  end
+*/  	  	  
+  	  if \compile_b then 		--		no compile requested
+  	  	  if \exec_b & arg=null then			--		no interpret requested
+  	  	  	  if \java_b then							--		no java output requested
+  	  	  	  	  	  compile_b=1		--	assume we are compiling to class files so we can check what needs compilation by date comparison
+--  	  	  	  	  if \(keep_b | keepasjava_b) then 	--		no java output implied
+--  	  	  	  	  	  
     /**
      * Executes the task. Performs the actual compiler call.
      */
@@ -365,8 +399,13 @@ class NetRexx extends MatchingTask
 /*     if srcDir = null | destDir = null then */
 /*       signal BuildException("srcDir and destDir attributes must be set!") */
 
+	checkoptions()				--		examine passed options and make some needed preliminary decisions
+	
+	vv=this.getClass().getPackage().getImplementationVersion()
+	if vv \= null then log("RexxLA Ant NetRexx task" vv, Project.MSG_VERBOSE)
+
     /* no we do not! We would like to be consistent with java mode */
-    if destDir = null & \compile then destDir = javaDir
+    if destDir = null & \compile_b then destDir = javaDir
     if destDir = null then destDir = srcDir
 	if javaDir = null then javaDir = destDir    	
 
@@ -391,9 +430,11 @@ class NetRexx extends MatchingTask
 
 	  doNetRexxCompile()
 		
-	  if (removeKeepExtension & (\compile | keep)) then removeKeepExtensions()
+	  if (removeKeepExtension & (\compile_b | keep_b)) then removeKeepExtensions()
 	  	  
 	  if javaDir \= destDir then movejavafiles()
+	  	  
+	  if \sourcedir_b then moveclassfiles()
 	  	  
 	  if removeSourceCopies then -
 	  	  if destDir \= srcDir then erasesourcecopies()
@@ -422,29 +463,29 @@ class NetRexx extends MatchingTask
 	do
 
       if i=0 then
-      	  if exec then do
+      	  if exec_b then do
       	  	  filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath())
       	  	  compileList.addElement(destFile.getAbsolutePath())
-      	  	  say destFile.getAbsolutePath()
+      	  	  log("Exec:" destFile.getAbsolutePath()) 
       	  	  iterate
       	  	  end
 	
 	  classFile = File(destDir_, fileName.substring(0, fileName.lastIndexOf('.'))".class")
 
-	  if keepasjava then -
+	  if keepasjava_b then -
 		  javaFile = File(javaDir, fileName.substring(0, fileName.lastIndexOf('.'))||'.java')
 		else -
 		  javaFile = File(javaDir, fileName.substring(0, fileName.lastIndexOf('.'))||'.java.keep .java'.word((removeKeepExtension)+1))
 --	  javaFile = File(destDir_, fileName.substring(0, fileName.lastIndexOf('.'))||'.java.keep .java'.word((removeKeepExtension)+1))
 
 	                 --// nocompile case tests against .java[.keep] file
-      if (\compile & (srcFile.lastModified() > javaFile.lastModified())) then do
+      if (\compile_b & (srcFile.lastModified() > javaFile.lastModified())) then do
                     filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath());
                     compileList.addElement(destFile.getAbsolutePath());
 					end
                    --// compile case tests against .class file
                 else -
-	  if compile & (srcFile.lastModified() > classFile.lastModified()) then
+	  if compile_b & (srcFile.lastModified() > classFile.lastModified()) then
 	    do
 	      filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath())
 	      compileList.addElement(destFile.getAbsolutePath())
@@ -547,7 +588,40 @@ class NetRexx extends MatchingTask
 							end
 				end
 			end
-        
+			
+    /**
+     * Move .class files to destDir. 
+     */
+   method moveclassfiles()
+   	   
+	userDirname = this.getProject().getProperty("user.dir")
+	if userDirname=null then return
+	userDir=File(userDirname)
+   	   
+    if userDir.getAbsolutePath().equals(destDir.getAbsolutePath()) then return -- no point in moving to same place
+    if srcDir.getAbsolutePath().equals(destDir.getAbsolutePath()) then return -- if compile in place, don't move class files (even if in working dir)    	
+   	   
+        if compileList.size() > 0 then do
+            log("Moving class files to destDir") 
+            e = compileList.elements()
+            loop while (e.hasMoreElements()) 
+                nrxName = String e.nextElement()
+                nrxFile=File(nrxName)
+                nrxName=nrxFile.getName()
+                baseName = nrxName.substring(0, nrxName.lastIndexOf('.'))
+                fromFile = File(userDirname"/"baseName".class")
+                if fromFile.exists() then do
+                			fname=fromFile.getName()
+                			toFile=File(destDir.getPath()"/"fname)
+                			FileUtils.getFileUtils().copyFile(fromFile, toFile)
+                			fromFile.delete()
+							 catch ioe = IOException
+								msg = "Failed to move" fromFile "to" toFile "due to" ioe.getMessage()
+								signal BuildException(msg, ioe)
+							end
+				end
+			end
+
     /**
      * Rename .java.keep files (back) to .java. The netrexxc renames all
      * .java files to .java.keep if either -keep or -nocompile option is set.
@@ -706,93 +780,19 @@ class NetRexx extends MatchingTask
 
     opt = ArrayList()
 
-    if binary then opt.add(String "-binary")
-    else opt.add(String "-nobinary")
+    optstring= getopt("binary",binary) getopt("comments",comments) getopt("compile",compile) getopt("compact",compact) getopt("console",console) getopt("crossref",crossref) -
+    	getopt("decimal",decimal) getopt("diag",diag) getopt("explicit",explicit) getopt("exec",exec) getopt("format",format) getopt("java",java_) getopt("keep",keep) -
+    	getopt("keepasjava",keepasjava) getopt("logo",logo) getopt("replace",replace) getopt("savelog",savelog) getopt("sourcedir",sourcedir) getopt("strictargs",strictargs) getopt("strictassign",strictassign) -
+    	getopt("strictcase",strictcase) getopt("strictimport",strictimport) getopt("strictprops",strictprops) getopt("strictsignal",strictsignal) getopt("symbols",symbols) getopt("time",time)  -
+    	getopt("utf8",utf8) getopt("warnexit0",warnexit0)
 
-    if comments then opt.add(String "-comments")
-    else opt.add(String "-nocomments")
-
-    if compile then opt.add(String "-compile")
-    else opt.add(String "-nocompile")
-
-    if compact then opt.add(String "-compact")
-    else opt.add(String "-nocompact")
-
-    if console then opt.add(String "-console")
-    else opt.add(String "-noconsole")
-
-    if crossref then opt.add(String "-crossref")
-    else opt.add(String "-nocrossref")
-
-    if decimal then opt.add(String "-decimal")
-    else opt.add(String "-nodecimal")
-
-    if diag then opt.add(String "-diag")
-    else opt.add(String "-nodiag")
-
-    if explicit then opt.add(String "-explicit")
-    else opt.add(String "-noexplicit")
-
-    if exec then opt.add(String "-exec")
-    else opt.add(String "-noexec")
-
-    if format then opt.add(String "-format")
-    else opt.add(String "-noformat")
-
-    if java_ then opt.add(String "-java")
-    else opt.add(String "-nojava")
-
-    if keep then opt.add(String "-keep")
-    else opt.add(String "-nokeep")
-
-    if keepasjava then opt.add(String "-keepasjava")
-    else opt.add(String "-nokeepasjava")
-
-    if logo then opt.add(String "-logo")
-    else opt.add(String "-nologo")
-
-    if replace then opt.add(String "-replace")
-    else opt.add(String "-noreplace")
-
-    if savelog then opt.add(String "-savelog")
-    else opt.add(String "-nosavelog")
-
-    if sourcedir then opt.add(String "-sourcedir")
-    else opt.add(String "-nosourcedir")
-
-    if strictargs then opt.add(String "-strictargs")
-    else opt.add(String "-nostrictargs")
-
-    if strictassign then opt.add(String "-strictassign")
-    else opt.add(String "-nostrictassign")
-
-    if strictcase then opt.add(String "-strictcase")
-    else opt.add(String "-nostrictcase")
-
-    if strictimport then opt.add(String "-strictimport")
-    else opt.add(String "-nostrictimport")
-
-    if strictprops then opt.add(String "-strictprops")
-    else opt.add(String "-nostrictprops")
-
-    if strictsignal then opt.add(String "-strictsignal")
-    else opt.add(String "-nostrictsignal")
-
-    if symbols then opt.add(String "-symbols")
-    else opt.add(String "-nosymbols")
-
-    if time then opt.add(String "-time")
-    else opt.add(String "-notime")
-
+    loop i=1 to optstring.words()
+    	opt.add(optstring.word(i).toString())
+    	end
+    	
     opt.add(("-"this.trace_).toString())
-
-    if utf8 then opt.add(String "-utf8")
-    else opt.add(String "-noutf8")
     
     opt.add(String ("-"||verbose))
-
-    if warnexit0 then opt.add(String "-warnexit0")
-    else opt.add(String "-nowarnexit0")
 
     if arg\=null then do
     	opt.add(String "-arg")
@@ -800,6 +800,11 @@ class NetRexx extends MatchingTask
     	end
 
     return opt
+
+  method getopt(name=Rexx,val=String)
+  	  if val=null then return ""
+  	  yesno="-no"name "-"name
+  	  return yesno.word(Project.toBoolean(val)+1)
     
     /**
      * Takes a classpath-like string, and adds each element of this string to
