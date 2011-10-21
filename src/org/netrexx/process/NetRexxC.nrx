@@ -85,6 +85,8 @@ class NetRexxC
   testflag =RxFlag()               -- used only for testing if flags valid
   usageone =boolean 1              -- 1 to show general usage information
                                    -- 0 after prompting
+                                   
+  classpath = String		--	allows classpath to be passed as an argument
 
 properties private static
   programstrings = String[]		--	allows programs to be passed in memory strings
@@ -180,6 +182,13 @@ properties private static
 
   parseline(arg)    -- collect initial flags and file specification
 
+    -- need to set java.class.path property and restore it later
+  if classpath\=null then do
+    currentClassPath = System.getProperty("java.class.path")
+    currentProperties = System.getProperties()
+    currentProperties.put("java.class.path", classpath)
+    end
+    
   langs=[Rexx 'Nr']                               -- languages supported
 
   if \translator.setlanguages(langs) then usage() -- select languages
@@ -292,6 +301,10 @@ properties private static
     if madelog then logfile.close()
     end
 
+  -- need to reset java.class.path property
+  if classpath\=null then
+	  currentProperties.put("java.class.path", currentClassPath)
+      
   programstrings=null		--		clear memory of any program strings in case we are called again
     
   return translator.getexitvalue()
@@ -311,7 +324,7 @@ properties private static
     */
   method parseline(arg=String[]) private
   newfiles=Vector(10)              -- collects new file specifications
-  loop a=0 for arg.length
+  loop a=0 to arg.length-1
     argword=Rexx arg[a]            -- get next word
     if argword.left(1)\=='-'       -- not a flag
      then newfiles.addElement(argword) -- but a file to compile
@@ -342,6 +355,13 @@ properties private static
    when arglow=='nowarnexit0' then warnexit0=0
    when arglow=='keepasjava' then do; keepasjava=1; keep=1; end
    when arglow=='nokeepasjava' then keepasjava=0
+   when arglow=='classpath' | arglow=='cp' then do
+   		a=a+1
+   		if a<arg.length then do
+   			classpath=arg[a]
+--   			say "classpath request="arg[a]
+   			end
+   		end   		
         when arglow=='noarg' then do
           exec=1    -- implied
 			if \compileexplicit then compile=0 
