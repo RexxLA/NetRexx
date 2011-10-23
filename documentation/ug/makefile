@@ -1,4 +1,4 @@
-TARGET		:= UserGuide
+TARGET		:= usersguide
 PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
 LATEX_EXE	:= xelatex

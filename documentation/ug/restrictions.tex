@@ -1,0 +1,40 @@
+\chapter{Current Restrictions}
+The NetRexx translator is now functionally complete, though work continues on usability and performance improvements. As of this version there are still a number of restrictions, listed below. 
+Please note that the presence of an item in this section is not a commitment to remove a restriction in some future update; NetRexx enhancements are dependent on on-going research, your feedback, and available resources. You should treat this list as a “wish-list” (and please send in your wishes, preferable as an RFE on the http://kenai.org/netrexx website). 
+\section{General restrictions}
+\begin{enumerate}
+\item The translator requires that Java 1.1.2 or later be installed. To use the interpreter functions, at least Java 1.2 (Java 2) is required. Note that Java 6 is the current version, so the chance that you will be impacted by this is minimal. 
+\item Certain forward references (in particular, references to methods later in a program from the argument list of an earlier method) are not handled by the translator. For these, try reordering the methods.
+\end{enumerate}
+\section{Compiler restrictions }
+The following restrictions are due to the use of a translator for compiling, and would probably only be lifted if a direct-to-bytecodes NetRexx compiler were built. 
+Externally-visible names (property, method, and class names) cannot be Java reserved words (you probably want to avoid these anyway, as people who have to write in Java cannot refer to them), and cannot start with “\$0”.
+\begin{enumerate}
+\item There are various restrictions on naming and the contents of programs (the first class name must match the program name, etc.), required to meet Java rules. 
+\item The javac compiler requires that mutually-dependent source files be on the CLASSPATH, so it can find the source files. NetRexxC does not have this restriction, but when using javac for the final compilation you will need to follow the convention described in the Compiling multiple programs and using packages section (see page 23). 
+\item The symbols option (which requests that debugging information be added to gener- ated .class files) applies to all programs compiled together if any of them specify that option. 
+\item Some binary floating point underflows may be treated as zero instead of being trapped as errors. 
+\item When trace is used, side-effects of calls to this() and super() in constructors may be seen before the method and method call instructions are traced – this is because the Java language does not permit tracing instructions to be added before the call to this() or super(). 
+\item The results of expressions consisting of the single term “null” are not traced. 
+\item When a minor (inner) class is explicitly imported, its parent class or classes must 
+also be explicitly imported, or javac will report that the class cannot be found. 
+\item If you have a loop construct with a large number (perhaps hundreds) of instructions inside it, running the compiled class may fail with an illegal target of jump or branch verification error (or, under Java 1.1, simply terminate execution after one iteration of the loop). This is due to a bug in javac one workaround is to move some of the code out of the loop, perhaps into a private method. 
+(The following problem may occur in larger methods, with Java 1.1.2; it seems to have been fixed in later versions of Java): NetRexxC does not restrict the number of local variables used or generated. However, the 1.1.2 javac compiler fails with unrelated error messages (such as statement unreachable or variable may be uninitialized) if asked to handle more than 63 local variables. 
+\end{enumerate}
+\section{Interpreter restrictions} 
+Interpreting Java-based programs is complex, and is constrained by various security issues and the architecture of the Java Virtual Machine. As a result, the following restrictions apply; these will not affect most uses of the interpreter. 
+\begin{enumerate}
+\item For interpretation to proceed, when any of –exec, –arg, or –noarg is specified, you must be running a Java 2 JVM (Java Virtual Machine). That is, the command “java –version” should report a version of 1.2 or later. Parsing and compilation, however, only require Java 1.1.2. 
+\item Certain “built-in” Java classes (notably java.lang.Object, java.lang.String, and java.lang.Throwable) are constrained by the JVM in that they are assumed to be pre-loaded. An attempt to interpret them is allowed, but will cause the later loading of any other classes to fail with a class cast exception. 
+Interpreted classes have a stub which is loaded by a private class loader. This means that they will usually not be visible to external (non-interpreted) classes which attempt to find them explicitly using reflection, Class.forName(), etc. Instead, these calls may find compiled versions of the classes from the classpath. Therefore, to find the “live” classes being interpreted, use the NetRexxA interpreter API interface (described below). 
+\item An interpreter cannot completely emulate the actions taken by the Java Virtual Machine as it closes down. Therefore, special rules are followed to determine when an application is assumed to have ended when interpreting (that is, when any of –exec, –arg, or –noarg is specified): 
+• If the application being interpreted invokes the exit method of the java.lang.System class, the run ends immediately (even if –prompt was specified). The call cannot be intercepted by the interpreter, and is assumed to be an explicit request by the application to terminate the process and release all resources. 
+In other cases, NetRexxC has to decide when the application ends and hence when to leave NetRexxC (or display the prompt, if –prompt was specified). The following rules apply:
+\begin{enumerate} 
+\item If any of the programs being interpreted contains the NetRexx exit instruction and the application leaves extra user threads active after the main method ends then NetRexxC will wait for an exit instruction to be executed before assuming the application has ended and exiting (or re-prompting). 
+Otherwise (that is, there are no extra threads, or no exit instruction was seen) the application is assumed to have ended as soon as the main method returns and in this case the run ends (or the prompt is shown) immediately. This rule allows a program such as “hello world” to be run after a windowing application (which leaves threads active) without a deadlocked wait. 
+These rules normally “do the right thing”. Applications which create windows may, however, appear to exit prematurely unless they use the NetRexx exit instruction to end their execution, because of the last rule. 
+\item Applications which include both thread creation and an exit instruction which is never executed will wait indefinitely and will need to be interrupted by an external “break” request, or equivalent, just as they would if run from compiled classes. 
+\item Interpreting programs which set up their own security managers may prevent correct operation of the interpreter. 
+\end{enumerate}
+\end{enumerate}
