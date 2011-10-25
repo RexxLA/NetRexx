@@ -184,6 +184,7 @@ properties private static
 
     -- need to set java.class.path property and restore it later
   if classpath\=null then do
+  	validateClassPath()
     currentClassPath = System.getProperty("java.class.path")
     currentProperties = System.getProperties()
     currentProperties.put("java.class.path", classpath)
@@ -309,6 +310,23 @@ properties private static
     
   return translator.getexitvalue()
 
+  method validateClassPath
+  	  cpr=Rexx(classpath)
+  	  cpr2=Rexx ""
+  	  ps=File.pathSeparatorChar
+  	  cpr=cpr.strip("b",'"')
+  	  loop while cpr\==""
+  	  	  parse cpr nextpath (ps) cpr
+  	  	  nextpath=nextpath.strip("b",'"')
+  	  	  if nextpath=="." then cpr2=cpr2||ps||nextpath
+  	  	  	  else do
+  	  	  	  	  nextpathcheck=File(nextpath)
+  	  	  	  	  if nextpathcheck.exists() then cpr2=cpr2||ps||nextpath
+  	  	  	  	  	  else say "Warning: classpath entry does not exist and has been dropped:" nextpath
+  	  	  	  	 end
+  	  	 end
+  	  classpath=cpr2.strip("b",ps).toString()
+  
  /* TENTH -- convert ms to 0.1s */
  -- this could use format()
  method tenth(n=long) constant returns Rexx private
