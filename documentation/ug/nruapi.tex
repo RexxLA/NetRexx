@@ -1,0 +1,176 @@
+.* ------------------------------------------------------------------
+.* NetRexx User's Guide                                              mfc
+.* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=useapi.Using the NetRexxA API
+.pi /interpreting/API
+.pi /interpreting/using the NetRexxA API
+.pi /application programming interface, for interpreting
+.pi /NetRexxA/class
+.pi /NetRexxA/API
+.pi ref /API/application programming interface
+:p.
+As described elsewhere, the simplest way to use the NetRexx interpreter
+is to use the command interface (NetRexxC) with the :m.-exec:em.
+or :m.-arg:em. flags.
+There is a also a more direct way to use the interpreter when calling it
+from another NetRexx (or Java) program, as described here.  This
+way is called the :i.NetRexxA Application Programming Interface:ei.
+(API).
+:p.
+The :m.NetRexxA:em. class is in the same package as the translator
+(that is, :m.COM.ibm.netrexx.process:em.), and comprises a constructor
+and two methods.  To interpret a NetRexx program (or, in general, call
+arbitrary methods on interpreted classes), the following steps are
+necessary:
+:ol.
+:li.
+Construct the interpreter object by invoking the constructor :m.NetRexxA():em..
+At this point, the environment's classpath is inspected and known
+compiled packages and extensions are identified.
+:li.
+Decide on the program(s) which are to be interpreted, and invoke the
+NetRexxA :m.parse:em. method to parse the programs.  This parsing
+carries out syntax and other static checks on the programs specified,
+and prepares them for interpretation.  A :q.stub:eq. class is created
+and loaded for each class parsed, which allows access to the classes
+through the JVM reflection mechanisms.
+:li.
+At this point, the classes in the programs are ready for use.  To invoke
+a method on one, or construct an instance of a class, or array, &etc.,
+the Java reflection API (in :m.java.lang:em. and :m.java.lang.reflect:em.)
+is used in the usual way, working on the :m.Class:em. objects created by
+the interpreter.  To locate these :m.Class:em. objects, the
+API's :m.getClassObject:em. method must be used.
+:eol.
+:p.
+Once step 2 has been completed, any combination or repetition of using
+the classes is allowed.  At any time (provided that all methods invoked
+in step 3 have returned) a new or edited set of source files can be
+parsed as described in step 2, and after that, the new set of class
+objects can be located and used.  Note that operation is undefined if
+any attempt is made to use a class object that was located before the
+most recent call to the :m.parse:em. method.
+.cp 25
+:p.
+Here's a simple example, a program that invokes the :m.main:em. method
+of the :m.hello.nrx:em. program's class:
+.pi /interpreting/API example
+:xmp.
+-- Try the NetRexxA interface
+options binary
+import COM.ibm.netrexx.process.NetRexxA
+
+interpreter=NetRexxA()             -- make interpreter
+
+files=['hello.nrx']                -- a file to interpret
+flags=['nocrossref', 'verbose0']   -- flags, for example
+interpreter.parse(files, flags)    -- parse the file(s), using the flags
+
+helloClass=interpreter.getClassObject(null, 'hello') -- find the hello Class
+
+-- find the 'main' method; it takes an array of Strings as its argument
+classes=[interpreter.getClassObject('java.lang', 'String', 1)]
+mainMethod=helloClass.getMethod('main', classes)
+
+-- now invoke it, with a null instance (it's static) and an empty String array
+values=[Object String[0]]
+
+loop for 10    -- let's call it ten times, for fun...
+  mainMethod.invoke(null, values)
+end
+:exmp.
+:p.
+Compiling and running (or interpreting!) this example program will
+illustrate some important points, especially if a :kw.trace all:ekw.
+instruction is added near the top.  First, the performance of the
+interpreter (or indeed the compiler) is dominated by JVM and other
+start-up costs; constructing the interpreter is expensive as the
+classpath has to be searched for duplicate classes, &etc.  Similarly,
+the first call to the parse method is slow because of the time taken to
+load, verify, and JIT-compile the classes that comprise the interpreter.
+After that point, however, only newly-referenced classes require
+loading, and execution will be very much faster.
+:p.
+The remainder of this section describes the constructor and the two
+methods of the NetRexxA class in more detail.
+.*
+.* - - - - -
+.cp 8
+:h4.The NetRexxA constructor
+.pi /NetRexxA/constructor
+.pi /constructor, in NetRexxA API
+:p.
+Syntax:
+:xmp.
+NetRexxA()
+:exmp.
+:pc.This constructor takes no arguments and builds an interpeter object.
+This process includes checking the classpath and other libraries known
+to the JVM and identifying classes and packages which are available.
+.* - - - - -
+.cp 8
+:h4.The parse method
+.pi /parse method, in NetRexxA API
+:p.
+Syntax:
+:xmp.
+parse(files=String[], flags=String[]) returns boolean
+:exmp.
+:p.
+The parse method takes two arrays of Strings.  The first array contains
+a list of one or more file specifications, one in each element of the
+array; these specify the files that are to be parsed and made ready for
+interpretation.
+:p.
+The second array is a list of zero or more option words; these may be
+any option words understood by the interpreter (but excluding those
+known only to the NetRexxC command interface, such as :m.time:em.).
+:fn.
+Note that the option words are not prefixed with a :q.:m.-:em.:eq..
+:efn.
+The parse method prefixes the :m.nojava:em. flag automatically, to
+prevent :m..java:em. files being created inadvertently.  In the
+example, :m.nocrossref:em. is supplied to stop a cross-reference file
+being written, and :m.verbose0:em. is added to prevent the logo and
+other progress displays appearing.
+:p.
+The :m.parse:em. method returns a boolean value; this will be 1 (true)
+if the parsing completed without errors, or 0 (false) otherwise.
+Normally a program using the API should test this result an take
+appropriate action; it will not be possible to interpret a program or
+class whose parsing failed with an error.
+.*
+.* - - - - -
+.cp 8
+:h4.The getClassObject method
+.pi /getClassObject method, in NetRexxA API
+:p.
+Syntax:
+:xmp.
+getClassObject(package=String, name=String [,dimension=int]) returns Class
+:exmp.
+:p.
+This method lets you obtain a Class object (an object of
+type :m.java.lang.Class:em.)  representing a class (or array) known to
+the interpreter, including those newly parsed by a parse instruction.
+:p.
+The first argument, :m.package:em., specifies the package name (for
+example, :q.:m.com.ibm.math:em.:eq.).  For a class which is not in a
+package, :m.null:em. should be used (not the empty string, :m.'':em.).
+:p.
+The second argument, :m.name:em., specifies the class name (for example,
+:q.:m.BigDecimal:em.:eq.).  For a minor (inner) class, this may have
+more than one part, separated by dots.
+:p.
+The third, optional, argument, specifies the number of dimensions of
+the requested class object.  If greater than zero, the returned class
+object will describe an array with the specified number of dimensions.
+This argument defaults to the value 0.
+:p.
+An example of using the :m.dimension:em. argument is shown above where
+the :m.java.lang.String[]:em. array Class object is requested.
+:p.
+Once a Class object has been retrieved from the interpreter it may be
+used with the Java reflection API as usual.  The Class objects returned
+are only valid until the parse method is next invoked.
