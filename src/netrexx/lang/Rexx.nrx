@@ -72,6 +72,7 @@
 /* 98.07.01 boundary conditions for charaddsub adjusted               */
 /* 98.12.20 extend layout to force/allow plain notation               */
 /* 2011.07.19 add constructor for CharSequence interface used in new Java APIs (Kermit Kiser)      */
+/* 2011.10.18 implement interface Comparable (Kermit Kiser)      */
 /* ------------------------------------------------------------------ */
 package netrexx.lang
 options binary nodecimal strictargs strictcase   noformat
@@ -80,7 +81,7 @@ options binary nodecimal strictargs strictcase   noformat
    This defines the primary string class for NetRexx.
  */
 
-class Rexx implements RexxOperators, Serializable, Comparable
+class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 
   /* ----- Constants ----- */
   properties constant public  -- might be useful to others
@@ -977,11 +978,11 @@ class Rexx implements RexxOperators, Serializable, Comparable
         
   /** Size returns the number of indexed subvalues in the
      Rexx object (explicitly set).  */
-  method size(check=0) protect returns Rexx
+  method size(check=0) protect returns int
     -- Note that the whole operation is protected (atomic)
     if coll=null then return 0     -- that was easy [probably rare]
     do protect coll
-	  icount=0
+	  icount=int 0
       it=coll.keys()
       loop label collcount while it.hasMoreElements()
         key=Rexx it.nextElement()
@@ -2262,3 +2263,335 @@ class Rexx implements RexxOperators, Serializable, Comparable
      if this.ind=0 then
       if this.exp=0 then return this
     return Rexx(int 0)
+ 
+/* **************************************************************************************/    
+/*  New methods and classes to implement Map interface for collections use  */
+/* **************************************************************************************/
+
+	method clear()
+		this.coll=null
+		
+	method containsKey(key=Object) returns boolean
+		return testnode(Rexx(key.toString()))
+		
+	method containsValue(value=Object) returns boolean
+		rexxvalue=Rexx(value.toString())
+		if coll=null then return 0
+		keyenum=keys()
+		loop while keyenum.hasMoreElements()
+			next=Rexx keyenum.nextElement()
+			rv=getnode(next).leaf
+			if rv\=null then
+				if rv==rexxvalue then return 1
+			end
+		return 0
+		
+	method entrySet() returns Set
+		return RexxEntrySet(this)
+		
+	method get(key=Object) returns Object
+		if testnode(Rexx(key.toString())) then 
+			return getnode(Rexx(key.toString())).leaf
+		return null
+	
+	method isEmpty() returns boolean
+		if coll=null then return 1
+		return this.size(1)==0
+		
+	method keySet() returns Set
+		return RexxKeySet(this)
+		
+	method put(key=Object, value=Object) returns Object
+		returnval=get(Rexx(key.toString()))
+		getnode(Rexx(key.toString())).leaf=Rexx(value.toString())
+		return returnval
+	
+	method putAll(t=Map)
+		if t=null then signal NullPointerException
+		copyIndexed(Rexx t)
+	
+	method remove(key=Object) returns Object
+		if key=null then signal NullPointerException
+		returnval=get(Rexx(key.toString()))
+		getnode(Rexx(key.toString())).leaf=null
+		return returnval		
+		
+	method values() returns Collection
+		return RexxValueCollection(this)
+		
+	method iterator() returns Iterator
+		return RexxIterator(this)
+		
+class RexxIterator implements Iterator
+	
+	base=Rexx
+	e=Enumeration		--	keys are Rexx items
+	nxt=Rexx null
+	last=Rexx null
+	
+	method RexxIterator(setbase=Rexx)
+		base=setbase
+		if base.coll=null then e=null
+			else e=base.coll.keys()
+		return
+		
+	method hasNext() returns boolean
+		if nxt\=null then return 1
+		if e=null then return 0
+		loop while e.hasMoreElements()
+			nxt=Rexx e.nextElement()
+			nn=base.getnode(nxt) 
+			if nn.leaf\=null then 				--		key not dropped
+				if Object nn.leaf \== Object nn.initleaf then return 1			--		key has been set
+			end
+		nxt=null
+		return 0
+		
+	method next() returns Object
+		if nxt\=null, hasNext() then do
+			last=nxt
+			nxt=null
+			return last
+			end
+		signal NoSuchElementException
+		
+	method remove()
+		if last\=null then base.getnode(last).leaf=null
+			else signal IllegalStateException
+		last=null
+	
+class RexxKeySet implements Set
+	
+	base=Rexx
+	
+	method RexxKeySet(b=Rexx)
+		this.base=b
+		return
+		
+	method add(o=Object) returns boolean
+		signal UnsupportedOperationException
+		
+	method addAll(c=Collection) returns boolean
+		signal UnsupportedOperationException
+		
+	method clear()
+		base.clear()
+					
+	method contains(o=Object) returns boolean
+		return base.containsKey(o)
+			
+	method containsAll(c=Collection) returns boolean
+		it=c.iterator()
+		loop while it.hasNext()
+			if \base.containsKey(it.next()) then return 0
+			end
+		return 1
+
+	method equals(o=Object) returns boolean
+		return base.equals(o)
+	
+	method isEmpty() returns boolean
+		if base.coll=null then return 1
+		return base.size(1)==0
+		
+	method iterator() returns Iterator
+		return RexxIterator(base)
+		
+	method remove(key=Object) returns boolean
+		if key=null then signal NullPointerException
+		was=base.get(Rexx key)
+		base.getnode(Rexx key).leaf=null			
+		return was\=null
+		
+	method removeAll(c=Collection) returns boolean
+		it=c.iterator()
+		rc=boolean 0
+		loop while it.hasNext()
+			ne=it.next()
+			if base.containsKey(Rexx ne) then do
+				base.getnode(Rexx ne).leaf=null
+				rc=1
+				end
+			end
+		return rc
+		
+	method retainAll(c=Collection) returns boolean
+		it=base.iterator()
+		rc=boolean 0
+		loop while it.hasNext()
+			ne=it.next()
+			if \c.contains(Rexx ne) then do
+				base.getnode(Rexx ne).leaf=null
+				rc=1
+				end
+			end
+		return rc
+	
+	method size() returns int
+		return base.size()		
+		
+	method toArray() returns Object[]
+		s=base.size()
+		a=Object[s]
+		it=base.iterator()
+		loop i=0 for s while it.hasNext()
+			a[i]=it.next()
+			end
+		return a		
+		
+	method toArray(ta=Object[ ]) returns Object[]
+		if ta=null then signal NullPointerException
+--		if \(ta<=Rexx) then signal ArrayStoreException
+--		if \(ta>=Rexx) then signal ArrayStoreException
+		s=base.size()
+		if s>ta.length then ta=Rexx[s]
+		it=base.iterator()
+		loop i=0 for s while it.hasNext()
+			ta[i]=it.next()
+			end
+		return ta				
+		
+class RexxEntrySet extends RexxKeySet
+	
+	base2=Rexx
+	
+	method RexxEntrySet(b=Rexx)
+		super(b)
+		this.base2=b
+		return
+		
+	method clear()
+		base2.clear()
+					
+	method contains(o=Object) returns boolean
+		me=Map.Entry o
+		mm=base2.get(me.getKey())
+		if mm=null then return 0
+		if mm=me.getValue() then return 1
+		return 0
+			
+	method containsAll(c=Collection) returns boolean
+		it=c.iterator()
+		loop while it.hasNext()
+			if \contains(Map.Entry it.next()) then return 0
+			end
+		return 1
+		
+	method iterator() returns Iterator
+		return RexxEntrySetIterator(this.base)
+		
+	method remove(o=Object) returns boolean
+		if \contains(o) then return 0
+		super.remove(Rexx (Map.Entry o).getKey())
+		return 1
+		
+	method removeAll(c=Collection) returns boolean
+		it=c.iterator()
+		rc=0
+		loop while it.hasNext()
+			ne=Map.Entry it.next()
+			if contains(ne) then do
+				remove(ne)
+				rc=1
+				end
+			end
+		return rc
+		
+	method retainAll(c=Collection) returns boolean
+		it=base2.iterator()
+		rc=boolean 0
+		loop while it.hasNext()
+			ne=Map.Entry it.next()
+			if \c.contains(ne) then do
+				base2.getnode(Rexx ne.getKey()).leaf=null
+				rc=1
+				end
+			end
+		return rc
+		
+	method toArray(a=Object[]) returns Object[]
+		if a=null then signal NullPointerException
+		s=base2.size()
+		if s>a.length then a=Map.Entry[s]
+		it=base2.iterator()
+		loop i=0 for s while it.hasNext()
+			a[i]=it.next()
+			end
+		return a			
+		
+class RexxEntrySetIterator extends RexxIterator
+	
+	base2=Rexx
+	
+	method RexxEntrySetIterator(setbase=Rexx)
+		super(setbase)
+		base2=setbase
+		return
+		
+	method next() returns Object
+		if this.nxt\=null, hasNext() then do
+			last=this.nxt
+			this.nxt=null
+			return RexxMapEntry(base2,last)
+			end
+		signal NoSuchElementException
+		
+class RexxMapEntry implements Map.Entry
+	
+	base=Rexx
+	key=Rexx
+	
+	method RexxMapEntry(b=Rexx,k=Rexx)
+		base=b;key=k
+		return
+		
+	method getKey() returns Object
+		return key
+		
+	method getValue() returns Object
+		return base.getnode(key).leaf
+		
+	method setValue(v=Object) returns Object
+		n=RexxNode base.getnode(key)
+		tr=n.leaf
+		n.leaf=Rexx v
+		return tr
+
+class RexxValueCollection extends AbstractCollection
+	
+	base=Rexx
+	
+	method RexxValueCollection(b=Rexx)
+		super()
+		base=b
+		return
+	
+	method clear()
+		base.clear()
+		
+	method size() returns int
+		return base.size()
+		
+	method iterator() returns Iterator
+		return RexxValueIterator(base)
+		
+		
+class RexxValueIterator extends RexxIterator
+	
+	base2=Rexx
+	
+	method RexxValueIterator(setbase=Rexx)
+		super(setbase)
+		base2=setbase
+		return
+		
+	method next() returns Object
+		if this.nxt\=null, hasNext() then do
+			last=this.nxt
+			this.nxt=null
+			return base2.getnode(last).leaf
+			end
+		signal NoSuchElementException
+	
+				
+
