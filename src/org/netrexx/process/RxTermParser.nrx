@@ -409,13 +409,15 @@ class RxTermParser uses RxCode
                                                   tokstart, 0, 0, 1)
           if bitvar\=null then do
             -- check for indexed strings (type Rexx)
-            if bitvar.vartype=RxType.REXX_TYPE then do
+            if bitvar.vartype=RxType.REXX_TYPE | (classer.issubclass(cursor, bitvar.vartype, RxType.REXX_TYPE, tokstart) & \bitvar.isarray() ) then do		--	KK
+--            if bitvar.vartype=RxType.REXX_TYPE then do
               badstatic(cursor, bitvar, tokstart)
               /* Class of variable is exactly Rexx with no hard dimensions */
               stem=parsestem(cursor, n)
               -- syntax OK, arraynext->']'+1
               next=stem.arraynext
-              code.type=RxType.REXX_TYPE     -- dimensions vanish
+              code.type=bitvar.vartype     -- dimensions vanish
+--              code.type=RxType.REXX_TYPE     -- dimensions vanish
               code.javacode=bitvar.varspell||stem.arraygen
               code.constant=0      -- it's mutable...
               code.array=stem      -- [gets cleared below if not last in term]
@@ -505,12 +507,14 @@ class RxTermParser uses RxCode
             if field.fieldtype=RxType.VOID_TYPE then if onrhs then
               signal RxError(rxt, tokstart, 'undefined.property.reference',-
                              field.toString(cursor.curprogram))
-            if field.fieldtype=RxType.REXX_TYPE then do
+            if field.fieldtype=RxType.REXX_TYPE | (classer.issubclass(cursor, field.fieldtype, RxType.REXX_TYPE, tokstart) & \field.fieldtype.isarray() ) then do		--	KK                             
+--            if field.fieldtype=RxType.REXX_TYPE then do
               /* Class of property is exactly Rexx with no hard dimensions */
               stem=parsestem(cursor, n)
               -- syntax OK, arraynext->']'+1
               next=stem.arraynext
-              code.type=RxType.REXX_TYPE          -- dimensions vanish
+              code.type=field.fieldtype          -- dimensions vanish
+--              code.type=RxType.REXX_TYPE          -- dimensions vanish
               code.javacode=classusei[u].type.classname'.'field.fieldname||stem.arraygen
               code.array=stem      -- [gets cleared below if not last in term]
 
@@ -1450,12 +1454,15 @@ class RxTermParser uses RxCode
         if field.fieldtype=RxType.VOID_TYPE then if onrhs then
           signal RxError(rxt, parttok, 'undefined.property.reference',-
                          field.toString(cursor.curprogram))
-        if field.fieldtype=RxType.REXX_TYPE then do
+/*  is the following where to fix indexed subclasses of Rexx? KK  */   
+        if field.fieldtype=RxType.REXX_TYPE | (classer.issubclass(cursor, field.fieldtype, RxType.REXX_TYPE, parttok) & \field.fieldtype.isarray() )then do		--		KK
+--        if field.fieldtype=RxType.REXX_TYPE then do
           /* Class of property is exactly Rexx with no hard dimensions */
           stem=parsestem(cursor, n)
           -- syntax OK, arraynext->']'+1
           next=stem.arraynext
-          code.type=RxType.REXX_TYPE              -- dimensions vanish
+          code.type=field.fieldtype              -- dimensions vanish
+--          code.type=RxType.REXX_TYPE              -- dimensions vanish
           code.javacode=code.javacode||field.fieldname||stem.arraygen
           code.array=stem     -- [gets cleared above if not last in term]
           code.isstem=1       -- the term is a stem reference
