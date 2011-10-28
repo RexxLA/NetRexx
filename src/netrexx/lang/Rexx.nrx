@@ -2268,6 +2268,10 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 /*  New methods and classes to implement Map interface for collections use  */
 /* **************************************************************************************/
 
+	method Rexx(m=Map)
+		this.putAll(m)
+		return this
+
 	method clear()
 		this.coll=null
 		
@@ -2287,7 +2291,7 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 		return 0
 		
 	method entrySet() returns Set
-		return RexxEntrySet(this)
+		return Rexx.EntrySet(this)
 		
 	method get(key=Object) returns Object
 		if testnode(Rexx(key.toString())) then 
@@ -2299,7 +2303,7 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 		return this.size(1)==0
 		
 	method keySet() returns Set
-		return RexxKeySet(this)
+		return Rexx.KeySet(this)
 		
 	method put(key=Object, value=Object) returns Object
 		returnval=get(Rexx(key.toString()))
@@ -2308,7 +2312,12 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 	
 	method putAll(t=Map)
 		if t=null then signal NullPointerException
-		copyIndexed(Rexx t)
+		e=t.entrySet()
+		i=e.iterator()
+		loop while i.hasNext()
+			m=Map.Entry i.next()
+			put(m.getKey(),m.getValue())
+			end
 	
 	method remove(key=Object) returns Object
 		if key=null then signal NullPointerException
@@ -2317,19 +2326,19 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 		return returnval		
 		
 	method values() returns Collection
-		return RexxValueCollection(this)
+		return Rexx.ValueCollection(this)
 		
 	method iterator() returns Iterator
-		return RexxIterator(this)
+		return Rexx.BaseIterator(this)
 		
-class RexxIterator implements Iterator
+class Rexx.BaseIterator implements Iterator
 	
 	base=Rexx
 	e=Enumeration		--	keys are Rexx items
 	nxt=Rexx null
 	last=Rexx null
 	
-	method RexxIterator(setbase=Rexx)
+	method BaseIterator(setbase=Rexx)
 		base=setbase
 		if base.coll=null then e=null
 			else e=base.coll.keys()
@@ -2360,11 +2369,11 @@ class RexxIterator implements Iterator
 			else signal IllegalStateException
 		last=null
 	
-class RexxKeySet implements Set
+class Rexx.KeySet implements Set
 	
 	base=Rexx
 	
-	method RexxKeySet(b=Rexx)
+	method KeySet(b=Rexx)
 		this.base=b
 		return
 		
@@ -2395,7 +2404,7 @@ class RexxKeySet implements Set
 		return base.size(1)==0
 		
 	method iterator() returns Iterator
-		return RexxIterator(base)
+		return Rexx.BaseIterator(base)
 		
 	method remove(key=Object) returns boolean
 		if key=null then signal NullPointerException
@@ -2451,11 +2460,11 @@ class RexxKeySet implements Set
 			end
 		return ta				
 		
-class RexxEntrySet extends RexxKeySet
+class Rexx.EntrySet extends Rexx.KeySet
 	
 	base2=Rexx
 	
-	method RexxEntrySet(b=Rexx)
+	method EntrySet(b=Rexx)
 		super(b)
 		this.base2=b
 		return
@@ -2478,7 +2487,7 @@ class RexxEntrySet extends RexxKeySet
 		return 1
 		
 	method iterator() returns Iterator
-		return RexxEntrySetIterator(this.base)
+		return Rexx.EntrySetIterator(this.base)
 		
 	method remove(o=Object) returns boolean
 		if \contains(o) then return 0
@@ -2519,11 +2528,11 @@ class RexxEntrySet extends RexxKeySet
 			end
 		return a			
 		
-class RexxEntrySetIterator extends RexxIterator
+class Rexx.EntrySetIterator extends Rexx.BaseIterator
 	
 	base2=Rexx
 	
-	method RexxEntrySetIterator(setbase=Rexx)
+	method EntrySetIterator(setbase=Rexx)
 		super(setbase)
 		base2=setbase
 		return
@@ -2532,16 +2541,16 @@ class RexxEntrySetIterator extends RexxIterator
 		if this.nxt\=null, hasNext() then do
 			last=this.nxt
 			this.nxt=null
-			return RexxMapEntry(base2,last)
+			return Rexx.MapEntry(base2,last)
 			end
 		signal NoSuchElementException
 		
-class RexxMapEntry implements Map.Entry
+class Rexx.MapEntry implements Map.Entry
 	
 	base=Rexx
 	key=Rexx
 	
-	method RexxMapEntry(b=Rexx,k=Rexx)
+	method MapEntry(b=Rexx,k=Rexx)
 		base=b;key=k
 		return
 		
@@ -2557,11 +2566,11 @@ class RexxMapEntry implements Map.Entry
 		n.leaf=Rexx v
 		return tr
 
-class RexxValueCollection extends AbstractCollection
+class Rexx.ValueCollection extends AbstractCollection
 	
 	base=Rexx
 	
-	method RexxValueCollection(b=Rexx)
+	method ValueCollection(b=Rexx)
 		super()
 		base=b
 		return
@@ -2573,14 +2582,13 @@ class RexxValueCollection extends AbstractCollection
 		return base.size()
 		
 	method iterator() returns Iterator
-		return RexxValueIterator(base)
+		return Rexx.ValueIterator(base)
 		
-		
-class RexxValueIterator extends RexxIterator
+class Rexx.ValueIterator extends Rexx.BaseIterator
 	
 	base2=Rexx
 	
-	method RexxValueIterator(setbase=Rexx)
+	method ValueIterator(setbase=Rexx)
 		super(setbase)
 		base2=setbase
 		return
@@ -2592,6 +2600,3 @@ class RexxValueIterator extends RexxIterator
 			return base2.getnode(last).leaf
 			end
 		signal NoSuchElementException
-	
-				
-
