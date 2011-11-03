@@ -21,3 +21,12 @@ $(TARGET).bbl: $(TEXSRC) $(BIBSRC)
 #	bibtex $(TARGET)
 	makeindex $(TARGET)
 
+#
+# target clean removes compiled products
+#
+.PHONY: clean
+clean: 
+	rm -f *.class
+	rm -f *.crossref
+	rm -f *.aux
+	rm -f *~
