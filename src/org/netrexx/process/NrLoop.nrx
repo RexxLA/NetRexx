@@ -24,6 +24,7 @@
 /* 2000.03.11 Implement OVER for interpretation                       */
 /* 2001.05.22 Until code stepped control variable in wrong place      */
 /* 2011.08.10 Added support for Iterables (Collections) and 1D arrays in LOOP OVER sections - Kermit Kiser    */
+/* 2011.12.10 Fix for bad code gen with LOOP OVER array of Rexx values (check for array before check for Rexx type) - Kermit Kiser    */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -224,6 +225,10 @@ class NrLoop extends NrBlock implements RxClauseParser-
         /* It must either extend Rexx or Dictionary */
         iterable=0			--		adds support for Java Collections, etc. 
         select
+          when overterm.type.isarray() then do
+            overtype=RxType.OBJECT_TYPE
+            overrexx=0
+            end        	
           when rxt.classer.issubclass(pcursor, overterm.type, RxType.REXX_TYPE,-
                                       tokens[n]) then do
             overtype=RxType.REXX_TYPE
@@ -239,10 +244,6 @@ class NrLoop extends NrBlock implements RxClauseParser-
             overtype=RxType.OBJECT_TYPE
             overrexx=0
             iterable=1		--	flag as Java iterable type
-            end
-          when overterm.type.isarray() then do
-            overtype=RxType.OBJECT_TYPE
-            overrexx=0
             end
           otherwise
             signal RxError(rxt, tokens[n], 'cannot.loop.over',-
