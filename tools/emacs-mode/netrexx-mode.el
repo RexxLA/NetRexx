@@ -288,7 +288,7 @@ It will need a trailing / or \\, depending on the filesystem,
 ;; Level 1 - comments and strings
 (setq netrexx-font-lock-keywords-1 
       (list
-       '("\\<\\(a\\(bstract\\|dapter\\)\\|b\\(inary\\|y\\)\\|c\\(ase\\|atch\\|lass\\|onstant\\)\\|d\\(ep\\(endent\\|recated\\)\\|igits\\|o\\)\\|e\\(lse\\|n\\(d\\|gineering\\)\\|x\\(it\\|tends\\)\\)\\|f\\(inal\\(\\|ly\\)\\|or\\(\\|\\(ever\\|m\\)\\)\\)\\|i\\(f\\|mp\\(lements\\|ort\\)\\|n\\(direct\\|heritable\\|terface\\)\\|terate\\)\\|l\\(abel\\|eave\\|oop\\)\\|m\\(ethod\\)\\|n\\(ative\\|op\\|umeric\\)\\|o\\(ptions\\|therwise\\|ver\\)\\|p\\(a\\(ckage\\|r\\(ent\\|se\\)\\)\\|r\\(ivate\\|o\\(perties\\|tect\\)\\)\\|ublic\\)\\|[Rr]\\(e\\(turn\\(\\|s\\)\\|set\\|xx\\)\\)\\|s\\(ay\\|cientific\\|e\\(t\\(digits\\|form\\)\\|lect\\)\\|hared\\|ignal\\(\\|s\\)\\|ourceline\\|tatic\\|uper\\)\\|t\\(h\\(en\\|is\\)\\|o\\|ra\\(ce\\|nsient\\)\\)\\|u\\(n\\(til\\|used\\)\\|pper\\)\\|v\\(olatile\\)\\|w\\(h\\(en\\|ile\\)\\)\\)\\>" 1 font-lock-keyword-face nil)
+       '("\\<\\(a\\(bstract\\|dapter\\)\\|b\\(inary\\|y\\)\\|c\\(ase\\|atch\\|lass\\|onstant\\)\\|d\\(ep\\(endent\\|recated\\)\\|igits\\|o\\)\\|e\\(lse\\|n\\(d\\|gineering\\)\\|x\\(it\\|tends\\)\\)\\|f\\(inal\\(\\|ly\\)\\|or\\(\\|\\(ever\\|m\\)\\)\\)\\|i\\(f\\|mp\\(lements\\|ort\\)\\|n\\(direct\\|heritable\\|terface\\)\\|terate\\)\\|l\\(abel\\|eave\\|oop\\)\\|m\\(ethod\\)\\|n\\(ative\\|op\\|umeric\\)\\|o\\(ptions\\|therwise\\|ver\\)\\|p\\(a\\(ckage\\|r\\(ent\\|se\\)\\)\\|r\\(ivate\\|o\\(perties\\|tect\\)\\)\\|ublic\\)\\|[Rr]\\(e\\(turn\\(\\|s\\)\\|set\\|xx\\)\\)\\|s\\(ay\\|cientific\\|e\\(t\\(digits\\|form\\)\\|lect\\)\\|hared\\|ignal\\(\\|s\\)\\|ourceline\\|tatic\\|uper\\)\\|t\\(h\\(en\\|is\\)\\|o\\|ra\\(ce\\|nsient\\)\\)\\|u\\(n\\(til\\|used\\)\\|pper\\|ses\\)\\|v\\(olatile\\)\\|w\\(h\\(en\\|ile\\)\\)\\)\\>" 1 font-lock-keyword-face nil)
        '("\\.\\(a\\(b\\(brev\\|s\\)\\|ddlib\\)\\|b\\(2x\\)\\|c\\(2\\(d\\|x\\)\\|ent\\(re\\|er\\)\\|ha\\(ngestr\\|rat\\)\\|lose\\|o\\(mpare\\|p\\(ies\\|yindexed\\)\\|untstr\\)\\)\\|d\\(2\\(c\\|x\\)\\|at\\(atype\\|e\\)\\|el\\(str\\|word\\)\\)\\|e\\(quals\\|xists\\)\\|f\\(orm\\(at\\|word\\)\\)\\|h\\(ashcode\\)\\|i\\(nsert\\)\\|l\\(astpos\\|e\\(ft\\|ngth\\)\\|ower\\)\\|m\\(ax\\|in\\)\\|o\\(p\\(a\\(dd\\|nd\\)\\|cc\\|ccblank\\|div\\|divl\\|eq\\|eqs\\|gt\\|gt\\(eq\\|eqs\\|s\\)\\|lt\\|lt\\(eq\\|eqs\\|s\\)\\|m\\(inus\\|ult\\)\\|not\\|not\\(eq\\|eqs\\)\\|or\\|p\\(lus\\|ow\\)\\|rem\\|sub\\|xor\\)verlay\\)\\|p\\(os\\)\\|r\\(everse\\|ight\\)\\|s\\(equence\\|ign\\|pace\\|trip\\|ub\\(str\\|word\\)\\)\\|t\\(o\\(b\\(oolean\\|yte\\)\\|char\\|chararray\\|double\\|float\\|int\\|long\\|short\\|string\\)\\|r\\(anslate\\|unc\\)\\)\\|u\\(pper\\)\\|v\\(erify\\)\\|w\\(ord\\(\\|index\\|lengh\\|pos\\|s\\)\\|rite\\(ch\\|ln\\)\\)\\|x\\(2\\(b\\|c\\|d\\)\\)\\)\\>" 1 font-lock-netrexx-method-face nil)
     '( "\\.\\([a-zA-Z0-9_]+\\)(" 1 font-lock-method-face nil)
     ))
@@ -300,7 +300,7 @@ It will need a trailing / or \\, depending on the filesystem,
     (list
       ;; class statement
       (list
-       "class *\\(\\<\\w*\\>\\)" '(1 font-lock-variable-name-face nil))
+       "class +\\(\\<\\S-*\\>\\)" '(1 font-lock-variable-name-face nil))
       ;; exit statement
       (list
        "exit \\(\\<.*\\>\\)" '(1 font-lock-variable-name-face nil))
@@ -314,12 +314,15 @@ It will need a trailing / or \\, depending on the filesystem,
        "implements \\(\\<.*?,?\\([ \t]*.*?,?\\)*?\\>\\)" '(1 font-lock-variable-name-face nil))
 ;;       (list
 ;;        "\\(extends \\(\\<.*?\\>\\)\\)* implements \\(\\<.*?\\>\\)" '(3 font-lock-variable-name-face nil))
+      ;; uses keyword
+      (list
+       "uses \\(\\<.*?,?\\([ \t]*.*?,?\\)*?\\>\\)" '(1 font-lock-variable-name-face nil))
       ;; import statements
       (list
        "import \\(\\<.*\\>\\)" '(1 font-lock-constant-face nil))
       ;; user function names
       (list
-       "method \\(\\<.*\\>\\)(" '(1 font-lock-function-name-face nil))
+       "method +\\(\\<\\w*\\>\\)" '(1 font-lock-function-name-face nil))
       ;; options statement (note: the binary and the trace keyword clash with the ones 
       ;; in the first list, which is needed for the class keyword.
       (list
@@ -1989,9 +1992,10 @@ comment them if within 4 lines back no \"if\" statement is found.
   (make-local-variable 'indent-line-function)
   (setq indent-line-function 'netrexx-indent-line)
   (make-local-variable 'comment-start)
-  (setq comment-start "/*")
+  ;; (setq comment-start "/*")
   (make-local-variable 'comment-end)
-  (setq comment-end "*/")
+  ;; (setq comment-end "*/")
+  (setq comment-start "-- " comment-end "")
   (make-local-variable 'imenu-case-fold-search)
   (setq imenu-case-fold-search t)
   (make-local-variable 'imenu-generic-expression)
@@ -2002,7 +2006,7 @@ comment them if within 4 lines back no \"if\" statement is found.
   (setq mode-name "Netrexx")
   (use-local-map netrexx-mode-map)
   (imenu-add-menubar-index)
-  (setq skeleton-pair t)
+  (setq skeleton-pair netrexx-use-skeleton-pairing)
 ;;   (make-local-variable 'skeleton-pair-alist)
 ;;   (make-local-variable 'skeleton-pair-filter)
   (run-hooks 'netrexx-mode-hook))
