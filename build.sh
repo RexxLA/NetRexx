@@ -4,4 +4,4 @@
 #  Reminder: to make this executable: chmod 751 nrc
 # -----------------------------------------------------------------
 
-java -jar ant\ant-launcher.jar $*
+java -jar ant/ant-launcher.jar $*
