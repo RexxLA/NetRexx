@@ -25,9 +25,10 @@
 /* 2001.05.22 Until code stepped control variable in wrong place      */
 /* 2011.08.10 Added support for Iterables (Collections) and 1D arrays in LOOP OVER sections - Kermit Kiser    */
 /* 2011.12.10 Fix for bad code gen with LOOP OVER array of Rexx values (check for array before check for Rexx type) - Kermit Kiser    */
+/* 2012.01.22 Fix for bad array type with LOOP OVER array of primitive values  - Kermit Kiser    */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
-options binary nodecimal strictcase strictargs
+options binary decimal strictcase strictargs
 
 /**   An object that represents a parsed Loop instruction.             */
 class NrLoop extends NrBlock implements RxClauseParser-
@@ -226,7 +227,8 @@ class NrLoop extends NrBlock implements RxClauseParser-
         iterable=0			--		adds support for Java Collections, etc. 
         select
           when overterm.type.isarray() then do
-            overtype=RxType.OBJECT_TYPE
+            overtype=overterm.type.basetype()
+--            overtype=RxType.OBJECT_TYPE
             overrexx=0
             end
           when rxt.classer.issubclass(pcursor, overterm.type, RxType.REXX_TYPE,-
@@ -562,7 +564,8 @@ class NrLoop extends NrBlock implements RxClauseParser-
     begpart=begpart||RxType.INT_CLASS workname'=0;'
     if overrexx then begpart=begpart||RxType.VECTOR_CLASS vectname'=new'-
                                       RxType.VECTOR_CLASS'(100,0);'
-        else if overterm.type.isarray() then begpart=begpart||RxType.OBJECT_CLASS'[]' vectname'=new' RxType.OBJECT_CLASS'['stemname'.length];'
+        else if overterm.type.isarray() then begpart=begpart||overterm.type.basetype().toJava()'[]' vectname'=new' overterm.type.basetype().toJava()'['stemname'.length];'
+--        else if overterm.type.isarray() then begpart=begpart||RxType.OBJECT_CLASS'[]' vectname'=new' RxType.OBJECT_CLASS'['stemname'.length];'
                 else begpart=begpart||RxType.OBJECT_CLASS'[]' vectname'=new'-
                                       RxType.OBJECT_CLASS'['stemname'.size()];'
 
@@ -973,10 +976,54 @@ class NrLoop extends NrBlock implements RxClauseParser-
           end
          else do
          	 if overterm.type.isarray() then do
-					terma=Object[] termo
-					snap=Vector(terma.length)
-					loop i=terma.length-1 to 0 by -1
-					   snap.add(terma[i])
+ 					terma=termo
+					 if overtype.isPrimitive() then
+						 select case overtype.classname
+							 when 'int' then termalength=(int[] terma).length
+							 when 'long' then termalength=(long[] terma).length
+							 when 'short' then termalength=(short[] terma).length
+							 when 'char' then termalength=(char[] terma).length
+							 when 'byte' then termalength=(byte[] terma).length
+							 when 'float' then termalength=(float[] terma).length
+							 when 'double' then termalength=(double[] terma).length
+							 when 'boolean' then termalength=(boolean[] terma).length
+							 end
+						 else termalength=(Object[] termo).length
+--					terma=Object[] termo
+					snap=Vector(termalength)
+--					snap=Vector(terma.length)
+					loop i=termalength-1 to 0 by -1
+					 if overtype.isPrimitive() then
+						 select case overtype.classname
+					 	 
+							 when 'int' then do;ia=int[] terma;snap.add(Integer(ia[i]));end
+							 when 'long' then do;la=long[] terma;snap.add(Long(la[i]));end
+							 when 'short' then do;sa=short[] terma;snap.add(Integer(String.valueOf(sa[i])));end
+--							 when 'short' then do;sa=short[] terma;snap.add(Short(sa[i]));end
+							 when 'char' then do;ca=char[] terma;snap.add(Character(ca[i]));end
+							 when 'byte' then do;ba1=byte[] terma;snap.add(Integer(String.valueOf(ba1[i])));end
+--							 when 'byte' then do;ba1=byte[] terma;snap.add(Byte(ba1[i]));end
+							 when 'float' then do;fa=float[] terma;snap.add(Double(String.valueOf(fa[i])));end
+--							 when 'float' then do;fa=float[] terma;snap.add(Float(fa[i]));end
+							 when 'double' then do;da=double[] terma;snap.add(Double(da[i]));end
+							 when 'boolean' then do;ba2=boolean[] terma;snap.add(Integer("false true".wordpos(String.valueOf(ba2[i]))-1));end
+--							 when 'boolean' then do;ba2=boolean[] terma;snap.add(Boolean(ba2[i]));end
+/*						 	 
+							 when 'int' then do;ia=int[] terma;snap.add(String.valueOf(ia[i]));end
+							 when 'long' then do;la=long[] terma;snap.add(String.valueOf(la[i]));end
+							 when 'short' then do;sa=short[] terma;snap.add(String.valueOf(sa[i]));end
+							 when 'char' then do;ca=char[] terma;snap.add(String.valueOf(ca[i]));end
+							 when 'byte' then do;ba1=byte[] terma;snap.add(String.valueOf(ba1[i]));end
+							 when 'float' then do;fa=float[] terma;snap.add(String.valueOf(fa[i]));end
+							 when 'double' then do;da=double[] terma;snap.add(String.valueOf(da[i]));end
+							 when 'boolean' then do;ba2=boolean[] terma;snap.add(String.valueOf(ba2[i]));end
+*/							 
+							 end
+						 else do
+						 	 oa=	Object[] terma
+						     snap.add(oa[i])
+						     end
+--					   snap.add(terma[i])
 					   end
 				   end
 			else -
