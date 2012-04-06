@@ -55,7 +55,8 @@
 /* 2008.02.25 Add standard location for classes.jar on MacOSX         */
 /* 2011.10.03 Add compare costs of superclass methods to subclass in searchfield method - KK  (issue 55)  */
 /* 2011.10.04 modify unimplemented method to check return signatures for superclass/interface match - KK  (issue 17)  */
-/* 2011.10.07 add 1 to interface costs if not zero - allows converted access to implemented methods - KK  (re issue 11)  */
+/* 2011.10.07 add 1 to interface costs if not zero - allows converted access to implemented methods - KK  (issue 11)  */
+/* 2012.04.06 fix interface search  - KK  (issue NETREXX-76)  */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -1287,7 +1288,7 @@ class RxClasser
     end
 
     searchinginterfaces=0		--		KK
-    
+
   retfield=searchfield(cursor, local, lookmeth, lookprop, statics,-
                        infostart, infostart, exactname, argtypearray,-
                        tok, checkacc, isconstructor)
@@ -1311,6 +1312,7 @@ class RxClasser
                     tok=RxToken, checkacc=boolean,-
                     isconstructor=boolean) private returns RxField
 --	say "searchfield infofrom="infofrom.shortname "infostart="infostart.shortname "exactname="exactname "KK"                    
+      gotfield=RxField null
 
   if cursor=null then flag=rxt.superflag               -- external lookup
                  else flag=cursor.curprogram.flag
@@ -1370,7 +1372,7 @@ class RxClasser
       end proplook
 
     if lookmeth then /* we're doing a method lookup */ do label methodlook
-      gotfield=RxField null
+--      gotfield=RxField null
       /**
       if flag.diag then do
         sigargs=argtlist(argtypearray)
@@ -1506,12 +1508,16 @@ class RxClasser
   -- Resolve the interface names, if needed
   if infostart.impinfos=null then findimps(cursor, infostart, tok)
   searchinginterfaces=1
+  newfield2=RxField null
   loop i=0 for infostart.impinfos.length
     impinfo=infostart.impinfos[i]
 --    say "search interfaces KK"
-    newfield2=searchfield(cursor, 0, lookmeth, lookprop, statics,-
+    newfieldi=searchfield(cursor, 0, lookmeth, lookprop, statics,-
                          infofrom, impinfo, exactname,-
                          argtypearray, tok, checkacc, isconstructor)
+    if newfield2=null then newfield2=newfieldi
+      else if newfieldi \= null then
+  	  	  if newfieldi.fieldcost<newfield2.fieldcost then newfield2=newfieldi
 --    if newfield2\=null then return newfield2        -- found in interface class
     end i
     searchinginterfaces=0
