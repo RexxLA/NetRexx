@@ -1,7 +1,6 @@
 (TeX-add-style-hook "pg"
  (lambda ()
     (TeX-run-style-hooks
-     "rail"
      "caption"
      "listings"
      "xcolor"
