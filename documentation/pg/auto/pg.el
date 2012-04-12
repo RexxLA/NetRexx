@@ -1,6 +1,10 @@
 (TeX-add-style-hook "pg"
  (lambda ()
+    (LaTeX-add-labels
+     "editors")
     (TeX-run-style-hooks
+     "pstricks-add"
+     "pst-barcode"
      "caption"
      "listings"
      "xcolor"
