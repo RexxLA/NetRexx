@@ -1,28 +1,14 @@
 (TeX-add-style-hook "pg"
  (lambda ()
     (LaTeX-add-labels
+     "interpreted"
+     "classes"
      "editors")
     (TeX-run-style-hooks
-     "pstricks-add"
-     "pst-barcode"
-     "caption"
-     "listings"
-     "xcolor"
-     "color"
-     "lingmacros"
-     "xy"
-     "all"
-     "makeidx"
-     "booktabs"
-     "tabularx"
-     "fontspec"
-     "graphics"
-     "hyperref"
-     "latex2e"
-     "bk10"
-     "book"
-     "10pt"
-     "../boilerplate/netrexxformat"
+     "../boilerplate/preamble"
+     "../boilerplate/bookmeta"
      "../boilerplate/series"
-     "../boilerplate/conventions")))
+     "../boilerplate/conventions"
+     "nruappl"
+     "nruapi")))
 
