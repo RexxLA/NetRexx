@@ -5,7 +5,7 @@
 \usepackage{fontspec} 
 %\setmainfont[Mapping=tex-text]{Garamond Premier Pro}
 \setmainfont[Mapping=tex-text]{Times New Roman}
-\setmonofont[Mapping=tex-text,Scale=0.95]{Courier New}
+\setmonofont[Mapping=tex-text,Scale=0.85]{Courier New}
 %\setmainfont[Mapping=tex-text]{Helvetica}
 \usepackage{tabularx}
 \usepackage{booktabs}
@@ -243,7 +243,7 @@ executed; but the instruction after \textbf{else} was not.
 When you write a program, remember that you will almost certainly want to read it over later (before improving it, for example). Other readers of your program also need to know what the program is for, what kind of input it can handle, what kind of output it produces, and so on. You may also want to write remarks about individual instructions themselves. All these things, words that are to be read by humans but are not to be interpreted, are called comments.
 To indicate which things are comments, use:
 \begin{verbatim}
-/* to mark the start of a" comment 
+/* to mark the start of a comment 
 */ to mark the end of a comment.
 \end{verbatim}
 The \texttt{/*} causes the translator to stop compiling and interpreting;
@@ -257,15 +257,15 @@ than one line. */
 
 \end{verbatim}
 NetRexx also has line mode comments - those turn a line at a time into
-a comment. They are composed of two dashes (in listings sometimes
+a comment. They are composed of two dashes (hyphens, in listings sometimes
 fused to a typographical \emph{em dash} - remember that in reality
 they are two \emph{n dashes}.
 \begin{verbatim}
 -- this is a line comment
 \end{verbatim}
 \section{Strings}
-When the interpreter sees a quote (either II or ') it stops
-interpreting and just goes along looking for the matching quote. The
+When the translator sees a quote (either " or ') it stops
+interpreting or compiling and just goes along looking for the matching quote. The
 string of characters inside the quotes is used just as it is. Examples
 of strings are:
 \begin{verbatim}
@@ -327,6 +327,66 @@ What will you see on the screen when this exec is run?
 say "2"; say "4" ; say "6" ; say "8" ; say "Who do we" -
 "appreciate?"
 \end{lstlisting}
+
+\section{Special Variables}
+We have seen that a \emph{variable} is a place where some data, be it
+character date or numerical data, can be held. There are some special
+variables, as shown in the following program.
+\lstinputlisting[label=specialvars,caption=NetRexx Special Variables]{../../../examples/rosettacode/RCSpecialVariables.nrx}
+\begin{description}
+\item[\texttt{this}] The special variables \textbf{this} and \textbf{super} refer to the
+current instance of the class and its superclass - what this means
+will be explained in detail in the chapter \textbf{Classes} on page
+\pageref{classes}, as is the case with the \textbf{class} variable.
+
+\item[\texttt{digits}]The special variable \textbf{digits} shows the current setting for the
+number of decimal digits - the current setting of \textbf{numeric
+  digits}. The related variable \textbf{form} returns the current
+setting of \textbf{numeric form} which is either \texttt{scientific}
+or \texttt{engineering}.
+
+\item[\texttt{null}]The special variable \textbf{null} denotes the \emph{empty
+  reference}. It is there when a variable has no value.
+
+\item[\texttt{source}]The \textbf{source} and \textbf{sourceline} variables are a good way to
+show the sourcefile and sourceline of a program, for example in an
+error message.
+
+\item[\texttt{trace}]The \textbf{trace} variable returns the current trace setting, which
+can be one of the words \texttt{off var methods all results}. 
+
+\item[\texttt{version}]The \textbf{version} variable returns the version of the NetRexx
+translator that was in use at the time the clause we processed; in
+case of interpreted execution(see chapter \ref{interpreted} on \pageref{interpreted}, it returns
+the level of the current translator in use. 
+\end{description}
+The result of executing this exec is as follows:
+\begin{verbatim}
+===== Exec: RCSpecialVariables =====
+<super>RCSpecialVariables@4e99353f</super>
+<this>RCSpecialVariables@4e99353f</this>
+<class>class RCSpecialVariables</class>
+<digits>9</digits>
+<form>scientific</form>
+<[1, 2, 3].length>
+3
+</[1, 2, 3].length>
+<null>
+
+</null>
+<source>Java method RCSpecialVariables.nrx</source>
+<sourceline>21</sourceline>
+<trace>off</trace>
+<version>NetRexx 3.02 27 Oct 2011</version>
+Type an answer:
+hello fifi
+<ask>hello fifi</ask>
+\end{verbatim}
+It might be useful to note here that these special variables are not
+fixed in the sense of that they are not \emph{Reserved Variables}. NetRexx
+does not have reserved variables and any of these special variables
+can be used as an ordinary variable. However, when it is used as an
+ordinary variable, there is no way to retrieve the special behavior.
 \chapter{NetRexx as a Scripting Language}
 You can use NetRexx as a simple scripting language without having
 knowledge of, using any of the features that is needed in a Java
@@ -345,39 +405,139 @@ script needs to be interpreted. In both cases, interpreted or
 compiled, the NetRexx translator adds the necessary overhead to enable
 the JVM to execute the resulting program.
 
-\chapter{NetRexx as an Interpreted Language}
+\chapter{NetRexx as an Interpreted Language}\label{interpreted}
 
 \chapter{NetRexx as a Compiled Language}
 
 \chapter{Calling non-JVM programs}
-
+Although NetRexx currently misses the \texttt{Address} facility that
+Classic Rexx and Object Rexx do have, it is easy to call non-JVM programs
+from a NetRexx program - not as easy as calling a JVM class of course, but if
+the following recipe is observed, it will show not to be a major
+problem. The following example is reusable for many cases.
+\lstinputlisting[label=nonjava,caption=Calling Non-JVM
+Programs]{../../../examples/NrxRedBk/script/NonJava.nrx} 
+Just firing off a program is no big deal, but this example (in script
+style) shows how easy it is to access the in- and output handles for
+the environment that executes the program, which enables you to
+capture the output the non-jvm program produces and do useful things
+with it.\footnote{This is akin to what one would do with \emph{queue}
+  on z/VM CMS and \emph{outtrap} on z/OS TSO in Classic Rexx.}
+Line 17 starts the external command using the JVM \texttt{Runtime}
+class in a process called \texttt{child}. In line 20 we create a
+\texttt{BufferedReader} from the \texttt{child} processes'
+output. This is called an InputStream but it might as well have been
+called an OutputStream- everything regarding I/O is relative - but
+fortunately the designers of the JVM took care of deciding this for you.
+In lines 25-35 we loop through the results and show the files stored
+in the zipfile. Note that we \textbf{do} (line 14) have to \textbf{catch} (line
+42) the \emph{IOException} that ensues if the runtime cannot find the
+\texttt{unzip} program, maybe because it is not on the path or was not
+delivered with your operating system. 
 \chapter{Using NetRexx classes from Java}
 If you are a Java programmer, using a NetRexx class from Java is just as easy as using a Java class from NetRexx. NetRexx compiles to Java classes that can be used by Java programs.
 You should import the netrexx.lang package to be able to use the short
 class name for the Rexx (NetRexx string and numerics) class.
 
 A NetRexx method without a returns keyword can return nothing, which is the void type in Java, or a Rexx string. 
-NetRexx is case independent; Java is case dependent. NetRexx generates the Java code with the case used in the class and method instructions. For example, if you named your class Spider in the NetRexx source file, the resulting Java class file is Spider.class.
+NetRexx is case independent\footnote{With the default of \texttt{options
+  nostrictcase} in effect.}; Java is case dependent. NetRexx generates the Java code with the case used in the class and method instructions. For example, if you named your class Spider in the NetRexx source file, the resulting Java class file is Spider.class.
 The public class name in your source program must match the NetRexx
-source file name. For example, if your source file is SPIDER.NRX, and
-your class is Spider, NetRexx generates a warning and changes the
-class name to SPIDER to match the file name. A Java program using the
+source file name. For example, if your source file is \texttt{SPIDER.NRX}, and
+your class is \texttt{Spider}, NetRexx generates a warning and changes the
+class name to \texttt{SPIDER} to match the file name. A Java program using the
 class name Spider would not find the generated class, because its name
-is SPIDER.class - if the compile succeeded, which is not guaranteed in
+is \texttt{SPIDER.class} - if the compile succeeded, which is not guaranteed in
 case of casing mismatches.
-If you have problems, compile your NetRexx program with the options
--keepasjava -format. You then can look at the generated java file for the correct spelling style and method parameters.
+If you have problems, compile your NetRexx program with the \textbf{options
+-keepasjava -format}. You then can look at the generated java file for the correct spelling style and method parameters.
 
-\chapter{Classes}
+\chapter{Classes}\label{classes}
 \section{Classes}
 \section{Properties}
 \section{Methods}
 \section{Inheritance}
 \section{Overriding Methods}
 \section{Overriding Properties}
+\chapter{Using Packages}
+Any non-toy, non-trivial program needs to be in a package. Only
+examples in programming books (present company included) have programs
+without package statements. The reason
+for this is that there is a fairly large chance that you will give
+something a name that is already used by someone else for something
+else. Things are not their names\footnote{Willard Van Orman Quine, Word
+  and Object, MIT Press, 1960, ISBN 0-262-67001-1}, and the same names
+are given to wildly dissimilar things. The \emph{package} construct is the JVM's approach to
+introducing \emph{namespaces} into the total set of programs that
+programmers make. Different people will probable write some method that is
+called \texttt{listDifferences} sometime. With all my software in a
+package called \texttt{com.frob.nitz} and yours in a package
+called \texttt{com.frob.otzim}, there is no danger of our programs
+calling the wrong class and listing the wrong differences.
+
+It is imperative to understand this chapter before continuing - it is
+a mechanical nuts-and-bolts issue but an essential one at that.
+
+\section{The package statement}
+The final words about the NetRexx \textbf{package} statement is in the
+NetRexx Language Reference, but the final statement about the package
+\emph{mechanism} is in the JVM documentation.
+\section{Translator performance consequences}
+Because the NetRexx translator has to scan all packages that it can
+see (meaning a recursive scan of the directories below its own level
+in the directory tree, and on its classpath, it is often advisable
+(and certainly if . (a dot, representing the current directory) is part of the classpath)
+to do development in a subdirectory, instead of, for example, the top
+level home directory. If a large number of packages and classes are
+visible to the translator, compile times will be negatively impacted. 
+
+\section{Some NetRexx package history}
+All IBM versions of NetRexx had the translator in a package called
+\begin{verbatim}
+COM.ibm.netrexx.process 
+\end{verbatim}
+The official, SUN ordained
+convention for package names was, to prepend the reversed domain name
+of the vendor to the package name, while uppercasing the top level
+domain. NetRexx, being one of the first programs to make use of
+packages, followed this convention, that was quickly dropped by SUN
+afterwards, probably because someone experienced what trouble it could
+cause with version management software that adapted to
+case-\emph{sensitive} and case-\emph{insensitive} file systems. For
+NetRexx, which had started out keenly observing the rules, this
+insight came late, and it is a sober fact that as a result some needlessly profane
+language was uttered on occasion by some in some projects that suffered the consequences of
+this. With the first RexxLA release of NetRexx in 2011, the package
+name was changed to \texttt{org.netrexx}, while the runtime package
+name was kept as \texttt{netrexx.lang}, because some major other
+languages also follow this convention.
+\section{CLASSPATH}
+Most implementations of Java use an environment variable called CLASSPATH to indicate a search path for Java classes. The Java Virtual Machine and the NetRexx translator rely on the CLASSPATH value to find directories, zip files, and jar files which may contain Java classes. 
+The procedure for setting the CLASSPATH environment variable depends on your operating system (and there may be more than one way).
+\begin{itemize}
+\item For Linux and Unix (BASH, Korn, or Bourne shell), use:
+\begin{verbatim}
+        CLASSPATH=<newdir>:\$CLASSPATH 
+        export CLASSPATH
+\end{verbatim}
+
+\item Changes for re-boot or opening of a new window should be placed in your /etc/profile, .login, or .profile file, as appropriate. 
+\item For Linux and Unix (C shell), use:
+\begin{verbatim}
+        setenv CLASSPATH <newdir>:\$CLASSPATH 
+\end{verbatim}
+Changes for re-boot or opening of a new window should be placed in
+your .cshrc file. If you are unsure of how to do this, check the
+documentation you have for installing the Java toolkit.
+\item For Windows operating systems, it is best to set the system wide
+  environment, which is accessible using the Control Panel (a search
+  for ``environment'' offsets the many attempts to relocate the exact
+  dialog in successive Windows Control Panel versions somewhat).
+\end{itemize}
+
 \chapter{Incorporating Class Libraries}
 \section{The Collection Classes}
-\section{CLASSPATH}
+
 \chapter{Input and Output}
 \section{The File Class}
 \section{Streams}
@@ -387,18 +547,60 @@ If you have problems, compile your NetRexx program with the options
 \section{Byte Oriented I/O}
 \section{Data Oriented I/O}
 \section{Object Oriented I/O using Serialization}
+\section{The NewIO (Change!) Approach}
 \chapter{Algorithms in NetRexx}
+\section{Factorial}
+A \emph{factorial} is the product of an integer and all the integers
+below it; the mathematical symbol used is ! (the exclamation mark). For
+example 4! is equal to 24 (because 4*3*2*1=24). The
+following program illustrates a recursive (a method calling itself)
+and an iterative approach to calculating factorials.
+\lstinputlisting[label=factorial,caption=Factorial]{../../../examples/rosettacode/RCFactorial.nrx}
+Executing this program yields the following result:
+\begin{verbatim}
+===== Exec: RCFactorial =====
+Input a number: 
+42
+42! = 1405006117752879898543142606244511569936384000000000 (using iteration)
+42! = 1405006117752879898543142606244511569936384000000000 (using recursion)
+\end{verbatim}
+As you can see, fortunately, both approaches come to the same
+conclusion about the results. In the above program, both
+approaches are a bit intermingled; for more clarity about how to use
+recursion, have a look at this:
+\begin{lstlisting}[label=factorialrecursive, caption=Factorial Recursive]
+class Factorial
+numeric digits 64
+
+  method main(args=String[]) static
+    say factorial_(42)
+
+  method factorial_(number) static
+    if number = 0 then return 1
+    else return number * factorial_(number-1)
+
+\end{lstlisting}
+In this program we can clearly see that the factorial\_ method, that
+takes an argument \texttt{number} (which is of type Rexx if we do not
+specify it to be another type), calls itself in the method body. This
+means that at runtime, another copy of it is run, with as argument
+number that the first invocation returns (the result of 42*41), and so
+on.
+
+In general, a recursive algorithm is considered more elegant, while an
+iterative approach has a better runtime performance. Some language
+environments are optimized for recursion, which means that their
+processors can spot a recursive algorithm and optimize it by not
+making many useless copies of the code. Some day in the near future
+the JVM will be such an environment. Also, for some problems, for example
+the processing of tree structures, using a recursive algorithm seems
+much more natural, while an iterative algorithm seems complicated or forced.
 \section{Fibonacci}
 \lstinputlisting[label=fibonacci,caption=Fibonacci]{../../../examples/rosettacode/RCFibonacciSeq.nrx}
 \chapter{Using Parse}
 \chapter{Using Trace}
 
-\chapter{User Interfaces}
-\section{AWT}
-\section{Swing}
-\subsection{Creating NetRexx Swing interfaces with NetBeans}
-\section{Web Frameworks}
-\subsection{JSF}
+\include{nruappl}
 \chapter{Network Programming}
 \section{Using Uniform Resource Locators (URL)}
 \section{TCP/IP Socket I/O}
@@ -410,6 +612,7 @@ If you have problems, compile your NetRexx program with the options
 
 \chapter{Component Based Programming: Beans}
 
+\include{nruapi}
 \chapter{Interfacing to Open Object Rexx}
 \section{BSF4ooRexx}
 
