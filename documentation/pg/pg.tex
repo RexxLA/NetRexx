@@ -725,6 +725,78 @@ move back and forth), so we would not have to go
 through this effort - but it is a valid example of an update statement.
 \chapter{Threads}
 
+\chapter{WebSphere MQ}
+WebSphere MQ (also and maybe better known as MQ Series) is IBM's
+messaging and queing middleware, in use at a great many financial
+institutions and other companies. It has, from a programming point of
+view, two API's: JMS (Java Messaging Services), a generic messaging
+API for the Java world, and MQI, which is older and proprietary to
+IBM's product. The below examples show the MQI; other examples might
+show JMS applications.
+
+This is the sample Java application for MQI, translated (and a lot
+shorter) to NetRexx.
+\lstinputlisting[label=mqsample,caption=MQ Sample]{../../../examples/enterprise/wmq/MQSample.nrx}
+This sample connects to the Queue Manager (called \emph{rjtestqm}) in
+\emph{bindings mode}, as opposed to \emph{client mode}. Bindings mode
+is only a connection possibility for client programs that are running
+in the same OS image as the Queue Manager, on the server. Note that
+the application connects (line 19), accesses a queue (line 23), puts a
+message (line 32), gets it back (line 39) closes the queue (line 45) and disconnects (line 48) all without checking
+returncodes: the exceptionhandler takes care of this, and all
+irregulaties will be reported from the catch MQException block
+starting at line 50).
+
+The main method does in this case not follow the canonical form, but
+has 'binary' as an extra option. Option binary can be defined on the
+command line as an option to the translator, as a program option, as a
+class option and as a method option. Here the smallest scope is
+chosen. There is a good reason to make this method a binary method:
+accessing a queue in MQ Series requires some options that are set
+using a mask of binary flags - this works, in current \nr versions,
+only in binary mode, because the operators have other semantics in
+nobinary mode.
+
+\lstinputlisting[label=mqlistener,caption=MQ Message Reader]{../../../examples/enterprise/wmq/MessageReader.nrx}
+In contrast to the previous sample the MessageReader sample only has
+one import statement. This is always hotly debated in project teams,
+one school likes the succinctness of including only the top level
+import, and only goes deeper when there is ambiguity detected; another
+school spells out the all imports to the bitter end. 
+
+The MessageReader sample connects to another queue, called TESTQUEUE1
+(specified in line 7) but here we connect in \emph{client mode}, as
+indicated by lines 13-15 which specify an MQEnvironment. (Other
+options are using an MQSERVER environment variable or a \emph{Channel
+Definition Table}.
+
+This program is also uncommon in that it uses
+\texttt{MQConstants.MQGMO\_WAIT} as an option instead of being
+triggered as a process by a message on a trigger queue. Using this
+option means that the program waits (stays active, not really busy polling
+but depending on an OS event) until a new
+message arrives, which will be processed immediately.
+
+In lines 18-21 a \emph{Channel Exit} is specified. This exit is show
+in the following example.
+\lstinputlisting[label=mqjavachannelexit,caption=MQ Java Channel Exit]{../../../examples/enterprise/wmq/TimeoutChannelExit.nrx}
+\lstinputlisting[label=watchdogtimer,caption=WatchdogTimer]{../../../examples/enterprise/wmq/WatchdogTimer.nrx}
+MQ Series has traditional channel exits (programs that can look at the
+message contents before the application gets to it). In the MQI Java
+environment there is something akin to this functionality, but a Java
+channel exit for MQ Series has to be defined in the application, as
+shown in the previous example. The function of this particular exit is
+to implement a \emph{Watchdog timer} - on a separate thread, as shown
+in the sample that follows the sample channel exit. The timer
+threatens here to have issues a HP OpenView alert, but that part has
+been left out.
+
+This particular sample has been designed to do something that is hard
+to do: signal the operations department when something does NOT happen
+- here the assumption is that there is a payment going over the queue
+at least once every 20 minutes - when that does not happen, an alert
+is issued. With every message that goes through, the timer thread is
+reset, and only when it is allowed to time out, action is undertaken.
 \chapter{Component Based Programming: Beans}
 
 \include{nruapi}
