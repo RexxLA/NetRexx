@@ -474,6 +474,85 @@ the JVM to execute the resulting program.
 \chapter{\nr as an Interpreted Language}\label{interpreted}
 
 \chapter{\nr as a Compiled Language}
+\section{Compiling from another program}
+\index{compiling,from another program}
+
+The translator may be called from a NetRexx or Java program directly, by
+invoking the \emph{main} method in the \emph{org.netrexx.process.NetRexxC}
+class described as follows:
+
+\begin{lstlisting}[label=ivmain,caption=Invoking NetRexxC.main]
+method main(arg=Rexx, log=PrintWriter null) static returns int
+\end{lstlisting}
+
+The \emph{Rexx} string passed to the method can be any combination of
+program names and options (except \emph{-run}), as described above.
+Program names may optionally be enclosed in double-quote characters (and
+must be if the name includes any blanks in its specification).
+
+A sample NetRexx program that invokes the NetRexx compiler to compile a
+program called \emph{test} is:
+\begin{lstlisting}[label=compiletest,caption=Compiletest]
+/* compiletest.nrx */
+s='test -keep -verbose4 -utf8'
+say org.netrexx.process.NetRexxC.main(s)
+\end{lstlisting}
+
+Alternatively, the compiler may be called using the method:
+\begin{lstlisting}[label=array,caption=Calling with Array argument]
+method main2(arg=String[], log=PrintWriter null) static returns int
+\end{lstlisting}
+in which case each element of the \emph{arg} array must contain
+either a name or an option (except \emph{-run}, as before).  In this
+case, names must \emph{not} be enclosed in double-quote characters, and
+may contain blanks.
+
+\index{completion codes, from translator}
+\index{return codes, from translator}
+\index{PrintWriter stream for capturing translator output}
+\index{capturing translator output}
+For both methods, the returned \emph{int} value will be one of the
+return values described above, and the second argument to the method is
+an optional \emph{PrintWriter} stream.  If the \emph{PrintWriter} stream
+is provided, translator messages will be written to that stream (in
+addition to displaying them on the console, unless \emph{-noconsole} is
+specified).
+It is the responsibility of the caller to create the stream (autoflush
+is recommended) and to close it after calling the compiler.
+The \emph{-savelog} compiler option is ignored if a \emph{PrintWriter}
+is provided (the \emph{-savelog} option normally creates
+a \emph{PrintWriter} for the file \emph{NetRexxC.log}).
+
+\textbf{Note:} NetRexxC is thread-safe (the only static properties are constants), but
+it is not known whether \emph{javac} is thread-safe.  Hence the
+invocation of multiple instances of NetRexxC on different threads should
+probably specify \emph{-nocompile}, for safety.
+
+\section{Compiling from memory strings}
+Programs may also be compiled from memory strings by passing an array
+of strings containing programs to the translator using these methods:
+
+\begin{lstlisting}[label=frommemory,caption=From Memory]
+method main(arg=Rexx, programarray=String[], log=PrintWriter null) static returns int
+method main2(arg=String[], programarray=String[], log=PrintWriter null) static returns int
+\end{lstlisting}
+
+Any programs passed as strings must be named in the arg parameter before any programs contained in files are named.
+For convenience when compiling a single program, the program can be
+passed directly to the compiler as a String with this method:
+
+\begin{lstlisting}[label=string,caption=With String argument]
+method main(arg=Rexx, programstring=String, logfile=PrintWriter null) constant returns int
+\end{lstlisting}
+
+Here is an example of compiling a NetRexx program from a string in
+memory:
+
+\begin{lstlisting}[label=memexample,caption=Example of compiling from String]
+import org.netrexx.process.NetRexxC
+program = "say 'hello there via NetRexxC'"
+NetRexxC.main("myprogram",program)
+\end{lstlisting}
 
 \chapter{Calling non-JVM programs}
 Although \nr currently misses the \texttt{Address} facility that
@@ -666,6 +745,40 @@ much more natural, while an iterative algorithm seems complicated or forced.
 \chapter{Using Parse}
 \chapter{Using Trace}
 
+\chapter{Concurrency}
+\section{Threads}
+Threads are a built-in multitasking feature of the JVM. Where earlier
+JVM implementations sometime ran on so-called \emph{Green Threads},
+which is a library that implements thread support for OS'ses that do
+not have this facility (an
+early version of Java was called \emph{GreenTalk} for this reason), modern versions
+all use native OS thread support. 
+
+A new thread is created when we create an instance of the Thread class. We cannot tell a thread which method to run, because threads are not references to methods. Instead we use the Runnable interface to create an object that contains the run method:
+
+Every thread begins its concurrent life by executing the run method. The run method does not have any parameters, does not return a value, and is not allowed to signal any exceptions.
+Any class that implements the Runnable interface can serve as a target of a new thread. An object of a class that implements the Runnable interface is used as a parameter for the thread constructor.
+
+Threads can be given a name that is visible when listing the threads in your system. It is good practice to name every thread, because if something goes wrong you can see which threads are still running.
+Additionally, threads are grouped by thread groups. If you do not
+supply a thread group, the new thread is added to the thread group of
+the currently executing thread. The threads of a group and their
+subgroups can be destroyed, stopped, resumed, or suspended by using
+the ThreadGroup object. 
+
+The next two samples are used in the following programs that
+illustrate thread usage.
+\lstinputlisting[label=threads1,caption=Thread sample 1]{../../../examples/NrxRedBk/thread/ThrdTst1.nrx} 
+\lstinputlisting[label=threads2,caption=Thread sample
+2]{../../../examples/NrxRedBk/thread/ThrdTst2.nrx} 
+The second class, Hello2, does not \emph{implement} the
+\texttt{Runnable} interface, but subclasses it, so it inherits its
+methods. This is a valid approach, and it is up to the developer to
+choose an implementation and worry about the semantics of an inherited
+thread interface.
+A newly created thread remains idle until the start method is invoked. The thread then wakes up and executes the run method of its target object. The start method can be called only once. The thread continues running until the run method completes or the stop method of the thread is called.
+
+
 \include{nruappl}
 \chapter{Network Programming}
 \section{Using Uniform Resource Locators (URL)}
@@ -723,8 +836,6 @@ rows as an indication of success.
 From JDBC 2.0 on, cursors are updateable (and scrollable, so they can
 move back and forth), so we would not have to go
 through this effort - but it is a valid example of an update statement.
-\chapter{Threads}
-
 \chapter{WebSphere MQ}
 WebSphere MQ (also and maybe better known as MQ Series) is IBM's
 messaging and queing middleware, in use at a great many financial
@@ -766,7 +877,7 @@ school spells out the all imports to the bitter end.
 
 The MessageReader sample connects to another queue, called TESTQUEUE1
 (specified in line 7) but here we connect in \emph{client mode}, as
-indicated by lines 13-15 which specify an MQEnvironment. (Other
+indicated by lines 13-15 which specify an MQEnvironment. Other
 options are using an MQSERVER environment variable or a \emph{Channel
 Definition Table}.
 
@@ -872,6 +983,32 @@ Usage:
 \input{../railroad/java2nrx1}
 Alternatively:
 \input{../railroad/java2nrx2}
+\chapter{Platform dependent issues}
+\section{Mobile Platforms}
+\subsection{Android}
+\subsection{Apple IOS}
+Nonewithstading the current policy of Apple to only allow Objective-C
+as a programming language on the iPhone and iPad, NetRexx on IOS works fine. This is what one should do to make it work:
+\begin{enumerate}
+\item Jailbreak\footnote{Note that jailbreaking an iPhone is against your eula (well - Apple's eula) and might be illegal in some jurisdictions.} the device. This is necessary until a more sensible setup is used. I used Spirit; it synchs the phone with the hack and then Cydia is installed, an application that does package management the Debian way
+\item Choose the "developer profile" on Cydia when asked. This applies a filter to the packages shown (or rather it doesn't) - but you need to do it in order to see the prerequisites
+\item OpenTerminal will help you to do command line operations on the phone itself
+\item The prerequisites are a Java VM (JamVM installs a VM and
+  ClassPath, the open Java implementation) and Jikes, the Java
+  compiler written in C and compiled to the native instruction set of
+  the phone, which is ARM - most processors implementing this have
+  \emph{Jazelle}, a specials instructionset to accellerate Java bytecode. 
+\end{enumerate}
+The phone can also be logged on to using ssh from your desktop. Do not forget to change the password for the 'root' user and the 'mobile' user, as instructed in the Cydia package.
+
+When this is done, NetRexxC.jar can be copied to the phone. I did this using 'scp NetRexxC.jar mobile@10.0.0.76:' (use the password you just set for this userid) (and because my router assigned 10.0.0.76 to the phone today). I crafted a small 'nrc' script that does a translate and then a Java compile using jikes (and I actually wrote this on the phone using an application called 'iEdit' - nano, vim and other editors are also available but I found the keyboard scheme to type in ctrl-characters a bit tedious - you type a 'ball' character and then the desired ctrl char, while shifting the virtual keyboard through different modes):
+
+nrc:
+\begin{verbatim}
+java -cp ~/NetRexxC.jar COM.ibm.netrexx.process.NetRexxC $*
+\end{verbatim}
+Now we can do a compile of the customary hello.nrx with './nrc -keep -nocompile hello' (notice that this is all in the home directory of the 'mobile' user, just like the jar that I just copied. The resulting hello.java.keep can then be mv'ed to hello.java and compiled with 'jikes hello.java'. This produces a class that can be run with 'java -cp NetRexxC.jar hello'
+
 \backmatter
 \listoffigures
 \listoftables
