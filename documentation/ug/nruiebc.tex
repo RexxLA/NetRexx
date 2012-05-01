@@ -2,12 +2,45 @@
 % .* NetRexx User's Guide                                              mfc
 % .* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.
 % .* ------------------------------------------------------------------
-\chapter{Installing on an EBCDIC system}
-
-
+\chapter{Installing on an IBM Mainframe}
+\subsection{EBCDIC Systems: z/OS, z/VM}
 \index{EBCDIC installations}
 \index{installation,EBCDIC systems}
 
+\subsubsection{Prerequisites for z/OS}
+Realistically, to use NetRexx on z/OS you must have access to an OMVS
+prompt (z/OS Unix Systems Services\footnote{IBM Manuals SA22-7801-12 ``Unix System
+  Services User's Guide''
+  and  SA22-7802-12 ``Unix System Services Reference''}  shell for 3270 terminals), have
+access using ssh or telnet, and Java must be installed. While this
+access used to be scarce, more and more installations have this as a
+standard. Of course, if you are systems programming staff you can
+arrange for most of this yourself, and if you are not, you need to
+befriend the staff that can.
+
+Access to the OMVS command is regulated through a security profile, so your userid
+must be in the right RACF of ACF2 class. You will need a home
+directory specified in this OMVS class, and this directory needs to be
+mounted, preferably as a permanent mount.
+
+If this is arranged and working, you need to verify if there is a Java
+runtime available. Test this with the command 
+\begin{verbatim}
+java -version
+\end{verbatim}
+Any version of Java will do, although newer is better. Generally,
+versions from 1.4 to 1.6 are found on mainframes nowadays. If the
+command is not found, don't despair; it might be installed but it may
+be not found on the \$PATH variable. This can be arranged for in the
+\texttt{.profile} or \texttt{.bash\_profile} file in your home direcory. This variable works
+just as in other versions of Unix\footnote{z/OS is officially a
+  version of Unix, this in addition to everything that it already was}, see
+page \pageref{install_classpath}. If Java is not installed, it is time
+someone did it; there are SMP/E and non-SMP/E installers (using a
+shell script) available -
+the latter comes in handy for a quick install.
+
+\subsubsection{Uploading the \nr translator jar}
 
 The NetRexx binaries are identical for all operating systems; the same
 NetRexxC.jar runs everywhere \footnote{Many thanks to Mark Cathcart
@@ -19,18 +52,46 @@ page as required.
 
 The simplest way to do this is to first install the package on a
 workstation, following the instructions above, then copy or FTP the
-files you need to the EBCDIC machine.  Specifically:
+files you need to the mainframe.  The files need to be placed in an
+HFS to be used by OMVS; FTP can directly places the files in an HFS
+home directory, while IND\$FILE can place them into a traditional data
+set.
+
+Specifically:
 \begin{itemize}
 \item The NetRexxC.jar file should be copied as-is, that is, use
 FTP or other file transfer with the BINARY option.  The CLASSPATH should
-be set to include this NetRexxC.jar file.
+be set to include this NetRexxC.jar file. When using IND\$FILE as a
+file transfer mechanism to a traditional MVS data set, make sure it is
+allocated as a load library with \texttt{lrecl 0} and a large blocksize.
 \item Other files (documentation, etc.) should be copied as Text (that is,
 they will be translated from ASCII to EBCDIC).
 \end{itemize}
 
 In general, files with extension \emph{.au}, \emph{.class}, \emph{.gif}, \emph{.jar},
-or \emph{.zip} are binary files; all others are text files.
-Setting the classpath might look like this:
+or \emph{.zip} are binary files; all others are text files. You may
+opt to leave the additional files on a workstation, the mainframe
+really only needs the .jar file, NetRexxC.jar (or NetRexxR.jar if you
+are only planning to run already compiled classfiles).
+Setting the classpath might look like this on a recent z/OS:
 \begin{verbatim}
-export CLASSPATH=\$CLASSPATH:/u/j390/j1.1.8/lib/NetRexxC.jar
+CLASSPATH=$CLASSPATH:/opt/ibm/java-s390x-60/lib/tools.jar
+CLASSPATH=$CLASSPATH:/opt/ibm/java-s390x-60/jre/lib/s390x/default/jclSC160/vm.jar
+CLASSPATH=$CLASSPATH:/u/[your userid]/lib/NetRexxC.jar
+export CLASSPATH
 \end{verbatim}
+Note that you are free to put the NetRexxC.jar archive in any
+location, as long as the classpath correctly refers to it.
+
+When this is done, we can run some tests with it and see that
+everything works. Edit a program source file with \texttt{oedit},
+which works just like the ISPF/PDF editor and compile or interpret it
+like we do on other versions of Unix. \nr programs can access HFS (and
+ZFS) files the same way it does on Windows and Unix, and also network
+programming with TCP/IP works in the same way from OMVS.
+
+For a description how \nr can be used in a traditional MVS
+workload environment, with batch JCL and using VSAM and sequentials
+data set and PDS directories, you are referred to the \emph{NetRexx
+  Programming Guide)}.
+\subsection{z/Linux}
