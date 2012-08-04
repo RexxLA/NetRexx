@@ -1,11 +1,9 @@
-You are looking at the readme for the second release candidate of the NetRexx 3.01 package.
+You are looking at the readme for the third release candidate of the NetRexx 3.01 package.
 
-This is RC2 and not the released package. Specifically, the following is incomplete:
+This is RC3 and not the released package. Specifically, the following is incomplete:
 
-- starter scripts for the translator
-- User Guide and other documentation is incomplete or missing, respectively
-- there is no building procedure for every example
-- addition of the open sourced njPipes package, which implements CMS/TSO (Hartmann) Pipelines in NetRexx and Java.
+- User Guide and other documentation is incomplete
+- there is not yet a building procedure for every example
 
 This release candidate is meant for experienced users. The NetRexxC.jar and NetRexxR.jar files have been tested and are fit for use. New features might be changed and/or repealed until the official version is issued. The LICENSE file can be found in both product jars.
 
@@ -26,15 +24,13 @@ The 3.01 release will mark the first official RexxLA release. Changes are:
 
 - the translator displays a version number and build date on startup
 
-- addition of the open sourced njPipes package, which implements CMS/TSO (Hartmann) Pipelines in NetRexx and Java - thanks to Ed Tomlinson donating his source code
-
 - addition of several NetRexx examples from the RosettaCode.org site ( http://rosettacode.org ) and the IBM Redbook
 
 - an example for the use of NetRexx with MS-Excel on Windows systems, using the Jacob library
 
 - a new NetRexx Language Reference (nrl3) donated by Mike Cowlishaw, which incorporates the NetRexx 2 Language Reference, the NetRexx Overview and the Language Supplement
 
-- a new version of the NetRexx User's Guide
+- a new version of the NetRexx User's Guide, now renamed to NetRexx Quickstart Guide
 
 - a new API to translate (interpret and/or compile) a NetRexx source from a memory buffer instead of a file - Kermit Kiser (NETREXX-5).
 
@@ -46,3 +42,8 @@ The 3.01 release will mark the first official RexxLA release. Changes are:
 
 This package structure will be built upon in the coming releases. For remarks, corrections and suggestions, please use developers@netrexx.kenai.com.
 
+Changes between RC2 and RC3
+
+- bug fixes for java code generation for LOOP OVER for Rexx and primitive types
+- addition of the eclipse batch compiler, (issue NETREXX-4) an alternative for javac that enables ahead-of-time compilation on a JRE and in cases that javac cannot be located on the user system
+support for the eclipse batch compiler is turned on by placing the ecj-4.2.0.jar file on the classpath and adding the -Dnrx-compiler=ecj to the compile commandline (the java org.netrexx.process.NetRexxC commandline.
