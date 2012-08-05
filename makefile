@@ -1,5 +1,5 @@
 # This is the overall makefile for NetRexx on Unixlike systems
-# for documentation purposees and people with habits that are hard to shake
+# for documentation purposes and people with habits that are hard to shake
 
 all:
 	java -jar ant/ant-launcher.jar compile
