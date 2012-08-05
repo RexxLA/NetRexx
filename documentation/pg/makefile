@@ -17,7 +17,7 @@ $(TARGET).pdf: $(TEX_SRC)
 		$(LATEX_EXE) $(TARGET).tex; \
 		makeindex $(TARGET); \
 	done
-
+	mv pg.pdf "NetRexx Programming Guide 3.01.pdf"
 $(TARGET).bbl: $(TEXSRC) $(BIBSRC)
 	$(LATEX_EXE) $(TARGET).tex
 #	bibtex $(TARGET)
