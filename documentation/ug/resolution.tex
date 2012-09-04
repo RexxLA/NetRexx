@@ -1,0 +1,69 @@
+Javac MSA Algorithm
+
+If more than one member method is both accessible and applicable to a method invocation, it is necessary to choose one to provide the descriptor for the run-time method dispatch. The Java programming language uses the rule that the most specific method is chosen.
+The informal intuition is that one method is more specific than another if any invocation handled by the first method could be passed on to the other one without a compile-time type error.
+
+One fixed-arity member method named m is more specific than another member method of the same name and arity if all of the following conditions hold:
+• The declared types of the parameters of the first member method are T1,.. . , Tn.
+• The declared types of the parameters of the other method are U1, . . . ,Un.
+• If the second method is generic then let R1 ... Rp p ≥ 1 , be its formal type parameters, let Bl be the declared bound of Rl, 1 ≤ l < p , let A1 ... Ap be the actual type arguments inferred for this invocation under the ini- tial constraintsTi << Ui, 1 ≤ i ≤ n and letSi = Ui[R1 = A1, ..., Rp = Ap]1≤i≤n; otherwise let Si=Ui 1≤i≤n.
+• For all j from 1 to n, Tj <: Sj.
+• If the second method is a generic method as described above then Al <: Bl[R1 = A1, ..., Rp = Ap], 1 ≤ l ≤ p .
+In addition, one variable arity member method named m is more specific than another variable arity member method of the same name if either:
+• One member method hasn parameters and the other has k parameters,where n ≥ k . The types of the parameters of the first member method are T1, . . . , Tn-1 , Tn[], the types of the parameters of the other method are U1, . . . , Uk-1, Uk[]. If the second method is generic then let R1 ... Rp p ≥ 1 , be its formal type parameters, let Bl be the declared bound of Rl, 1 ≤ l ≤ p , let A1 ... Ap be the actual type arguments inferred for this invocation under the initial constraints Ti << Ui, 1 ≤ i ≤ k – 1 , Ti << Uk, k≤i≤n andletSi=Ui[R1=A1,...,Rp=Ap]1≤i≤k;otherwiseletSi
+=Ui, 1≤i≤k.Then:
+◆ for all j from 1 to k-1 ,Tj <: Sj, and,
+◆ for all j from k to n,Tj<:Sk,and,
+◆ If the second method is a generic method as described above then Al <: Bl[R1 = A1, ..., Rp = Ap], 1 ≤ l < p .
+• One member method has k parameters and the other has n parameters, where n ≥ k . The types of the parameters of the first method are U1, . . . , Uk- 1, Uk[], the types of the parameters of the other method are T1, . . ., Tn-1 , Tn[]. If the second method is generic then let R1 ... Rp p ≥ 1 , be its formal type parameters, let Bl be the declared bound of Rl,1≤l≤p ,letA1 ... Ap be the actual type arguments inferred (§15.12.2.7) for this invocation under the initial constraints U i<< Ti, 1≤i≤k–1, Uk << Ti ,k≤i≤n and let Si = Ti[R1 = A1, ..., Rp = Ap] 1≤i≤n; otherwise letSi = Ti, 1 ≤ i ≤ n . Then:
+◆ for all j from 1 to k-1,Uj <:Sj, and,
+◆ for all j from k to n,Uk <:Sj, and,
+◆ If the second method is a generic method as described above then Al <: Bl[R1=A1,...,Rp=Ap],1≤l≤p .
+The above conditions are the only circumstances under which one method may be more specific than another.
+A method m1 is strictly more specific than another method m2 if and only if m1 is more specific than m2 and m2 is not more specific than m1.
+A method is said to be maximally specific for a method invocation if it is accessible and applicable and there is no other method that is applicable and accessible that is strictly more specific.
+If there is exactly one maximally specific method, then that method is in fact the most specific method; it is necessarily more specific than any other accessible method that is applicable. It is then subjected to some further compile-time checks as described in §15.12.3.
+It is possible that no method is the most specific, because there are two or more methods that are maximally specific. In this case:
+• If all the maximally specific methods have override-equivalent (§8.4.2) signa- tures, then:
+◆ If exactly one of the maximally specific methods is not declared abstract, it is the most specific method.
+◆ Otherwise, if all the maximally specific methods are declared abstract, and the signatures of all of the maximally specific methods have the same erasure (§4.6), then the most specific method is chosen arbitrarily among the subset of the maximally specific methods that have the most specific return type. However, the most specific method is considered to throw a checked exception if and only if that exception or its erasure is declared in the throws clauses of each of the maximally specific methods.
+• Otherwise, we say that the method invocation is ambiguous, and a compiletime error occurs.
+
+As paraphrased in Dutchyn et alia: Multi-Dispatch in the Java Virtual Machine: Design and Implementation
+
+The Java Language Specification, 2nd Edition
+(JLS) [15] provides an explicit algorithm [...] called Most Specific Applicable (MSA). At a call-site, the compiler begins with a list of all methods implemented and inherited by the (static) receiver type. Through a series of culling operations, the compiler reduces the set of methods down to a single most specific method. The first operation removes methods with the wrong name, methods that accept an incorrect number of arguments, and methods that are not accessible from the call-site. This latter group includes private methods called from another class and protected methods called from outside of the package.
+
+Next, any methods which are not compatible with the static type of the arguments are also removed. This test relies upon testing widening conversions, where one type can be widened to another if and only if is the same type as or a subtype of . For example, a FocusEvent can be widened to an AWT- Event because the latter is a super-type of the for- mer3. The opposite is not valid: an AWTEvent cannot be widened to a FocusEvent; indeed a type-cast from AWTEvent to FocusEvent would need to be a type- checked narrowing conversion.
+Finally, javac attempts to locate the single most specific method among the remaining subset of statically appli- cable methods. One method M is con- sidered more specific than M if and only if each argument type can be widened to for each , and for some , cannot be widened to . In effect, this means that any set of arguments acceptable to M is also accept- able to M , but not vice versa.
+
+Given the subset of applicable methods, javac selects one as its tentatively most specific. It then checks each other candidate method by testing whether its arguments can be widened to the corresponding argu- ment in . If this is successful, then is at least as specific as ; the compiler adopts as the new tentatively most specific method — the method is culled from the candidate list. If the first test, whether be widened to Mc, is unsuccessful, then the compiler checks the other direction: can be widened to . If so, then the compiler drops Mc from the candidate list.
+
+NetRexx Method Resolution
+
+Method resolution (search order)
+Method resolution in NetRexx proceeds as follows:
+• If the method invocation is the first part (stub) of a term, then:
+1. The current class is searched for the method (see below for details of searching).
+2. If not found in the current class, then the superclasses of the current class are searched, starting with the class that the current class extends.
+3. If still not found, then the classes listed in the uses phrase of the class instruction are searched for the method, which in this case must be a static method (see page 99). Each class from the list is searched for the method, and then its superclasses are searched upwards from the class; this process is repeated for each of the classes, in the order specified in the list.
+4. If still not found, the method invocation must be a constructor (see below) and so the method name, which may be qualified by a package name, should match the name of a primitive type or a known class (type). The specified class is then searched for a constructor that matches the method invocation.
+• If the method invocation is not the first part of the term, then the evaluation of the parts of the term to the left of the method invocation will have resulted in a value (or just a type), which will have a known type (the continuation type). Then:
+1. The class that defines the continuation type is searched for the method (see below for details of searching).
+2. If not found in that class, then the superclasses of that class are searched, starting with the class that that class extends.
+If the search did not find a method, an error is reported.
+If the search did find a method, that is the method which is invoked, except in one case:
+◦ If the evaluation so far has resulted in a value (an object), then that value may have a type which is a subclass of the continuation type. If, within that subclass, there is a method that exactly overrides (see page 55) the method that was found in the search, then the method in the subclass is invoked.
+This case occurs when an object is earlier assigned to a variable of a type which is a superclass of the type of the object. This type simplification hides the real type of the object from the language processor, though it can be determined when the program is executed.
+Searching for a method in a class proceeds as follows:
+1. Candidate methods in the class are selected. To be a candidate method:
+◦ the method must have the same name as the method invocation (independent of the case (see page 44) of the letters of the name)
+◦ the method must have the same number of arguments as the method invocation (or more arguments, provided that the remainder are shown as optional in the method definition)
+◦ it must be possible to assign the result of each argument expression to the type of the corresponding argument in the method definition (if strict type checking is in effect, the types must match exactly).
+2. If there are no candidate methods then the search is complete; the method was not found.
+3. If there is just one candidate method, that method is used; the search is complete.
+4. If there is more than one candidate method, the sum of the costs of the conversions (see page 60) from the type of each argument expression to the type of the corresponding argument defined for the method is computed for each candidate method.
+5. The costs of those candidates (if any) whose names match the method invocation exactly, including in case, are compared; if one has a lower cost than all others, that method is used and the search is complete.
+6. The costs of all the candidates are compared; if one has a lower cost than all others, that method is used and the search is complete.
+7. If there remain two or more candidates with the same minimum cost, the method invocation is ambiguous, and an error is reported.
+Note: When a method is found in a class, superclasses of that class are not searched for methods, even though a lower-cost method may exist in a superclass.

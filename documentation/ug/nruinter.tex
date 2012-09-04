@@ -1,0 +1,158 @@
+% .* ------------------------------------------------------------------
+% .* NetRexx User's Guide                                              mfc
+% .* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.
+% .* ------------------------------------------------------------------
+\section{Using the translator as an Interpreter}
+\index{interpreting,NetRexx programs}
+\index{using the translator,as an Interpreter}
+In addition to being used as a compiler, the translator also includes a
+true NetRexx interpreter, allowing NetRexx programs to be run on the
+Java 2 (1.2) platform without needing a compiler or generating .class
+files.
+\newline
+The startup time for running programs can therefore be significantly
+reduced as no Java source code or compilation is needed, and also the
+interpreter can give better runtime support (for example, exception
+tracebacks are localized to the programs being interpreted, and the
+location of an exception will be identified often to the nearest token
+in a term or expression).
+\newline
+Further, in a single run, a NetRexx program can be both interpreted and
+then compiled.  This shares the parsing between the two processes, so
+the \emph{.class} file is produced without the overhead of
+re-translating and re-checking the source.
+
+\subsection{Interpreting programs}
+The NetRexx interpreter is currently designed to be fully compatible
+with NetRexx programs compiled conventionally.  There are some minor
+restrictions (see section \ref{restrictions} on page \pageref{restrictions}), but in general any program that NetRexxC
+can compile without error should run.  In particular, multiple programs,
+threads, event listeners, callbacks, and Minor (inner) classes are fully
+supported.
+\newline
+To use the interpreter, use the NetRexxC command as usual and specify
+either of the following command options (flags):
+
+\begin{description}
+\item[-exec]
+\index{option,exec}
+\index{flag,exec}
+\index{exec option}
+after parsing, execute (interpret) the program or programs by calling
+the static \emph{main(String[])} method on the first class, with an
+empty array of strings as the argument.  (If there is no suitable \emph{main}
+method an error will be reported.)
+\item[-arg words...]
+\index{option,arg}
+\index{flag,arg}
+\index{arg option}
+as for \emph{-exec}, except that the remainder of the command argument
+string passed to NetRexxC will be passed on to the main method as the
+array of argument strings, instead of being treated as file
+specifications or flags.  Specifying \emph{-noarg} is equivalent to
+specifying \emph{-exec}; that is, an empty array of argument strings
+will be passed to the main method (and any remaining words in the
+command argument string are processed normally).
+\end{description}
+When any of \emph{-exec}, \emph{-arg}, or \emph{-noarg} is specified,
+NetRexxC will first parse and check the programs listed on the command.
+If no error was found, it will then run them by invoking the main method
+of the first class interpretively.
+\newline
+Before the run starts, a line similar to:
+\begin{verbatim}
+===== Exec: hello =====
+\end{verbatim}
+\index{option,verbose}
+\index{flag,verbose}
+\index{verbose option}
+will be displayed (you can stop this and other progress indicators being
+displayed by using the \emph{-verbose0} flag, as usual).
+\newline
+\index{option,nojava}
+\index{flag,nojava}
+\index{nojava option}
+\index{option,nocompile}
+\index{flag,nocompile}
+\index{nocompile option}
+Finally, after interpretation is complete, the programs are compiled in
+the usual way, unless \emph{-nojava}\footnote{The \emph{-nojava} flag stops any Java source being produced, so
+prevents compilation.  This flag may be used to force syntax-checking of
+a program while preventing compilation, and with optional
+interpretation.}
+or \emph{-nocompile} was specified.
+\newline
+For example, to interpret the hello world program without
+compilation, the command:
+\begin{verbatim}
+nrc hello -exec -nojava
+\end{verbatim}
+can be used.  If you are likely to want to re-interpret the program (for
+example, after changing the source file) then also specify
+the \emph{-prompt} flag, as described above.  This will give very much
+better performance on the second and subsequent interpretations.
+\newline
+Similarly, the command:
+\begin{verbatim}
+nrc hello -nojava -arg Hi Fred!
+\end{verbatim}
+would invoke the program, passing the words \emph{Hi Fred!} as
+the argument to the program (you might want to add the line \emph{say
+arg} to the program to demonstrate this).
+\newline
+You can also invoke the interpreter directly from another NetRexx or
+Java program, as described in The NetRexx Programming Guide.
+
+\section{Interpreting -- Hints and Tips}
+\index{interpreting,hints and tips}
+
+When using the translator as an interpreter, you may find these hints
+useful:
+\begin{itemize}
+\item If you can, use the \emph{-prompt} command line option (see above).
+This will allow very rapid re-interpretation of programs after changing
+their source.
+\item If you don't want the programs to be compiled after interpretation,
+specify the \emph{-nojava} option, unless you want the Java source code
+to be generated in any case (in which case specify \emph{-nocompile},
+which implies \emph{-keep}).
+\item By default, NetRexxC runs fairly noisily (with a banner and logo
+display, and progress of parsing being shown).  To turn off these
+messages during parsing (except error reports and warnings) use
+the \emph{-verbose0} flag.
+\item
+\index{option,trace1}
+\index{flag,trace1}
+\index{trace1 option}
+If you are watching NetRexx trace output while interpreting, it is often
+a good idea to use the \emph{-trace1} flag.  This directs trace output
+to the standard output stream, which will ensure that trace output and
+other output (for example, from \textbf{say} instructions) are
+synchronized.
+\item
+Use the NetRexx \textbf{exit} instruction (rather than the \emph{System.exit()}
+method call) to end windowing (AWT) applications which are to be
+interpreted.  This will allow the interpreter to correctly determine
+when the application has ended.  This is discussed further in the
+%\cite{Interpreter restrictions}
+\end{itemize}
+
+
+\section{Interpreting -- Performance}
+\index{interpreting,performance}
+\index{performance, while interpreting}
+The initial release of the interpreter, in the NetRexx 2.0 reference
+implementation, directly and efficiently interprets NetRexx
+instructions.  However, to assure the stability of the code, terms and
+expressions within instructions are currently fully re-parsed and
+checked each time they are executed.  This has the effect of slowing the
+execution of terms and expressions significantly; performance
+measurements on the initial release are therefore unlikely to be
+representative of later versions that might be released in the future.
+\newline
+For example, at present a loop controlled using \emph{loop for
+1000} will be interpreted around 50 times faster than a loop
+controlled by \emph{loop i=1 to 1000}, even in a binary method,
+because the latter requires an expression evaluation each time around
+the loop.
+
