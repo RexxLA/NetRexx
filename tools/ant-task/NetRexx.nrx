@@ -7,6 +7,11 @@ package org.apache.tools.ant.taskdefs.optional
  * (ported to netrexx code, since it seemed a bit silly to have a netrexx
  * compile task written in java instead of in netrexx)
  * compiling this only needs ant.jar and NetRexxC.jar on the classpath.
+  *
+ * Kermit Kiser 20110904 - updated to fix errors, add missing code from Apache version, 
+ *   use main2 entry to handle file names with spaces, add nested classpath support.
+ * Kermit Kiser 20110930 - added options arg, exec, javaDir, warnexit0, use internal verify for trace and verbose options  
+ * Kermit Kiser 20120831 - allow specify Eclipse compiler (ecj) via Ant properties: nrx.compiler or ant.netrexxc.javacompiler   
  */
 
 import java.io.File
@@ -88,10 +93,7 @@ import org.netrexx.
  * <li>The current directory, and,</li>
  * <li>The directory the source is in (see sourcedir option)
  * </ol>
- *
- * Kermit Kiser 20110904 - updated to fix errors, add missing code from Apache version, 
- *   use main2 entry to handle file names with spaces, add nested classpath support.
- * Kermit Kiser 20110930 - added options arg, exec, javaDir, warnexit0, use internal verify for trace and verbose options  
+
  */
 
 class NetRexx extends MatchingTask
@@ -113,6 +115,7 @@ class NetRexx extends MatchingTask
   exec        = String
   exec_b      = boolean
   format       = String
+  javacompiler = String
   java_	       = String
   java_b      = boolean
   javaDir	   = File
@@ -366,10 +369,18 @@ class NetRexx extends MatchingTask
     p = prj.getProperty("ant.netrexxc.removeSourceCopies")
     if p \= null then this.removeSourceCopies = Project.toBoolean(p)
 
+    p = prj.getProperty("nrx.compiler")
+    if p \= null then this.javacompiler = p
+
+    p = prj.getProperty("ant.netrexxc.javacompiler")
+    if p \= null then this.javacompiler = p
+        
     return
 
   method checkoptions() 		--	analyze NetRexx options used internally by this Ant task 
     
+  	  if javacompiler \= null then System.setProperty("nrx.compiler",javacompiler)
+  	  	  else System.clearProperty("nrx.compiler")
   	  if compile=null then compile_b=0; else compile_b=Project.toBoolean(compile) 
   	  if exec=null then exec_b=0; else exec_b=Project.toBoolean(exec) 
   	  if java_=null then java_b=0; else java_b=Project.toBoolean(java_) 

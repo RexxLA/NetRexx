@@ -32,6 +32,7 @@
 /* 2000.04.12 More efficient makemessage                              */
 /* 2000.04.19 Small reorganization for API; exec() now called above   */
 /* 2011.08.22 pass keepasjava option to skip rename of java files to .keep  - Kermit Kiser */
+/* 2012.07.31 System property nrx.compiler = ecj option for alternative compiler - rvj */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -613,9 +614,22 @@ class RxTranslator
       args[f+offset]=program.streamer.outfilefull
       end f
     if maxverbose>3 then say('Compiling: '''Rexx(args)'''')
-     else if haddiag then say '# Compiling:' Rexx(args)
-    --javacok=\com.sun.tools.javac.Main.compile(args,PrintWriter(System.out))
-    javacok=sun.tools.javac.Main(System.out, 'javac').compile(args)
+    else if haddiag then say '# Compiling:' Rexx(args)
+    
+    compilerChoice = System.getProperty("nrx.compiler","javac")
+    select
+      when compilerChoice == "javac" then do
+	if program.flag.diag then say '# compiling' program.programname 'using javac'
+	javacok=sun.tools.javac.Main(System.out, 'javac').compile(args)
+      end
+      when compilerChoice == "ecj" then do
+	if program.flag.diag then say '# compiling' program.programname 'using eclipse batch compiler'
+	javacok=org.eclipse.jdt.core.compiler.batch.BatchCompiler.compile(args, PrintWriter(System.out), PrintWriter(System.err), null)
+      end
+      otherwise
+	RxQuit(this, null, 'compiler.specification.error')
+    end
+    
     if haddiag then say '# Compiled: ok='javacok
     badjavac=\javacok
 
