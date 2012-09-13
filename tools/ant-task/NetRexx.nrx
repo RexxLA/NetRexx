@@ -12,6 +12,7 @@ package org.apache.tools.ant.taskdefs.optional
  *   use main2 entry to handle file names with spaces, add nested classpath support.
  * Kermit Kiser 20110930 - added options arg, exec, javaDir, warnexit0, use internal verify for trace and verbose options  
  * Kermit Kiser 20120831 - allow specify Eclipse compiler (ecj) via Ant properties: nrx.compiler or ant.netrexxc.javacompiler   
+ * Kermit Kiser 20120909 - pass Ant classloader to NetRexx compiler in thread context loader field (so it can still find java compiler from Ant classpath in case NetRexxC.jar is in lib\ext dir)   
  */
 
 import java.io.File
@@ -722,9 +723,15 @@ class NetRexx extends MatchingTask
     currentProperties.put("java.class.path", classpath)
 
     do
+    	
+    	savethreadloader=Thread.currentThread().getContextClassLoader()
+    	Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader()) 			-- pass the current class loader to NetRexxC in case he is in lib\ext directory
+    	
 	   out = StringWriter()
 --      nrx_ = org.netrexx.Nrx(compileArgs)
       nrx_ = org.netrexx.process.NetRexxC.main2(compileArgs, PrintWriter(out))
+      
+      Thread.currentThread().setContextClassLoader(savethreadloader) 			-- restore the thread classloader value
       
        in = BufferedReader(StringReader(out.toString()))
        loop forever
