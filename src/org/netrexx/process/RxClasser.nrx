@@ -57,6 +57,7 @@
 /* 2011.10.04 modify unimplemented method to check return signatures for superclass/interface match - KK  (issue 17)  */
 /* 2011.10.07 add 1 to interface costs if not zero - allows converted access to implemented methods - KK  (issue 11)  */
 /* 2012.04.06 fix interface search  - KK  (issue NETREXX-76)  */
+/* 2012.09.16 change constructor to allow auto (standard) import of a single package as well as a tree branch;  add java.lang to strictimports to match javac  --KK  (issue NETREXX-61)  */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -79,6 +80,7 @@ class RxClasser
   zsep        =char '/'       -- zipfile file separator
   dot         =char '.'       -- extension or segment separator
   standpacks  =String[]       -- standard packages (imports)
+  standpacksscope  =boolean[]       -- standard packages (imports) flags to include subpackages - issue #61  -KK-20120916
 
   /* local dictionaries and lists */
   classpool   =RxClassPool    -- pool of known classes
@@ -126,8 +128,29 @@ class RxClasser
 
   classpool=RxClassPool(rxt)       -- make a classpool
 
-  if \rxt.program.flag.strictimport then standpacks=standardimports
-                                    else standpacks=String[0]
+/*  if \rxt.program.flag.strictimport then standpacks=standardimports
+                                    else standpacks=String[0]			*/
+
+/*  Check each standard import to see if subpackages were requested - part of mod for issue #61  --KK-20120916  */	
+  if \rxt.program.flag.strictimport then do
+		standpacks=String[standardimports.length]	                                    
+		standpacksscope=boolean[standardimports.length]	
+  	loop i=0 for standardimports.length
+  		if Rexx(standardimports[i]).right(1)=='.' then do
+  			standpacks[i]=standardimports[i].substring(0,standardimports[i].length()-1)
+  			standpacksscope[i]=1
+  			end
+  			else do
+  			standpacks[i]=standardimports[i]
+  			standpacksscope[i]=0
+  			end
+			end
+		end
+		
+		else do		--		strictimport case
+		standpacks=[String 'java.lang']				--		Java always includes java.lang import   --  part of mod for issue #61  --KK-20120916  */
+		standpacksscope=[boolean 0]					--		no subpackages
+		end
 
   -- initialize and import standard classes
   initclasspath()                  -- get and parse classpath, loading Zips
@@ -311,6 +334,7 @@ class RxClasser
       package=simport.substring(0, simlen-1)    -- drop dot
       -- if a standard package, return -1 to indicate no re-import done
       loop i=0 for standpacks.length
+        if standpacksscope[i] then			--		if a matching standard import included sub packages this import is redundant (for issue #61) - KK - 20120916
         if standpacks[i]==package then return -1
         end i
       find=String null
@@ -377,7 +401,8 @@ class RxClasser
         packdirfind(seg, packlook)         -- locate packages
         loop i=0 for standpacks.length     -- standards please
           found=found+dirfind(seg, standpacks[i], null, nickable,-
-                              importer, subpacks)
+                              importer, standpacksscope[i])		--	mod per issue #61 -KK-20120916
+--                              importer, subpacks)
           end i
         end standards
       end
@@ -570,7 +595,10 @@ class RxClasser
         -- next line makes assumption that standard packages are
         -- reasonably named; could check lengths equal or '.' in right place
         -- effectively this implies 'all subpackages'
-        if fpackage.startsWith(standpacks[i], 0) then leave
+        if standpacksscope[i] then				--	standard packages may or may not include subpackages now --(issue #61) --KK-20120916
+					if fpackage.startsWith(standpacks[i], 0) then leave
+        	else nop		--(issue #61) --KK-20120916
+				else if fpackage.equals(standpacks[i]) then leave		--(issue #61) --KK-20120916
         end i
       if i=standpacks.length then iterate elements -- not found
       -- element is 'one of ours'
