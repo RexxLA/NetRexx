@@ -61,6 +61,7 @@
 /* 2012.09.16 add assert and strictfp to javakeytable  --KK  (issue NETREXX-64)  */
 /* 2012.10.16 missing null check in unimplemented method causing null ptr errors  --KK  (no issue opened - non released code)  */
 /* 2012.10.17 missing null check in unimplemented method causing null ptr errors  --KK  (no issue opened - non released code)  */
+/* 2012.11.14 Force Android to only use passed in classpath - Jason M */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -177,30 +178,38 @@ class RxClasser
       hard (slow) work of reading and parsing the Zipfile.
     */
  method initclasspath
-   path=System.getProperty('java.class.path')
-   /* Java 1.2 betas forget to add the home classes.zip/.jar, so we add
-      them.  Later checks will filter them out if duplicates or unreal.
-      Later 1.2 beta changes the name to rt.jar, and moves tools to a
-      new jar at a higher level.
-      Final 1.2 also adds extensions mechanism .. and .jar files in
-      \lib\ext are automatically added to the classpath.
+    if System.getProperty("java.vendor")=="The Android Project" then do
+        path=System.getProperty('java.class.path') -- Only passed in classpath
+        home=''          -- For home and lib, NetRexx cannot load dex classes 
+        lib=''          -- .. and Android will not load if already there.
+                         -- This way will work in App or Console
+        end             -- .. without android.jar for compilation
+    else do
+        path=System.getProperty('java.class.path')
+        /* Java 1.2 betas forget to add the home classes.zip/.jar, so we add
+            them.  Later checks will filter them out if duplicates or unreal.
+            Later 1.2 beta changes the name to rt.jar, and moves tools to a
+            new jar at a higher level.
+            Final 1.2 also adds extensions mechanism .. and .jar files in
+            \lib\ext are automatically added to the classpath.
 
-      In Java 1.4, some JVMs split and renamed rt.jar, so now we
-      simply check all .jars in jre\lib
-    */
+            In Java 1.4, some JVMs split and renamed rt.jar, so now we
+            simply check all .jars in jre\lib
+        */
 
-   home=System.getProperty('java.home')
+        home=System.getProperty('java.home')
 
-   lib=home||fsep'lib'fsep
-   -- ancient name was classes.zip
-   path=path||psep||lib'classes.zip'
--- path=path||psep||home||fsep'..'fsep'lib'fsep'tools.jar'  -- 1.2b3K
+        lib=home||fsep'lib'fsep
+        -- ancient name was classes.zip
+        path=path||psep||lib'classes.zip'
+        -- path=path||psep||home||fsep'..'fsep'lib'fsep'tools.jar'  -- 1.2b3K
 
-   path=path||psep||lib'classes.zip'
-   -- add standard location for MacOSX so it does not need to be put on classpath anymore
-   path=path||psep||'/System/Library/Frameworks/JavaVM.framework/Classes/classes.jar'
-      -- add standard location for java6 on zLinux so it does not need to be put on classpath anymore
-   path=path||psep||'/opt/ibm/java-s390x-60/lib/tools.jar:/opt/ibm/java-s390x-60/jre/lib/s390x/default/jclSC160/vm.jar'
+        path=path||psep||lib'classes.zip'
+        -- add standard location for MacOSX so it does not need to be put on classpath anymore
+        path=path||psep||'/System/Library/Frameworks/JavaVM.framework/Classes/classes.jar'
+        -- add standard location for java6 on zLinux so it does not need to be put on classpath anymore
+        path=path||psep||'/opt/ibm/java-s390x-60/lib/tools.jar:/opt/ibm/java-s390x-60/jre/lib/s390x/default/jclSC160/vm.jar'
+        end
 
    -- all jars in lib..
    libpath=lib
