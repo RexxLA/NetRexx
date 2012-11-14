@@ -37,6 +37,7 @@
 /* 2012.09.16 change auto import interface to allow import of a single package as well as package hierarchy branches --issue #61 --Kermit */
 /* 2012.09.16 add base javax.swing package to auto imports  --issue #61 --Kermit */
 /* 2012.10.11 fix for missing package info if this class is loaded by some classloaders  -- no issue # --Kermit */
+/* 2012.11.14 bootstrap ecj compiler with passed classpath - Jason M. */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -619,7 +620,12 @@ class RxTranslator
      else
       args=String[programs+3]
     args[0]='-nowarn'                   -- both paths
-    args[1]='-classpath'                -- explicit classpath needed
+    if System.getProperty("java.vendor")="The Android Project" then do
+        System.setProperty("nrx.compiler","ecj") -- javac not available
+        args[1]='-bootclasspath'            -- bootstrap ecj with runtime jars
+        end                            -- .. using a passed classpath
+    else
+        args[1]='-classpath'                -- explicit classpath needed
     args[2]=classpath                   -- .. for Java 1.2 javac
     -- add the filenames
     offset=args.length-programs
