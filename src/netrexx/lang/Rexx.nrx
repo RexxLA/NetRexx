@@ -73,6 +73,7 @@
 /* 98.12.20 extend layout to force/allow plain notation               */
 /* 2011.07.19 add constructor for CharSequence interface used in new Java APIs (Kermit Kiser)      */
 /* 2011.10.18 implement interface Comparable (Kermit Kiser)      */
+/* 2012.11.21 add new collections constructor for arrays and lists (Kermit Kiser)      */
 /* ------------------------------------------------------------------ */
 package netrexx.lang
 options binary nodecimal strictargs strictcase   noformat
@@ -2268,6 +2269,59 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 /*  New methods and classes to implement Map interface for collections use  */
 /* **************************************************************************************/
 
+/*  add constructor to support arrays and lists to map  2012-11-21 -- Kermit    */
+	method Rexx(s1=Object,s2=Object) returns Rexx
+		this(s1,s2,"")
+		
+	method Rexx(s1=Object,s2=Object,defaultvalue=Object) returns Rexx
+		this(defaultvalue.toString())
+		
+		if s1=null then f1=Object[] null
+			else
+		if s1.getClass().isArray() then
+			if s1.getClass().getComponentType().isPrimitive() then 
+					f1=Object[] wrap(s1)
+			else f1=Object[] s1
+		else if s1<=java.util.List then f1=(java.util.List s1).toArray()
+				else signal BadArgumentException
+					
+		if s2=null then f2=Object[] null
+			else
+		if s2.getClass().isArray() then
+			if s2.getClass().getComponentType().isPrimitive() then 
+					f2=Object[] wrap(s2)
+			else f2=Object[] s2
+		else if s2<=java.util.List then f2=(java.util.List s2).toArray()
+				else signal BadArgumentException
+					
+		setRexx(f1,f2,this)
+
+	method setRexx(s1=Object[],s2=Object[],r=Rexx) returns Rexx
+		if s1\=null then
+		 if s2\=null then
+			if s1.length\=s2.length then signal BadArgumentException
+	  if s1=null then
+	  	if s2=null then arraylen=0
+	  		else arraylen=s2.length
+		else arraylen=s1.length
+		loop i=0 for arraylen
+			if s1=null then r.put(Rexx(i+1),s2[i].toString())
+				else if s2=null then r.put(s1[i].toString(),Rexx(i+1))
+					else r.put(s1[i].toString(),s2[i].toString())
+			end
+		return r
+		
+	method wrap(o=Object) static returns Object[]
+		r=Object[] null
+		loop i=0 for Array.getLength(o)
+			wrapped=Array.get(o,i)
+			if r=null then r=Object[] Array.newInstance(wrapped.getClass(), Array.getLength(o))
+			r[i]=wrapped
+			end
+		return r
+
+-- Original stuff added for Java collections support:		
+		
 	method Rexx(m=Map)
 		this("")
 		this.putAll(m)

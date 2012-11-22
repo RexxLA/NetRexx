@@ -16,6 +16,7 @@
 /* 96.11.16 doublePow and floatPow                                    */
 /* 97.07.18 x2b, x2c, and hexint moved from Rexx.nrx                  */
 /* 98.12.20 format revised to match BigDecimal algorithm (=ANSI)      */
+/* 2012.11.21 add new getRexx method for converting arrays and lists to Rexx maps (Kermit Kiser)      */
 package netrexx.lang
 options binary strictargs nodecimal
 
@@ -427,6 +428,60 @@ class RexxUtil final extends Rexx
       end
     return a
 
+    -- A method to create new indexed Rexx maps from Java arrays or Lists  -- 2012-11-21 -- Kermit 
+	
+    method getRexx(s1=Object,s2=Object) static returns Rexx
+		return getRexx(s1,s2,"")
+		
+	method getRexx(s1=Object,s2=Object,defaultvalue=Object) static returns Rexx
+		
+		newrexx=Rexx(defaultvalue.toString())
+		
+		if s1=null then f1=Object[] null
+			else
+		if s1.getClass().isArray() then
+			if s1.getClass().getComponentType().isPrimitive() then 
+					f1=Object[] wrap(s1)
+			else f1=Object[] s1
+		else if s1<=java.util.List then f1=(java.util.List s1).toArray()
+				else signal BadArgumentException
+					
+		if s2=null then f2=Object[] null
+			else
+		if s2.getClass().isArray() then
+			if s2.getClass().getComponentType().isPrimitive() then 
+					f2=Object[] wrap(s2)
+			else f2=Object[] s2
+		else if s2<=java.util.List then f2=(java.util.List s2).toArray()
+				else signal BadArgumentException
+					
+		return setupRexx(f1,f2,newrexx)
+
+	method setupRexx(s1=Object[],s2=Object[],r=Rexx) static returns Rexx
+		
+		if s1\=null then
+		 if s2\=null then
+			if s1.length\=s2.length then signal BadArgumentException
+	  if s1=null then
+	  	if s2=null then arraylen=0
+	  		else arraylen=s2.length
+		else arraylen=s1.length
+		loop i=0 for arraylen
+			if s1=null then r.put(Rexx(i+1),s2[i].toString())
+				else if s2=null then r.put(s1[i].toString(),Rexx(i+1))
+					else r.put(s1[i].toString(),s2[i].toString())
+			end
+		return r
+		
+	method wrap(o=Object) static returns Object[]
+		oa=Object[] null
+		loop i=0 for Array.getLength(o)
+			wrapped=Array.get(o,i)
+			if oa=null then oa=Object[] Array.newInstance(wrapped.getClass(), Array.getLength(o))
+			oa[i]=wrapped
+			end
+		return oa    
+    
   /* ----- Local Helper methods ----- */
   /** Converts a hexadecimal character to int in range 0 to 15
      Valid characters are 0-9 a-f A-F
