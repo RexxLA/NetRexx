@@ -55,7 +55,8 @@
 /* 2000.02.26 Add evalterm [wraps exceptions]                         */
 /* 2000.04.04 Precall signal after collecting this()/super() args     */
 /* 2000.04.11 .. extended precall for dependent constructors          */
-/* 2011.10.28 mod to allow subclassing Rexx class with indexing  *KK*          */
+/* 2011.10.28 mod to allow subclassing Rexx class with indexing  *KK*     -- issue #31     */
+/* 2012.12.23 if indexed access to Rexx subtype, cast return type to subclass --	KK  ---- issue #31 */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -420,6 +421,14 @@ class RxTermParser uses RxCode
               code.type=bitvar.vartype     -- dimensions vanish
 --              code.type=RxType.REXX_TYPE     -- dimensions vanish
               code.javacode=bitvar.varspell||stem.arraygen
+              -- if indexed access to Rexx subtype, cast return type to subclass 		--	KK  -- 2012-12-23 -- issue #31
+             if onrhs then
+              if bitvar.vartype\=RxType.REXX_TYPE then
+              	if classer.issubclass(cursor, bitvar.vartype, RxType.REXX_TYPE, tokstart) then 		--	KK  -- 2012-12-23
+              		code.javacode='(('bitvar.vartype')('code.javacode'))'
+--              		code.javacode='(('RxType.REXX_TYPE')('code.javacode'))'
+--              say "possible indexed assign1="code.javacode
+              		
               code.constant=0      -- it's mutable...
               code.array=stem      -- [gets cleared below if not last in term]
               code.group=S_VAR     -- treat as a variable
