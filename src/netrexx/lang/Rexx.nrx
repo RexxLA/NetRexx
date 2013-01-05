@@ -72,6 +72,7 @@
 /* 98.07.01 boundary conditions for charaddsub adjusted               */
 /* 98.12.20 extend layout to force/allow plain notation               */
 /* 2011.07.19 add constructor for CharSequence interface used in new Java APIs (Kermit Kiser)      */
+/* 2011.10.02 add missing methods per issue #30: isIndexed,size,b2d,d2b (Kermit Kiser)      */
 /* 2011.10.18 implement interface Comparable (Kermit Kiser)      */
 /* 2011.10.20 modify compareTo method to handle non-Rexx objects (Kermit Kiser)      */
 /* 2011.10.26 add collections interfaces (Map, Iterable) (Kermit Kiser)      */
@@ -79,6 +80,7 @@
 /* 2011.10.28 Add constructor Rexx(Rexx,Rexx), methods putAll(Rexx), put(Object,Rexx) for collections support. (Kermit Kiser)      */
 /* 2012.11.24 Add buildMap bif as suggested by Bill Fenlason for collections support. (Kermit Kiser)      */
 /* 2012.12.21 Add copyindexed method name per issue NETREXX-94. Also isindexed method name for same reason. (Kermit Kiser)      */
+/* 2013.01.04 match b2d, d2b output to api doc in new 3.02 release notes. (Kermit Kiser)      */
 /* ------------------------------------------------------------------ */
 package netrexx.lang
 options binary nodecimal strictargs strictcase   noformat
@@ -892,11 +894,11 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
     return this.OpMinus(set)
 
   /** B2d binary to decimal conversion.  */
-  method b2d(bil=Rexx 0) returns Rexx
+  method b2d(bil=Rexx -1) returns Rexx
   	  bl=bil.toint()
-  	  if bl=0 then return this.b2x().x2d()
-  	  if bl<0 then bl=this.intlength()
-  	  if bl>this.intlength() then first=this.left(1)
+  	  if bl=0 then return "0"
+  	  if bl<0 then bl=this.intlength()+1
+  	  if bl>this.intlength() then first="0"
   	  	  else first=this.right(bl).left(1)
   	  newb=this.right(bl,first)
   	  if bl//4\=0 then ble=bl+4-bl//4;else ble=bl
@@ -1080,11 +1082,17 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
     return Rexx RexxWords.delword(chars, start, len)
 
   /** D2b decimal to binary coded conversion.  */
-  method d2b(dil=Rexx 0) returns Rexx
-  	  dl=dil.toint()
-  	  if dl=0 then return this.d2x().x2b()
+  method d2b(dil=Rexx "zip") returns Rexx
+  	  if dil==Rexx "0" then return ""
+  	  if dil==Rexx "zip" then dl=this.d2x().length().toint()*4
+								else dl=dil.toint()
   	  if dl//4\=0 then dle=dl+4-dl//4;else dle=dl
-  	  return this.d2x(dle%4).x2b().right(dl)
+  	  if dil==Rexx "zip" then 
+  	  	if this.d2x(dle%4).x2b().strip("l","0")=="" then return "0"
+  	  		else
+				return this.d2x(dle%4).x2b().strip("l","0")
+			else
+				return this.d2x(dle%4).x2b().right(dl)
     
   /** D2c decimal to coded conversion.  */
   method d2c returns Rexx
