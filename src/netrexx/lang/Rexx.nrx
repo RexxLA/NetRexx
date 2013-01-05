@@ -73,7 +73,12 @@
 /* 98.12.20 extend layout to force/allow plain notation               */
 /* 2011.07.19 add constructor for CharSequence interface used in new Java APIs (Kermit Kiser)      */
 /* 2011.10.18 implement interface Comparable (Kermit Kiser)      */
-/* 2012.11.21 add new collections constructor for arrays and lists (Kermit Kiser)      */
+/* 2011.10.20 modify compareTo method to handle non-Rexx objects (Kermit Kiser)      */
+/* 2011.10.26 add collections interfaces (Map, Iterable) (Kermit Kiser)      */
+/* 2011.10.27 Add Rexx(Map) constructor, fix putAll method, change collection stuff to inner classes.  (Kermit Kiser)      */
+/* 2011.10.28 Add constructor Rexx(Rexx,Rexx), methods putAll(Rexx), put(Object,Rexx) for collections support. (Kermit Kiser)      */
+/* 2012.11.24 Add buildMap bif as suggested by Bill Fenlason for collections support. (Kermit Kiser)      */
+/* 2012.12.21 Add copyindexed method name per issue NETREXX-94. Also isindexed method name for same reason. (Kermit Kiser)      */
 /* ------------------------------------------------------------------ */
 package netrexx.lang
 options binary nodecimal strictargs strictcase   noformat
@@ -971,36 +976,12 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
       end
     return Rexx(res, 1)
    
-  /** isIndexed returns a boolean flag that indicates if indexed subvalues are present in the
-     Rexx object (explicitly set).  */
-  method isIndexed() protect returns Rexx
-    if this.size(1)==0 then return 0
-    	else return 1
-        
-  /** Size returns the number of indexed subvalues in the
-     Rexx object (explicitly set).  */
-  method size(check=0) protect returns int
-    -- Note that the whole operation is protected (atomic)
-    if coll=null then return 0     -- that was easy [probably rare]
-    do protect coll
-	  icount=int 0
-      it=coll.keys()
-      loop label collcount while it.hasMoreElements()
-        key=Rexx it.nextElement()
-        node=RexxNode coll.get(key)   -- get the node for the key
-        -- ignore if dropped or never set explicitly
-        if node.leaf=null then iterate collcount   -- a dropped item
-        if Object node.leaf==Object node.initleaf then iterate collcount
-        -- it's a reference that we want to count
-        icount=icount+1
-        if check then return 1
-        end collcount
-      end
-    return icount
-    
   /** CopyIndexed merges the collection of indexed strings with
      the collection of (explicitly-set) indexed strings from another
      Rexx object, and returns the current object.  */
+  method copyindexed(r=Rexx) protect returns Rexx
+  	return copyIndexed(r)
+  	
   method copyIndexed(r=Rexx) protect returns Rexx
     -- Note that the whole operation is protected (atomic)
     if r.coll=null then return this     -- that was easy [probably rare]
@@ -2268,41 +2249,14 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 /* **************************************************************************************/    
 /*  New methods and classes to implement Map interface for collections use  */
 /* **************************************************************************************/
-
-/*  add constructor to support arrays and lists to map  2012-11-21 -- Kermit    */
-
-	method Rexx(s1=Object,s2=Object) returns Rexx
-		this(s1,s2,"")
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=boolean) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=char) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=byte) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=short) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=int) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=long) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=float) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-	
-	method Rexx(s1=Object,s2=Object,defaultvalue=double) returns Rexx
-		this(s1,s2,Rexx(defaultvalue))
-		
-	method Rexx(s1=Object,s2=Object,defaultvalue=Object) returns Rexx
-		this(defaultvalue.toString())
-		buildMap(s1,s2)
+/****************************************************************************************/
+/*  add methods to convert arrays and lists to map  2012-11-24 -- Kermit         */
+/****************************************************************************************/
 
 -- a method to build a map from arrays or Lists and add it to the Rexx object		
+	method buildmap(s1=Object,s2=Object) returns Rexx
+		return buildMap(s1,s2)
+		
 	method buildMap(s1=Object,s2=Object) returns Rexx
 		if s1=null then f1=Object[] null
 			else
@@ -2348,7 +2302,37 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 			end
 		return r
 
--- Original stuff added for Java collections support:		
+-- Original classes, constructors, and methods added for isIndexed and Java collections support:		
+
+  /** isIndexed returns a boolean flag that indicates if indexed subvalues are present in the
+     Rexx object (explicitly set).  */
+  method isindexed() protect returns Rexx
+  	return isIndexed()
+  	
+  method isIndexed() protect returns Rexx
+    if this.size(1)==0 then return 0
+    	else return 1
+        
+  /** Size returns the number of indexed subvalues in the
+     Rexx object (explicitly set).  */
+  method size(check=0) protect returns int
+    -- Note that the whole operation is protected (atomic)
+    if coll=null then return 0     -- that was easy [probably rare]
+    do protect coll
+	  icount=int 0
+      it=coll.keys()
+      loop label collcount while it.hasMoreElements()
+        key=Rexx it.nextElement()
+        node=RexxNode coll.get(key)   -- get the node for the key
+        -- ignore if dropped or never set explicitly
+        if node.leaf=null then iterate collcount   -- a dropped item
+        if Object node.leaf==Object node.initleaf then iterate collcount
+        -- it's a reference that we want to count
+        icount=icount+1
+        if check then return 1
+        end collcount
+      end
+    return icount
 		
 	method Rexx(m=Map)
 		this("")
