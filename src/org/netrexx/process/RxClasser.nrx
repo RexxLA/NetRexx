@@ -53,6 +53,14 @@
 /* 2004.07.04 Import all jre\lib classes for IBM JVM 1.4.1            */
 /* 2004.12.18 Protect against 1.4 loop on looping EXTENDS             */
 /* 2008.02.25 Add standard location for classes.jar on MacOSX         */
+/* 2011.10.03 Add compare costs of superclass methods to subclass in searchfield method - KK  (issue 55)  */
+/* 2011.10.04 modify unimplemented method to check return signatures for superclass/interface match - KK  (issue 17)  */
+/* 2011.10.07 add 1 to interface costs if not zero - allows converted access to implemented methods - KK  (issue 11)  */
+/* 2012.04.06 fix interface search  - KK  (issue NETREXX-76)  */
+/* 2012.09.16 change constructor to allow auto (standard) import of a single package as well as a tree branch;  add java.lang to strictimports to match javac  --KK  (issue NETREXX-61)  */
+/* 2012.09.16 add assert and strictfp to javakeytable  --KK  (issue NETREXX-64)  */
+/* 2012.10.16 missing null check in unimplemented method causing null ptr errors  --KK  (no issue opened - non released code)  */
+/* 2012.10.17 missing null check in unimplemented method causing null ptr errors  --KK  (no issue opened - non released code)  */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -75,6 +83,7 @@ class RxClasser
   zsep        =char '/'       -- zipfile file separator
   dot         =char '.'       -- extension or segment separator
   standpacks  =String[]       -- standard packages (imports)
+  standpacksscope  =boolean[]       -- standard packages (imports) flags to include subpackages - issue #61  -KK-20120916
 
   /* local dictionaries and lists */
   classpool   =RxClassPool    -- pool of known classes
@@ -98,6 +107,8 @@ class RxClasser
                               --  [Hashtables, keyed by package name]
   classdefines=Vector         -- Lookasides during interpret [RxClassInfo]
 
+  searchinginterfaces =boolean 0 		--	flag is 1 while searching interfaces - KK
+  	  
  /** Constructor
     Arg1 is the translator object
     Arg2 is an array of standard import name-Strings
@@ -120,8 +131,29 @@ class RxClasser
 
   classpool=RxClassPool(rxt)       -- make a classpool
 
-  if \rxt.program.flag.strictimport then standpacks=standardimports
-                                    else standpacks=String[0]
+/*  if \rxt.program.flag.strictimport then standpacks=standardimports
+                                    else standpacks=String[0]			*/
+
+/*  Check each standard import to see if subpackages were requested - part of mod for issue #61  --KK-20120916  */	
+  if \rxt.program.flag.strictimport then do
+		standpacks=String[standardimports.length]	                                    
+		standpacksscope=boolean[standardimports.length]	
+  	loop i=0 for standardimports.length
+  		if Rexx(standardimports[i]).right(1)=='.' then do
+  			standpacks[i]=standardimports[i].substring(0,standardimports[i].length()-1)
+  			standpacksscope[i]=1
+  			end
+  			else do
+  			standpacks[i]=standardimports[i]
+  			standpacksscope[i]=0
+  			end
+			end
+		end
+		
+		else do		--		strictimport case
+		standpacks=[String 'java.lang']				--		Java always includes java.lang import   --  part of mod for issue #61  --KK-20120916  */
+		standpacksscope=[boolean 0]					--		no subpackages
+		end
 
   -- initialize and import standard classes
   initclasspath()                  -- get and parse classpath, loading Zips
@@ -305,6 +337,7 @@ class RxClasser
       package=simport.substring(0, simlen-1)    -- drop dot
       -- if a standard package, return -1 to indicate no re-import done
       loop i=0 for standpacks.length
+        if standpacksscope[i] then			--		if a matching standard import included sub packages this import is redundant (for issue #61) - KK - 20120916
         if standpacks[i]==package then return -1
         end i
       find=String null
@@ -371,7 +404,8 @@ class RxClasser
         packdirfind(seg, packlook)         -- locate packages
         loop i=0 for standpacks.length     -- standards please
           found=found+dirfind(seg, standpacks[i], null, nickable,-
-                              importer, subpacks)
+                              importer, standpacksscope[i])		--	mod per issue #61 -KK-20120916
+--                              importer, subpacks)
           end i
         end standards
       end
@@ -564,7 +598,10 @@ class RxClasser
         -- next line makes assumption that standard packages are
         -- reasonably named; could check lengths equal or '.' in right place
         -- effectively this implies 'all subpackages'
-        if fpackage.startsWith(standpacks[i], 0) then leave
+        if standpacksscope[i] then				--	standard packages may or may not include subpackages now --(issue #61) --KK-20120916
+					if fpackage.startsWith(standpacks[i], 0) then leave
+        	else nop		--(issue #61) --KK-20120916
+				else if fpackage.equals(standpacks[i]) then leave		--(issue #61) --KK-20120916
         end i
       if i=standpacks.length then iterate elements -- not found
       -- element is 'one of ours'
@@ -1281,6 +1318,7 @@ class RxClasser
      else isconstructor=(exactname.OpEq(null,infostart.shortname))
     end
 
+    searchinginterfaces=0		--		KK
 
   retfield=searchfield(cursor, local, lookmeth, lookprop, statics,-
                        infostart, infostart, exactname, argtypearray,-
@@ -1304,6 +1342,8 @@ class RxClasser
                     exactname=Rexx, argtypearray=RxType[],-
                     tok=RxToken, checkacc=boolean,-
                     isconstructor=boolean) private returns RxField
+--	say "searchfield infofrom="infofrom.shortname "infostart="infostart.shortname "exactname="exactname "KK"                    
+      gotfield=RxField null
 
   if cursor=null then flag=rxt.superflag               -- external lookup
                  else flag=cursor.curprogram.flag
@@ -1363,6 +1403,7 @@ class RxClasser
       end proplook
 
     if lookmeth then /* we're doing a method lookup */ do label methodlook
+--      gotfield=RxField null
       /**
       if flag.diag then do
         sigargs=argtlist(argtypearray)
@@ -1376,6 +1417,7 @@ class RxClasser
       loop f=0 for fieldarray.length
         field=fieldarray[f]
         if \field.isMethod() then iterate f         -- not a method
+--        say "fieldname="field.fieldname	"field.fieldinfo.shortname="field.fieldinfo.shortname "field.fieldtype.classname="field.fieldtype.classname	 "field.fieldargtypes.length="field.fieldargtypes.length	--		KK
         if lookprop then
          if field.isConstructor() then iterate f    -- paren-less constructor
 
@@ -1411,6 +1453,16 @@ class RxClasser
           if cost>fieldcost then iterate f             -- we have a better
           convertlist[a]=aconv                         -- save conversions
           end a
+        if searchinginterfaces then do; if cost \=0 then cost=cost+2;end		--		bias against interface methods because of "ambiguous" message with conversions  -  KK
+        	else do
+        		if field.fieldtype \= null then 
+					tc=findclass(cursor,field.fieldtype.classname,tok,0)
+					else tc=null
+        		if tc \= null then 
+					if tc.isinterface then if cost \= 0 then cost=cost+1
+        		end
+--        say "cost="cost		--		KK
+        if cost>fieldcost then iterate f             -- we have a better
         if cost<fieldcost then do                      -- best so far
           countcost   =1                               -- count is 1
           bestfield   =field                           -- remember which we are
@@ -1447,44 +1499,70 @@ class RxClasser
           if field.fieldexcep\=null then say '# +excep:' field.fieldexcep
           if field.fieldambig then say '# Ambiguous'
           end
-        return field; end
+        gotfield = field
+        if gotfield=null then leave exact
+        if rxt.program.flag.strictmethods then return field; 
+        if field.fieldcost=0 then return field; 
+        leave exact
+        end
       end methodlook
     end exact
 
   /* Didn't find in the requested class -- try superclass and implements
      lists, unless we were asked for just a local search */
-  if local then return null                       -- no spin up
+  if local then return gotfield              -- no spin up
 
   -- [2000.02.07] If we are a constructor then the actual constructor
   -- must exist in the class of the same name; we're not allowed to use
   -- a superclass or superinterface  constructor as the resulting type
   -- would be wrong.
-  if isconstructor then return null
+  if isconstructor then return gotfield
 
   -- we can skip the superclass search if we are an interface class, as
   -- the superclass of an interface is always Object (which is not an interface)
+/* let's NOT skip the superclass search for interfaces as it causes compile failures when using toString calls for interfaces --  KK 2011-12-26
   if infostart.isinterface then superinfo=RxClassInfo null
    else superinfo=infostart.superinfo             -- get superclass
+*/   
+  superinfo=infostart.superinfo             -- get superclass
   if superinfo\=null then /* have superclass */ do
     lookname=exactname     -- same name
+--    say "search superclass KK"
     newfield=searchfield(cursor, 0, lookmeth, lookprop, statics,-
                          infofrom, superinfo, lookname,-
                          argtypearray, tok, checkacc, isconstructor)
-    if newfield\=null then return newfield        -- found in superclass
+    if newfield\=null then
+    	if newfield.fieldcost=0 then return newfield        -- found in superclass
     end
 
   -- Now try the implements list
   -- Resolve the interface names, if needed
   if infostart.impinfos=null then findimps(cursor, infostart, tok)
+  searchinginterfaces=1
+  newfield2=RxField null
   loop i=0 for infostart.impinfos.length
     impinfo=infostart.impinfos[i]
-    newfield=searchfield(cursor, 0, lookmeth, lookprop, statics,-
+--    say "search interfaces KK"
+    newfieldi=searchfield(cursor, 0, lookmeth, lookprop, statics,-
                          infofrom, impinfo, exactname,-
                          argtypearray, tok, checkacc, isconstructor)
-    if newfield\=null then return newfield        -- found in interface class
+    if newfield2=null then newfield2=newfieldi
+      else if newfieldi \= null then
+  	  	  if newfieldi.fieldcost<newfield2.fieldcost then newfield2=newfieldi
+--    if newfield2\=null then return newfield2        -- found in interface class
     end i
-
-  return null                                     -- not found
+    searchinginterfaces=0
+    
+  if gotfield = null then gotfield=newfield
+  	  else if newfield \= null then
+  	  	  if newfield.fieldcost<gotfield.fieldcost then gotfield=newfield
+  	  
+  if gotfield = null then gotfield=newfield2
+  	  else if newfield2 \= null then
+  	  	  if newfield2.fieldcost<gotfield.fieldcost then gotfield=newfield2
+    
+  return gotfield                                     -- not found or found
+--  return null                                     -- not found
 
  /** ARGTLIST -- return RxType array as a list string */
  -- for diag only
@@ -1641,7 +1719,22 @@ class RxClasser
       select
         when newfield=null                       then bad=boolean 1
         when newfield.isAbstract()                 then bad=1
-        when newfield.fieldtype\=field.fieldtype then bad=1
+        when newfield.fieldtype\=field.fieldtype then do
+        		bad=1		--		KK  this is wrong! must also check against super types!
+        		returnclass=findclass(cursor,newfield.fieldtype,null,0)
+        		if returnclass\=null then					--		missing check here causing null ptr errors   --  20121016 -- KK
+        		 loop while returnclass.superinfo\=null
+        			if returnclass.type=field.fieldtype then do;bad=0;leave;end
+        			ii=returnclass.impinfos
+        			if ii\=null then -											--		missing check here causing null ptr errors   --  20121017 -- KK
+        			loop n=0 for ii.length
+        				if ii[n]=null then iterate
+        				if ii[n].type=field.fieldtype then do;bad=0;leave;end
+        				end
+        			if bad=0 then leave
+        			returnclass=returnclass.superinfo
+        			end
+        		end
         -- if it was generated for us then it's not really there
         -- [1998.04.25 check removed .. indirect property is just fine]
         -- when newfield.isSynthetic-
@@ -1803,6 +1896,7 @@ class RxClasser
     javakeytable=Hashtable(101)
     item=Object()                            -- dummy item to store
     javakeytable.put('abstract'    , item)
+    javakeytable.put('assert'    , item)
     javakeytable.put('boolean'     , item)
     javakeytable.put('break'       , item)
     javakeytable.put('byte'        , item)
@@ -1841,6 +1935,7 @@ class RxClasser
     javakeytable.put('return'      , item)
     javakeytable.put('short'       , item)
     javakeytable.put('static'      , item)
+    javakeytable.put('strictfp'      , item)
     javakeytable.put('super'       , item)
     javakeytable.put('switch'      , item)
     javakeytable.put('synchronized', item)

@@ -52,6 +52,7 @@
 /* 2000.10.16 Properly ignore -savelog if Printwriter specified       */
 /* 2011.08.20 Update to allow compiling programs from memory strings - Kermit Kiser       */
 /* 2011.08.22 add option to supress rename of java files to .keep - Kermit Kiser       */
+/* 2012.07.31 mod for select of ecj compiler  *rvj*        */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -78,10 +79,15 @@ class NetRexxC
   flags    =Vector(10)             -- collects translator flags
 
   -- others
+  compileexplicit = boolean 0	--	record if compile was explicitly requested
+  javaexplicit = boolean 0			--	record if java was explicitly requested
+  crossrefexplicit = boolean 0	--	record if crossref was explicitly requested
   madelog  =boolean 0              -- 1 if we made the logfile
   testflag =RxFlag()               -- used only for testing if flags valid
   usageone =boolean 1              -- 1 to show general usage information
                                    -- 0 after prompting
+                                   
+  classpath = String		--	allows classpath to be passed as an argument
 
 properties private static
   programstrings = String[]		--	allows programs to be passed in memory strings
@@ -102,7 +108,7 @@ properties private static
     Arg3 is PrintWriter file (forces -savelog if specified)
     */
  method main(arg=Rexx, programstring=String, logfile=PrintWriter null) constant returns int
- 	 exit main(arg,[String programstring],logfile)
+ 	 return main(arg,[String programstring],logfile)
 
  /** public call-from-Java entry,
     Arg1 is command argument string which has words which are flags or
@@ -114,7 +120,7 @@ properties private static
  method main(arg=Rexx, programarray=String[], logfile=PrintWriter null) constant returns int
  	 
  	 programstrings=programarray	--	save array of program strings 
- 	 exit main(arg,logfile)
+ 	 return main(arg,logfile)
  	 
  /** public call-from-Java entry,
     Arg1 is command argument string which has words which are flags or
@@ -151,7 +157,7 @@ properties private static
     */
  method main2(arg=String[], programarray=String[], logfile=PrintWriter null) constant returns int
 	 programstrings=programarray	--	save array of program strings 
- 	 exit main2(arg,logfile)
+ 	 return main2(arg,logfile)
  	 
  /** public call-from-Java entry,
     Arg1 is array of argument strings (each containing a flag or a file
@@ -177,6 +183,14 @@ properties private static
 
   parseline(arg)    -- collect initial flags and file specification
 
+    -- need to set java.class.path property and restore it later
+  if classpath\=null then do
+  	validateClassPath()
+    currentClassPath = System.getProperty("java.class.path")
+    currentProperties = System.getProperties()
+    currentProperties.put("java.class.path", classpath)
+    end
+    
   langs=[Rexx 'Nr']                               -- languages supported
 
   if \translator.setlanguages(langs) then usage() -- select languages
@@ -266,6 +280,7 @@ properties private static
       say "\nEnter new files and additional options, '=' to repeat, 'exit' to end:"
       rt.gc()                                -- good moment to garbage-collect
       response=ask
+      if response = null then leave process			--		fix rare nullpointer errors - KK
       if response.OpNotEq(null, '') then leave -- something to process
       usage()
       end prompt
@@ -289,10 +304,31 @@ properties private static
     if madelog then logfile.close()
     end
 
+  -- need to reset java.class.path property
+  if classpath\=null then
+	  currentProperties.put("java.class.path", currentClassPath)
+      
   programstrings=null		--		clear memory of any program strings in case we are called again
     
   return translator.getexitvalue()
 
+  method validateClassPath
+  	  cpr=Rexx(classpath)
+  	  cpr2=Rexx ""
+  	  ps=File.pathSeparatorChar
+  	  cpr=cpr.strip("b",'"')
+  	  loop while cpr\==""
+  	  	  parse cpr nextpath (ps) cpr
+  	  	  nextpath=nextpath.strip("b",'"')
+  	  	  if nextpath=="." then cpr2=cpr2||ps||nextpath
+  	  	  	  else do
+  	  	  	  	  nextpathcheck=File(nextpath)
+  	  	  	  	  if nextpathcheck.exists() then cpr2=cpr2||ps||nextpath
+  	  	  	  	  	  else say "Warning: classpath entry does not exist and has been dropped:" nextpath
+  	  	  	  	 end
+  	  	 end
+  	  classpath=cpr2.strip("b",ps).toString()
+  
  /* TENTH -- convert ms to 0.1s */
  -- this could use format()
  method tenth(n=long) constant returns Rexx private
@@ -308,7 +344,7 @@ properties private static
     */
   method parseline(arg=String[]) private
   newfiles=Vector(10)              -- collects new file specifications
-  loop a=0 for arg.length
+  loop a=0 to arg.length-1
     argword=Rexx arg[a]            -- get next word
     if argword.left(1)\=='-'       -- not a flag
      then newfiles.addElement(argword) -- but a file to compile
@@ -316,9 +352,15 @@ properties private static
       arglow=argword.substr(2).lower()    -- drop '-' and lowercase
       select
         when arglow=='nocompile' then do; compile=0; keep=1; end
-        when arglow=='compile'   then do; compile=1; end
-        when arglow=='exec'      then exec=1
+        when arglow=='compile'   then do; compile=1; compileexplicit=1; end
+        when arglow=='exec'      then do; exec=1; 
+			if \compileexplicit then compile=0 
+			if \javaexplicit then flags.addElement(Rexx("-nojava")) 
+			if \crossrefexplicit then flags.addElement(Rexx("-nocrossref")) 
+			end
         when arglow=='noexec'    then exec=0
+        when arglow=='java'      then do; javaexplicit=1; flags.addElement(Rexx("-java"));end
+        when arglow=='crossref'      then do; crossrefexplicit=1; flags.addElement(Rexx("-crossref"));end
         when arglow=='keep'      then keep=1
         when arglow=='nokeep'    then keep=0
         when arglow=='time'      then time=1
@@ -333,12 +375,25 @@ properties private static
    when arglow=='nowarnexit0' then warnexit0=0
    when arglow=='keepasjava' then do; keepasjava=1; keep=1; end
    when arglow=='nokeepasjava' then keepasjava=0
+   when arglow=='classpath' | arglow=='cp' then do
+   		a=a+1
+   		if a<arg.length then do
+   			classpath=arg[a]
+--   			say "classpath request="arg[a]
+   			end
+   		end   		
         when arglow=='noarg' then do
           exec=1    -- implied
+			if \compileexplicit then compile=0 
+			if \javaexplicit then flags.addElement(Rexx("-nojava")) 
+			if \crossrefexplicit then flags.addElement(Rexx("-nocrossref"))           
           argarray=String[0]
           end
         when arglow=='arg' then do
           exec=1    -- implied
+			if \compileexplicit then compile=0 
+			if \javaexplicit then flags.addElement(Rexx("-nojava")) 
+			if \crossrefexplicit then flags.addElement(Rexx("-nocrossref")) 
           -- remaining words become argstring array
           alen=arg.length-a-1
           argarray=String[alen]

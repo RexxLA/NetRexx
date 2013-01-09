@@ -29,6 +29,7 @@
 /* 1999.09.30 add exec and java (interpret, generate code)            */
 /* 2000.02.08 add usage method for NetRexxC (etc.) to get at.         */
 /* 2000.04.19 drop exec (now handled by caller)                       */
+/* 2011.10.28 add strictmethods option - KK                       */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -55,6 +56,8 @@ class RxFlag
     maxassign =int     RxConverter.MAXASSIGN -- default maximum assignment cost [0-100]
   strictcase  =boolean 0      -- names must match in case
   strictimport=boolean 0      -- imports must be explicit
+--strictmethods - any local matchable method will override superclass - strictmethods is the original NetRexx algorithm
+  strictmethods=boolean 0      -- prevents superclass methods from being compared to subclass methods to find best match
   strictprops =boolean 0      -- even local properties must be qualified
   strictsignal=boolean 0      -- signals are checked
 --strictwarn  =boolean 0      -- only warn of 'strict' infringements
@@ -89,6 +92,7 @@ class RxFlag
     strictassign=orig.strictassign
     strictcase=orig.strictcase
     strictimport=orig.strictimport
+    strictmethods=orig.strictmethods
     strictprops=orig.strictprops
     strictsignal=orig.strictsignal
     --strictwarn=orig.strictwarn
@@ -131,6 +135,7 @@ class RxFlag
       end
       when opt=='STRICTCASE'   then strictcase  =new
       when opt=='STRICTIMPORT' then strictimport=new
+      when opt=='STRICTMETHODS' then strictmethods=new
       when opt=='STRICTPROPS'  then strictprops =new
       when opt=='STRICTSIGNAL' then strictsignal=new
       --  when opt=='STRICTWARN'   then strictwarn  =new
@@ -188,6 +193,8 @@ class RxFlag
     else if nose then acc=acc 'NoStrictcase'
     if strictimport then acc=acc 'Strictimport'
     else if nose then acc=acc 'NoStrictimport'
+    if strictmethods then acc=acc 'Strictmethods'
+    else if nose then acc=acc 'NoStrictmethods'
     if strictprops  then acc=acc 'Strictprops'
     else if nose then acc=acc 'NoStrictprops'
     if strictsignal then acc=acc 'Strictsignal'
@@ -232,6 +239,7 @@ class RxFlag
     say '  -strictassign -- assignment must be cost-free'
     say '  -strictcase   -- names must match in case'
     say '  -strictimport -- all imports must be explicit'
+    say '  -strictmethods -- superclass methods are not compared to local methods for best match'
     say '  -strictprops  -- even local properties must be qualified'
     say '  -strictsignal -- signals list must be explicit'
     say '  -symbols      -- include symbols table in generated .class files'
