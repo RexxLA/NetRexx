@@ -1,4 +1,119 @@
-â‰ˆ______________________________________________
+______________________________________________
+
+NetRexx 3.02 [ ]
+
+Changes are:
+
+- New methods b2d() and d2b allow converting binary strings to decimal and decimal strings to binary.
+
+b2d([n]) Binary to decimal. Converts the string (a string of binary characters)
+to a decimal number, without rounding. If string is the null string, 0 is returned.
+If n is not specified, string is taken to be an unsigned number.
+Examples:
+'01110'.b2d == 14
+'10000001'.b2d == 129
+'111110000001'.b2d == 3969
+'1111111110000001'.b2d == 65409
+'1100011011110000'.b2d == 50928
+If n is specified, string is taken as a signed number expressed in n binary
+characters. If the most significant (left-most) bit is zero then the number is
+positive; otherwise it is a negative number in twos-complement form. In both
+cases it is converted to a NetRexx number which may, therefore, be negative. If n
+is 0, 0 is always returned.
+If necessary, string is padded on the left with '0' characters (note, not “signextended”),
+or truncated on the left, to length n characters; (that is, as though
+string.right(n, '0') had been executed.)
+Examples:
+'10000001'.b2d(8) == -127
+'10000001'.b2d(16) == 129
+'1111000010000001'.b2d(16) == -3967
+'1111000010000001'.b2d(12) == 129
+'1111000010000001'.b2d(8) == -127
+'1111000010000001'.b2d(4) == 1
+'0000000000110001'.b2d(0) == 0
+
+
+d2b([n]) Decimal to binary. Returns a string of binary characters of length as
+needed or of length n, which is the binary representation of the
+decimal number. The returned string will use 0 and 1 characters for binary values.
+string must be a whole number, and must be non-negative unless n is specified,
+or an error will result. If n is not specified, the length of the result returned is
+such that there are no leading 0 characters, unless string was equal to 0 (in which
+case '0' is returned).
+If n is specified it is the length of the final result in characters; that is, after
+conversion the input string will be sign-extended to the required length (negative
+numbers are converted assuming twos-complement form). If the number is too
+big to fit into n characters, it will be truncated on the left. n must be a nonnegative
+whole number.
+Examples:
+'0'.d2b == 0
+'9'.d2b == 1001
+'19'.d2b == 10011
+'129'.d2b == 10000001
+'129'.d2b(1) == 1
+'129'.d2b(8) == 10000001
+'127'.d2b(12) == 000001111111
+'129'.d2b(16) == 0000000010000001
+'257'.d2b(8) == 00000001
+'-127'.d2b(8) == 10000001
+'-127'.d2b(16) == 1111111110000001
+'12'.d2b(0) == 
+
+
+- A new "-classpath" operand allows dynamic specification of the classpath used by the NetRexxC compiler without having to depend on the CLASSPATH environment variable which is no longer recommended by Java authorities.
+
+- Subclasses of the native NetRexx datatype "Rexx" are now supported.
+
+- The NetRexxA interpreter API has a new "exiting()" method to check if the interpreter has been terminated by a program call to "exit". This is mainly useful to IDE developers who need to restart the interpreter in such cases.
+
+- The default imports for NetRexx programs have been changed slightly: In the "strictimports" mode, the java.lang package is now imported automatically to match the behavior of the Java compiler. If not using strictimports, the base package javax.swing is now automatically imported to allow creation and sharing of simple graphical programs without manual importing. Mods to NRL page 91/111:
+
+In the reference implementation, the fundamental NetRexx and Java package hierarchies are
+automatically imported by default, as though the instructions:
+import netrexx.lang.
+import java.lang.
+import java.io.
+import java.util.
+import java.net.
+import java.awt.
+import java.applet.
+import javax.swing
+had been executed before the program begins. In addition, classes in the current (working) directory
+are imported if no package instruction is specified. If a package instruction is specified then all
+classes in that package are imported.
+
+strictimport Requires that all imported packages and classes be imported explicitly using import
+instructions. That is, if in effect, there will be no automatic imports (see page 90),
+except those related to the package instruction and the java.lang package automatically imported by the Java compiler.
+This option only has an effect as a compiler option, and applies to all programs being
+compiled.
+
+- The proxy classloader used by the NetRexx interpreter is now linked to the Java thread context classloader when possible to allow the interpreter to run in custom or dynamic classloader environments like JSP servers.
+
+- Support has been added for the Java collections framework: The NetRexx native "Rexx" datatype contains a Java Hashtable which is part of the Collections Framework. New classes, constructors and methods have been added to implement the Java Map interface and allow better interoperation with Java.
+Some of the new collections support methods include "isindexed()" to check if a Map currently exists, "size()" to determine the count of map entries and "buildmap(sequence1,sequence2)" to construct Rexx maps from arrays or Java Lists.
+Other classes and methods are documented in the Java Collections Map interface Javadocs.
+
+"isindexed()" returns 0 if no indexed values exist and 1 if there is at least one indexed value in a Rexx object.
+
+To build a new indexed Rexx map with the buildmap method you can do this:
+
+Rexx(default).buildMap(keys, values)
+
+where keys and values are any arrays or Java collections framework Lists and default is the default value for the Rexx variable (using the standard Rexx constructors). All elements are converted to strings before being added to the indexed Rexx variable which is returned. Null can be passed for one of the keys or values parameters to default to a 1-n integer sequence matching the other parameter but if both parameters are provided they must have the same length. Note that arrays do not need to be string arrays and that primitive arrays such as int[] are also accepted. 
+
+
+- Several problems with using Java classes from NetRexx have been fixed with some minor changes to the method resolution algorithms. A new "strictmethods" option has been added for use with legacy programs that could change behavior with the new algorithms. This is considered extremely unlikely to occur. Project issues are NETREXX-17, NETREXX-55.
+
+NRL page 59 has this note:
+
+Note: When a method is found in a class, superclasses of that class are not searched for methods, even though a lower-cost method may exist in a superclass.
+
+The above information is no longer correct as NetRexx now compares the cost of using superclass methods to the cost of using subclass methods when performing inexact method searches. Here is the replacement note:
+
+Note: When a method that is not an exact match to a call is found in a class, superclasses of that class are also searched for methods which may have a lower-cost of conversion and the method with the lowest cost, hence the closest match, is used to resolve the search. 
+
+______________________________________________
 NetRexx 3.01 [23 Aug 2012]
 
 The 3.01 release will mark the first official RexxLA release. Changes are:
