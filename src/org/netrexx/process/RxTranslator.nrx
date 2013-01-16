@@ -37,6 +37,7 @@
 /* 2012.09.16 change auto import interface to allow import of a single package as well as package hierarchy branches --issue #61 --Kermit */
 /* 2012.09.16 add base javax.swing package to auto imports  --issue #61 --Kermit */
 /* 2012.10.11 fix for missing package info if this class is loaded by some classloaders  -- no issue # --Kermit */
+/* 2013.01.15  switch the javac call to the documented entry point to fix issues #74, #95 and possible other problems  -- KK ----Kermit */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -653,13 +654,32 @@ class RxTranslator
       when compilerChoice == "javac" then do
 			if program.flag.diag then say '# compiling' program.programname 'using javac'
 			-- javacok=sun.tools.javac.Main(System.out, 'javac').compile(args)
-			
 			do
+			-- switch the javac call to the documented entry point to fix issues 74, 95 and possible other problems  -- 2013-01-15 -- KK --
+			-- this entry point has different return codes than the original undocumented entry point
+			javacclass=javaloader.loadClass('com.sun.tools.javac.Main')
+			compilemethod = javacclass.getMethod('compile', [Class args.getClass(), PrintWriter.class])
+			jok=Rexx(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString())
+			javacok=boolean (jok=="0")		--		convert RC to boolean flag per original use of return value
+--			javacok=boolean Boolean(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString()).booleanValue()
+/*
+For the record, here are the javac exit codes:
+    static final int
+        EXIT_OK = 0,        // Compilation completed with no errors.
+        EXIT_ERROR = 1,     // Completed but reported errors.
+        EXIT_CMDERR = 2,    // Bad command-line arguments
+        EXIT_SYSERR = 3,    // System error or resource exhaustion.
+        EXIT_ABNORMAL = 4;  // Compiler terminated abnormally
+*/
+/* 			
+-- old entry point may be causing a JVM target/source problem 		-- seems to default to Java 1.4 features
+-- this undocumented javac entry point returns a "1" value (boolean true) on successful compile!
 			javacclass=javaloader.loadClass('sun.tools.javac.Main')
 			javacconstructor=javacclass.getConstructor([OutputStream.class, String.class])
 			javac=Object javacconstructor.newInstance([Object System.out, String 'javac'])
 			compilemethod = javac.getClass().getMethod('compile', [Class args.getClass()])
 			javacok=boolean Boolean(compilemethod.invoke(javac,[Object args]).toString()).booleanValue()
+*/
 			catch cle=Exception
 				say cle
 			end
@@ -668,12 +688,12 @@ class RxTranslator
       when compilerChoice == "ecj" then do
 			if program.flag.diag then say '# compiling' program.programname 'using eclipse batch compiler'
 		--	javacok=org.eclipse.jdt.core.compiler.batch.BatchCompiler.compile(args, PrintWriter(System.out), PrintWriter(System.err), null)
-				
 			do
 			ecjclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.batch.BatchCompiler')
 			ecpclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.CompilationProgress')
 			compilemethod = ecjclass.getMethod('compile', [args.getClass(),PrintWriter.class,PrintWriter.class, ecpclass])
 			javacok=boolean Boolean(compilemethod.invoke(ecjclass,[Object args, PrintWriter(System.out), PrintWriter(System.err), null]).toString()).booleanValue()
+			-- note: ecj also returns boolean 1 (true) if successful compile!
 			catch cle=Exception
 				say cle
 			end
