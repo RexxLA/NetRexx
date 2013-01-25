@@ -1,11 +1,12 @@
 <?xml version="1.0" ?>
 
-<project name="NetRexx" basedir="." default="dist">
+<project name="NetRexx" basedir="." default="default">
 
-  <property name="version"         value="3.02"/>
-  <property name="PACKAGE_NAME"    value="NetRexx-3.02.zip"/>
-  <property name="examples"        value="../examples"  description="directory location to find the NetRexx examples" />
+  <property name="version"      value="3.02"/>
+  <property name="PACKAGE_NAME" value="NetRexx-3.0x.zip"/>
+  <property name="examples"     value="../examples"  description="directory location to find the NetRexx examples" />
   
+  <property name="build.sysclasspath"                         value="ignore"/>
   <!-- =================================================================== -->
   <!-- NetRexx default settings                                            -->
   <!-- =================================================================== -->
@@ -29,20 +30,23 @@
   <property name="ant.netrexxc.suppressPrivatePropertyNotUsed" value="true"/>
   <property name="ant.netrexxc.suppressVariableNotUsed"        value="false"/>
   <property name="ant.netrexxc.verbose"                        value="verbose1"/>
-  <property name="ant.netrexxc.console"                        value="true"/>
-  <property name="ant.netrexxc.java"                           value="true"/>
-  
-  
+  <property name="ant.netrexxc.console"                        value="false"/>
+  <property name="ant.netrexxc.java"                        value="true"/>
+  <property name="ant.netrexxc.time"                        value="true"/>
+  <!-- <property name="ant.netrexxc.javacompiler"           value="ecj"/> -->
+  <!-- <property name="nrx.compiler"                        value="ecj"/> -->
+
+
   <!-- =================================================================== -->
   <!-- Project properties                                                  -->
   <!-- =================================================================== -->
   
   <property name="name"         value="NetRexx"/>
-  
+
   <property name="root"          location="."/>
   <property name="sources"       value="${root}/src"/>
   <property name="build"         value="${root}/build"/>
-  <property name="package"       value="${root}/package"/>
+  <property name="package"    value="${root}/package"/>
   <property name="build.lib"     value="${build}/lib"/>
   <property name="build.classes" value="${build}/classes"/>
 
@@ -52,14 +56,14 @@
   <property name="anttaskDir"    value="org/apache/tools/ant/taskdefs/optional"/>
   <property name="testsDir"      value="org/netrexx/diag"/>
 
-  <property name="oldAPI"        value="COM/ibm/netrexx/process"/>  
-  <property name="oldAPINAME"    value="COM.ibm.netrexx.process"/>  
-  <property name="RUNTIME"       value="${build.classes}/netrexx/lang/" description="Runtime directory"/>
-  <property name="RUNTIMENAME"   value="netrexx.lang" description="Runtime prefix"/>
-  <property name="COMPILER"      value="${build.classes}/org/netrexx/process/" />
-  <property name="COMPILERNAME"  value="org.netrexx.process"/> 
-  <property name="DIAG"          value="${build.classes}/org/netrexx/diag/"/>
-  <property name="DIAGNAME"      value="org.netrexx.diag"/>  
+  <property name="oldAPI" value="COM/ibm/netrexx/process"/>  
+  <property name="oldAPINAME" value="COM.ibm.netrexx.process"/>  
+  <property name="RUNTIME" value="${build.classes}/netrexx/lang/" description="Runtime directory"/>
+  <property name="RUNTIMENAME" value="netrexx.lang" description="Runtime prefix"/>
+  <property name="COMPILER" value="${build.classes}/org/netrexx/process/" />
+  <property name="COMPILERNAME" value="org.netrexx.process"/> 
+  <property name="DIAG" value="${build.classes}/org/netrexx/diag/"/>
+  <property name="DIAGNAME" value="org.netrexx.diag"/>  
   
   <property name="DOCPATH"       value="${build}/javadocs"/>
   <property name="DOCTITLE"      value="NetRexx documentation:"/>
@@ -120,12 +124,12 @@
     <pathconvert property="test.classpath" refid="test.class.path"/>
     
     <!-- two netrexx compilers, one for building, later the built one for testing -->
-    <taskdef name="buildnrc" classname="org.apache.tools.ant.taskdefs.optional.NetRexxC" classpath="${build.classpath}"/>
+    <taskdef name="buildnrc" classname="org.apache.tools.ant.taskdefs.optional.NetRexx" classpath="${build.classpath}"/>
     
   </target>
   
-  <target name="post.jar.prepare" depends="prepare" description="compile runtime">  
-    <taskdef name="testnrc"  classname="org.apache.tools.ant.taskdefs.optional.NetRexxC" classpath="${test.classpath}"/>
+  <target name="post.jar.prepare" depends="prepare" description="post jar build - define new NetRexx compiler">  
+    <taskdef name="testnrc"  classname="org.apache.tools.ant.taskdefs.optional.NetRexx" classpath="${test.classpath}"/>
   </target>
 
   <target name="compile.runtime" depends="prepare" description="compile runtime">
@@ -142,7 +146,7 @@
     <echo message="|   |"/>
     
     <buildnrc srcDir="${sources}/${runtimeDir}" destDir="${build.classes}/${runtimeDir}" classpath="${build.classpath}"
-	      includes="*.nrx" excludes="RexxDictionary.nrx"/>
+      includes="*.nrx" excludes="RexxDictionary.nrx"    />
   </target>
   
   <target name="clean.runtime"  description="delete built runtime files">
@@ -272,59 +276,71 @@
   </target>
   
   <target name="apidocs" depends="compile" description="create API documentation">
-    <javadoc source="1.4" maxmemory="128M" private="true" Author="true" Version="true" breakiterator="yes" Use="true" destdir="${DOCPATH}"
-	     bottom="${BOTTOM}" Header="${HEADER}"  Windowtitle="${WINDOWTITLE}" sourcepath="${build.classes}" packagenames="${COMPILERNAME},${RUNTIMENAME},${oldAPINAME}" 
-	     classpath=".${path.separator}${RUNTIME}${path.separator}${COMPILER}${path.separator}${build.classpath}"  Verbose="false"
-	     >
-      <doctitle>${DOCTITLE} ${RUNTIMENAME} ${COMPILERNAME}</doctitle>
-    </javadoc>
+		 <javadoc source="1.4" maxmemory="128M" private="true" Author="true" Version="true" breakiterator="yes" Use="true" destdir="${DOCPATH}"
+		 		bottom="${BOTTOM}" Header="${HEADER}"  Windowtitle="${WINDOWTITLE}" sourcepath="${build.classes}" packagenames="${COMPILERNAME},${RUNTIMENAME},${oldAPINAME}" 
+		 		classpath=".${path.separator}${RUNTIME}${path.separator}${COMPILER}${path.separator}${build.classpath}"  Verbose="false"
+		 		>
+			 <doctitle>${DOCTITLE} ${RUNTIMENAME} ${COMPILERNAME}</doctitle>
+		 </javadoc>
   </target>
   
   <target name="clean" depends="clean.runtime, clean.process, clean.tests, clean.jar,clean.javadocs" description="delete all built files">
     <delete dir="${build}"/>
   </target>  
   
-  <target name="dist" depends="init,compile, jars, tests, apidocs" description="build distribution"/>
+  <target name="withjavadocs" depends="init,compile, jars, tests, apidocs" description="build distribution and javadocs with test"/>
+
+  <target name="setecj"  description="set compiler to ecj">
+  	<property name="ant.netrexxc.javacompiler" value="ecj"/>
+  </target>  
+
+  <target name="setjavac"  description="set compiler to javac">
+  	<property name="ant.netrexxc.javacompiler" value="javac"/>
+  </target>    
   
+  <target name="default" depends="withecj" description="build and test distribution"/>
+
+  <target name="withecj" depends="setecj,compile, jars, tests" description="build and test distribution with ecj"/>
+  
+  <target name="withjavac" depends="setjavac,compile, jars, tests" description="build and test distribution with javac"/>
+
   <target name="package" depends="clean,compile, jars" description="build distribution package">
     <delete dir="${package}"/>
-    <mkdir  dir="${package}${file.separator}bin"/>
-    <copy todir="${package}${file.separator}bin">
-      <fileset dir="bin"/>
-    </copy>
-    <mkdir  dir="${package}/lib"/>
-    <mkdir  dir="${package}/runlib"/>
-    <mkdir  dir="${package}/examples"/>
-    <mkdir  dir="${package}/documents"/>
-    <copy file="build/lib/NetRexxC.jar" todir="${package}/lib"/>
-    <copy file="lib/ecj-4.2.jar" todir="${package}/lib"/>
-    <copy file="build/lib/NetRexxR.jar" todir="${package}/runlib"/>
-    <copy todir="${package}/documents">
-      <fileset dir="../trunk/documentation/ug" includes="*.pdf"/>
-      <fileset dir="../trunk/documentation/pg" includes="*.pdf"/>
-      <fileset dir="../trunk/documentation/nrl" includes="*.pdf"/>
-    </copy>
-    <copy file="releasenotes.txt" todir="${package}"/>
-    <copy file="read.me.first" todir="${package}"/>
-    <copy file="LICENSE" todir="${package}"/>
-    <mkdir  dir="${package}/tools"/>
-    <mkdir  dir="${package}/tools/emacs"/>
-    <mkdir  dir="${package}/tools/ant-task"/>
-    <copy file="lib/ant-netrexx.jar" todir="${package}/tools/ant-task"/>
-    <copy file="tools/emacs-mode/netrexx-mode.el" todir="${package}/tools/emacs"/>
-    <copy todir="${package}/examples">
-      <fileset dir="${examples}" />
-    </copy>
-    <jar jarfile="${PACKAGE_NAME}" compress="yes" filesonly="true">
+	<mkdir  dir="${package}${file.separator}bin"/>
+	<copy todir="${package}${file.separator}bin">
+		<fileset dir="bin"/>
+	</copy>
+	<mkdir  dir="${package}/lib"/>
+	<mkdir  dir="${package}/runlib"/>
+	<mkdir  dir="${package}/examples"/>
+	<mkdir  dir="${package}/documents"/>
+	<copy file="build/lib/NetRexxC.jar" todir="${package}/lib"/>
+	<copy file="build/lib/NetRexxR.jar" todir="${package}/runlib"/>
+	<copy todir="${package}/documents">
+		<fileset dir="documentation/ug" includes="*.pdf"/>
+		<fileset dir="documentation/nrl" includes="*.pdf"/>
+	 </copy>
+	<copy file="documentation/ug/releasenotes.txt" todir="${package}"/>
+	<copy file="documentation/ug/readme.txt" todir="${package}"/>
+	<copy file="LICENSE" todir="${package}"/>
+	<mkdir  dir="${package}/tools"/>
+	<mkdir  dir="${package}/tools/emacs"/>
+	<mkdir  dir="${package}/tools/ant-task"/>
+	<copy file="lib/ant-netrexx.jar" todir="${package}/tools/ant-task"/>
+	<copy file="tools/emacs-mode/netrexx-mode.el" todir="${package}/tools/emacs"/>
+	<copy todir="${package}/examples">
+		<fileset dir="${examples}" />
+	 </copy>
+   <jar jarfile="${PACKAGE_NAME}" compress="yes" filesonly="true">
       <fileset dir="${package}"/>
-      <manifest>
-	<attribute name="Implementation-Vendor" value="Rexx Language Association"/>
-	<attribute name="Implementation-Title" value="NetRexx"/>
-	<attribute name="Implementation-Version" value="${version}"/>
-      </manifest>
+			 <manifest>
+			  <attribute name="Implementation-Vendor" value="Rexx Language Association"/>
+			  <attribute name="Implementation-Title" value="NetRexx"/>
+			  <attribute name="Implementation-Version" value="${version}"/>
+			</manifest>
     </jar>	
   </target>
-  
+	
   <target name="clean.javadocs" description="delete built javadocs">
     <delete dir="${DOCPATH}"/>
   </target>
