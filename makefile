@@ -25,6 +25,15 @@ doc:
 .PHONY: package
 package:
 	java -jar ant/ant-launcher.jar package
+	mkdir -p scratch
+	cd scratch;unzip -o ../lib/ecj-4.2.jar
+	cd scratch;unzip -o ../build/lib/NetRexxC.jar
+	cd scratch;zip -r NetRexxF.jar *
+	mv scratch/NetRexxF.jar lib
+	zip NetRexx-3.02RC1.zip lib/NetRexxF.jar
+	mv lib/NetRexxF.jar build/lib
+	rm -rf scratch
+
 
 
 
