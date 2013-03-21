@@ -22,6 +22,11 @@ clean:
 doc:
 	java -jar ant/ant-launcher.jar apidocs
 
+.PHONY: documents
+documents:
+	cd documentation/ug;make -B
+	cd documentation/pg;make -B	
+
 .PHONY: package
 package:
 	java -jar ant/ant-launcher.jar package
