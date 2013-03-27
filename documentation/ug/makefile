@@ -32,4 +32,14 @@ clean:
 	rm -f *.class
 	rm -f *.crossref
 	rm -f *.aux
+	rm -f *.log
+	rm -f *.lot
+	rm -f *.idx
+	rm -f *.ilg
+	rm -f *.lol
+	rm -f *.rai
+	rm -f *.rao
+	rm -f *.toc
+	rm -f *.lof
+	rm -f *.out
 	rm -f *~
