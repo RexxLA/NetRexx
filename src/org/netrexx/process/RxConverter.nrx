@@ -30,6 +30,7 @@
 /* 2000.04.15 make cursor-based                                       */
 /* 2011.09.02 add conversions for CharSequences - Kermit Kiser        */
 /* 2012.12.16 -- if the rhtype is a subclass of Rexx, allow it to be converted (from) the same as a Rexx object --	kk --	2012-12-16   -- issue #31  */
+/* 2013-05-04 -- fix for issues 98,99		--		kk		-- */ 	
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -170,7 +171,7 @@ class RxConverter uses RxCode
                    returns RxConvert
   -- if rxt.superflag.diag then
   --   say '# assigncost' lhtype.toSig() rhtype.toSig()
-
+  
   /* exact match is always valid, and no cost */
   if lhtype=rhtype then return RxConvert(0, CONVERT_NOP)
   	
@@ -178,6 +179,7 @@ class RxConverter uses RxCode
   -- this should allow Rexx subclasses to be used as indexes. shouldn't do this to lhtype as we don't know how to convert to arbitrary subclass of Rexx		--	kk		--	2012-12-16
   temptok=RxToken(char 'S',int 0,int 0,int 0,char '0')	--	create fake token so we can call issubclass		--	kk		--	2012-12-16
   if rhtype\=null then
+   if rhtype.dimension=0 then			-- fix for issues 98,99		--		kk		-- 	2013-05-04 
   	if rhtype\=RxType.NULL_TYPE then
 		if classer.issubclass(cursor,rhtype, RxType.REXX_TYPE, temptok) then rhtype=RxType.REXX_TYPE		--	kk		--	2012-12-16
 
