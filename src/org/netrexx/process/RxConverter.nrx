@@ -31,6 +31,7 @@
 /* 2011.09.02 add conversions for CharSequences - Kermit Kiser        */
 /* 2012.12.16 -- if the rhtype is a subclass of Rexx, allow it to be converted (from) the same as a Rexx object --	kk --	2012-12-16   -- issue #31  */
 /* 2013-05-04 -- fix for issues 98,99		--		kk		-- */ 	
+/* 2013-05-10 -- fix for issue 96 -- add auto conversion Rexx=>Map for collections support	--		kk		-- */ 	
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -104,6 +105,7 @@ class RxConverter uses RxCode
   CONVERT_RCSQ =140   -- Rexx -> CharSequence
   CONVERT_CSQR =141   -- CharSequence -> Rexx 
   CONVERT_CSQS =142   -- CharSequence -> String 
+  CONVERT_RMAP =143   -- Rexx -> RxMap (Java Map) 2013-05-10 -- fix for issue 96 -- add auto conversion Rexx=>Map for collections support	--	kk	
 
   /* Tuning value */
   MAXCONLEN  = 12   -- maximum length literal that will be made a constant
@@ -292,6 +294,9 @@ class RxConverter uses RxCode
   if lhtype=RxType.OBJECT_TYPE       then return RxConvert(10, CONVERT_NO)
   /* Object may be downcast to arrays of any kind (even primitives) */
   if rhtype=RxType.OBJECT_TYPE then if lhtype.isarray() then return RxConvert(40, CONVERT_NO)
+  	
+  if lhtype=RxType.MAP_TYPE then
+  	if rhtype=RxType.REXX_TYPE then return RxConvert(22,CONVERT_RMAP)  --  2013-05-10 -- fix for issue 96 -- add auto conversion Rexx=>Map for collections support	--	kk	
 
   /* Almost all hopes of cross-dimension assignment have now been tested
      for, so check dimensions before we generalize any more, and
@@ -612,7 +617,17 @@ end
         code.wrapped=1                       -- it's atomic
         end
       if code.value\=null then code.value=(Rexx code.value).toString()
+      end 
+      
+/* 2013-05-10 -- fix for issue 96 -- add auto conversion Rexx=>Map for collections support	--		kk		-- */      
+    when CONVERT_RMAP then do                  -- Rexx -> Rexx.Map (Java Map)
+      if code.javacode\=null then do label java
+        code.javacode=code.javacode'.toMap()'
+        code.wrapped=1                       -- it's atomic
+        end
+      if code.value\=null then code.value=(Rexx code.value).toString()
       end      
+
     when CONVERT_SC  then do                 -- String -> char
       tochar(code)
       if code.value\=null then do label doit
