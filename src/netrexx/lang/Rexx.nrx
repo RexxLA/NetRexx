@@ -82,6 +82,8 @@
 /* 2012.12.21 Add copyindexed method name per issue NETREXX-94. Also isindexed method name for same reason. (Kermit Kiser)      */
 /* 2013.01.04 match b2d, d2b output to api doc in new 3.02 release notes. (Kermit Kiser)      */
 /* 2013.01.20 Add StructuredList support. (Kermit Kiser)      */
+/* 2013.04.30 Move Map interface to separate subclass per issue 96. (Kermit Kiser)      */
+/* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */     
 /* ------------------------------------------------------------------ */
 package netrexx.lang
 options binary nodecimal strictargs strictcase   noformat
@@ -90,7 +92,7 @@ options binary nodecimal strictargs strictcase   noformat
    This defines the primary string class for NetRexx.
  */
 
-class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable, StructuredList
+class Rexx implements RexxOperators, Serializable, Comparable, Iterable, StructuredList
 
   /* ----- Constants ----- */
   properties constant public  -- might be useful to others
@@ -3169,6 +3171,10 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 -------------------------------------------------------------------------------------------------------------------------------
 -- Original classes, constructors, and methods added for isIndexed and Java collections support:		
 -------------------------------------------------------------------------------------------------------------------------------
+
+  method toMap() protect returns Rexx.RxMap      /* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */
+  	return Rexx.RxMap(this)
+  	
   /** isIndexed returns a boolean flag that indicates if indexed subvalues are present in the
      Rexx object (explicitly set).  */
   method isindexed() protect returns Rexx
@@ -3605,4 +3611,15 @@ class Rexx.RexxList extends AbstractList
 			if \currentlist.islist() then return 0
 			le=currentlist.elementcount().toint()
 			return le
+			
+---------------------------------------------------------------------------------------
+--		RxMap class, moves Map implementation out of Rexx class to prevent overriding String conversions in XML API  -- 2013-04-30	
+/* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */
+---------------------------------------------------------------------------------------
+/** RxMap  - a Java Map version of the Rexx object   */
 
+class Rexx.RxMap extends Rexx implements java.util.Map
+
+	method RxMap(rx=Rexx)
+		super(rx)
+		this.coll=rx.coll			
