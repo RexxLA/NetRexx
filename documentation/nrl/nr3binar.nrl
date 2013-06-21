@@ -1,0 +1,239 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=refbinary.Binary values and operations
+.ty Page &refbinary.: Binary values and operations
+.pi /Binary/arithmetic
+.pi /Binary/operations
+.pi /Binary/values
+:p.
+By default, arithmetic and string operations in NetRexx are carried out
+using the NetRexx string class, :hp4.Rexx:ehp4., which offers the robust
+set of operators described in :a id=refexpr.:hp1.Expressions and
+operators:ehp1.:ea..
+:p.
+.pi /Primitive types
+.pi /Types/primitive
+NetRexx implementations, however, may also provide :i.primitive:ei.
+datatypes, as described in :a id=refprims.:hp1.Types and
+Classes:ehp1.:ea..  These primitive types are used for compact storage
+of numbers and for fast binary arithmetic, features which are built-in
+to the hardware of most computers.
+:p.
+.pi /Binary classes
+To make use of binary arithmetic, a class is declared to be a
+:a id=refbincla.:i.binary class:ei.:ea. by using the :kw.binary:ekw.
+keyword on the :kw.class:ekw. instruction.
+In such a class, literal strings and numeric symbols are assigned native
+string or primitive types, rather than NetRexx types, where appropriate,
+and native binary operations are used to implement operators where
+possible, as detailed below.
+Implementations may also provide a keyword on the
+:a id=refoptions.:kw.options:ekw.:ea. instruction that indicates that
+all classes in a program are binary classes.
+:fn.
+:ri.In the reference implementation, :kw.options binary:ekw. is
+used:eri..
+:efn.
+:p.
+.pi /Binary methods
+Alternatively, individual methods within a class may be declared to
+be a :a id=refbinme.:i.binary method:ei.:ea. by using the :kw.binary:ekw.
+keyword on the :kw.method:ekw. instruction.
+:p.
+.pi /Integers, binary
+.pi /Floating-point numbers, binary
+.pi /Real numbers, binary
+.pi /Binary numbers
+Binary classes and methods should be used with care.  Although binary
+arithmetic can have a considerable performance advantage over
+arithmetic that is not implemented in hardware, it can give incorrect
+or unexpected results.
+In particular, whole numbers (integers) are often held in fixed-sized
+data areas (of 8, 16, 32, or 64 bits), and overflowing the data area
+during a calculation can result in a positive number becoming negative
+and vice versa.
+Similarly, binary numbers that are not whole numbers (floating-point
+numbers) cannot exactly represent common numbers in the decimal system
+(:hp4.0.1:ehp4., :hp4.0.2:ehp4., &etc.), and hence can give unexpected
+results.
+.* - - - - -
+:h4 id=refbindif.Operations in binary classes and methods
+:p.
+In a binary class or method, the following (and only the following)
+rules differ from the usual rules:
+:dl termhi=1.
+:dt.Dyadic operations in expressions
+.pi /Binary operations/dyadic
+:dd.:p.
+If the operands of a dyadic operator both have primitive numeric types
+:fn.
+:ri.In the reference implementation, :hp4.boolean:ehp4. is considered to
+be a numeric type (having the values :hp4.0:ehp4. or :hp4.1:ehp4.)
+but :hp4.char:ehp4. is not.
+Characters, and strings or arrays of characters, always use the rules
+defined for NetRexx strings.:eri.
+:efn.
+then binary operations are carried out.  The type of the result is
+implementation defined, and is typically the type of the more precise of
+the two operands, or of some minimum precision.
+:fn.
+:ri.In the reference implementation, the minimum precision is 32 bits,
+so an :hp4.int:ehp4. is returned for results that would otherwise
+be :hp4.byte:ehp4. or :hp4.short:ehp4..
+If both operands are :hp4.boolean:ehp4., however, and the operation is a
+logical operation, then the type of the result
+is :hp4.boolean:ehp4..:eri.
+:efn.
+Arithmetic operations follow the usual rules of binary arithmetic, as
+defined for the underlying environment of the implementation.
+:p.
+Note that NetRexx provides both divide and integer divide operators; in
+a binary class or method, the divide operator (:q.:hp4./:ehp4.:eq.)
+converts its operands to floating-point types and returns a
+floating-point result, whereas the integer divide operator
+(:q.:hp4.%:ehp4.:eq.) converts its operands to integer types and
+returns an integer result.
+The remainder operator must accept both integer and floating-point
+types.
+:p.
+Logical operations (:hp1.and:ehp1., :hp1.or:ehp1., and :hp1.exclusive
+or:ehp1.) apply to all the bits of the operands, and are not permitted
+on floating-point types.
+.cp 5
+:dt.Prefix operations in expressions
+.pi /Binary operations/prefix
+.pi /Binary operations/monadic
+:dd.:p.
+If the operand of a prefix operator has a primitive numeric type, then
+the type of the result is the type of the operand, subject to
+the same minimum as dyadic operations.
+Prefix plus and minus follow the rules of dyadic operators (because they
+are defined as being zero plus or minus the operand) with the additional
+rule that if acting on a literal number (a constant in the program) then
+the result is also considered to be a literal constant.
+Logical not (prefix :q.:hp4.&bslash.:ehp4.:eq.) does not apply to all
+the bits of its operand; instead, it changes a :hp4.0:ehp4.
+to :hp4.1:ehp4. and vice versa.
+.*
+.cp 5
+:dt.Assignments
+.pi /Binary classes/assignment
+.pi /Binary methods/assignment
+.pi /Binary literals
+.pi /Literals, binary
+.pi /Assignment/of literals
+.pi /Assignment/binary
+:dd.:p.
+In assignments where the value being assigned is the result of an
+expression which comprises a string or number literal constant, the
+type of the result is defined as follows:
+:ol.
+:li.Strings are given the native string type, even for a
+single-character literal.
+:fn.
+:ri.In the reference implementation, this type is :hp4.java.lang.String:ehp4.:eri..
+:efn.
+:li.Numbers are given the smallest possible primitive numeric type that
+will contain the literal without loss of information (or minimal loss of
+information for numbers with decimal or exponential parts).
+If this is smaller than the implementation-defined minimum precision
+used for the result of adding the literal to :hp4.0:ehp4., then the type
+of that minimum precision is used.
+:p.
+If the constant is an integer, and no primitive integer binary type has
+sufficient precision to hold the number without loss of information,
+then the number is treated as a literal string (that is, as though it
+were enclosed in quotes).  NetRexx arithmetic would then be used if it
+were involved in an arithmetic operation.
+:eol.
+:p.
+These rules can apply in assignment instructions, the initial assignment
+to the control variable in the :kw.loop:ekw. instruction, or the
+assignment of a default value to the argument of a method; the result
+type may define the type of the variable (if new, or a method argument).
+.*
+.cp 5
+:dt.Control variables in loops
+.pi /Binary classes/control variables
+.pi /Binary classes/LOOP instruction
+.pi /Binary methods/control variables
+.pi /Binary methods/LOOP instruction
+.pi /Loops/in binary classes and methods
+:dd.:p.
+In the :kw.loop:ekw. instruction, if the control variable has a
+primitive integer type, and the increment (:kw.by:ekw. value) has a
+primitive integer type, then binary arithmetic will be used for stepping
+the control variable, following the rules for binary arithmetic in
+expressions described above.
+:p.
+Similarly, if the control variable has a primitive integer type, and the
+end (:kw.to:ekw.) value has a primitive integer type, then binary
+arithmetic will be used for the comparison that tests for loop
+termination.
+.* :li.
+.* The special words :kw.source:ekw. and :kw.version:ekw. return constants
+.* whose type is the implementation's native string type
+.* :fn.
+.* :ri.In the reference implementation, this is :hp4.java.lang.String:ehp4.:eri..
+.* :efn.
+.* rather than of type :hp4.Rexx:ehp4..
+.* :eul.
+.cp 5
+:dt.Numeric instruction
+.pi /Binary classes/NUMERIC instruction
+.pi /Binary methods/NUMERIC instruction
+.pi /NUMERIC/in binary classes and methods
+:dd.:p.
+The :kw.numeric:ekw. instruction does not affect binary operations.
+It has the usual effects on operations carried out using NetRexx
+arithmetic.
+:edl.
+:note.
+At all times (whether in binary classes, binary methods, or anywhere
+else) implementations may use primitive types and operations, and
+techniques such as late binding of types, as an optimization
+providing that the results obtained are identical to those defined in
+this language definition.
+.* - - - - -
+:h4 id=refbincon.Binary constructors
+.pi /Binary constructors
+.pi /Constructors/binary
+.pi /Conversion/binary constructors
+.pi /Conversion/of characters
+.pi /Character/encodings
+.pi /Character/converting to binary
+.pi /Encodings/binary
+:p.
+NetRexx provides special constructors for implementation-defined
+primitive types that allow bit-wise construction of primitives.
+These :i.binary constructors:ei. are especially useful for
+manipulating the binary encodings of individual characters.
+:p.
+The binary constructors follow the same syntax as other constructors,
+with the name being that of a primitive type.  All binary constructors
+take one argument, which must have a primitive type.
+:p.
+The bits of the value of the argument are extended or truncated on the
+left to the same length as the bits required for the type of the
+constructor (following the usual binary rules of sign extension if the
+argument type is a signed numeric type), and a value with the type of
+the constructor is then constructed directly from those bits and
+returned.
+.cp 8
+:p.:hp2.Example::ehp2.
+:p.This example illustrates types from the reference implementation,
+with 32-bit signed integers of type :hp4.int:ehp4. and 16-bit Unicode
+characters of type :hp4.char:ehp4..
+:xmp.
+i=int 77   -- i is now the integer 77
+c=char(i)  -- c is now the character 'M'
+j=int(c)   -- j is now the integer 77
+:exmp.
+:pc.Note that the conversion
+:xmp.
+j=int c
+:exmp.
+:pc.would have failed, as :q.:hp4.M:ehp4.:eq. is not a number.
+.cp 40

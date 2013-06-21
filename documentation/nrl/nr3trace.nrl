@@ -1,0 +1,345 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=reftrace.Trace instruction
+.pi /TRACE/instruction
+.pi /Trace setting/altering with TRACE instruction
+.* .pi /VALUE/option of TRACE instruction
+.pi /Instructions/TRACE
+.pi /Tracing/execution of programs
+.pi ref /Debugging NetRexx programs/TRACE instruction
+.pi ref /Syntax checking/TRACE instruction
+.* .pi ref /TRACE/Interactive tracing
+[%char
+.bx left right
+:xmp.
+:hp2.trace:ehp2. :hp1.traceoption:ehp1.;
+
+where :hp1.traceoption:ehp1. is one of:
+____:hp1.tracesetting:ehp1.
+____:hp2.var:ehp2. &lbrk.:hp1.varlist:ehp1.&rbrk.
+
+where :hp1.tracesetting:ehp1. is one of:
+
+____:hp2.all:ehp2.
+____:hp2.methods:ehp2.
+____:hp2.off:ehp2.
+____:hp2.results:ehp2.
+
+and :hp1.varlist:ehp1. is one or more variable :hp1.names:ehp1., optionally prefixed with a :m.+:em. or :m.-:em.
+:exmp.
+.bx off
+]]
+[%smff
+.syntra
+]]
+:p.The :kw.trace:ekw. instruction is used to control the tracing of the
+execution of NetRexx methods, and is primarily used for debugging.
+It may change either the general trace :i.setting:ei. or may select
+or deselect the tracing of individual variables.
+:p.
+Within methods, the :kw.trace:ekw. instruction changes the trace setting
+or variables tracing when it is executed, and affects the tracing of
+all clauses in the method which are then executed (until changed by a
+later :kw.trace:ekw. instruction).
+:p.
+One or more :kw.trace:ekw. instructions may appear before the first
+method in a class, one of which may set the initial trace setting
+for all methods in the class (the default is :kw.off:ekw.) and others
+may set up variables tracing that applies to all the methods in the
+class.
+These act as though the :kw.trace:ekw. instructions were
+placed immediately following the :kw.method:ekw. instruction in each
+method (except that they will not be traced).
+:p.
+Similarly, one or more :kw.trace:ekw. instructions may be placed
+before the first :kw.class:ekw. instruction in a program; they do not
+imply the start of a class.  One of these may set the initial trace
+setting and others may set up variables tracing for all classes in
+the program (except interface classes) and act as though the
+:kw.trace:ekw. instructions were placed immediately following the
+:kw.class:ekw. instruction in each class.
+.*
+.cp 15
+:h4.Tracing clauses
+.pi /Trace setting
+.pi /Tracing/clauses
+:p.
+The trace :i.setting:ei. controls the tracing of clauses in a program, and
+may be one of the following:
+.*
+:dl tsize=20mm termhi=5.
+.cp 8
+:dt id=reftrall.all
+.pi /ALL/TRACE setting
+:dd.:p.All clauses (except null clauses without commentary) which are in
+methods and which are executed after the :kw.trace:ekw. instruction will
+be traced.
+If :kw.trace all:ekw. is placed before the first method in the current
+class, the :kw.method:ekw. instructions in the class,
+together with the values of the arguments passed to each method,
+will be traced when the method is invoked (that is, :kw.trace all:ekw.
+implies :kw.trace methods:ekw.).
+.*
+.cp 8
+:dt id=reftrmeth.methods
+.pi /METHODS/TRACE setting
+:dd.:p.
+All :kw.method:ekw. clauses in the class will be traced when the method
+they introduce is invoked, together with the values of the arguments
+passed to each method; no other clauses, or results, will be traced.
+The :kw.trace methods:ekw. instruction must be placed before the first
+method in the current class (as otherwise it would have no effect).
+.*
+.cp 8
+:dt id=reftroff.off
+.pi /OFF/TRACE setting
+:dd.:p.
+Turns tracing off; no following clauses, variables, or results will be traced.
+.cp 8
+:dt id=reftrres.results
+.pi /RESULTS/TRACE setting
+:dd.:p.All clauses (except null clauses without commentary) which are in
+methods and which are executed after the :kw.trace:ekw. instruction will
+be traced, as though :kw.trace all:ekw. had been requested.
+In addition, the results of all :hp1.expression:ehp1. evaluations and
+any results assigned to a variable by an assignment, :kw.loop:ekw., or
+:kw.parse:ekw. instruction are also traced.
+:p.
+If :kw.trace results:ekw. is placed before the first method in the
+current class, the :kw.method:ekw. instructions in the class will be
+traced when the method is invoked, together with the values of the
+arguments passed to each method.
+:edl.
+.* - - - - -
+.cp 5
+:p.:hp2.Notes::ehp2.
+:ol.
+:li.Tracing of clauses shows the data from the source of the program,
+starting at the first character of the first token of the clause and
+including any commentary from that point until the end of the clause.
+:li.When a loop is being traced, the :kw.loop:ekw. clause itself will be
+traced on every iteration of the loop, as indicated by the
+:a id=refloopmod.programmer's model:ea.; the :kw.end:ekw. clause is only
+traced once, when the loop completes normally.
+:li.With :kw.trace results:ekw., an expression is not traced if it is
+immediately used for an assignment (in an assignment instruction, or
+when the control variable is initialized in a :kw.loop:ekw.
+instruction).
+The assignment will trace the result of the expression.
+:eol.
+.* - - - - - - - - -
+.*
+.cp 15
+:h4.Tracing variables
+.pi /Tracing/variables
+:p.
+The :kw.var:ekw. option adds names to a list of monitored
+variables; it can also remove names from the list.  If the name of a
+variable in the current class or method is in the list, then :kw.trace
+results:ekw. is turned on for any assignment, :kw.loop:ekw., or
+:kw.parse:ekw. clause that assigns a new value to the named
+variable.
+:p.
+Variable names are specified by listing them after the :kw.var:ekw.
+keyword.
+Each name may be optionally prefixed by a :m.+:em. or a :m.-:em. sign.
+A :m.+:em. sign indicates that the variable is to be added to the list
+of monitored variables (the default), and a :m.-:em. sign indicates that
+the variable is to be removed from the list.  Blanks may be added before
+and after variable names and signs to separate the tokens and to improve
+readability.
+.cp 7
+:p.For example:
+:xmp.
+trace var a b c
+-- now variables a, b, and c will be traced
+trace var -b -c d
+-- now variables a and d will be traced
+:exmp.
+.*
+:p.:hp2.Notes::ehp2.
+:ol.
+:li.
+Names in the list following the :kw.var:ekw. keyword are simple symbols
+that name variables in the current class or current method.
+The variables may be properties, method arguments, or local variables,
+and may be of any type, including arrays.
+The names are not case-sensitive; any variables whose names match,
+independent of case, will be monitored.
+:li.
+No variable name can appear more than once in the list on one
+:kw.trace var:ekw. instruction.  However, it is not an error to add the
+name of a variable which does not exist or is not then assigned a value.
+Similarly, it is not an error to remove a name which is not currently
+being monitored.
+:li.
+One or more :kw.trace var:ekw. instructions (along with one other
+:kw.trace:ekw. instruction) are allowed before the first method in a
+class.  They all modify an initial list of monitored variables which
+is then used for all methods in the class.  Similarly, :kw.trace
+var:ekw. instructions are allowed before the first class in a program,
+in which case they apply to all classes (except interface classes).
+:li.
+Other :kw.trace:ekw. instructions do not affect the list of monitored
+variables.
+The :kw.trace off:ekw. instruction may be used to turn off tracing
+completely; in this case :kw.trace var:ekw. (with or without any
+variable names) will then turn the tracing of variables back on, using
+the current (or modified) variable list.
+:li.
+For a :kw.parse:ekw. instruction, only monitored variables have their
+assignments traced (unless :kw.trace results:ekw. is already in effect).
+:eol.
+.* - - - - - - - - -
+.cp 15
+:h4.The format of trace output
+.pi /Indention during tracing
+.pi /Formatting/of output during tracing
+:p.
+Trace output is either clauses from the program being traced, or results
+(such as the results from expressions).
+:p.
+.pi /Tracing/line numbers
+.pi /Line numbers, in tracing
+The first clause or result traced on any line will be preceded by its
+line number in the program; this is right-justified in a space which
+allows for the largest line number in the program, plus one blank.
+Following clauses or results from the same line are preceded by white
+space of the same width; however, any change of line number causes the
+line number to be included.
+:p.
+Clauses that are traced will be displayed with the formatting
+(indention) and layout used in the original source stream for the
+program, starting with the first character of the first token of the
+clause.
+:p.
+Results (if requested) are converted to a string for tracing if
+necessary, are not indented, and have a double quote prefixed and
+suffixed so that leading and trailing blanks are apparent; if, however,
+the result being traced is :a id=refswnull.:hp4.null:ehp4.:ea. then the
+string :q.:hp4.&lbrk.null&rbrk.:ehp4.:eq. is shown (without quotes).
+For results with an associated name (the values assigned to local
+variables, method arguments, or properties in the current class), the
+name of the result precedes the data, separated by a single blank.
+:p.
+For clarity, implementations may replace :q.control codes:eq.
+in the encoding of results (for example, EBCDIC values less
+than :hp4.'\x40':ehp4., or Unicode values less than :hp4.'\x20':ehp4.)
+by a question mark (:q.:hp4.?:ehp4.:eq.).
+.pi /Tracing/data identifiers
+:p.All lines displayed during tracing have a three character tag to
+identify the type of data being traced.  This tag follows the line
+number (or the space for a line number), and is separated from the line
+number by a single blank.
+The traced clause or result follows the tag, after another
+blank.
+The identifier tags may be:
+:dl tsize=10mm termhi=4.
+:dt.&z.=&z.
+.pi /*=* tracing flag
+:dd.identifies the first line of the source of a single clause, &ie.,
+the data actually in the program.
+:dt.&z.-&z.
+.pi /*-* tracing flag
+:dd.identifies a continuation line from the source of a single clause.
+Continuations may be due to the use of a :a id=refsemis.continuation
+character:ea. or to the use of a :a id=refblockco.block comment:ea.
+which spans more than one line.
+:dt.>a>
+.pi />a> tracing flag
+:dd.Identifies a value assigned to a method argument of the current
+method.
+The name of the argument is included in the trace.
+:dt.>p>
+.pi />p> tracing flag
+:dd.Identifies a value assigned to a property.
+The name of the property is included in the trace if the property is in
+the current class.
+:dt.>v>
+.pi />v> tracing flag
+:dd.Identifies a value assigned to a local variable in the current
+method.
+The name of the variable is included in the trace.
+:dt.>>>
+.pi />>> tracing flag
+:dd.Identifies the result of an expression evaluation that is not used
+for an assignment (for example, an argument expression in a method
+call).
+.*
+:dt.+++
+.pi /+++ tracing flag
+:dd.Reserved for error messages that are not supplied by the environment
+underlying the implementation.
+:edl.
+:pc.
+.pi /Trace/context
+.pi /Thread/tracing
+If a trace line is produced in a different context (program or thread)
+from the preceding trace line (if any) then a :i.trace context:ei.
+line is shown.  This shows the name of the program that produced the
+trace line, and also the name of the thread (and thread group) of the
+context.
+:p.
+The thread group name is not shown if it is :m.main:em., and in this
+case the thread name is then also suppressed if its name is :m.main:em..
+.*
+.cp 10
+:p.:hp2.Examples::ehp2.
+:p.If the following instructions, starting on line 53 of a 120-line
+program, were executed:
+:xmp.
+trace all
+if i=1 then say 'Hello'
+       else say 'i<>1'
+say -
+ 'A continued line'
+:exmp.
+:pc.the trace output (if :hp1.i:ehp1. were :hp4.1:ehp4.) would be:
+:xmp.
+__54 &z.=&z. if i=1
+     &z.=&z.        then
+     &z.=&z.             say 'Hello'
+  56 &z.=&z. say -
+  57 &z.-&z.  'A continued line'
+:exmp.
+.cp 6
+:p.Similarly, for the 3-line program:
+:xmp.
+trace results
+number=1/7
+parse number before '.' after
+:exmp.
+:pc.the trace output would be:
+:xmp.
+_2 &z.=&z. number=1/7
+   >v> number "0.142857143"
+ 3 &z.=&z. parse number before '.' after
+   >v> before "0"
+   >v> after "142857143"
+:exmp.
+.***
+.cp 5
+:p.:hp2.Notes::ehp2.
+:ol.
+:li.
+Trace output is written to an implementation-defined output stream
+.pi /stderr, used by TRACE
+(typically the :q.standard error:eq. output stream, which lets it be
+redirected to a destination separate from the default destination for
+output which is used by the :kw.say:ekw. instruction).
+:li.In some implementations, the use of :kw.trace:ekw. instructions
+may substantially increase the size of classes and the execution time of
+methods affected by tracing.
+:fn.
+:ri.In the reference implementation, :kw.options notrace:ekw. may be
+used to disable all :kw.trace:ekw. instructions and hence ensure that
+tracing overhead is not accidentally incurred.:eri.
+:efn.
+:li.With some implementations it may be possible to switch tracing on
+externally, without requiring modification to the program.
+:eol.
+.cp 40
+.*.se refkeyend = &
+.ty Page &refkeyend.: Keyword instructions [end]

@@ -1,0 +1,790 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=refnums.Numbers and Arithmetic
+.pi start /Arithmetic
+.pi start /Decimal/arithmetic
+.pi start /Integer arithmetic
+.pi ref /Pure numbers/Numbers
+.pi ref /Simple number/Numbers
+.pi /Arbitrary precision arithmetic
+.pi /Precision/arbitrary
+.pi /Rexx/arithmetic
+:p.NetRexx arithmetic attempts to carry out the usual operations
+(including addition, subtraction, multiplication, and division) in as
+:q.natural:eq. a way as possible.
+What this really means is that the rules followed are those that are
+conventionally taught in schools and colleges.
+However, it was found that unfortunately the rules used vary
+considerably (indeed much more than generally appreciated) from person
+to person and from application to application and in ways that are not
+always predictable.
+The NetRexx arithmetic described here is therefore a compromise which
+(although not the simplest) should provide acceptable results in most
+applications.
+.* - - - - - - - - - - - - - - - - - - - - - - -
+:h3.Introduction
+:p.
+.pi /Numbers
+Numbers can be expressed in NetRexx very flexibly (leading and trailing
+blanks are permitted, exponential notation may be used) and follow
+conventional syntax.
+Some valid numbers are:
+:xmp.
+     12          /&z. A whole number               &z./
+   '-76'         /&z. A signed whole number        &z./
+     12.76       /&z. Some decimal places          &z./
+ ' +  0.003 '    /&z. Blanks around the sign, etc. &z./
+     17.         /&z. Equal to 17                  &z./
+      '.5'       /&z. Equal to 0.5                 &z./
+     4E+9        /&z. Exponential notation         &z./
+      0.73e-7    /&z. Exponential notation         &z./
+:exmp.
+.pi /Exponential notation
+:pc.(Exponential notation means that the number includes a sign and a power
+of ten following an :q.:hp4.E:ehp4.:eq. that indicates how the decimal
+point will be shifted.  Thus :hp4.4E+9:ehp4. above is just a short way
+of writing :hp4.4000000000:ehp4., and :hp4.0.73e-7:ehp4. is short
+for :hp4.0.000000073:ehp4..)
+.*
+.pi /Operators/arithmetic
+.pi /Numbers/arithmetic on
+.pi /Arithmetic/operators
+.pi /Integer division
+.pi /Division/integer
+.pi /Remainder operator
+:p.The arithmetic operators include
+addition (indicated by a :q.:hp4.+:ehp4.:eq.),
+subtraction (:q.:hp4.-:ehp4.:eq.),
+multiplication (:q.:hp4.&z.:ehp4.:eq.),
+power (:q.:hp4.&z.&z.:ehp4.:eq.), and
+division (:q.:hp4./:ehp4.:eq.).
+There are also two further division operators:
+integer divide (:q.:hp4.%:ehp4.:eq.) which divides and returns the integer part, and
+remainder (:q.:hp4.//:ehp4.:eq.) which divides and returns the remainder.
+Prefix plus (:q.:hp4.+:ehp4.:eq.) and
+prefix minus (:q.:hp4.-:ehp4.:eq.) operators are also provided.
+.*
+.pi /Rounding
+:p.When two numbers are combined by an operation, NetRexx uses a set of
+rules to define what the result will be (and how the result is to be
+represented as a character string).
+These rules are defined in the next section, but in summary:
+:ul.
+:li.Results will be calculated with up to some maximum number of
+significant digits.
+That is, if a result required more than 9 digits it would normally be
+rounded to 9 digits.
+For instance, the division of 2 by 3 would result in 0.666666667 (it
+would require an infinite number of digits for perfect accuracy).
+:p.
+You can change the default of 9 significant digits by using the
+:kw.numeric digits:ekw. instruction.  This lets you calculate using
+as many digits as you need &dash. thousands, if necessary.
+.*
+:li.Except for the division and power operators, trailing zeros are
+preserved (this is in contrast to most electronic calculators, which
+remove all trailing zeros in the decimal part of results).
+So, for example:
+:xmp.
+2.40 + 2  =>  4.40
+2.40 - 2  =>  0.40
+2.40 &z. 2  =>  4.80
+2.40 / 2  =>  1.2
+:exmp.
+:pc.This preservation of trailing zeros is desirable for most
+calculations (and especially financial calculations).
+:p.If necessary, trailing zeros may be easily removed with the
+:a id=refstrip.:hp4.strip:ehp4. method:ea., or by division by 1.
+:li.A zero result is always expressed as the single
+digit :hp4.'0':ehp4..
+:li.
+Exponential form is used for a result depending on its value and
+the setting of :kw.numeric digits:ekw. (the default is 9 digits).
+If the number of places needed before the decimal point exceeds this
+setting, or the absolute value of the number is less
+than :hp4.0.000001:ehp4., then the number will be expressed in
+exponential notation; thus
+:xmp.
+1e+6 &z. 1e+6
+:exmp.
+:pc.results in :q.:hp4.1E+12:ehp4.:eq. instead of
+:q.:hp4.1000000000000:ehp4.:eq., and
+:xmp.
+1 / 3E+10
+:exmp.
+:pc.results in :q.:hp4.3.33333333E-11:ehp4.:eq. instead of
+:q.:hp4.0.0000000000333333333:ehp4.:eq..
+:li.
+Any mixture of Arabic numerals (0-9) and :a id=refsyms.Extra digits:ea.
+can be used for the digits in numbers used in calculations.  The results
+are expressed using Arabic numerals.
+:eul.
+.* ======================================================================
+.cp 30
+:h3.Definition
+:p.This definition describes arithmetic for NetRexx strings
+(type :hp4.Rexx:ehp4.).
+The arithmetic operations are identical to those defined in the ANSI
+standard for Rexx.
+.* Note: NetRexx exponential notation is different (sign is required
+.* after E), and NUMERIC FUZZ is absent.
+.pi /ANSI standard/arithmetic definition
+:fn.
+:cit.American National Standard for Information Technology &dash.
+Programming Language REXX, X3.274-1996:ecit., American National
+Standards Institute, New York, 1996.
+.* 167pp
+:efn.
+.* - - - - - - -
+.cp 8
+:h4 id=refdefnum.Numbers
+.pi /Numbers/definition
+:p.A :i.number:ei. in NetRexx is a character string that includes one or
+more decimal digits, with an optional decimal point.
+The decimal point may be embedded in the digits, or may be prefixed or
+suffixed to them.
+The group of digits (and optional point) thus constructed may have
+leading or trailing blanks, and an optional sign (:q.:hp4.+:ehp4.:eq.
+or :q.:hp4.-:ehp4.:eq.) which must come before any digits or decimal
+point.
+The sign may also have leading or trailing blanks.
+Thus:
+.pi /Numeric/part of a number
+.pi /Digits/in numbers
+:xmp.
+sign    ::=  + &vbar. -
+digit   ::=  0 &vbar. 1 &vbar. 2 &vbar. 3 &vbar. 4 &vbar. 5 &vbar. 6 &vbar. 7 &vbar. 8 &vbar. 9
+digits  ::=  digit &lbrk.digit&rbrk....
+numeric ::=  digits . &lbrk.digits&rbrk.
+             &vbar. &lbrk..&rbrk. digits
+number  ::=  &lbrk.blank&rbrk.... &lbrk.sign &lbrk.blank&rbrk....&rbrk.
+             numeric &lbrk.blank&rbrk....
+:exmp.
+:pc.
+.pi /Extra digits/in numbers
+where if the implementation supports :a id=refsyms.extra digits:ea.
+these are also accepted as :hp1.digit:ehp1.s, providing that they
+represent values in the range zero through nine.
+In this case each extra digit is treated as though it were
+the corresponding character in the range 0-9.
+.pi /Period/in numbers
+.pi /. (period)/in numbers
+:p.Note that a single period alone is not a valid number.
+.* Note also that :a id=refsyms.extra digits:ea. are not permitted in
+.* numbers; they are only treated as digits when used in numeric symbols.
+.cp 8
+:h4 id=refndi2.Precision
+.pi /Arithmetic/precision
+.pi /Precision/of arithmetic
+.pi /Significant digits, in arithmetic
+.pi /DIGITS/on NUMERIC instruction
+.pi /NUMERIC/DIGITS
+:p.The maximum number of significant digits that can result from an
+arithmetic operation is controlled by the :kw.digits:ekw. keyword on the
+:a id=refnumeric.:kw.numeric:ekw. instruction:ea.:
+:xmp.
+:kw.numeric digits:ekw. &lbrk.:hp1.expression:ehp1.&rbrk.;
+:exmp.
+:pc.The expression is evaluated and must result in a positive whole
+number.
+This defines the precision (number of significant digits) to which
+arithmetic calculations will be carried out; results will be rounded to
+that precision,
+if necessary.
+:p.If no expression is specified, then the default precision is used.
+The default precision is 9, that is, all implementations must support
+at least nine digits of precision.  An implementation-dependent maximum
+(equal to or larger than 9) may apply: an attempt to exceed this will
+cause execution of the instruction to terminate with an exception.
+Thus if an algorithm is defined to use more than 9 digits then if
+the :kw.numeric digits:ekw. instruction succeeds then the computation
+will proceed and produce identical results to any other implementation.
+:p.Note that :kw.numeric digits:ekw. may set values below the default of
+nine.
+Small values, however, should be used with care &dash. the loss of
+precision and rounding thus requested will affect all NetRexx
+computations, including (for example) the computation of new values for
+the control variable in loops.
+:p.
+In the remainder of this section, the notation :hp4.digits:ehp4. refers
+to the current setting of :kw.numeric digits:ekw..
+This setting may also be referred to in expressions in programs by using
+the :hp4.digits:ehp4. :a id=refspecial.special word:ea..
+.* - - - - -
+.cp 8
+:h4.Arithmetic operators
+.pi /Operators/arithmetic
+.pi /Numbers/arithmetic on
+.pi /Arithmetic/operators
+:p.
+NetRexx arithmetic is effected by the operators :q.:hp4.+:ehp4.:eq.,
+:q.:hp4.-:ehp4.:eq., :q.:hp4.&z.:ehp4.:eq., :q.:hp4./:ehp4.:eq.,
+:q.:hp4.%:ehp4.:eq., :q.:hp4.//:ehp4.:eq., and :q.:hp4.&z.&z.:ehp4.:eq.
+(add, subtract, multiply, divide, integer divide, remainder, and power)
+which all act upon two terms, together with the prefix operators
+:q.:hp4.+:ehp4.:eq. and :q.:hp4.-:ehp4.:eq. (plus and minus)
+which both act on a single term.
+The result of all these operations is a NetRexx string, of
+type :hp4.Rexx:ehp4..
+This section describes the way in which these operations are carried
+out.
+:p.Before every arithmetic operation, the term or terms being operated
+upon have any extra digits converted to the corresponding Arabic numeral
+(the digits 0-9).  They then have leading zeros removed (noting the
+position of any decimal point, and leaving just one zero if all the
+digits in the number are zeros) and are then truncated
+to :hp4.digits+1:ehp4. significant digits
+:fn.
+.pi /Guard digit in arithmetic
+That is, to the precision set by :kw.numeric digits:ekw., plus one extra
+:q.guard:eq. digit.
+:efn.
+(if necessary) before being used in the computation.
+The operation is then carried out under up to double that precision, as
+described under the individual operations below.
+When the operation is completed, the result is rounded if necessary to
+the precision specified by the :kw.numeric digits:ekw. instruction.
+.pi /Rounding/definition
+:p.Rounding is done in the :q.traditional:eq. manner, in that the extra
+(guard) digit is inspected and values of 5 through 9 are rounded up,
+and values of 0 through 4 are rounded down.
+:fn.
+.pi 'Even/odd rounding
+Even/odd rounding would require the ability to calculate to arbitrary
+precision (that is, to a precision not governed by the setting of
+:kw.numeric digits:ekw.) at any time and is therefore not the mechanism
+defined for NetRexx.
+:efn.
+:p.A conventional zero is supplied preceding a decimal point if
+otherwise there would be no digit before it.  Trailing zeros are
+retained for addition, subtraction, and multiplication, according to
+the rules given below, except that a result of zero is always expressed
+as the single character :hp4.'0':ehp4..  For division, insignificant
+trailing zeros are removed after rounding.
+:p.
+The :a id=refformat.:hp4.format:ehp4. method:ea. is defined to allow a
+number to be represented in a particular format if the standard result
+provided by NetRexx does not meet requirements.
+.* - - -
+.cp 8;
+:h4 page.Arithmetic operation rules &dash. basic operators
+.pi /Trailing zeros
+.pi /Arithmetic/operation rules
+:p.The basic operators (addition, subtraction, multiplication, and
+division) operate on numbers as follows:
+:dl termhi=3.
+.cp 8;
+:dt.Addition and subtraction
+.pi /Addition/definition
+.pi /+ plus sign/addition operator
+.pi /Subtraction/definition
+.* .pi key /+- Sub/z/z/ /- subtraction operator
+.pi /&idash. minus sign/subtraction operator
+.pi /Prefix operators/arithmetic
+:dd.
+If either number is zero then the other number, rounded
+to :hp4.digits:ehp4. digits if necessary, is used as the result (with
+sign adjustment as appropriate).
+Otherwise, the two numbers are extended on the right and left as
+necessary up to a total maximum of :hp4.digits+1:ehp4. digits.
+:p.
+The number with smaller absolute value may therefore lose some or
+all of its digits on the right.
+:fn.
+In the example, the number :hp4.yy.yyyyy:ehp4. would have three digits
+truncated if :hp4.digits:ehp4. were :hp4.5:ehp4..
+:efn.
+The numbers are then added or subtracted as appropriate.  For example:
+:xmp.
+xxxx.xxx + yy.yyyyy
+:exmp.
+:pc.becomes:
+[%char
+:xmp.
+.* .'im xeditg1
+  xxxx.xxx00
++ 00yy.yyyyy
+------------
+  zzzz.zzzzz
+.* .'im xeditg2
+:exmp.
+]]
+[%smff
+.sumadd
+]]
+:pc.The result is then rounded to :hp4.digits:ehp4. digits if necessary,
+taking into account any extra (carry) digit on the left after an
+addition, but otherwise counting from the position corresponding to the
+most significant digit of the terms being added or subtracted.
+Finally, any insignificant leading zeros are removed.
+:p.The :i.prefix operators:ei. are evaluated using the same rules;
+the operations :q.:hp4.+number:ehp4.:eq. and :q.:hp4.-number:ehp4.:eq.
+are calculated as :q.:hp4.0+number:ehp4.:eq. and
+:q.:hp4.0-number:ehp4.:eq., respectively.
+.cp 8;
+:dt.Multiplication
+.pi /Multiplication/definition
+.pi /* multiplication operator
+:dd.
+The numbers are multiplied together (:q.long multiplication:eq.)
+resulting in a number which may be as long as the sum of the lengths of
+the two operands.  For example:
+:xmp.
+xxx.xxx &z. yy.yyyyy
+:exmp.
+:pc.becomes:
+:xmp.
+zzzzz.zzzzzzzz
+:exmp.
+:pc.and the result is then rounded to :hp4.digits:ehp4. digits if
+necessary, counting from the first significant digit of the result.
+.cp 8;
+:dt.Division
+.pi '/ division operator
+.pi /Division/definition
+:dd.
+For the division:
+:xmp.
+yyy / xxxxx
+:exmp.
+:pc.the following steps are taken: first, the number
+:q.:hp4.yyy:ehp4.:eq. is extended
+with zeros on the right until it is larger than
+the number :q.:hp4.xxxxx:ehp4.:eq. (with note being taken of the change
+in the power of ten that this implies).  Thus in this example,
+:q.:hp4.yyy:ehp4.:eq.
+might become
+:q.:hp4.yyy00:ehp4.:eq..
+Traditional long division then takes place, which can be written:
+[%char
+:xmp.
+.* .'im xeditg1
+         zzzz
+.*    &Ul.------
+      .------
+xxxxx | yyy00
+.* .'im xeditg2
+:exmp.
+]]
+[%smff
+.sumdiv
+]]
+:pc.The length of the result (:q.:hp4.zzzz:ehp4.:eq.) is such that the
+rightmost :q.:hp4.z:ehp4.:eq. will be at least as far right as the
+rightmost digit of the (extended) :q.:hp4.y:ehp4.:eq. number in the
+example.  During the division, the :q.:hp4.y:ehp4.:eq. number will be
+extended further as necessary, and the :q.:hp4.z:ehp4.:eq. number
+(which will not include any leading zeros) may increase up
+to :hp4.digits+1:ehp4. digits, at which point the division stops and the
+result is rounded.
+Following completion of the division (and rounding if necessary),
+insignificant trailing zeros are removed.
+:edl.
+.cp 15
+:p.:hp2.Examples::ehp2.
+:xmp.
+/&z. With 'numeric digits 5' &z./
+12+7.00     ==  19.00
+1.3-1.07    ==  0.23
+1.3-2.07    ==  -0.77
+1.20&z.3      ==  3.60
+7&z.3         ==  21
+0.9&z.0.8     ==  0.72
+1/3         ==  0.33333
+2/3         ==  0.66667
+5/2         ==  2.5
+1/10        ==  0.1
+12/12       ==  1
+8.0/2       ==  4
+:exmp.
+:note.With all the basic operators, the position of the decimal point
+in the terms being operated upon is arbitrary.
+The operations may be carried out as integer operations with the
+exponent being calculated and applied afterwards.
+Therefore the significant digits of a result are not in any way
+dependent on the position of the decimal point in either of the terms
+involved in the operation.
+.* - - -
+.cp 12
+:h4.Arithmetic operation rules &dash. additional operators
+:p.The operation rules for the power (:q.:hp4.&z.&z.:ehp4.:eq.),
+integer division (:q.:hp4.%:ehp4.:eq.), and remainder
+(:q.:hp4.//:ehp4.:eq.) operators are as follows:
+:dl termhi=3.
+.cp 8;
+:dt id=refpower.Power
+:dd.
+.pi /Exponentiation/definition
+.pi /Power operator/definition
+.pi '** power operator
+The :q.:hp4.&z.&z.:ehp4.:eq. (power) operator raises a number (on the
+left of the operator) to a power (on the right of the operator).
+The term on the right is rounded to :hp4.digits:ehp4. digits (if
+necessary), and must, after any rounding, be a whole number, which may
+be positive, negative, or zero.
+If negative, the absolute value of the power is used, and then the
+result is inverted (divided into 1).
+:p.
+For calculating the power, the number is effectively multiplied by
+itself for the number of times expressed by the power, and finally
+trailing zeros are removed (as though the result were divided by one).
+:p.In practice (see note below for the reasons), the power is
+calculated by the process of left-to-right binary reduction.
+For :q.:hp4.x&z.&z.n:ehp4.:eq.: :q.:hp4.n:ehp4.:eq. is converted to
+binary, and a temporary accumulator is set to 1.
+If :q.:hp4.n:ehp4.:eq. has the value 0 then the initial calculation is
+complete.
+Otherwise each bit (starting at the first non-zero bit) is inspected
+from left to right.
+If the current bit is 1 then the accumulator is multiplied by
+:q.:hp4.x:ehp4.:eq..
+.* [1997.11.22] clarify that squaring does not use power operator
+If all bits have now been inspected then the initial calculation is
+complete, otherwise the accumulator is squared by multiplication and the
+next bit is inspected.
+When the initial calculation is complete, the temporary result is
+divided into 1 if the power was negative.
+:p.
+.* [1997.11.22] clarify that any sign is not part of exponent length
+The multiplications and division are done under the normal
+arithmetic operation rules, detailed earlier in this section, using a
+precision of :hp4.digits+elength+1:ehp4. digits.
+Here, :hp4.elength:ehp4. is the length in decimal digits of the integer
+part of the whole number :q.:hp4.n:ehp4.:eq. (&ie., excluding any sign,
+decimal part, decimal point, or insignificant leading zeros, as though
+the operation :hp4.n%1:ehp4. had been carried out and any sign removed).
+Finally, the result is rounded to :hp4.digits:ehp4. digits, if
+necessary, and insignificant trailing zeros are removed.
+.* .cs 4 on
+.* :fn.The precision specified for the intermediate calculations ensures
+.* that the final result will differ by at most 1, in the least
+.* significant position, from the :q.true:eq. result
+.* (given that the operands are expressed precisely under the current
+.* setting of :kw.numeric:ekw. DIGITS).
+.* Half of this maximum error comes from the intermediate calculation, and
+.* half from the final rounding.
+.* .* Thanks to Don Coppersmith for the analysis leading to
+.* .* this statement.
+.* :efn.
+.* .cs 4 off
+.cp 8;
+:dt.Integer division
+:dd.
+.pi /Integer division/definition
+.pi '% integer division operator
+The :q.:hp4.%:ehp4.:eq. (integer divide) operator divides two numbers
+and returns the integer part of the result.
+.* which is not rounded unless the integer has more digits than the
+.* current setting of :kw.numeric:ekw. DIGITS.
+The result returned is defined to be that which would result from
+repeatedly subtracting the divisor from the dividend while the dividend
+is larger than the divisor.  During this subtraction, the absolute
+values of both the dividend and the divisor are used: the sign of the
+final result is the same as that which would result if normal division
+were used.
+:p.The result returned will have no fractional part (that is, no
+decimal point or zeros following it).
+If the result cannot be expressed exactly within :hp4.digits:ehp4.
+digits, the operation is in error and will fail &dash. that is, the
+result cannot have more digits than the current setting of :kw.numeric
+digits:ekw..
+For example, :hp4.10000000000%3:ehp4. requires ten digits to express the
+result exactly (:hp4.3333333333:ehp4.) and would therefore fail
+if :hp4.digits:ehp4. were :hp4.9:ehp4. or smaller.
+.* Note that this operator may not give the same result as truncating
+.* normal division (which could be affected by rounding).
+.cp 8;
+:dt.Remainder
+:dd.
+.pi /Remainder operator/definition
+.pi '// remainder operator
+.pi ref /Residue/Remainder operator
+.pi ref /Modulo/Remainder operator
+The :q.:hp4.//:ehp4.:eq. (remainder) operator will return the remainder
+from integer division, and is defined
+as being the residue of the dividend after the operation of calculating
+integer division as just described.
+The sign of the remainder, if non-zero, is the same as that of the
+original dividend.
+:p.This operation will fail under the same conditions as integer
+division (that is, if integer division on the same two terms would
+fail, the remainder cannot be calculated).
+.* :pc.The result of the remainder operator may therefore have trailing
+.* zeros.
+:edl.
+.cp 14;
+:p.:hp2.Examples::ehp2.
+:xmp.
+/&z. Again with 'numeric digits 5' &z./
+2&z.&z.3        ==  8
+2&z.&z.-3       ==  0.125
+1.7&z.&z.8      ==  69.758
+2%3         ==  0
+2.1//3      ==  2.1
+10%3        ==  3
+10//3       ==  1
+-10//3      ==  -1
+10.2//1     ==  0.2
+10//0.3     ==  0.1
+3.6//1.3    ==  1.0
+:exmp.
+:p.:hp2.Notes::ehp2.
+:ol.
+:li.A particular algorithm for calculating powers is described, since
+it is efficient (though not optimal) and considerably reduces the
+number of actual multiplications performed.
+It therefore gives better performance than the simpler definition of
+repeated multiplication.
+Since results could possibly differ from those of repeated
+multiplication, the algorithm must be defined here so that different
+implementations will give identical results for the same operation on
+the same values.
+Other algorithms for this (and other) operations may always be used, so
+long as they give identical results to those described here.
+:li.The integer divide and remainder operators are defined so that they
+may be calculated as a by-product of the standard division operation
+(described above).  The division process is ended as soon as the
+integer result is available; the residue of the dividend is the
+remainder.
+:eol.
+.cp 8;
+:h4 page id=refnumco.Numeric comparisons
+.pi /Arithmetic/comparisons
+.pi /Operators/comparative
+.pi /Comparison/of numbers
+.pi /Numbers/comparison of
+:p.Any of the :a id=refcomps.comparative operators:ea. may be used
+for comparing numeric strings.
+However, the strict comparisons (for example, :q.:hp4.==:ehp4.:eq. and
+:q.:hp4.>>:ehp4.:eq.) are not numeric comparative operators and should
+not normally be used for comparing numbers, since they compare from left
+to right and leading and trailing blanks (and leading zeros) are
+significant for these operators.
+:p.Numeric comparison, using the normal comparative operators, is
+effected by subtracting the two numbers (calculating the difference) and
+then comparing the result with :hp4.'0':ehp4. &dash. that is, the
+operation:
+:xmp.
+A ? B
+:exmp.
+:pc.where :q.:hp4.?:ehp4.:eq. is any normal comparative operator, is
+identical to:
+:xmp.
+(A - B) ? '0'
+:exmp.
+:pc.It is therefore the :hp1.difference:ehp1. between two numbers, when
+subtracted under NetRexx subtraction rules, that determines their equality.
+.cp 8
+:h4.Exponential notation
+.pi /Ten, powers of
+.pi /Pure numbers
+:p.The definition of numbers :a id=refdefnum.above:ea.
+describes :q.pure:eq. numbers, in the sense that the character strings
+that describe numbers can be very long.
+.cp 7;
+:p.:hp2.Examples::ehp2.
+:xmp.
+say  10000000000 &z. 10000000000
+/&z. would display: 100000000000000000000 &z./
+
+say  0.00000000001 &z. 0.00000000001
+/&z. would display: 0.0000000000000000000001 &z./
+:exmp.
+:pc.For both large and small numbers some form of exponential notation
+is useful, both to make such long numbers more readable and to make
+evaluation possible in extreme cases.  In addition, exponential notation
+is used whenever the :q.pure:eq. form would give misleading
+information.  For example:
+:xmp.
+numeric digits 5
+say 54321&z.54321
+:exmp.
+:pc.would display :q.:hp4.2950800000:ehp4.:eq. if long form were to be
+used.
+This is misleading, as it appears that the result is an exact multiple
+of 100000, and so NetRexx would express the result in exponential
+notation, in this case :q.:hp4.2.9508E+9:ehp4.:eq..
+.cp 6
+.pi /Numbers/definition
+.pi /Mantissa of exponential numbers
+.pi /Significand of exponential numbers
+.pi /Numeric/part of a number
+.pi /Powers of ten in numbers
+.pi /Exponential notation/definition
+.pi /E-notation/definition
+:p.The definition of :i.number:ei. (see above) is therefore extended
+by replacing the description of :hp4.numeric:ehp4. by the following:
+:xmp.
+mantissa ::=  digits . &lbrk.digits&rbrk.
+              &vbar. &lbrk..&rbrk. digits
+numeric  ::=  mantissa &lbrk.E sign digits&rbrk.
+:exmp.
+:pc.In other words, the numeric part of a number may be followed by an
+:q.:hp4.E:ehp4.:eq. (indicating an exponential part), a sign,
+and an integer following the sign that represents a power of ten that is
+to be applied.
+The :q.:hp4.E:ehp4.:eq. may be in uppercase or lowercase.
+Note that no blanks are permitted within this part of a number, but the
+integer may have leading zeros.
+.cp 7
+:p.:hp2.Examples::ehp2.
+:xmp.
+12E+11  =  1200000000000
+12E-5   =  0.00012
+ 12e+4  =  120000
+:exmp.
+:p.All valid numbers may be used as data for arithmetic.  The results
+of calculations will be returned in exponential form depending on the
+setting of :kw.numeric digits:ekw..
+If the number of places needed before the decimal point
+exceeds :hp4.digits:ehp4., or if the absolute value of the result is
+less than :hp4.0.000001:ehp4., then exponential form will be used.
+The exponential form generated by NetRexx always has a sign following the
+:q.:hp4.E:ehp4.:eq..
+If the exponent is 0 then the exponential part is omitted &dash. that
+is, an exponential part of :q.:hp4.E+0:ehp4.:eq. will never be
+generated.
+:p.If the default format for a number is not satisfactory for a
+particular application, then the :hp4.format:ehp4. method may be used to
+control its format.  Using this, numbers may be explicitly converted to
+exponential form or even forced to be returned in :q.pure:eq. form.
+.pi /Notation/scientific
+.pi /Notation/engineering
+.pi /Exponential notation
+.pi /E-notation
+.pi /Scientific notation
+.pi /Engineering notation
+.pi /FORM/option of NUMERIC instruction
+.pi /NUMERIC/FORM
+:mark id=refnfo2.
+:p.Different exponential notations may be selected with the
+:a id=refnform.:kw.numeric form:ekw. instruction:ea..
+This instruction allows the selection of either scientific or
+engineering notation.
+:i.Scientific notation:ei. adjusts the power of ten so there is a
+single non-zero digit to the left of the decimal point.
+:i.Engineering notation:ei. causes powers of ten to be expressed as a
+multiple of three &dash. the integer part may therefore range
+from :hp4.1:ehp4. through :hp4.999:ehp4..
+.cp 9
+:p.:hp2.Examples::ehp2.
+:xmp.
+numeric form scientific
+say 123.45 &z. 1e11
+/&z. would display: 1.2345E+13 &z./
+
+numeric form engineering
+say 123.45  &z. 1e11
+/&z. would display: 12.345E+12 &z./
+:exmp.
+:p.The default exponential notation is scientific.
+.cp 8;
+:h4 id=refwholed.Whole numbers
+.pi /Whole numbers/definition
+.pi /DIGITS/effect on whole numbers
+:p.Within the set of numbers understood by NetRexx it is useful to
+distinguish the subset defined as :i.whole numbers:ei..
+:p.
+A :i.whole number:ei. in NetRexx is a number that has a decimal part
+which is all zeros (or that has no decimal part).
+.* - - - - -
+.cp 8
+:h4 id=refnumuse.Numbers used directly by NetRexx
+.pi /Numbers/use of by NetRexx
+.pi /Functions/numeric arguments of
+.pi /Rounding/when numbers used
+.pi /DIGITS/rounding when numbers used
+:p.As discussed above, the result of any arithmetic operation is
+rounded (if necessary) according to the setting of :kw.numeric digits:ekw..
+Similarly, when a number (which has not necessarily been involved in an
+arithmetic operation) is used directly by NetRexx then the same rounding
+is also applied, just as though the operation of adding the number
+to :hp4.0:ehp4. had been carried out.
+.* Added [1997.12.20]
+After this operation, the integer part of the number must have no more
+digits than the current setting of :kw.numeric digits:ekw..
+:p.
+In the following cases, the number used must be a whole number and
+an implementation restriction on the largest number that can be used
+may apply:
+.* >>>>> This list also used in error 26 description <<<<<
+:ul.
+:li.positional patterns, including variable positional patterns,
+in :a id=refparsing.parsing templates:ea.
+:li.the power value (right hand operand) of the :a id=refpower.power
+operator:ea.
+:li.the values of :hp1.exprr:ehp1. and :hp1.exprf:ehp1. (following the
+:kw.for:ekw. keyword) in the :a id=refloop.:kw.loop:ekw. instruction:ea.
+:li.the value of :hp1.exprd:ehp1. (following the :kw.digits:ekw.
+keyword) in the :a id=refnumeric.:kw.numeric:ekw. instruction:ea..
+.* :li.any number used in the :hp1.tracesetting:ehp1. in the TRACE
+.* instruction. <- watch dots
+:eul.
+:p.:hp2.Implementation minimum::ehp2. A minimum length of 9 digits must
+be supported for these uses of whole numbers by a NetRexx language
+processor.
+.cp 8;
+:h4.Implementation independence
+.pi /Arithmetic/implementation independence
+:p.The NetRexx arithmetic rules are defined in detail, so that when a
+given program is run the results of all computations are sufficiently
+defined that the same answer will result for all correct
+implementations.  Differences due to the underlying machine
+architecture will not affect computations.
+:p.This contrasts with most other programming languages, and with
+:a id=refbinary.binary arithmetic:ea. in NetRexx, where the
+result obtained may depend on the implementation because the precision
+and algorithms used by the language processor are defined by the
+implementation rather than by the language.
+.cp 8;
+:h4.Exceptions and errors
+.pi /Exceptions/during arithmetic
+.pi /Errors during arithmetic
+.pi /Arithmetic/exceptions
+.pi /Arithmetic/errors
+.pi /Arithmetic/overflow
+.pi /Arithmetic/underflow
+.pi /Overflow, arithmetic
+.pi /Underflow, arithmetic
+:p.The following exceptions and errors may be signalled during arithmetic:
+:ul.
+:li.Divide exception
+:p.This exception will be signalled if division by zero was attempted,
+or if the integer result of an integer divide or remainder operation had
+too many digits.
+:li.Overflow/Underflow exception
+:p.This exception will be signalled if the exponential part of a result
+(from an operation that is not an attempt to divide by zero) would
+exceed the range that can be handled by the language processor, when the
+result is formatted according to the current settings of :kw.numeric
+digits:ekw. and :kw.numeric form:ekw..
+The language defines a minimum capability for the exponential part,
+namely exponents whose absolute value is at least as large as the
+largest number that can be expressed as an exact integer in default
+precision.
+Thus, since the default precision is nine, implementations must support
+exponents in the range :hp4.-999999999:ehp4.
+through :hp4.999999999:ehp4..
+.* :p.Since this allows for large exponents, an implementation may
+.* treat overflow or underflow as a terminating error.
+:li.Insufficient storage
+:p.Storage is needed for calculations and intermediate results, and on
+occasion an arithmetic operation may fail due to lack of storage.
+This is considered an operating environment error as usual, rather
+than an arithmetical exception.
+:eul.
+:p.:ri.In the reference implementation, the exceptions and error types
+used for these three cases
+are :hp4.DivideException:ehp4., :hp4.ExponentOverflowException:ehp4.,
+and :hp4.OutOfMemoryError:ehp4., respectively.:eri.
+.* - - - - -
+.pi end /Arithmetic
+.pi end /Decimal/arithmetic
+.pi end /Integer arithmetic
+.*
+.* .se refearith = &
+.* .ty Page &refearith.: Arithmetic [end]
+.* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+.cp 40

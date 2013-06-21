@@ -1,0 +1,197 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=refexcep.Exceptions
+.ty Page &refexcep.: Exceptions
+.pi /Exceptions
+.pi /Signals
+.pi /Caught exceptions
+:p.
+Exceptional conditions, including errors, in NetRexx are handled by a
+mechanism called :i.Exceptions:ei..
+When an exceptional condition occurs, a :i.signal:ei. takes place
+which may optionally be :i.caught:ei. by an enclosing control
+construct, as detailed below.
+:p.
+An exception can be signalled by:
+:ol.
+:li.the program's environment, when some processing error occurs (such
+as running out of memory, or a problem discovered when reading or
+writing a file)
+:li.a method called by a NetRexx program (if, for example, it is passed
+incorrect arguments)
+:li.the :a id=refsignal.:kw.signal:ekw. instruction:ea..
+:eol.
+:pc.In all cases, the signal is handled in exactly the same way.
+First, execution of the current clause ceases; no further operations
+within the clause will be carried out.
+:fn.
+This is the only case in which an expression will not be wholly
+evaluated, for example.
+:efn.
+Next, an object that represents the exception is constructed.  The type
+of the exception object is implementation-dependent, as described for
+the :a id=refsignal.:kw.signal:ekw. instruction:ea., and defines the
+type of the exception.  The object constructed usually contains
+information about the Exception (such as a descriptive string).
+:p.
+Once the object has been constructed, all active :kw.do:ekw. groups,
+:kw.loop:ekw. loops, :kw.if:ekw. constructs, and :kw.select:ekw.
+constructs in the active method are :q.unwound:eq., starting with the
+innermost, until the exception is caught by a control construct that
+specifies a suitable :kw.catch:ekw. clause (see below) for handling the
+exception.
+:p.
+This unwinding takes place as follows:
+:ol.
+:li.No further clauses within the body of the construct will be executed
+(in this respect, the signal acts like a :kw.leave:ekw. for the
+construct).
+:li.If a :kw.catch:ekw. clause specifies a type to which
+the exception object can be assigned (that is, it matches or is a
+superclass of the type of exception object), then the
+:hp1.instructionlist:ehp1. following that clause is executed, and the
+exception is considered to be handled (no further control constructs
+will be unwound).
+If more than one :kw.catch:ekw. clause specifies a suitable type, the
+first is used.
+:li.The :hp1.instructionlist:ehp1. following the :kw.finally:ekw. clause
+for the construct, if any, is executed.
+:li.The :kw.end:ekw. clause is executed, hence completing execution of
+the construct.
+(The only effect of this is that it is seen when tracing.)
+:li.
+If the exception was handled, then execution resumes as though the
+construct completed normally.  If it was not handled, then the process
+is repeated for any enclosing constructs.
+:eol.
+:p.
+If the exception is not caught by any of the control constructs
+enclosing the original point of the exception signal, then
+the current active method is terminated, without returning any data, and
+the exception is then signalled at the point where the method was
+invoked (that is, in the caller).
+:p.
+The process of unwinding control constructs and terminating the method
+is then repeated in each calling method until the exception is caught or
+the initial program invocation method (the main method) is terminated,
+in which case the program ends and the environment receives the signal
+(it would usually then display diagnostic information).
+.*
+.* - - - - - - -
+.cp 10
+:h4.Syntax and example
+.pi /CATCH/use of
+.pi /FINALLY/use of
+:p.
+The constructs that may be used to handle (catch) an exception are
+:kw.do:ekw. groups, :kw.loop:ekw. loops, and :kw.select:ekw. constructs.
+Specifically, as shown in the syntax diagrams (&qv.), where the
+:kw.end:ekw. clause can appear in these constructs, zero or more
+:kw.catch:ekw. clauses can be used to define exception handlers,
+followed by zero or one :kw.finally:ekw. clauses that describe
+:q.clean-up:eq. code for the construct.
+The whole construct continues to be ended by an :kw.end:ekw. clause.
+:p.
+The syntax of a :kw.catch:ekw. clause is shown in the syntax diagrams.
+It always specifies an :hp1.exception:ehp1. type, which may be
+qualified.  It may optionally specify a symbol, :hp1.vare:ehp1., which
+is followed by an equals sign.  This indicates that when the exception
+is caught then the object representing the exception will be assigned to
+the variable :hp1.vare:ehp1..  If new, the type of the variable will be
+:hp1.exception:ehp1..
+.cp 16
+:p.Here is an example of a program that handles some of the exceptions
+signalled by methods in the :hp4.Rexx:ehp4. class; the :kw.trace
+results:ekw. instruction is included to show the flow of execution:
+.pi /Example/of exception handling
+:xmp.
+trace results
+do                -- could be LOOP i=1 to 10, etc.
+  say 1/arg
+catch DivideException
+  say 'Divide exception'
+catch ex=NumberFormatException
+  /* 'ex' is assigned the exception object */
+  say 'Bad number for division:' ex.getMessage
+finally
+  say 'Done!'
+end
+:exmp.
+:pc.In this example, if the argument passed to the program (and hence
+placed in :hp4.arg:ehp4.) is a valid number, then its inverse is
+displayed.  If the argument is 0, then :q.:hp4.Divide
+exception:ehp4.:eq. would be displayed.  If the argument were an invalid
+number, the message describing the bad number would be displayed.
+For any other exception (such as an :hp4.ExponentOverflowException:ehp4.),
+the program would end and the environment would normally report the
+exception.
+:p.
+In :hp2.all:ehp2. cases, the message :q.:hp4.Done!:ehp4.:eq. would be
+displayed; this would be true even if the body of the :kw.do:ekw.
+construct executed a :kw.return:ekw., :kw.leave:ekw., or
+:kw.iterate:ekw. instruction.  Only an :a id=refexit.:kw.exit:ekw.
+instruction:ea. would cause immediate termination of the construct (and
+the program).
+.*
+:note.The :kw.finally:ekw. keyword, like :kw.otherwise:ekw. in the
+:kw.select:ekw. construct, implies a semicolon after it, so the last
+:kw.say:ekw. instruction in the example could have appeared on the same
+line as the :kw.finally:ekw. without an intervening semicolon.
+.* - - - - - - -
+.cp 10
+:h4.Exceptions after catch and finally clauses
+.pi /Exceptions/after CATCH clause
+.pi /Exceptions/after FINALLY clause
+:p.
+If an exception is signalled in the :hp1.instructionlist:ehp1. following
+a :kw.catch:ekw. or :kw.finally:ekw. clause, then the current exception
+is considered handled, the :hp1.instructionlist:ehp1. is terminated, and
+the new exception is signalled.  It will not be caught by :kw.catch:ekw.
+clauses in the current construct.  If it occurs in the
+:hp1.instructionlist:ehp1. following a :kw.catch:ekw. clause, then any
+:kw.finally:ekw. instructions will be executed, as usual.
+:p.
+Similarly, executing a :kw.return:ekw.
+.* , :kw.leave:ekw., :kw.iterate:ekw.,
+or :kw.exit:ekw. instruction within either of the
+:hp1.instructionlists:ehp1. completes the handling of any pending
+signal.
+.* - - - - - - -
+.cp 10
+:h4 id=refchecked.Checked exceptions
+.pi /Exceptions/checked
+.pi /Checked exceptions
+:p.
+NetRexx implementations may define certain exceptions as :i.checked
+exceptions:ei..  These are exceptions that the implementation considers
+it useful to check; the checked exceptions that each method may signal
+are recorded.  Within :kw.do:ekw. groups, :kw.loop:ekw. loops, and
+:kw.select:ekw. constructs, for example, it is then possible to report
+if a :kw.catch:ekw. clause tries to catch a checked exception that is
+not signalled within the body of the construct.
+:p.
+Checked exceptions that are signalled within a method (by a
+:kw.signal:ekw. instruction or a method invocation) but not caught by a
+:kw.catch:ekw. clause in the method are automatically added to the
+:kw.signals:ekw. list for a method.  Implementations that support
+checked exceptions are encouraged to provide options that list the
+uncaught checked exceptions for methods or enforce the explicit
+inclusion of some or all checked exceptions in the :kw.signals:ekw. list
+on the method instruction.
+:p.
+:ri.In the reference implementation, all exceptions are checked except
+those that are subclasses of :hp4.java.lang.RuntimeException:ehp4.
+or :hp4.java.lang.Error:ehp4..  These latter are considered so
+ubiquitous that almost all methods would signal them.:eri.
+:p.
+:ri.Expressions assigned as the initial values of properties must not invoke
+methods that may signal checked exceptions.:eri.
+:p.
+:ri.The :kw.strictsignal:ekw. option on the :kw.options:ekw. instruction may
+be used to enforce the inclusion of all uncaught checked exceptions in
+methods' :kw.signals:ekw. lists; this may be used to assure that
+any uncaught checked exceptions are intentional.:eri.
+.* - - - - - - -
+.cp 40
