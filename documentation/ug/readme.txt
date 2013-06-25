@@ -1,6 +1,5 @@
-You are looking at the readme for the second release candidate -RC2-  of the NetRexx 3.02 package - NetRexx-3.02RC2.zip
+You are looking at the readme for the NetRexx 3.02 package - NetRexx-3.02GA.zip
 
-This is not the released 3.02 translator.
 
 Changes since 3.02 RC1 include:
 
