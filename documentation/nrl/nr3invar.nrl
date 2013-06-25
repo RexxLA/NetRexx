@@ -1,0 +1,294 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=refinstr.Indexed strings and Arrays
+.pi /Indexed references/indexed strings
+.pi /Indexed strings
+.pi /Strings/indexed
+.pi /Variables/indexed
+.pi /Variables/subscripts
+.pi /Sub-values, of strings
+.pi /Strings/sub-values of
+.pi /Index strings/for sub-values
+.pi /References/to indexed strings
+.pi /Brackets/in indexed strings
+.pi /Comma/in indexed strings
+:p.
+Any NetRexx string (that is, a value of type :hp4.Rexx:ehp4.), has the
+ability to have :i.sub-values:ei., values (also of type :hp4.Rexx:ehp4.)
+which are associated with the original string and are indexed by an
+:i.index string:ei. which identifies the sub-value.
+Any string with such sub-values is known as an :i.indexed string:ei..
+:p.
+The sub-values of a NetRexx string are accessed using :i.indexed
+references:ei., where the name of a variable of type :hp4.Rexx:ehp4. is
+followed immediately by square brackets enclosing one or more
+expressions separated by commas:
+:fn.
+The notations :kw.&vq.&lbrk.&vq.:ekw. and :kw.&vq.&rbrk.&vq.:ekw.
+indicate square brackets appearing in the NetRexx program.
+:efn.
+[%char
+.bx left right
+:xmp.
+:i.symbol:ei.'&lbrk.'&lbrk.:i.expression:ei.&lbrk., :i.expression:ei.&rbrk....&rbrk.'&rbrk.'
+:exmp.
+.bx off
+]]
+[%smff
+.synindex
+]]
+:pc.It is important to note that the :hp1.symbol:ehp1. that names the
+variable must be followed immediately by the :q.:kw.&lbrk.:ekw.:eq.,
+with :hp2.no:ehp2. blank in between, or the construct will not be
+recognized as an indexed reference.
+.* (a :i.blank operator:ei. would be
+.* assumed at that point instead).
+:p.The :hp1.expression:ehp1.s (separated by commas) between the
+brackets are called the :i.indexes:ei. to the string.
+These index expressions are evaluated in turn from left to right, and
+each must evaluate to a value is of type :hp4.Rexx:ehp4. or that can be
+converted to type :hp4.Rexx:ehp4..
+:p.
+The resulting index strings are taken :q.as-is:eq. &dash. that is, they
+must match exactly in content, case, and length for a reference to find
+a previously-set item.
+They may have any length (including the null string) and value (they are
+not constrained to be just those strings which are numbers, for
+example).
+:p.
+If a reference does not find a sub-value, then a copy of the non-indexed
+value of the variable is used.
+.cp 10
+:p.:hp2.Example::ehp2.
+:xmp.
+surname='Unknown'         -- default value
+surname&lbrk.'Fred'&rbrk.='Bloggs'
+surname&lbrk.'Davy'&rbrk.='Jones'
+try='Fred'
+say surname&lbrk.try&rbrk. surname&lbrk.'Bert'&rbrk.
+:exmp.
+:pc.would say :q.:hp4.Bloggs Unknown:ehp4.:eq..
+:p.
+When multiple indexes are used, they indicate accessing a hierarchy of
+strings.  A single NetRexx string has a single set of indexes and
+subvalues associated with it.  The sub-values, however, are also NetRexx
+strings, and so may in turn have indexes and sub-values.  When more than
+one index is specified in an indexed reference, the indexes are applied
+in turn from left to right to each retrieved sub-value.
+.cp 7
+:p.
+For example, in the sequence:
+:xmp.
+x='?'
+x&lbrk.'foo', 'bar'&rbrk.='OK'
+say x&lbrk.'foo', 'bar'&rbrk.
+y=x&lbrk.'foo'&rbrk.
+say y&lbrk.'bar'&rbrk.
+:exmp.
+:pc.both :kw.say:ekw. instructions would display the string
+:q.:hp4.OK:ehp4.:eq..
+.*
+:p.Indexed strings may be used to set up :q.associative arrays:eq., or
+dictionaries, in which the subscript is not necessarily numeric, and
+thus offer great scope for the creative programmer.
+A useful application is to set up a variable in which the subscripts
+are taken from the value of one or more variables, so effecting a form
+of associative (content addressable) memory.
+[%book
+The :a id=refjust1.:hp1.justone:ehp1. program:ea. is an example of this
+technique.
+]]
+.cp 5
+:p.:hp2.Notes::ehp2.
+:ol.
+:li.
+A variable of type :hp4.Rexx:ehp4. must have been assigned a value
+before indexing is used on it.
+This is the value that is used as the default value whenever an indexed
+reference finds no sub-value.
+:li.
+The indexes, and hence the sub-values, of a :hp4.Rexx:ehp4. object can
+be retrieved in turn using the :a id=refloopov.:kw.over:ekw.:ea. keyword
+of the :kw.loop:ekw. instruction.
+:li.
+The :a id=refexists.:hp4.exists:ehp4. method:ea. of the :hp4.Rexx:ehp4.
+class may be used to test whether an indexed reference has an
+explicitly-set value.
+:li.
+Assigning :hp4.null:ehp4. to an indexed reference (for example, the
+assignment :hp4.switch&lbrk.7&rbrk.=null;:ehp4.) drops the sub-value;
+until set to a new value, any reference to the sub-value (including use
+of the :hp4.exists:ehp4. method) will return the same result as
+when it had never been set.
+:eol.
+.* - - - - - - - - - -
+:h3 id=refarray.Arrays
+.pi /Arrays
+.pi /Indexed references/arrays
+.pi /Brackets/in array references
+.pi /Comma/in array references
+:p.
+In addition to indexed strings, NetRexx also includes the concept of
+fixed-size :i.arrays:ei., which may be used for indexing values of any
+type (including strings).
+:p.
+Arrays are used with the same syntax and in the same manner as
+indexed strings, but with important differences that allow for
+compact implementations and access to equivalent data structures
+constructed using other programming languages:
+:ol.
+:li.
+The indexes for arrays must be whole numbers that are zero or positive.
+There will usually be an implementation restriction on the maximum value
+of the index (typically 999999999 or higher).
+:li.
+The elements of an array are considered to be :i.ordered:ei.; the
+first element has index :hp4.0:ehp4., the second :hp4.1:ehp4., and so on.
+:li.
+An array is of fixed size;
+.pi /Fixed size, of arrays
+it must be constructed before use.
+:li.
+Variables that are assigned arrays can only be assigned arrays (of the
+same dimension, see below) in the future.  That is, being an array
+changes the type of a value; it becomes a
+:a id=refdimtype.:i.dimensioned type:ei.:ea..
+:eol.
+:p.
+.pi /Arrays/references
+.pi /References/to arrays
+.pi /Arrays/constructors
+.pi /Constructors/array
+Array references use the NetRexx :i.indexed reference:ei. syntax
+defined above.  The same syntax is used for constructing arrays, except
+that the symbol before the left bracket describes a type (and hence may
+be qualified by a package name).  The expression or expressions between
+the brackets indicate the size of the array in each dimension, and must
+be a positive whole number or zero:
+:xmp.
+arg=String&lbrk.4&rbrk.       -- makes an array for four Strings
+arg=java.io.File&lbrk.4&rbrk. -- makes an array for four Files
+i=int&lbrk.3&rbrk.            -- makes an array for three 'int's
+:exmp.
+:pc.
+(Another way of describing this is that array constructors look
+just like other object constructors, except that brackets are
+used instead of parentheses.)
+:p.
+Once an array has been constructed, its elements can be referred to
+using brackets and expressions, as before:
+:xmp.
+i&lbrk.2&rbrk.=3 -- sets the '2'-indexed value of 'i'
+j=i&lbrk.2&rbrk. -- sets 'j' to the '2'-indexed value of 'i'
+:exmp.
+:p.
+Regular multiple-dimensioned arrays may be constructed and referenced by
+using multiple expressions within the brackets:
+:xmp.
+i=int&lbrk.2,3&rbrk. -- makes a 2x3 array of 'int' type objects
+i&lbrk.1,2&rbrk.=3   -- sets the '1,2'-indexed value of 'i'
+j=i&lbrk.1,2&rbrk.   -- sets 'j' to the '1,2'-indexed value of 'i'
+:exmp.
+:p.As with indexed strings, when multiple indexes are used, they
+indicate accessing a hierarchy of arrays (the underlying model is
+therefore of a hierarchy of single-dimensioned arrays).
+When more than one index is specified in an indexed reference to an
+array, the indexes are applied in turn from left to right to each
+array.
+:p.
+As described in the section on :a id=reftypes.:hp1.Types:ehp1.:ea., the
+type of a variable that refers to an array can be set (declared) by
+assignment of the type with array notation that indicates the dimension
+of an array without any sizes:
+:xmp.
+k=int&lbrk.&rbrk.     -- one-dimensional array of 'int' objects
+m=float&lbrk.,,&rbrk. -- 3-dimensional array of 'float' objects
+:exmp.
+:pc.
+The same syntax is also used when describing an array type in the
+arguments of a :kw.method:ekw. instruction or when converting types.
+For example, after:
+:xmp.
+gg=char&lbrk.&rbrk. "Horse"
+:exmp.
+:pc.the variable :hp4.gg:ehp4. has as its value an array of
+type :hp4.char&lbrk.&rbrk.:ehp4. containing the five
+characters :hp4.H:ehp4., :hp4.o:ehp4., :hp4.r:ehp4., :hp4.s:ehp4.,
+and :hp4.e:ehp4..
+.* - - - - - - - - - -
+:h4 id=refarrin.Array initializers
+.pi /Arrays/initializing
+.pi /Initializing arrays
+.pi /Array initializer/in terms
+.pi /Brackets/in array initializers
+.pi /Square brackets/in array initializers
+:p.
+An :i.array initializer:ei. is a :hp1.simple term:ehp1. which is
+recognized if it does not immediately follow (abut) a symbol, and has
+the form
+:fn.
+The notations :kw.&vq.&lbrk.&vq.:ekw. and :kw.&vq.&rbrk.&vq.:ekw.
+indicate square brackets appearing in the NetRexx program.
+:efn.
+[%char
+:xmp.
+:kw.'&lbrk.':ekw.:hp1.expression:ehp1.&lbrk.,:hp1.expression:ehp1.&rbrk....:kw.'&rbrk.':ekw.
+:exmp.
+]]
+[%smff
+.synarrin
+]]
+:p.
+An array initializer therefore comprises a list of one or more
+expressions, separated by commas, within brackets.  When an array
+initializer is evaluated, the expressions are evaluated in turn from
+left to right, and all must result in a value.
+An array is then constructed, with a number of elements
+equal to the number of expressions in the list, with each element
+initialized by being assigned the result of the corresponding
+expression.
+:p.
+The type of the array is derived by adding one dimension to the type of
+the result of the first expression in the list, where the type of that
+expression is determined using the same rules as are used to select the
+type of a variable when it is first :a id=refassign.assigned a
+value:ea..
+All the other expressions in the list must have types that could be
+assigned to the chosen type without error.
+.cp 9
+:p.
+For example, in
+:xmp.
+var1=&lbrk.'aa', 'bb', 'cc'&rbrk.
+var2=&lbrk.char 'a', 'b', 'c'&rbrk.
+var3=&lbrk.String 'a', 'bb', 'c'&rbrk.
+var4=&lbrk.1, 2, 3, 4, 5, 6&rbrk.
+var5=&lbrk.&lbrk.1,2&rbrk., &lbrk.3,4&rbrk.&rbrk.
+:exmp.
+:pc.the types of the variables would
+be :hp4.Rexx&lbrk.&rbrk.:ehp4., :hp4.char&lbrk.&rbrk.:ehp4., :hp4.String&lbrk.&rbrk.:ehp4., :hp4.Rexx&lbrk.&rbrk.:ehp4.,
+and :hp4.Rexx&lbrk.,&rbrk.:ehp4. respectively.
+In a binary class in the reference implementation, the types would
+be :hp4.String&lbrk.&rbrk.:ehp4., :hp4.char&lbrk.&rbrk.:ehp4., :hp4.String&lbrk.&rbrk.:ehp4., :hp4.int&lbrk.&rbrk.:ehp4.,
+and :hp4.int&lbrk.,&rbrk.:ehp4..
+:p.
+Array initializers are most useful for initializing properties and
+variables, but like other simple terms, they may start a compound term.
+.cp 3
+:p.
+So, for example
+:xmp.
+say &lbrk.1,1,1,1&rbrk..length
+:exmp.
+:pc.would display :hp4.4:ehp4..
+.*
+:p.Note that an array of length zero cannot be constructed with an array
+initializer, as its type would be undefined.  An explicitly typed array
+constructor (for example, :hp4.int&lbrk.0&rbrk.:ehp4.) must be used.
+.* - - - - - - - - - -
+.* :li.:ri.In the reference implementation, array initializers require
+.* Java 1.1.:eri.
+.*
+.cp 40

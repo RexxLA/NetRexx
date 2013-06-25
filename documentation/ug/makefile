@@ -17,7 +17,7 @@ $(TARGET).pdf: $(TEX_SRC)
 		$(LATEX_EXE) $(TARGET).tex; \
 		makeindex $(TARGET); \
 	done
-	mv quickstart.pdf "NetRexx Quickstart Guide pre3.02.pdf"
+	mv quickstart.pdf "NetRexx Quickstart Guide 3.02.pdf"
 
 $(TARGET).bbl: $(TEXSRC) $(BIBSRC)
 	$(LATEX_EXE) $(TARGET).tex
@@ -32,4 +32,14 @@ clean:
 	rm -f *.class
 	rm -f *.crossref
 	rm -f *.aux
+	rm -f *.log
+	rm -f *.lot
+	rm -f *.idx
+	rm -f *.ilg
+	rm -f *.lol
+	rm -f *.rai
+	rm -f *.rao
+	rm -f *.toc
+	rm -f *.lof
+	rm -f *.out
 	rm -f *~

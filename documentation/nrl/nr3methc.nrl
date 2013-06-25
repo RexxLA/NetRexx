@@ -1,0 +1,389 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=refmethcon.Methods and Constructors
+.ty Page &refmethcon.: Methods and Constructors
+.pi /Methods
+.pi /Methods/invocation of
+.pi /Parentheses/in method calls
+.pi /Comma/in method calls
+.pi ref /Routines/Methods
+:p.
+Instructions in NetRexx are grouped into :i.methods:ei., which are
+named routines that always belong to (are part of) a :i.class:ei..
+:p.
+.pi /References/to methods
+Methods are invoked by being referenced in a :a id=refterms.term:ea.,
+which may be part of an expression or be a clause in its own right (a
+method call instruction).
+In either case, the syntax used for a method invocation is:
+[%char
+:xmp.
+:hp1.symbol:ehp1.(&lbrk.:hp1.expression:ehp1.&lbrk.,:hp1.expression:ehp1.&rbrk....&rbrk.)
+:exmp.
+]]
+[%smff
+.synmeth1
+]]
+.pi /Arguments/of methods
+.pi /Arguments/passing to methods
+:p.The :hp1.symbol:ehp1., which must be non-numeric, is called the
+:i.name:ei. of the method.
+It is important to note that the name of the method must be followed
+immediately by the :q.:kw.(:ekw.:eq., with :hp2.no:ehp2. blank in
+between, or the construct will not be recognized as a method call
+(a :i.blank operator:ei. would be assumed at that point instead).
+:p.The :hp1.expression:ehp1.s (separated by commas) between the
+parentheses are called the :i.arguments:ei. to the method.
+Each argument expression may include further method calls.
+:p.The argument expressions are evaluated in turn from left to right
+and the resulting values are then passed to the method (the procedure
+for locating the method is described below).
+The method then executes some algorithm (usually dependent on any
+arguments passed, though arguments are not mandatory) and will
+eventually return a value.
+This value is then included in the original expression just as though
+the entire method reference had been replaced by the name of a variable
+whose value is that returned data.
+:p.
+For example, the :hp4.substr:ehp4. method is provided for strings of
+type :hp4.Rexx:ehp4. and could be used as:
+:xmp.
+c='abcdefghijk'
+a=c.substr(3,7)
+/&z. would set A to "cdefghi" &z./
+:exmp.
+:pc.Here, the value of the variable :hp4.c:ehp4. is a string (of
+type :hp4.Rexx:ehp4.).
+The :hp4.substr:ehp4. (substring) method of the :hp4.Rexx:ehp4. class is
+then invoked, with arguments :hp4.3:ehp4. and :hp4.7:ehp4., on the value
+referred to by :hp4.c:ehp4..
+That is, the the properties available to (the context of)
+the :hp4.substr:ehp4. method are the properties constructed from the
+literal string :hp4.'abcdefghijk':ehp4..
+The method returns the substring of the value, starting at the third
+character and of length seven characters.
+.pi /Arguments/passing to methods
+:p.
+A method may have a variable number of arguments: only those
+required need be specified.
+For example, :hp4.'ABCDEF'.substr(4):ehp4. would return the
+string :hp4.'DEF':ehp4., as the :hp4.substr:ehp4. method will assume
+that the remainder of the string is to be returned if no length is
+provided.
+:p.
+Method invocations that take no arguments may omit the (empty)
+parentheses in circumstances where this would not be ambiguous.
+See the section on :a id=refterms.:hp1.Terms:ehp1.:ea. for details.
+:p.
+:hp2.Implementation minimum::ehp2. At least 10 argument expressions
+should be allowed in a method call.
+.* - - -
+.cp 10
+:h3 id=refmcalli.Method call instructions
+.pi /Method call instructions
+.pi /Subroutines/calling
+:p.
+When a clause in a method consists of just a term, and the final part of
+the term is a method invocation, the clause is a :i.method call
+instruction:ei.:
+[%char
+.bx left right
+:xmp.
+:hp1.symbol:ehp1.(&lbrk.:hp1.expression:ehp1.&lbrk.,:hp1.expression:ehp1.&rbrk....&rbrk.);
+:exmp.
+.bx off
+]]
+[%smff
+.synmeth
+]]
+:pc.The method is being called as a subroutine of the current method, and
+any returned value is discarded.
+In this case (and in this case only), the method invoked need not return
+a value (that is, the :kw.return:ekw. instruction that ends it need not
+specify an expression).
+:fn.
+A method call instruction is equivalent to the :kw.call:ekw. instruction
+of other languages, except that no keyword is required.
+:efn.
+:p.
+A method call instruction that is the first instruction in a constructor
+(see below) can only invoke the special constructors :hp4.this:ehp4.
+and :hp4.super:ehp4..
+.* - - - - - -
+.cp 10
+:h3 id=refsmeth.Method resolution (search order)
+.pi /Resolution of methods
+.pi /Search order/for methods
+.pi /Methods/resolution of
+:p.
+Method resolution in NetRexx proceeds as follows:
+:ul.
+:li.
+If the method invocation is the first part (stub) of a term, then:
+:ol.
+:li.
+The current class is searched for the method (see below for details of
+searching).
+:li.If not found in the current class, then the superclasses of the
+current class are searched, starting with the class that the current
+class extends.
+:li.
+If still not found, then the classes listed in the :kw.uses:ekw. phrase
+of the :kw.class:ekw. instruction are searched for the method, which in
+this case must be a :a id=refstatmet.static method:ea..
+Each class from the list is searched for the method, and then its
+superclasses are searched upwards from the class; this process is
+repeated for each of the classes, in the order specified in the list.
+:li.
+If still not found, the method invocation must be a constructor (see
+below) and so the method name, which may be qualified by a package name,
+should match the name of a primitive type or a known class (type).
+The specified class is then searched for a constructor that matches the
+method invocation.
+:eol.
+:li.
+If the method invocation is not the first part of the term, then the
+evaluation of the parts of the term to the left of the method invocation
+will have resulted in a value (or just a type), which will have a known
+type (the continuation type).
+Then:
+:ol.
+:li.
+The class that defines the continuation type is searched for the method
+(see below for details of searching).
+:li.If not found in that class, then the superclasses of that class are
+searched, starting with the class that that class extends.
+:eol.
+:p.If the search did not find a method, an error is reported.
+:p.
+If the search did find a method, that is the method which is invoked,
+except in one case:
+:ul.
+:li.If the evaluation so far has resulted in a value (an object), then
+that value may have a type which is a subclass of the continuation type.
+If, within that subclass, there is a method that
+:a id=refoverrid.exactly overrides:ea. the method that was found in the
+search, then the method in the subclass is invoked.
+:eul.
+:pc.
+This case occurs when an object is earlier assigned to a variable of a
+type which is a superclass of the type of the object.  This type
+simplification hides the real type of the object from the language
+processor, though it can be determined when the program is executed.
+:eul.
+.* - - - - -
+.cp 5
+:p.
+.pi /Methods/searching for
+.pi /Matching methods
+Searching for a method in a class proceeds as follows:
+:ol.
+:li.
+Candidate methods in the class are selected.
+To be a candidate method:
+:ul.
+:li.
+the method must have the same name as the method invocation (independent
+of the :a id=refcase.case:ea. of the letters of the name)
+:li.
+the method must have the same number of arguments as the method
+invocation (or more arguments, provided that the remainder are shown as
+optional in the method definition)
+:li.
+it must be possible to assign the result of each argument expression to
+the type of the corresponding argument in the method definition (if
+strict type checking is in effect, the types must match exactly).
+:eul.
+:li.
+If there are no candidate methods then the search is complete; the
+method was not found.
+:li.If there is just one candidate method, that method is used; the
+search is complete.
+:li.
+If there is more than one candidate method, the sum of the
+:a id=refcosts.costs of the conversions:ea. from the type of each
+argument expression to the type of the corresponding argument defined
+for the method is computed for each candidate method.
+:li.
+The costs of those candidates (if any) whose names match the method
+invocation exactly, including in case, are compared; if one has a lower
+cost than all others, that method is used and the search is complete.
+:li.
+The costs of all the candidates are compared; if one has a lower
+cost than all others, that method is used and the search is complete.
+:li.
+If there remain two or more candidates with the same minimum cost, the
+method invocation is ambiguous, and an error is reported.
+:eol.
+:note.When a method is found in a class, superclasses of that class are
+not searched for methods, even though a lower-cost method may exist in a
+superclass.
+.* - - - - -
+.cp 15
+:h3 id=refoverrid.Method overriding
+.pi /Methods/overriding
+.pi /Overriding methods
+:p.
+A method is said to :i.exactly override:ei. a method in another class
+if
+:ol.
+:li.the method in the other class has the same name as the current method
+:li.the method in the other class is not :kw.private:ekw.
+:li.the other class is a superclass of the current class, or is a class
+that the current class implements (or is a superclass of one of those
+classes).
+:li.the number and type of the arguments of the method in the other
+class exactly match the number and type of the arguments of the current
+method (where subsets are also checked, if either method has optional
+arguments).
+:eol.
+:pc.For example, the :hp4.Rexx:ehp4. class includes a
+:a id=refsubstr.:hp4.substr:ehp4.:ea. method, which takes from one to
+three strings of type :hp4.Rexx:ehp4..  In the class:
+:xmp.
+class mystring extends Rexx
+  method substr(n=Rexx, length=Rexx)
+    return this.reverse.substr(n, length)
+
+  method substr(n=int, length=int)
+    return this.reverse.substr(Rexx n, Rexx length)
+:exmp.
+:pc.the first method exactly overrides the :hp4.substr:ehp4. method in
+the :hp4.Rexx:ehp4. class, but the second does not, because the types of
+the arguments do not match.
+:p.
+A method that exactly overrides a method is assumed to be an extension
+of the overridden method, to be used in the same way.  For such a
+method, the following rules apply:
+:ul.
+:li.It must return a value of the same type as the overridden method (or
+none, if the overridden method returns none).
+.* Following list item is missing from book due to extra :li. (!)
+:li.It must be at least as visible as the overridden routine.
+For example, if the overridden routine is :kw.public:ekw. then it must
+also be :kw.public:ekw..
+:li.If the overridden method is :kw.static:ekw. then it must also
+be :kw.static:ekw..
+:li.If the overridden method is not :kw.static:ekw. then it must
+not be :kw.static:ekw..
+:li.If the underlying implementation checks :a id=refexcep.exceptions:ea.,
+only those checked exceptions that are signalled by the overridden
+method may be left uncaught in the current method.
+:eul.
+.* - - - - - - - - - - - - - - -
+.cp 15
+:h3 id=refcons.Constructor methods
+.pi /Constructors
+.pi ref /Constructor methods/Constructors
+.pi /Methods/constructor
+.pi /Objects/constructing
+.pi /Instance, of a class
+.pi /Class/instances of
+:p.
+As described above, methods are usually invoked in the context of an
+existing value or type.
+A special kind of method, called a constructor method, is used to
+actually create a value of a given type (an object).
+:p.
+Constructor methods always have the same short name as the class in
+which they are found, and construct and return a value of the type
+defined by that class (sometimes known as an :i.instance:ei. of that
+class).
+If the class is part of a package, then the constructor call may be
+qualified by the package name.
+.cp 7
+:p.:hp2.Example constructors::ehp2.
+:xmp.
+File('Dan.yr.Ogof')
+java.io.File('Speleogroup.letter')
+Rexx('some words')
+netrexx.lang.Rexx(1)
+:exmp.
+:p.
+.pi /Constructors/default
+There will always be at least one constructor if values can be created
+for a class.  NetRexx will add a default public constructor that takes
+no arguments if no constructors are provided, unless the components of
+the class are all static or constant, or the class is an interface
+class.
+.cp 3
+:p.
+All constructors follow the same rules as other methods, and in
+addition:
+:ol.
+:li.Constructor calls always include parentheses in the syntax, even
+if no arguments are supplied.  This distinguishes them from a reference
+to the type of the same name.
+:li.Constructors must call a constructor of their superclass (the class
+they extend) before they carry out any initialization of their own.
+This is so any initialization carried out by the superclass takes
+place, and at the appropriate moment.
+Only after this call is complete can they make any reference to the
+special words :a id=refspecial.:hp4.this:ehp4. or :hp4.super:ehp4.:ea..
+:p.
+Therefore, the first instruction in a constructor must be either a call
+to the superclass, using the special constructor :hp4.super():ehp4.
+(with optional arguments), or a call to to another constructor in the
+same class, using the special constructor :hp4.this():ehp4. (with
+optional arguments).
+In the latter case, eventually a constructor that explicitly
+calls :hp4.super():ehp4. will be invoked and the chain of local
+constructor calls ends.
+:p.
+As a convenience, NetRexx will add a default call to :hp4.super():ehp4.,
+with no arguments, if the first instruction in a constructor is not a
+call to :hp4.this():ehp4. or :hp4.super():ehp4..
+:li.
+The properties of a constructed value are initialized, in the order
+given in the program, after the call to :hp4.super():ehp4. (whether
+implicit or explicit).
+:li.
+By definition, constructors create a value (object) whose type is
+defined by the current class, and then return that value for use.
+Therefore, the :kw.returns:ekw. keyword on the
+:a id=refmethod.:kw.method:ekw. instruction:ea. that introduces the
+constructor is optional (if given, the type specified must be that of
+the class).
+Similarly, the only possible forms of the :kw.return:ekw. instruction
+used in a constructor are either :q.:hp4.return this;:ehp4.:eq., which
+returns the value that has just been constructed, or just
+:q.:hp4.return;:ehp4.:eq., in which case, the :q.:hp4.this:ehp4.:eq. is
+assumed (this form will be assumed at the end of a method, as usual, if
+necessary).
+:eol.
+.cp 12
+:p.
+.pi /Example/of constructors
+Here is an example of a class with two constructors, showing the use
+of :hp4.this():ehp4. and :hp4.super():ehp4., and taking advantage of
+some of the assumptions:
+:xmp.
+class MyChars extends SomeClass
+
+  properties private
+    /&z. the data 'in' the object &z./
+    value=char&lbrk.&rbrk.
+
+  /&z. construct the object from a char array &z./
+  method MyChars(array=char&lbrk.&rbrk.)
+    /&z. initialize superclass &z./
+    super()
+    value=array             -- save the value
+
+  /&z. construct the object from a String &z./
+  method MyChars(s=String)
+    /&z. convert to char&lbrk.&rbrk. and use the above &z./
+    this(s.toCharArray())
+:exmp.
+.cp 4
+:p.
+Objects of type :hp4.MyChars:ehp4. could then be created thus:
+:xmp.
+myvar=MyChars("From a string")
+:exmp.
+:pc.
+or by using an argument that has type :hp4.char&lbrk.&rbrk.:ehp4..
+.* - - - - - -
+.cp 35

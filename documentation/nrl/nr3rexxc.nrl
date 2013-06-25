@@ -1,0 +1,1704 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+.*
+:h2 id=refbmeth.Methods for NetRexx strings
+.ty Page &refbmeth.: NetRexx methods
+.pi ref /Built-in methods/Method, built-in
+.pi start /Built-in methods
+.pi start /Methods/built-in
+.pi start /Methods/NetRexx
+.pi start /Utility methods
+.* .pi start /Conversion methods
+.pi ref /Text formatting/Formatting
+.pi ref /Word processing/Formatting
+.pi ref /Text formatting/Words
+.pi ref /Word processing/Words
+.pi /Rexx/class/methods of
+:p.This section describes the set of methods defined for the NetRexx
+string class, :hp4.Rexx:ehp4..  These are called :i.built-in
+methods:ei., and include character manipulation, word manipulation,
+conversion, and arithmetic methods.
+[%www
+:p.The following methods are defined:
+:p.
+:a id=refabbrev.abbrev:ea.
+:a id=refabs.abs:ea.
+:a id=refb2x.b2x:ea.
+:a id=refcenter.center:ea.
+:a id=refcentre.centre:ea.
+:a id=refchastr.changestr:ea.
+:a id=refcompar.compare:ea.
+:a id=refcopies.copies:ea.
+:a id=refcopyind.copyindexed:ea.
+:a id=refcoustr.countstr:ea.
+:a id=refc2d.c2d:ea.
+:a id=refc2x.c2x:ea.
+:a id=refdataty.datatype:ea.
+:a id=refdelstr.delstr:ea.
+:a id=refdelword.delword:ea.
+:a id=refd2c.d2c:ea.
+:a id=refd2x.d2x:ea.
+:a id=refexists.exists:ea.
+:a id=refformat.format:ea.
+:a id=refinsert.insert:ea.
+:a id=reflastpos.lastpos:ea.
+:a id=refleft.left:ea.
+:a id=reflength.length:ea.
+:a id=reflower.lower:ea.
+:a id=refmax.max:ea.
+:a id=refmin.min:ea.
+:a id=refoverlay.overlay:ea.
+:a id=refpos.pos:ea.
+:a id=refreverse.reverse:ea.
+:a id=refright.right:ea.
+:a id=refsequen.sequence:ea.
+:a id=refsign.sign:ea.
+:a id=refspace.space:ea.
+:a id=refstrip.strip:ea.
+:a id=refsubstr.substr:ea.
+:a id=refsubword.subword:ea.
+:a id=reftrans.translate:ea.
+:a id=reftrunc.trunc:ea.
+:a id=refupper.upper:ea.
+:a id=refverify.verify:ea.
+:a id=refword.word:ea.
+:a id=refwordind.wordindex:ea.
+:a id=refwordlen.wordlength:ea.
+:a id=refwordpos.wordpos:ea.
+:a id=refwords.words:ea.
+:a id=refx2b.x2b:ea.
+:a id=refx2c.x2c:ea.
+:a id=refx2d.x2d:ea.
+]]
+:p.
+Implementations will also provide other methods for the :hp4.Rexx:ehp4.
+class (for example, to implement the NetRexx operators or to provide
+constructors with primitive arguments), but these are not part of the
+NetRexx language.
+:fn.
+:ri.Details of the methods provided in the reference implementation are
+included in :a id=refappc.Appendix C:ea..:eri.
+:efn.
+.*
+:h4.General notes on the built-in methods:
+:ol.
+:li.All methods work on a NetRexx string of type :hp4.Rexx:ehp4.; this
+is referred to by the name :hp1.string:ehp1. in the descriptions of the
+methods.  For example, if the :hp4.word:ehp4. method were invoked using
+the term:
+:xmp.
+"Three word phrase".word(2)
+:exmp.
+:pc.then in the description of :hp4.word:ehp4. the name
+:hp1.string:ehp1. refers to the string :q.:hp4.Three word
+phrase:ehp4.:eq., and the name :hp1.n:ehp1. refers to the string
+:q.:hp4.2:ehp4.:eq..
+:li.All method arguments are of type :hp4.Rexx:ehp4. and all methods
+return a string of type :hp4.Rexx:ehp4.; if a number is returned, it
+will be formatted as though 0 had been added with no rounding.
+:li.
+The first parenthesis in a method call must immediately follow the name
+of the method, with no space in between.
+:li.The parentheses in a method call can be omitted if no
+arguments are required and the method call is part of a
+:a id=refcomterm.:i.compound term:ei.:ea..
+:fn.
+Unless an implementation-provided option to disallow parenthesis
+omission is in force.
+:efn.
+:li.A position in a string is the number of a character in the string,
+where the first character is at position 1, &etc.
+.* :li.If an argument specifies a length, then it must be a non-negative
+.* whole number.
+.* it specifies a start character or word in a string, then it must be
+.* a positive whole number unless otherwise stated.
+:li.Where arguments are optional, commas may only be included between
+arguments that are present (that is, trailing commas in argument lists
+are not permitted).
+:li.A :i.pad:ei. argument, if specified, must be exactly one
+character long.
+:li.If a method has a sub-option selected by the first character of a
+string, that character may be in upper or lowercase.
+:li.Conversion between character encodings and decimal or hexadecimal
+is dependent on the machine representation (encoding) of characters
+and hence will return appropriately different results for Unicode,
+ASCII, EBCDIC, and other implementations.
+:eol.
+.*----------------------------------------------------------------------
+.cp 20
+:h3 page.The built-in methods
+.* .se fc = 0
+.* .se h7 = '.cm'
+.* .se gives = '=='
+:dl tsize=32mm termhi=5.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refabbrev.abbrev(info &lbrk.,length&rbrk.)
+.* &h7.ABBREV
+.pi /ABBREV method
+.pi /Method, built-in/ABBREV
+.pi /Abbreviations/testing with ABBREV method
+:dd.
+returns 1 if :hp1.info:ehp1. is equal to the leading characters of
+:hp1.string:ehp1. and :hp1.info:ehp1. is not less than
+the minimum length, :hp1.length:ehp1.; 0 is returned
+if either of these conditions is not met.
+:hp1.length:ehp1. must be a non-negative whole number; the default is
+the length of :hp1.info:ehp1..
+.cp 8;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Print'.abbrev('Pri')   == 1
+'PRINT'.abbrev('Pri')   == 0
+'PRINT'.abbrev('PRI',4) == 0
+'PRINT'.abbrev('PRY')   == 0
+'PRINT'.abbrev('')      == 1
+'PRINT'.abbrev('',1)    == 0
+:exmp.
+:note.A null string will always match if a length of 0 (or the default)
+is used.
+This allows a default keyword to be selected automatically if desired.
+.cp 5;
+:p.:hp2.Example::ehp2.
+:xmp.
+say 'Enter option:';  option=ask
+select  /&z. keyword1 is to be the default &z./
+  when 'keyword1'.abbrev(option) then ...
+  when 'keyword2'.abbrev(option) then ...
+     ...
+  otherwise ...
+  end
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refabs.abs()
+.* &h7.ABS
+.pi /ABS method
+.pi /Method, built-in/ABS
+.pi /Mathematical method/ABS
+.pi /Absolute/value, finding using ABS method
+:dd.
+returns the absolute value of :hp1.string:ehp1., which must be a
+number.
+:p.
+Any sign is removed from the number, and it is then formatted by adding
+zero with a digits setting that is either nine or, if greater, the
+number of digits in the mantissa of the number (excluding leading
+insignificant zeros).
+Scientific notation is used, if necessary.
+.cp 6
+:p.:hp2.Examples::ehp2.
+:xmp.
+'12.3'.abs              == 12.3
+' -0.307'.abs           == 0.307
+'123.45E+16'.abs        == 1.2345E+18
+'- 1234567.7654321'.abs == 1234567.7654321
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refb2x.b2x()
+.pi /B2X method
+.pi /Packing a string/with B2X
+.pi /Method, built-in/B2X
+.pi /Conversion/binary to hexadecimal
+.pi /Binary/conversion to hexadecimal
+.* &h7.B2X
+:dd.
+Binary to hexadecimal.
+Converts :hp1.string:ehp1., a string of at least one binary
+(:hp4.0:ehp4. and/or :hp4.1:ehp4.) digits, to an equivalent string of
+hexadecimal characters.
+The returned string will use uppercase Roman letters for the values A-F,
+and will not include any blanks.
+:p.
+.* :hp1.string:ehp1. may be of any length, and if it is the null
+.* string then a null string is returned.
+If the number of binary digits in the string is not a multiple of four,
+then up to three :hp4.'0':ehp4. digits will be added on the left before
+conversion to make a total that is a multiple of four.
+.* :p.Blanks may optionally be included in :hp1.string:ehp1. (at four-digit
+.* boundaries only, corresponding to the returned hexadecimal character
+.* boundaries, and not leading or trailing) to aid readability; they are
+.* ignored.
+.cp 4
+:p.:hp2.Examples::ehp2.
+:xmp.
+'11000011'.b2x  == 'C3'
+'10111'.b2x     == '17'
+'0101'.b2x      == '5'
+'101'.b2x       == '5'
+'111110000'.b2x == '1F0'
+:exmp.
+:p._
+.*----------------------------------------------------------------------
+.cp 9;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refcenter.center(length &lbrk.,pad&rbrk.)
+:dd.
+:hp3.or:ehp3.
+:dt id=refcentre.centre(length &lbrk.,pad&rbrk.)
+.* &h7.CENTER CENTRE
+.pi /CENTRE method
+.pi /CENTER method
+.pi /Method, built-in/CENTRE
+.pi /Method, built-in/CENTER
+.pi /Formatting/text centering
+:dd.
+returns a string of length :hp1.length:ehp1. with :hp1.string:ehp1.
+centered in it, with :hp1.pad:ehp1. characters added as necessary to
+make up the required length.
+:hp1.length:ehp1. must be a non-negative whole number.
+The default :hp1.pad:ehp1. character is blank.
+If the string is longer than :hp1.length:ehp1., it will be truncated at
+both ends to fit.
+If an odd number of characters are truncated or added, the right hand
+end loses or gains one more character than the left hand end.
+.cp 6;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'ABC'.centre(7)          == '  ABC  '
+'ABC'.center(8,'-')      == '--ABC---'
+'The blue sky'.centre(8) == 'e blue s'
+'The blue sky'.center(7) == 'e blue '
+:exmp.
+:note.This method may be called either :hp4.centre:ehp4. or :hp4.center:ehp4.,
+which avoids difficulties due to the difference between the British and
+American spellings.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refchastr.changestr(needle, new)
+.* &h7.CHANGESTR
+.pi /CHANGESTR method
+.pi /Method, built-in/CHANGESTR
+.pi /Replacing strings/using CHANGESTR
+.pi /Changing strings/using CHANGESTR
+:dd.
+returns a copy of :hp1.string:ehp1. in which each occurrence of the
+:hp1.needle:ehp1. string is replaced by the :hp1.new:ehp1. string.
+Each unique (non-overlapping) occurrence of the :hp1.needle:ehp1. string
+is changed, searching from left to right and starting from the first
+(leftmost) position in :hp1.string:ehp1..
+Only the original :hp1.string:ehp1. is searched for the
+:hp1.needle:ehp1., and each character in :hp1.string:ehp1. can only be
+included in one match of the :hp1.needle:ehp1..
+:p.
+If the :hp1.needle:ehp1. is the null string, the result is a copy of
+:hp1.string:ehp1., unchanged.
+.cp 8
+:p.:hp2.Examples::ehp2.
+:xmp.
+'elephant'.changestr('e','X')    == 'XlXphant'
+'elephant'.changestr('ph','X')   == 'eleXant'
+'elephant'.changestr('ph','hph') == 'elehphant'
+'elephant'.changestr('e','')     == 'lphant'
+'elephant'.changestr('','!!')    == 'elephant'
+:exmp.
+:p.The :a id=refcoustr.:hp4.countstr:ehp4. method:ea. can be used to
+count the number of changes that could be made to a string in this
+fashion.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refcompar.compare(target &lbrk.,pad&rbrk.)
+.* &h7.COMPARE
+.pi /COMPARE method
+.pi /Method, built-in/COMPARE
+.pi /Finding a mismatch using COMPARE
+.pi /Comparison/of strings/using COMPARE
+:dd.
+returns 0 if :hp1.string:ehp1. and :hp1.target:ehp1.
+are the same.
+If they are not, the returned number is positive and is the position of
+the first character that is not the same in both strings.
+If one string is shorter than the other, one or more :hp1.pad:ehp1.
+characters are added on the right to make it the same length for the
+comparison.
+The default :hp1.pad:ehp1. character is a blank.
+.cp 9
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc'.compare('abc')      == 0
+'abc'.compare('ak')       == 2
+'ab '.compare('ab')       == 0
+'ab '.compare('ab',' ')   == 0
+'ab '.compare('ab','x')   == 3
+'ab-- '.compare('ab','-') == 5
+:exmp.
+.*----------------------------------------------------------------
+.cp 10;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refcopies.copies(n)
+.* &h7.COPIES
+.pi /COPIES method
+.pi /Method, built-in/COPIES
+.pi /Copying a string using COPIES
+.pi /Repeating a string with COPIES
+:dd.
+returns :hp1.n:ehp1. directly concatenated copies of
+:hp1.string:ehp1..
+:hp1.n:ehp1. must be positive or 0; if 0, the null string is returned.
+.cp 5
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc'.copies(3) == 'abcabcabc'
+'abc'.copies(0) == ''
+''.copies(2)    == ''
+:exmp.
+.* :note.(Historical) This replaces the REPEAT method
+.*----------------------------------------------------------------
+.cp 10;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refcopyind.copyindexed(sub)
+.* &h7.COPYINDEXED
+.pi /COPYINDEXED method
+.pi /Method, built-in/COPYINDEXED
+.pi /Indexed strings/merging
+.pi /Indexed strings/copying
+.pi /Copying indexed variables
+.pi /Merging indexed variables
+.* ** :dd.
+:dd.copies the collection of indexed :a id=refinstr.sub-values:ea.
+of :hp1.sub:ehp1. into the collection associated with
+:hp1.string:ehp1., and returns the modified :hp1.string:ehp1..  The
+resulting collection is the union of the two collections (that is,
+it contains the indexes and their values from both collections).
+If a given index exists in both collections then the sub-value of
+:hp1.string:ehp1. for that index is replaced by the sub-value from
+:hp1.sub:ehp1..
+:p.
+The non-indexed value of :hp1.string:ehp1. is not affected.
+.cp 7
+:p.:hp2.Example::ehp2.
+:p.Following the instructions:
+:xmp.
+foo='def'
+foo&lbrk.'a'&rbrk.=1
+foo&lbrk.'b'&rbrk.=2
+bar='ghi'
+bar&lbrk.'b'&rbrk.='B'
+bar&lbrk.'c'&rbrk.='C'
+merged=foo.copyIndexed(bar)
+:exmp.
+.cp 7
+:pc.then:
+:xmp.
+merged&lbrk.'a'&rbrk. == '1'
+merged&lbrk.'b'&rbrk. == 'B'
+merged&lbrk.'c'&rbrk. == 'C'
+merged&lbrk.'d'&rbrk. == 'def'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refcoustr.countstr(needle)
+.* &h7.COUNTSTR
+.pi /COUNTSTR method
+.pi /Method, built-in/COUNTSTR
+.pi /Counting/strings, using COUNTSTR
+:dd.
+returns the count of non-overlapping occurrences of the
+:hp1.needle:ehp1. string in :hp1.string:ehp1., searching from left to
+right and starting from the first (leftmost) position in
+:hp1.string:ehp1..
+:p.
+If the :hp1.needle:ehp1. is the null string, :hp4.0:ehp4. is returned.
+.cp 6
+:p.:hp2.Examples::ehp2.
+:xmp.
+'elephant'.countstr('e')  == '2'
+'elephant'.countstr('ph') == '1'
+'elephant'.countstr('')   == '0'
+:exmp.
+:p.The :a id=refchastr.:hp4.changestr:ehp4. method:ea. can be used to
+change occurrences of :hp1.needle:ehp1. to some other string.
+.*
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refc2d.c2d()
+.pi /C2D method
+.pi /Method, built-in/C2D
+.pi /Conversion/coded character to decimal
+.pi /Conversion/character to decimal
+.pi /Character/conversion to decimal
+.pi /Coded character/conversion to decimal
+.* &h7.C2D
+:dd.
+Coded character to decimal.
+Converts the encoding of the character in :hp1.string:ehp1. (which must be
+exactly one character) to its decimal representation.
+The returned string will be a non-negative number that represents
+the encoding of the character and will not include any sign, blanks,
+insignificant leading zeros, or decimal part.
+.cp 5
+:p.:hp2.Examples::ehp2.
+:xmp.
+'M'.c2d  == '77'  -- ASCII or Unicode
+'7'.c2d  == '247' -- EBCDIC
+'&bslash.r'.c2d == '13'  -- ASCII or Unicode
+'&bslash.0'.c2d == '0'
+:exmp.
+:p.The :a id=refc2x.:hp4.c2x:ehp4. method:ea. can be used to
+convert the encoding of a character to a hexadecimal representation.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refc2x.c2x()
+.pi /C2X method
+.pi /Unpacking a string/with C2X
+.pi /Method, built-in/C2X
+.pi /Conversion/coded character to hexadecimal
+.pi /Conversion/character to hexadecimal
+.pi /Character/conversion to hexadecimal
+.pi /Coded character/conversion to hexadecimal
+.* &h7.C2X
+:dd.
+Coded character to hexadecimal.
+Converts the encoding of the character in :hp1.string:ehp1. (which must be
+exactly one character) to its hexadecimal representation (unpacks).
+The returned string will use uppercase Roman letters for the values A-F,
+and will not include any blanks.
+Insignificant leading zeros are removed.
+.cp 5
+:p.:hp2.Examples::ehp2.
+:xmp.
+'M'.c2x  == '4D' -- ASCII or Unicode
+'7'.c2x  == 'F7' -- EBCDIC
+'&bslash.r'.c2x == 'D'  -- ASCII or Unicode
+'&bslash.0'.c2x == '0'
+:exmp.
+:p.The :a id=refc2d.:hp4.c2d:ehp4. method:ea. can be used to
+convert the encoding of a character to a decimal number.
+.* .cp 4
+.* :p.:hp2.Example::ehp2.
+.* :xmp.
+.* 'M'.c2d == '77' -- ASCII or Unicode
+.* :exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refdataty.datatype(option)
+.pi /DATATYPE method
+.pi /Method, built-in/DATATYPE
+.pi /Mathematical method/DATATYPE options
+.pi /Types/checking with DATATYPE
+.pi /Numbers/checking with DATATYPE
+.pi /Whole numbers/checking with DATATYPE
+.pi /Alphanumerics/checking with DATATYPE
+.pi /Alphabetics/checking with DATATYPE
+.pi /Letters/checking with DATATYPE
+.pi /Bits/checking with DATATYPE
+.pi /Binary/checking with DATATYPE
+.pi /Digits/checking with DATATYPE
+.pi /Lowercase/checking with DATATYPE
+.pi /Mixed case/checking with DATATYPE
+.pi /Whole numbers/checking with DATATYPE
+.pi /Numbers/checking with DATATYPE
+.pi /Symbol characters/checking with DATATYPE
+.pi /Uppercase/checking with DATATYPE
+.pi /Hexadecimal/checking with DATATYPE
+.pi ref /Hexadecimal/Conversion
+.pi ref /Binary/Conversion
+.pi ref /Numbers/Conversion
+.* &h7.DATATYPE
+:dd.
+returns 1 if :hp1.string:ehp1. matches the description requested with
+the :hp1.option:ehp1., or 0 otherwise.
+If :hp1.string:ehp1. is the null string, 0 is always returned.
+.* (except when :hp1.type:ehp1. is :q.:hp4.X:ehp4.:eq., which returns 1
+.* for a null string).
+:p.
+Only the first character of :hp1.option:ehp1. is significant, and it may
+be in either uppercase or lowercase.
+The following :hp1.option:ehp1. characters are recognized:
+:dl tsize=8mm termhi=4.
+.*
+:dt id=refdta.A
+:dd.(Alphanumeric); returns 1 if :hp1.string:ehp1. only contains
+characters from the ranges :q.a-z:eq., :q.A-Z:eq., and :q.0-9:eq..
+:dt id=refdtb.B
+:dd.(Binary); returns 1 if :hp1.string:ehp1. only contains the
+characters :q.0:eq. and/or :q.1:eq..
+:dt id=refdtd.D
+:dd.(Digits); returns 1 if :hp1.string:ehp1. only contains
+characters from the range :q.0-9:eq..
+:dt id=refdtl.L
+:dd.(Lowercase); returns 1 if :hp1.string:ehp1. only contains
+characters from the range :q.a-z:eq..
+:dt id=refdtm.M
+:dd.(Mixed case); returns 1 if :hp1.string:ehp1. only contains
+characters from the ranges :q.a-z:eq. and :q.A-Z:eq..
+:dt id=refdtn.N
+:dd.(Number); returns 1 if :hp1.string:ehp1. is a syntactically valid
+NetRexx number that could be added to :hp4.'0':ehp4. without error,
+:dt id=refdts.S
+:dd.(Symbol); returns 1 if :hp1.string:ehp1. only contains characters
+that are valid in non-numeric symbols (the alphanumeric characters and
+underscore), and does not start with a digit.  Note that both uppercase
+and lowercase letters are permitted.
+:dt id=refdtu.U
+:dd.(Uppercase); returns 1 if :hp1.string:ehp1. only contains
+characters from the range :q.A-Z:eq..
+:dt id=refdtw.W
+:dd.(Whole Number); returns 1 if :hp1.string:ehp1. is a syntactically valid
+NetRexx number that can be added to :hp4.'0':ehp4. without error, and
+whose decimal part after that addition, with no rounding, is zero.
+:dt id=refdtx.X
+:dd.(heXadecimal); returns 1 if :hp1.string:ehp1. only contains
+characters from the ranges :q.a-f:eq., :q.A-F:eq., and :q.0-9:eq..
+.* It also returns 1 if :hp1.string:ehp1. is a null string, which is a
+.* valid hexadecimal string.
+.*
+:edl.
+.cp 13
+:p.:hp2.Examples::ehp2.
+:xmp.
+'101'.datatype('B')    == 1
+'12.3'.datatype('D')   == 0
+'12.3'.datatype('N')   == 1
+'12.3'.datatype('W')   == 0
+'LaArca'.datatype('M') == 1
+''.datatype('M')       == 0
+'Llanes'.datatype('L') == 0
+'3_d'.datatype('s')    == 1
+'BCd3'.datatype('X')   == 1
+'BCgd3'.datatype('X')  == 0
+:exmp.
+:note.The :hp4.datatype:ehp4. method tests the meaning of the characters
+in a string, independent of the encoding of those characters.  Extra
+letters and Extra digits cause :hp4.datatype:ehp4. to return 0 except
+for the number tests (:q.:hp4.N:ehp4.:eq. and :q.:hp4.W:ehp4.:eq.),
+which treat extra digits whose value is in the range 0-9 as though they
+were the corresponding Arabic numeral.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refdelstr.delstr(n &lbrk.,length&rbrk.)
+.* &h7.DELSTR
+.pi /DELSTR method
+.pi /Method, built-in/DELSTR
+.pi /Deleting/part of a string
+:dd.
+returns a copy of :hp1.string:ehp1. with the sub-string of
+:hp1.string:ehp1. that begins at the :hp1.n:ehp1.&th. character, and is
+of length :hp1.length:ehp1. characters, deleted.
+If :hp1.length:ehp1. is not specified, or is greater than the number of
+characters from :hp1.n:ehp1. to the end of the string, the rest of the
+string is deleted (including the :hp1.n:ehp1.&th. character).
+:hp1.length:ehp1. must be a non-negative whole number, and :hp1.n:ehp1.
+must be a positive whole number.  If :hp1.n:ehp1. is greater than the
+length of :hp1.string:ehp1., the string is returned unchanged.
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abcd'.delstr(3)    == 'ab'
+'abcde'.delstr(3,2) == 'abe'
+'abcde'.delstr(6)   == 'abcde'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refdelword.delword(n &lbrk.,length&rbrk.)
+.* &h7.DELWORD
+.pi /DELWORD method
+.pi /Method, built-in/DELWORD
+.pi /Deleting/words from a string
+.pi /Words/deleting from a string
+:dd.
+returns a copy of :hp1.string:ehp1. with the sub-string of
+:hp1.string:ehp1. that starts at the :hp1.n:ehp1.&th. word, and is of
+length :hp1.length:ehp1. blank-delimited words, deleted.
+If :hp1.length:ehp1. is not specified, or is greater than number of
+remaining words in the string, it defaults to be the remaining words
+in the string (including the :hp1.n:ehp1.&th. word).
+:hp1.length:ehp1. must be a non-negative whole number, and :hp1.n:ehp1.
+must be a positive whole number.  If :hp1.n:ehp1. is greater than the
+number of words in :hp1.string:ehp1., the string is returned unchanged.
+The string deleted includes any blanks following the final word
+involved, but none of the blanks preceding the first word involved.
+.cp 6;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Now is the  time'.delword(2,2) == 'Now time'
+'Now is the time '.delword(3)   == 'Now is '
+'Now  time'.delword(5)          == 'Now  time'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refd2c.d2c()
+.* &h7.D2C
+.pi /D2C method
+.pi /Method, built-in/D2C
+.pi /Conversion/decimal to character
+.pi /Decimal/conversion to character
+.pi /Coded character/from decimal
+.pi /Character/from decimal
+.pi /Character/from a number
+.pi /Numbers/conversion to character
+:dd.
+Decimal to coded character.
+Converts the :hp1.string:ehp1. (a NetRexx :hp1.number:ehp1.) to a
+single character, where the number is used as the encoding of the
+character.
+:p.
+:hp1.string:ehp1. must be a non-negative whole number.
+An error results if the encoding described does not produce a valid
+character for the implementation (for example, if it has more
+significant bits than the implementation's encoding for characters).
+.cp 5
+:p.:hp2.Examples::ehp2.
+:xmp.
+'77'.d2c  == 'M' -- ASCII or Unicode
+'+77'.d2c == 'M' -- ASCII or Unicode
+'247'.d2c == '7' -- EBCDIC
+'0'.d2c   == '&bslash.0'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refd2x.d2x(&lbrk.n&rbrk.)
+.* &h7.D2X
+.pi /D2X method
+.pi /Method, built-in/D2X
+.pi /Conversion/decimal to hexadecimal
+.pi /Decimal/conversion to hexadecimal
+.pi /Numbers/conversion to hexadecimal
+:dd.
+Decimal to hexadecimal.
+Returns a string of hexadecimal characters of length as needed or of
+length :hp1.n:ehp1., which is the hexadecimal (unpacked) representation
+of the decimal number.  The returned string will use uppercase
+Roman letters for the values A-F, and will not include any blanks.
+:p.:hp1.string:ehp1. must be a whole number, and must be non-negative
+unless :hp1.n:ehp1. is specified, or an error will result.
+If :hp1.n:ehp1. is not specified, the length of the result returned is
+such that there are no leading 0 characters, unless :hp1.string:ehp1.
+was equal to 0 (in which case :hp4.'0':ehp4. is returned).
+:p.
+If :hp1.n:ehp1. is specified it is the length of the final result in
+characters; that is, after conversion the input string will be
+sign-extended to the required length (negative numbers are converted
+assuming twos-complement form).
+If the number is too big to fit into :hp1.n:ehp1. characters, it will be
+truncated on the left.
+:hp1.n:ehp1. must be a non-negative whole number.
+.cp 15
+:p.:hp2.Examples::ehp2.
+:xmp.
+'9'.d2x       == '9'
+'129'.d2x     == '81'
+'129'.d2x(1)  == '1'
+'129'.d2x(2)  == '81'
+'127'.d2x(3)  == '07F'
+'129'.d2x(4)  == '0081'
+'257'.d2x(2)  == '01'
+'-127'.d2x(2) == '81'
+'-127'.d2x(4) == 'FF81'
+'12'.d2x(0)   == ''
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refexists.exists(index)
+.* &h7.EXISTS
+.pi /EXISTS method
+.pi /Method, built-in/EXISTS
+.pi /Index strings/testing for
+.pi /Indexed strings/testing for
+.pi /Testing for indexed variables
+:dd.
+returns 1 if :hp1.index:ehp1. names a :a id=refinstr.sub-value:ea. of
+:hp1.string:ehp1. that has explicitly been assigned a value, or 0
+otherwise.
+.cp 9
+:p.:hp2.Example::ehp2.
+:p.Following the instructions:
+:xmp.
+vowel=0
+vowel&lbrk.'a'&rbrk.=1
+vowel&lbrk.'b'&rbrk.=1
+vowel&lbrk.'b'&rbrk.=null -- drops previous assignment
+:exmp.
+.cp 6
+:pc.then:
+:xmp.
+vowel.exists('a') == '1'
+vowel.exists('b') == '0'
+vowel.exists('c') == '0'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refformat.format(&lbrk.before &lbrk.,after&rbrk.&rbrk.)
+.* &h7.FORMAT
+.pi /FORMAT/method
+.pi /Method, built-in/FORMAT
+.pi /Mathematical method/FORMAT
+.pi /Formatting/numbers for display
+.pi /Numbers/formatting for display
+.pi /Numbers/rounding
+.pi /Conversion/formatting numbers
+:dd.
+formats (lays out) :hp1.string:ehp1., which must be a number.
+:p.
+The number, :hp1.string:ehp1., is first formatted by adding zero with a
+digits setting that is either nine or, if greater, the number of digits
+in the mantissa of the number (excluding leading insignificant zeros).
+If no arguments are given, the result is precisely that of this
+operation.
+:p.
+The arguments :hp1.before:ehp1. and :hp1.after:ehp1. may be specified to
+control the number of characters to be used for the integer part and
+decimal part of the result respectively.  If either of these is omitted
+(with no arguments specified to its right), or is :hp4.null:ehp4., the
+number of characters used will be as many as are needed for that part.
+.* :fn.
+.* :ri.In the reference implementation, omitted arguments to
+.* the :hp4.format:ehp4. function that have other arguments to the right of
+.* them must be specified as :hp4.null:ehp4., as shown in the
+.* examples.:eri.
+.* :efn.
+:p.
+:hp1.before:ehp1. must be a positive number; if it is larger than is
+needed to contain the integer part, that part is padded on the left with
+blanks to the requested length.
+If :hp1.before:ehp1. is not large enough to contain the integer part
+of the number (including the sign, for negative numbers), an error
+results.
+:p.
+:hp1.after:ehp1. must be a non-negative number; if it is not the same
+size as the decimal part of the number, the number will be rounded (or
+extended with zeros) to fit.  Specifying 0 for :hp1.after:ehp1. will
+cause the number to be rounded to an integer (that is, it will have no
+decimal part or decimal point).
+.cp 10
+:p.:hp2.Examples::ehp2.
+:xmp.
+' - 12.73'.format         == '-12.73'
+'0.000'.format            == '0'
+'3'.format(4)             == '   3'
+'1.73'.format(4,0)        == '   2'
+'1.73'.format(4,3)        == '   1.730'
+'-.76'.format(4,1)        == '  -0.8'
+'3.03'.format(4)          == '   3.03'
+' - 12.73'.format(null,4) == '-12.7300'
+:exmp.
+:p.
+Further arguments may be passed to the :kw.format:ekw. method to control
+the use of exponential notation.
+The full syntax of the method is then:
+.cp 8
+:p.
+.* .in 8mm
+:kw.format(&lbrk.before&lbrk.,after&lbrk.,explaces&lbrk.,exdigits&lbrk.,exform&rbrk.&rbrk.&rbrk.&rbrk.&rbrk.):ekw.
+.* .in 0
+:p.The first two arguments are as already described.  The other three
+(:hp1.explaces:ehp1., :hp1.exdigits:ehp1., and :hp1.exform:ehp1.)
+control the exponent part of the result.  The default for any of the
+arguments may be selected by omitting them (if there are no arguments to
+be specified to their right) or by using the value :hp4.null:ehp4..
+:p.
+:hp1.explaces:ehp1. must be a positive number; it sets the number of
+places (digits after the sign of the exponent) to be used for any
+exponent part, the default being to use as many as are needed.
+If :hp1.explaces:ehp1. is specified and is not large enough to contain
+the exponent, an error results.
+.*
+If :hp1.explaces:ehp1. is specified and the exponent will be 0,
+then :hp1.explaces:ehp1.+2 blanks are supplied for the exponent
+part of the result.
+.* :fn.
+.* This preserves vertical alignment of similarly formatted numbers.
+.* :efn.
+:p.
+:hp1.exdigits:ehp1. sets the trigger point for use of exponential
+notation.
+If, after the first formatting, the number of places needed before the
+decimal point exceeds :hp1.exdigits:ehp1., or if the absolute value of
+the result is less than :hp4.0.000001:ehp4., then exponential form will
+be used, provided that :hp1.exdigits:ehp1. was specified.
+.*
+When :hp1.exdigits:ehp1. is not specified, exponential notation
+will never be used.
+The current setting of :kw.numeric digits:ekw. may be used for
+:hp1.exdigits:ehp1. by specifying the special word
+:a id=refswdigit.:hp4.digits:ehp4.:ea..
+.*
+If 0 is specified for :hp1.exdigits:ehp1., exponential
+notation is always used unless the exponent would be 0.
+:p.
+:hp1.exform:ehp1. sets the form for exponential notation (if needed).
+:hp1.exform:ehp1. may be either :hp4.'Scientific':ehp4. (the default)
+or :hp4.'Engineering':ehp4..  Only the first character of
+:hp1.exform:ehp1. is significant and it may be in uppercase or in
+lowercase.
+.*
+The current setting of :kw.numeric form:ekw. may be used by specifying
+the special word :a id=refswform.:hp4.form:ehp4.:ea..
+.*
+If engineering form is in effect, up to three digits (plus sign) may be
+needed for the integer part of the result (:hp1.before:ehp1.).
+.*
+.cp 9;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'12345.73'.format(null,null,2,2) == '1.234573E+04'
+'12345.73'.format(null,3,null,0) == '1.235E+4'
+'1.234573'.format(null,3,null,0) == '1.235'
+'123.45'.format(null,3,2,0)      == '1.235E+02'
+'1234.5'.format(null,3,2,0,'e')  == '1.235E+03'
+'1.2345'.format(null,3,2,0)      == '1.235    '
+'12345.73'.format(null,null,3,6) == '12345.73     '
+'12345e+5'.format(null,3)        == '1234500000.000'
+:exmp.
+:p.:hp2.Implementation minimum::ehp2. If exponents are supported in an
+implementation, then they must be supported for exponents whose
+absolute value is at least as large as the largest number that can be
+expressed as an exact integer in default precision, &ie., 999999999.
+Therefore, values for :hp1.explaces:ehp1. of up to 9 should also be
+supported.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refinsert.insert(new &lbrk.,n &lbrk.,length &lbrk.,pad&rbrk.&rbrk.&rbrk.)
+.* &h7.INSERT
+.pi /INSERT method
+.pi /Method, built-in/INSERT
+.pi /Inserting a string into another
+:dd.
+inserts the string :hp1.new:ehp1., padded or truncated to length
+:hp1.length:ehp1., into a copy of the target :hp1.string:ehp1. after the
+:hp1.n:ehp1.&th. character; the string with any inserts is returned.
+:hp1.length:ehp1. and :hp1.n:ehp1. must be a non-negative whole numbers.
+If :hp1.n:ehp1. is greater than the length of the target string,
+padding is added before the :hp1.new:ehp1. string also.
+The default value for :hp1.n:ehp1. is 0, which means insert before the
+beginning of the string.  The default value for :hp1.length:ehp1. is
+the length of :hp1.new:ehp1..  The default :hp1.pad:ehp1. character is
+a blank.
+.cp 7;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc'.insert('123')         == '123abc'
+'abcdef'.insert(' ',3)      == 'abc def'
+'abc'.insert('123',5,6)     == 'abc  123   '
+'abc'.insert('123',5,6,'+') == 'abc++123+++'
+'abc'.insert('123',0,5,'-') == '123--abc'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=reflastpos.lastpos(needle &lbrk.,start&rbrk.)
+.* &h7.LASTPOS
+.pi /LASTPOS method
+.pi /Method, built-in/LASTPOS
+.pi /Finding a string in another string
+.pi /Locating/a string in another string
+:dd.
+returns the position of the last occurrence of the string
+:hp1.needle:ehp1. in :hp1.string:ehp1. (the :q.haystack:eq.), searching
+from right to left.
+If the string :hp1.needle:ehp1. is not found, or is the null string,
+0 is returned.
+By default the search starts at the last character of
+:hp1.string:ehp1. and scans backwards.
+This may be overridden by specifying :hp1.start:ehp1., the point at
+which to start the backwards scan.
+:hp1.start:ehp1. must be a positive whole number, and defaults to the
+value :hp1.string:ehp1.:hp4..length:ehp4. if larger than that
+value or if not specified (with a minimum default value of one).
+.cp 7
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc def ghi'.lastpos(' ')   == 8
+'abc def ghi'.lastpos(' ',7) == 4
+'abcdefghi'.lastpos(' ')     == 0
+'abcdefghi'.lastpos('cd')    == 3
+''.lastpos('?')              == 0
+:exmp.
+.*----------------------------------------------------------------------
+.cp 14;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refleft.left(length &lbrk.,pad&rbrk.)
+.* &h7.LEFT
+.pi /LEFT method
+.pi /Method, built-in/LEFT
+.pi /Formatting/text left justification
+:dd.
+returns a string of length :hp1.length:ehp1. containing the
+left-most :hp1.length:ehp1. characters of :hp1.string:ehp1..
+The string is padded with :hp1.pad:ehp1. characters (or truncated) on
+the right as needed.
+The default :hp1.pad:ehp1. character is a blank.
+:hp1.length:ehp1. must be a non-negative whole number.
+This method is exactly equivalent to
+:hp1.string:ehp1.:hp4..substr(1:ehp4., :hp1.length:ehp1.
+&lbrk., :hp1.pad:ehp1.&rbrk.:hp4.):ehp4..
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc d'.left(8)     == 'abc d   '
+'abc d'.left(8,'.') == 'abc d...'
+'abc defg'.left(6)  == 'abc de'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 8;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=reflength.length()
+.* &h7.LENGTH
+.pi /LENGTH/method
+.pi /Method, built-in/LENGTH
+.pi /Strings/length of
+.pi /Data/length of
+:dd.
+returns the number of characters in :hp1.string:ehp1..
+.* as a number comprising only
+.* digits and with no insignificant leading zeros.
+.cp 4
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abcdefgh'.length == 8
+''.length         == 0
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=reflower.lower(&lbrk.n &lbrk.,length&rbrk.&rbrk.)
+.* &h7.LOWER
+.pi /LOWER method
+.pi /Method, built-in/LOWER
+.pi /Strings/lowercasing
+.pi /Lowercasing strings
+:dd.
+returns a copy of :hp1.string:ehp1. with any uppercase characters in
+the sub-string of :hp1.string:ehp1. that begins at the :hp1.n:ehp1.&th.
+character, and is of length :hp1.length:ehp1. characters, replaced by
+their lowercase equivalent.
+:p.
+:hp1.n:ehp1. must be a positive whole number, and defaults to 1 (the
+first character in :hp1.string:ehp1.).  If :hp1.n:ehp1. is greater than
+the length of :hp1.string:ehp1., the string is returned unchanged.
+:p.
+:hp1.length:ehp1. must be a non-negative whole number.
+If :hp1.length:ehp1. is not specified, or is greater than the number of
+characters from :hp1.n:ehp1. to the end of the string, the rest of the
+string (including the :hp1.n:ehp1.&th. character) is assumed.
+.cp 7
+:p.:hp2.Examples::ehp2.
+:xmp.
+'SumA'.lower      == 'suma'
+'SumA'.lower(2)   == 'Suma'
+'SuMB'.lower(1,1) == 'suMB'
+'SUMB'.lower(2,2) == 'SumB'
+''.lower          == ''
+:exmp.
+.*----------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refmax.max(number)
+.* &h7.MAX
+.pi /MAX method
+.pi /Method, built-in/MAX
+.pi /Mathematical method/MAX
+:dd.
+returns the larger of :hp1.string:ehp1. and :hp1.number:ehp1., which
+must both be numbers.  If they compare equal (that is, when subtracted,
+the result is 0), then :hp1.string:ehp1. is selected for the result.
+:p.
+The comparison is effected using a numerical comparison with a digits
+setting that is either nine or, if greater, the larger of the number of
+digits in the mantissas of the two numbers (excluding leading
+insignificant zeros).
+:p.
+The selected result is formatted by adding zero to the selected number
+with a digits setting that is either nine or, if greater, the number of
+digits in the mantissa of the number (excluding leading insignificant
+zeros).
+Scientific notation is used, if necessary.
+.cp 8
+:p.:hp2.Examples::ehp2.
+:xmp.
+0.max(1)          ==1
+'-1'.max(1)       ==1
+'+1'.max(-1)      ==1
+'1.0'.max(1.00)   =='1.0'
+'1.00'.max(1.0)   =='1.00'
+'123456700000'.max(1234567E+5)   == '123456700000'
+'1234567E+5'.max('123456700000') == '1.234567E+11'
+:exmp.
+.*-----------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refmin.min(number)
+.* &h7.MIN
+.pi /MIN method
+.pi /Method, built-in/MIN
+.pi /Mathematical method/MIN
+:dd.
+returns the smaller of :hp1.string:ehp1. and :hp1.number:ehp1., which
+must both be numbers.  If they compare equal (that is, when subtracted,
+the result is 0), then :hp1.string:ehp1. is selected for the result.
+:p.
+The comparison is effected using a numerical comparison with a digits
+setting that is either nine or, if greater, the larger of the number of
+digits in the mantissas of the two numbers (excluding leading
+insignificant zeros).
+:p.
+The selected result is formatted by adding zero to the selected number
+with a digits setting that is either nine or, if greater, the number of
+digits in the mantissa of the number (excluding leading insignificant
+zeros).
+Scientific notation is used, if necessary.
+.cp 8
+:p.:hp2.Examples::ehp2.
+:xmp.
+0.min(1)          ==0
+'-1'.min(1)       =='-1'
+'+1'.min(-1)      =='-1'
+'1.0'.min(1.00)   =='1.0'
+'1.00'.min(1.0)   =='1.00'
+'123456700000'.min(1234567E+5)   == '123456700000'
+'1234567E+5'.min('123456700000') == '1.234567E+11'
+:exmp.
+.*-----------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refoverlay.overlay(new &lbrk.,n &lbrk.,length &lbrk.,pad&rbrk.&rbrk.&rbrk.)
+.* &h7.OVERLAY
+.pi /OVERLAY method
+.pi /Method, built-in/OVERLAY
+.pi /Overlaying a string onto another
+:dd.
+overlays the string :hp1.new:ehp1., padded or truncated to length
+:hp1.length:ehp1., onto a copy of the target :hp1.string:ehp1. starting
+at the :hp1.n:ehp1.&th. character; the string with any overlays is
+returned.  Overlays may extend beyond the end of the original
+:hp1.string:ehp1..
+If :hp1.length:ehp1. is specified it must be a non-negative whole
+number.
+If :hp1.n:ehp1. is greater than the length of
+the target string, padding is added before the :hp1.new:ehp1. string
+also.
+The default :hp1.pad:ehp1. character is a blank, and the default value
+for :hp1.n:ehp1. is 1.
+:hp1.n:ehp1. must be greater than 0.
+The default value for :hp1.length:ehp1. is the length of :hp1.new:ehp1..
+.cp 7;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abcdef'.overlay(' ',3)      == 'ab def'
+'abcdef'.overlay('.',3,2)    == 'ab. ef'
+'abcd'.overlay('qq')         == 'qqcd'
+'abcd'.overlay('qq',4)       == 'abcqq'
+'abc'.overlay('123',5,6,'+') == 'abc+123+++'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refpos.pos(needle &lbrk.,start&rbrk.)
+.* &h7.POS
+.pi /POS position method
+.pi /Method, built-in/POS
+.pi /Finding a string in another string
+.pi /Locating/a string in another string
+.pi /Searching a string for a word or phrase
+:dd.
+returns the position of the string :hp1.needle:ehp1., in
+:hp1.string:ehp1. (the :q.haystack:eq.), searching from left to right.
+If the string :hp1.needle:ehp1. is not found, or is the null string,
+0 is returned.
+By default the search starts at the first character of
+:hp1.string:ehp1. (that is, :hp1.start:ehp1. has the value 1).
+This may be overridden by specifying :hp1.start:ehp1. (which must be a
+positive whole number), the point at which to start the search; if
+:hp1.start:ehp1. is greater than the length of :hp1.string:ehp1. then 0
+is returned.
+.cp 6;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Saturday'.pos('day')    == 6
+'abc def ghi'.pos('x')   == 0
+'abc def ghi'.pos(' ')   == 4
+'abc def ghi'.pos(' ',5) == 8
+:exmp.
+.*----------------------------------------------------------------------
+.cp 9;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refreverse.reverse()
+.* &h7.REVERSE
+.pi /REVERSE method
+.pi /Method, built-in/REVERSE
+:dd.
+returns a copy of :hp1.string:ehp1., swapped end for end.
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'ABc.'.reverse        == '.cBA'
+'XYZ '.reverse        == ' ZYX'
+'Tranquility'.reverse == 'ytiliuqnarT'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 12;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refright.right(length &lbrk.,pad&rbrk.)
+.* &h7.RIGHT
+.pi /RIGHT method
+.pi /Method, built-in/RIGHT
+.pi /Formatting/text right justification
+.pi /Leading zeros/adding with the RIGHT method
+.pi /Zeros/adding on the left
+.pi /Zeros/padding
+:dd.
+returns a string of length :hp1.length:ehp1. containing the
+right-most :hp1.length:ehp1. characters of :hp1.string:ehp1. &dash.
+that is, padded with :hp1.pad:ehp1. characters (or truncated) on the
+left as needed.  The default :hp1.pad:ehp1. character is a blank.
+:hp1.length:ehp1. must be a non-negative whole number.
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc  d'.right(8)  == '  abc  d'
+'abc def'.right(5) == 'c def'
+'12'.right(5,'0')  == '00012'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 12;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refsequen.sequence(final)
+.* &h7.SEQUENCE
+.pi /SEQUENCE method
+.pi /Method, built-in/SEQUENCE
+.pi /Collating sequence, using SEQUENCE
+:dd.
+ returns a string of all characters, in ascending order of encoding,
+between and including the character in :hp1.string:ehp1. and the
+character in :hp1.final:ehp1..
+:hp1.string:ehp1. and :hp1.final:ehp1. must be single characters;
+if :hp1.string:ehp1. is greater than :hp1.final:ehp1., an error is
+reported.
+.cp 5
+:p.:hp2.Examples::ehp2.
+:xmp.
+'a'.sequence('f')           == 'abcdef'
+'\0'.sequence('\x03')       == '\x00\x01\x02\x03'
+'\ufffe'.sequence('\uffff') == '\ufffe\uffff'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 13;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refsign.sign()
+.* &h7.SIGN
+.pi /SIGN method
+.pi /Method, built-in/SIGN
+.pi /Mathematical method/SIGN
+:dd.
+returns a number that indicates the sign of :hp1.string:ehp1., which
+must be a number.
+:hp1.string:ehp1. is first formatted, just as though the operation
+:q.:hp4.string+0:ehp4.:eq. had been carried out with sufficient digits
+to avoid rounding.
+If the number then starts with :hp4.'-':ehp4. then :hp4.'-1':ehp4. is
+returned; if it is :hp4.'0':ehp4. then :hp4.'0':ehp4. is returned; and
+otherwise :hp4.'1':ehp4. is returned.
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'12.3'.sign    ==  1
+'0.0'.sign     ==  0
+' -0.307'.sign == -1
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refspace.space(&lbrk.n &lbrk.,pad&rbrk.&rbrk.)
+.* &h7.SPACE
+.pi /SPACE method
+.pi /Method, built-in/SPACE
+.pi /Formatting/text spacing
+.pi /Blank/removal with SPACE method
+:dd.
+returns a copy of :hp1.string:ehp1. with the blank-delimited words in
+:hp1.string:ehp1. formatted with :hp1.n:ehp1. (and only :hp1.n:ehp1.)
+:hp1.pad:ehp1. characters between each word.
+:hp1.n:ehp1. must be a non-negative whole number.
+If :hp1.n:ehp1. is 0, all blanks are removed.
+Leading and trailing blanks are always removed.
+The default for :hp1.n:ehp1. is 1, and the default :hp1.pad:ehp1.
+character is a blank.
+.cp 7;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc  def  '.space        == 'abc def'
+'  abc def '.space(3)     == 'abc   def'
+'abc  def  '.space(1)     == 'abc def'
+'abc  def  '.space(0)     == 'abcdef'
+'abc  def  '.space(2,'+') == 'abc++def'
+:exmp.
+.*----------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refstrip.strip(&lbrk.option &lbrk.,char&rbrk.&rbrk.)
+.pi /STRIP method
+.pi /Method, built-in/STRIP
+.pi /Leading blanks/removal with STRIP method
+.pi /Blank/removal with STRIP method
+.pi /Zeros/removal with STRIP method
+.pi /Leading zeros/removal with STRIP method
+.pi /Character/removal with STRIP method
+.pi /Trailing blanks/removal with STRIP method
+.* &h7.STRIP
+:dd.
+returns a copy of :hp1.string:ehp1. with Leading, Trailing, or Both
+leading and trailing characters removed, when the first character of
+:hp1.option:ehp1. is L, T, or B respectively (these may be given in
+either uppercase or lowercase).  The default is B.
+The second argument, :hp1.char:ehp1., specifies the character to be
+removed, with the default being a blank.
+If given, :hp1.char:ehp1. must be exactly one character long.
+.cp 8
+:p.:hp2.Examples::ehp2.
+:xmp.
+'  ab c  '.strip        == 'ab c'
+'  ab c  '.strip('L')   == 'ab c  '
+'  ab c  '.strip('t')   == '  ab c'
+'12.70000'.strip('t',0) == '12.7'
+'0012.700'.strip('b',0) == '12.7'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refsubstr.substr(n &lbrk.,length &lbrk.,pad&rbrk.&rbrk.)
+.* &h7.SUBSTR
+.pi /SUBSTR method
+.pi /Method, built-in/SUBSTR
+.pi /Extracting/a sub-string
+.pi /Sub-string, extracting
+:dd.
+returns the sub-string of :hp1.string:ehp1. that begins at the
+:hp1.n:ehp1.&th. character, and is of length :hp1.length:ehp1., padded
+with :hp1.pad:ehp1. characters if necessary.
+:hp1.n:ehp1. must be a positive whole number, and :hp1.length:ehp1. must
+be a non-negative whole number.
+If :hp1.n:ehp1. is greater than :hp1.string:ehp1.:hp4..length:ehp4.,
+then only pad characters can be returned.
+:p.If :hp1.length:ehp1. is omitted it defaults to be the rest of the
+string (or 0 if :hp1.n:ehp1. is greater than the length of the string).
+The default :hp1.pad:ehp1. character is a blank.
+.cp 8
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abc'.substr(2)       == 'bc'
+'abc'.substr(2,4)     == 'bc  '
+'abc'.substr(5,4)     == '    '
+'abc'.substr(2,6,'.') == 'bc....'
+'abc'.substr(5,6,'.') == '......'
+:exmp.
+:note.In some situations the positional (numeric) patterns of parsing
+templates are more convenient for selecting sub-strings, especially if
+more than one sub-string is to be extracted from a string.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refsubword.subword(n &lbrk.,length&rbrk.)
+.* &h7.SUBWORD
+.pi /SUBWORD method
+.pi /Method, built-in/SUBWORD
+.pi /Extracting/words from a string
+.pi /Words/extracting from a string
+:dd.
+returns the sub-string of :hp1.string:ehp1. that starts at the
+:hp1.n:ehp1.&th. word, and is up to :hp1.length:ehp1. blank-delimited
+words long.
+:hp1.n:ehp1. must be a positive whole number; if greater than the number
+of words in the string then the null string is returned.
+:hp1.length:ehp1. must be a non-negative whole number.
+If :hp1.length:ehp1. is omitted it defaults to be the remaining words
+in the string.
+The returned string will never have leading or trailing blanks, but
+will include all blanks between the selected words.
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Now is the  time'.subword(2,2) == 'is the'
+'Now is the  time'.subword(3)   == 'the  time'
+'Now is the  time'.subword(5)   == ''
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=reftrans.translate(tableo, tablei &lbrk.,pad&rbrk.)
+.* &h7.TRANSLATE
+.pi /TRANSLATE method
+.pi /Method, built-in/TRANSLATE
+.pi /Translation/with TRANSLATE method
+.pi /Re-ordering characters/with TRANSLATE method
+.pi /Moving characters, with TRANSLATE method
+.pi /Strings/moving with TRANSLATE method
+.pi ref /Translation/Case translation
+.pi /Replacing strings/using TRANSLATE
+.pi /Changing strings/using TRANSLATE
+:dd.
+returns a copy of :hp1.string:ehp1. with each character in
+:hp1.string:ehp1. either unchanged or translated to another character.
+:p.
+The :hp4.translate:ehp4. method acts by searching the input translate
+table, :hp1.tablei:ehp1., for each character in :hp1.string:ehp1..
+If the character is found in :hp1.tablei:ehp1. (the first, leftmost,
+occurrence being used if there are duplicates) then the corresponding
+character in the same position in the output translate table,
+:hp1.tableo:ehp1., is used in the result string; otherwise the original
+character found in :hp1.string:ehp1. is used.
+The result string is always the same length as :hp1.string:ehp1..
+:p.
+The translate tables may be of any length, including the null string.
+The output table, :hp1.tableo:ehp1., is padded with :hp1.pad:ehp1. or
+truncated on the right as necessary to be the same length as
+:hp1.tablei:ehp1..
+The default :hp1.pad:ehp1. is a blank.
+.cp 8
+:p.:hp2.Examples::ehp2.
+:xmp.
+'abbc'.translate('&amp.','b')           == 'a&amp.&amp.c'
+'abcdef'.translate('12','ec')       == 'ab2d1f'
+'abcdef'.translate('12','abcd','.') == '12..ef'
+'4123'.translate('abcd','1234')     == 'dabc'
+'4123'.translate('hods','1234')     == 'shod'
+:exmp.
+:note.The last two examples show how the :hp4.translate:ehp4. method
+may be used to move around the characters in a string.
+In these examples, any 4-character string could be specified as the
+first argument and its last character would be moved to the beginning of
+the string.
+Similarly, the term:
+:xmp.
+'gh.ef.abcd'.translate(19970827,'abcdefgh')
+:exmp.
+:pc.(which returns :q.:hp4.27.08.1997:ehp4.:eq.) shows how a string (in
+this case perhaps a date) might be re-formatted and merged with other
+characters using the :hp4.translate:ehp4. method.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=reftrunc.trunc(&lbrk.n&rbrk.)
+.* &h7.TRUNC
+.pi /TRUNC method
+.pi /Method, built-in/TRUNC
+.pi /Truncating numbers
+.pi /Numbers/truncating
+.pi /Formatting/numbers with TRUNC
+:dd.
+returns the integer part of :hp1.string:ehp1., which must be a
+number, with :hp1.n:ehp1. decimal places (digits after the decimal
+point).
+:hp1.n:ehp1. must be a non-negative whole number, and defaults to zero.
+:p.
+The number :hp1.string:ehp1. is formatted by adding zero with a digits
+setting that is either nine or, if greater, the number of digits in the
+mantissa of the number (excluding leading insignificant zeros).
+It is then truncated to :hp1.n:ehp1. decimal places (or trailing zeros
+are added if needed to make up the specified length).
+If :hp1.n:ehp1. is 0 (the default) then an integer with no decimal
+point is returned.
+The result will never be in exponential form.
+.cp 6;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'12.3'.trunc         == 12
+'127.09782'.trunc(3) == 127.097
+'127.1'.trunc(3)     == 127.100
+'127'.trunc(2)       == 127.00
+'0'.trunc(2)         == 0.00
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refupper.upper(&lbrk.n &lbrk.,length&rbrk.&rbrk.)
+.* &h7.UPPER
+.pi /UPPER method
+.pi /Method, built-in/UPPER
+.pi /Strings/uppercasing
+.pi /Uppercasing strings
+:dd.
+returns a copy of :hp1.string:ehp1. with any lowercase characters in
+the sub-string of :hp1.string:ehp1. that begins at the :hp1.n:ehp1.&th.
+character, and is of length :hp1.length:ehp1. characters, replaced by
+their uppercase equivalent.
+:p.
+:hp1.n:ehp1. must be a positive whole number, and defaults to 1 (the
+first character in :hp1.string:ehp1.).  If :hp1.n:ehp1. is greater than
+the length of :hp1.string:ehp1., the string is returned unchanged.
+:p.
+:hp1.length:ehp1. must be a non-negative whole number.
+If :hp1.length:ehp1. is not specified, or is greater than the number of
+characters from :hp1.n:ehp1. to the end of the string, the rest of the
+string (including the :hp1.n:ehp1.&th. character) is assumed.
+.cp 9
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Fou-Baa'.upper        == 'FOU-BAA'
+'Mad Sheep'.upper      == 'MAD SHEEP'
+'Mad sheep'.upper(5)   == 'Mad SHEEP'
+'Mad sheep'.upper(5,1) == 'Mad Sheep'
+'Mad sheep'.upper(5,4) == 'Mad SHEEp'
+'tinganon'.upper(1,1)  == 'Tinganon'
+''.upper               == ''
+:exmp.
+.*-----------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refverify.verify(reference &lbrk.,option &lbrk.,start&rbrk.&rbrk.)
+.pi /VERIFY method
+.pi /Method, built-in/VERIFY
+.pi /Strings/verifying contents of
+.* &h7.VERIFY
+:dd.
+verifies that :hp1.string:ehp1. is composed only of characters
+from :hp1.reference:ehp1., by returning the position of the first
+character in :hp1.string:ehp1. that is not also in
+:hp1.reference:ehp1..  If all the characters were found in
+:hp1.reference:ehp1., 0 is returned.
+:p.The :hp1.option:ehp1. may be either :hp4.'Nomatch':ehp4. (the
+default) or :hp4.'Match':ehp4..  Only the first character of
+:hp1.option:ehp1. is significant and it may be in uppercase or in
+lowercase.
+If :hp4.'Match':ehp4. is specified, the position of the first character
+in :hp1.string:ehp1. that :hp2.is:ehp2. in :hp1.reference:ehp1. is
+returned, or 0 is returned if none of the characters were found.
+:p.The default for :hp1.start:ehp1. is 1 (that is, the search starts at
+the first character of :hp1.string:ehp1.).
+This can be overridden by giving a different :hp1.start:ehp1. point,
+which must be positive.
+:p.If :hp1.string:ehp1. is the null string, the method returns 0,
+regardless of the value of the :hp1.option::ehp1..
+Similarly if :hp1.start:ehp1. is greater than
+:hp1.string:ehp1.:hp4..length:ehp4., 0 is returned.
+:p.If :hp1.reference:ehp1. is the null string, then the returned value
+is the same as the value used for :hp1.start:ehp1.,
+unless :hp4.'Match':ehp4. is specified as the :hp1.option:ehp1., in
+which case 0 is returned.
+.cp 9;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'123'.verify('1234567890')          == 0
+'1Z3'.verify('1234567890')          == 2
+'AB4T'.verify('1234567890','M')     == 3
+'1P3Q4'.verify('1234567890','N',3)  == 4
+'ABCDE'.verify('','n',3)            == 3
+'AB3CD5'.verify('1234567890','m',4) == 6
+:exmp.
+.*----------------------------------------------------------------------
+.cp 10;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refword.word(n)
+.* &h7.WORD
+.pi /WORD method
+.pi /Method, built-in/WORD
+.pi /Words/extracting from a string
+:dd.
+returns the :hp1.n:ehp1.&th. blank-delimited word in
+:hp1.string:ehp1..
+:hp1.n:ehp1. must be positive.
+If there are fewer than :hp1.n:ehp1. words in :hp1.string:ehp1., the
+null string is returned.
+This method is exactly equivalent to
+:hp1.string:ehp1.:hp4..subword(:ehp4.:hp1.n:ehp1.,:hp4.1):ehp4..
+.cp 5
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Now is the time'.word(3) == 'the'
+'Now is the time'.word(5) == ''
+:exmp.
+.*----------------------------------------------------------------------
+.cp 10;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refwordind.wordindex(n)
+.* &h7.WORDINDEX
+.pi /WORDINDEX method
+.pi /Method, built-in/WORDINDEX
+.pi /Words/locating in a string
+:dd.
+returns the character position of the :hp1.n:ehp1.&th.
+blank-delimited word in :hp1.string:ehp1..
+:hp1.n:ehp1. must be positive.
+If there are fewer than :hp1.n:ehp1. words in the string, 0 is returned.
+.cp 4;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Now is the time'.wordindex(3) == 8
+'Now is the time'.wordindex(6) == 0
+:exmp.
+.*----------------------------------------------------------------------
+.cp 10;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refwordlen.wordlength(n)
+.* &h7.WORDLENGTH
+.pi /WORDLENGTH method
+.pi /Method, built-in/WORDLENGTH
+.pi /Words/finding length of
+:dd.
+returns the length of the :hp1.n:ehp1.&th. blank-delimited word in
+:hp1.string:ehp1..
+:hp1.n:ehp1. must be positive.
+If there are fewer than :hp1.n:ehp1. words in the string, 0 is returned.
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Now is the time'.wordlength(2)    == 2
+'Now comes the time'.wordlength(2) == 5
+'Now is the time'.wordlength(6)    == 0
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refwordpos.wordpos(phrase &lbrk.,start&rbrk.)
+.* &h7.WORDPOS
+.pi /WORDPOS method
+.pi /Method, built-in/WORDPOS
+.pi /Searching a string for a word or phrase
+.pi /Locating/a word or phrase in a string
+.pi /Words/finding in a string
+:dd.
+searches :hp1.string:ehp1. for the first occurrence of the sequence
+of blank-delimited words :hp1.phrase:ehp1., and returns the word number
+of the first word of :hp1.phrase:ehp1. in :hp1.string:ehp1..  Multiple
+blanks between words in either :hp1.phrase:ehp1. or :hp1.string:ehp1.
+are treated as a single blank for the comparison, but otherwise the
+words must match exactly.  Similarly, leading or trailing blanks on
+either string are ignored.
+If :hp1.phrase:ehp1. is not found, or contains no words, 0 is returned.
+:p.By default the search starts at the first word in :hp1.string:ehp1..
+This may be overridden by specifying :hp1.start:ehp1. (which must be
+positive), the word at which to start the search.
+.cp 15
+:p.:hp2.Examples::ehp2.
+:xmp.
+'now is the time'.wordpos('the')       == 3
+'now is the time'.wordpos('The')       == 0
+'now is the time'.wordpos('is the')    == 2
+'now is the time'.wordpos('is    the') == 2
+'now is the time'.wordpos('is  time')  == 0
+'To be or not to be'.wordpos('be')     == 2
+'To be or not to be'.wordpos('be',3)   == 6
+:exmp.
+.*----------------------------------------------------------------------
+.cp 9;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refwords.words()
+.* &h7.WORDS
+.pi /WORDS method
+.pi /Method, built-in/WORDS
+.pi /Words/counting, using WORDS
+.pi /Counting/words, using WORDS
+:dd.
+returns the number of blank-delimited words in :hp1.string:ehp1..
+.cp 6
+:p.:hp2.Examples::ehp2.
+:xmp.
+'Now is the time'.words == 4
+' '.words               == 0
+''.words                == 0
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refx2b.x2b()
+.* &h7.X2B
+.pi /X2B method
+.pi /Unpacking a string/with X2B
+.pi /Method, built-in/X2B
+.pi /Conversion/hexadecimal to binary
+.pi /Hexadecimal/conversion to binary
+:dd.
+Hexadecimal to binary.
+Converts :hp1.string:ehp1. (a string of at least one hexadecimal
+characters) to an equivalent string of binary digits.
+Hexadecimal characters may be any decimal digit character (0-9) or any
+of the first six alphabetic characters (a-f), in either lowercase or
+uppercase.
+:p.:hp1.string:ehp1. may be of any length; each hexadecimal character
+with be converted to a string of four binary digits.
+The returned string will have a length that is a multiple of four, and
+will not include any blanks.
+.* :p.:hp1.string:ehp1. may be the null string, in which case a null
+.* string is returned.
+.* :p.Blanks may optionally be included in :hp1.string:ehp1. (at byte
+.* boundaries only, not leading or trailing) to aid readability; they are
+.* ignored.
+.cp 5;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'C3'.x2b  == '11000011'
+'7'.x2b   == '0111'
+'1C1'.x2b == '000111000001'
+:exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refx2c.x2c()
+.* &h7.X2C
+.pi /X2C method
+.pi /Packing a string/with X2C
+.pi /Method, built-in/X2C
+.pi /Conversion/hexadecimal to character
+.pi /Hexadecimal/conversion to character
+.pi /Coded character/from hexadecimal
+.pi /Character/from hexadecimal
+.pi /Character/from a number
+.pi /Numbers/conversion to character
+:dd.
+Hexadecimal to coded character.
+Converts the :hp1.string:ehp1. (a string of hexadecimal characters) to
+a single character (packs).
+Hexadecimal characters may be any decimal digit character (0-9) or any
+of the first six alphabetic characters (a-f), in either lowercase or
+uppercase.
+:p.
+:hp1.string:ehp1. must contain at least one hexadecimal character;
+insignificant leading zeros are removed, and the string is then padded
+with leading zeros if necessary to make a sufficient number of
+hexadecimal digits to describe a character encoding for the
+implementation.
+:p.
+An error results if the encoding described does not produce a valid
+character for the implementation (for example, if it has more
+significant bits than the implementation's encoding for characters).
+.cp 5
+:p.:hp2.Examples::ehp2.
+:xmp.
+'004D'.x2c == 'M' -- ASCII or Unicode
+'4d'.x2c   == 'M' -- ASCII or Unicode
+'A2'.x2c   == 's' -- EBCDIC
+'0'.x2c    == '&bslash.0'
+:exmp.
+:p.The :a id=refd2c.:hp4.d2c:ehp4. method:ea. can be used to
+convert a NetRexx number to the encoding of a character.
+.* .cp 4;
+.* :p.:hp2.Example::ehp2.
+.* :xmp.
+.* '77'.d2c == 'M' -- ASCII or Unicode
+.* :exmp.
+.*----------------------------------------------------------------------
+.cp 15;.sk 0.9;.cm .se fc = &fc. + 1
+:dt id=refx2d.x2d(&lbrk.n&rbrk.)
+.* &h7.X2D
+.pi /X2D method
+.pi /Method, built-in/X2D
+.pi /Conversion/hexadecimal to decimal
+.pi /Hexadecimal/conversion to decimal
+:dd.
+Hexadecimal to decimal.
+Converts the :hp1.string:ehp1. (a string of hexadecimal characters) to
+a decimal number, without rounding.
+If :hp1.string:ehp1. is the null string, 0 is returned.
+:p.
+If :hp1.n:ehp1. is not specified, :hp1.string:ehp1. is taken to
+be an unsigned number.
+.cp 7
+:p.:hp2.Examples::ehp2.
+:xmp.
+'0E'.x2d    == 14
+'81'.x2d    == 129
+'F81'.x2d   == 3969
+'FF81'.x2d  == 65409
+'c6f0'.x2d  == 50928
+:exmp.
+:p.
+If :hp1.n:ehp1. is specified, :hp1.string:ehp1. is taken as a signed
+number expressed in :hp1.n:ehp1. hexadecimal characters.
+If the most significant (left-most) bit is zero then the number is
+positive; otherwise it is a negative number in twos-complement form.
+In both cases it is converted to a NetRexx number which may,
+therefore, be negative.
+If :hp1.n:ehp1. is 0, 0 is always returned.
+:p.
+If necessary, :hp1.string:ehp1. is padded on the left
+with :hp4.'0':ehp4. characters (note, not :q.sign-extended:eq.), or
+truncated on the left, to length :hp1.n:ehp1. characters; (that is, as
+though :hp1.string:ehp1.:hp4..right(:ehp4.:hp1.n:ehp1., :hp4.'0'):ehp4.
+had been executed.)
+.cp 9;
+:p.:hp2.Examples::ehp2.
+:xmp.
+'81'.x2d(2)   == -127
+'81'.x2d(4)   == 129
+'F081'.x2d(4) == -3967
+'F081'.x2d(3) == 129
+'F081'.x2d(2) == -127
+'F081'.x2d(1) == 1
+'0031'.x2d(0) == 0
+:exmp.
+:p.The :a id=refc2d.:hp4.c2d:ehp4. method:ea. can be used to convert
+a character to a decimal representation of its encoding.
+.*----------------------------------------------------------------------
+:edl.
+.* .pi end /Conversion methods
+.pi end /Built-in methods
+.pi end /Methods/built-in
+.pi end /Utility methods
+.pi end /Methods/NetRexx
+.*
+.* .se refebmeth = &
+.ty Page &refebmeth.: &fc. methods defined
+.*
+.* .cp 40;

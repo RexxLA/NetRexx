@@ -81,6 +81,7 @@
 /* 2012.11.24 Add buildMap bif as suggested by Bill Fenlason for collections support. (Kermit Kiser)      */
 /* 2012.12.21 Add copyindexed method name per issue NETREXX-94. Also isindexed method name for same reason. (Kermit Kiser)      */
 /* 2013.01.04 match b2d, d2b output to api doc in new 3.02 release notes. (Kermit Kiser)      */
+/* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */     
 /* ------------------------------------------------------------------ */
 package netrexx.lang
 options binary nodecimal strictargs strictcase   noformat
@@ -89,7 +90,7 @@ options binary nodecimal strictargs strictcase   noformat
    This defines the primary string class for NetRexx.
  */
 
-class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
+class Rexx implements RexxOperators, Serializable, Comparable, Iterable
 
   /* ----- Constants ----- */
   properties constant public  -- might be useful to others
@@ -2309,9 +2310,13 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 			r[i]=wrapped
 			end
 		return r
-
+-------------------------------------------------------------------------------------------------------------------------------
 -- Original classes, constructors, and methods added for isIndexed and Java collections support:		
+-------------------------------------------------------------------------------------------------------------------------------
 
+  method toMap() protect returns Rexx.RxMap      /* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */
+  	return Rexx.RxMap(this)
+  	
   /** isIndexed returns a boolean flag that indicates if indexed subvalues are present in the
      Rexx object (explicitly set).  */
   method isindexed() protect returns Rexx
@@ -2346,11 +2351,13 @@ class Rexx implements RexxOperators, Serializable, Comparable, Map, Iterable
 		this("")
 		this.putAll(m)
 		return this
-
+		
+/* this is not really needed - equivalent to Rexx(r).copyindexed(s)
 	method Rexx(r=Rexx,s=Rexx)
 		this(r)
 		this.putAll(s)
 		return this
+*/
 
 	method clear()
 		this.coll=null
@@ -2695,3 +2702,15 @@ class Rexx.ValueIterator extends Rexx.BaseIterator
 			return base2.getnode(last).leaf
 			end
 		signal NoSuchElementException
+			
+---------------------------------------------------------------------------------------
+--		RxMap class, moves Map implementation out of Rexx class to prevent overriding String conversions in XML API  -- 2013-04-30	
+/* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */
+---------------------------------------------------------------------------------------
+/** RxMap  - a Java Map version of the Rexx object   */
+
+class Rexx.RxMap extends Rexx implements java.util.Map
+
+	method RxMap(rx=Rexx)
+		super(rx)
+		this.coll=rx.coll			

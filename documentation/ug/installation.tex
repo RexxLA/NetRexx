@@ -1,10 +1,10 @@
 \chapter{Installation}
 This chapter of the document tells you how to unpack, install, and test the NetRexx translator package. This will install documentation, samples, and executables. It will first state some generic steps that are sufficient for most users. The appendices contain very specific instructions for a range of platforms that NetRexx is used on. 
 Note that to run any of the samples, or use the NetRexx translator, you must have already installed the Java runtime (and toolkit, if you want to compile NetRexx programs using the default compiler). 
-The NetRexx samples and translator, as of version 3.01, are
-guaranteed to run on Java version 1.5 or later, but will almost
-certainly run on earlier versions of many JVM's.\footnote{For earlier versions of Java,
-  NetRexx 2.05 is available from the NetRexx.org website.}. For ease
+The NetRexx samples and translator, version 3.02, are
+guaranteed to run on Java version 1.5 or later; the programs using the
+NetRexxR.jar runtime library will run on earlier versions of many JVM's.\footnote{For earlier versions of Java,
+  NetRexx 2.05 is available from the NetRexx.org website.} For ease
 of development and the availability of additional Java tools, a Java
 SDK can be installed, but NetRexx
 programs can be interpreted or compiled on a Java JRE
@@ -15,15 +15,12 @@ default the built-in (same compiler classes as javac uses) compiler of the Java 
 \end{verbatim}
 which should display a response similar to this:
 \begin{verbatim} 
-java version "1.6.0_26"
-Java(TM) SE Runtime Environment (build 1.6.0_26-b03-383-11A511)
-Java HotSpot(TM) 64-Bit Server VM (build 20.1-b02-383, mixed mode)
+java version "1.7.0_17"
+Java(TM) SE Runtime Environment (build 1.7.0_17-b02)
+Java HotSpot(TM) 64-Bit Server VM (build 23.7-b01, mixed mode)
 \end{verbatim}
-For more information on Java installation:
-\begin{enumerate} 
-\item For some operating environments
-\item For other operating systems, see the Oracle Java web page\footnote{at \url{http://www.javasoft.com}} – or other suppliers of Java toolkits.
-\end{enumerate}
+For more information on Java installation, see the Oracle Java web page\footnote{at \url{http://www.javasoft.com}} – or other suppliers of Java toolkits.
+
 \section{Unpacking the NetRexx package}
 The NetRexx package is shipped as a collection of files compressed into the file NetRexx<version>.zip. 
 Most modern operating environments can uncompress a .zip package by doubleclicking.
@@ -119,6 +116,92 @@ After unpacking, the following directories should have been created:
    |---ant-task
    |---emacs
 \end{verbatim}
+\section{The NetRexx packages}
+In the \emph{lib} subdirectory, there are three java archive files
+(\emph{jars}), which are called:
+
+\begin{description}
+\item[NetRexxF.jar] The translator (and runtime) package including the
+  ecj\footnote{Eclipse Compiler for Java} java compiler
+\item[NetRexxC.jar] The translator (and runtime) package without java
+  compiler
+\item[ecj-4.2.jar] The eclipse java compiler package
+\end{description}
+
+The \emph{runlib} directory contains one java archive:
+\begin{description}
+\item[NetRexxR.jar] A minimal package including only the runtime
+  NetRexx classes - for distribution with NetRexx programs
+\end{description}
+\index{NetRexxF.jar}
+It is advised to start with the NetRexxF.jar archive package. This can
+be used for your first NetRexx activities in a way that is independent
+of the Java \emph{classpath}, or the Java installation - a development
+installation (JDK) or just the java runtime (JRE). This enables you to interpret, or
+compile NetRexx programs to .class files. The NetRexxC.jar package is
+used by experienced NetRexx users; it requires a correct setting of
+the \emph{classpath} environment variable (explicitly, or implicitly
+by adding it to the JVM standard extension directory) to find the java
+compiler (either the JDK included \emph{javac} classes or the included
+eclipse compiler) - on a JDK or JRE installation. The NetRexxR.jar
+contains only the runtime of the NetRexx language. It can be added to
+compiled NetRexx applications if a small footprint is required. The
+following paragraph discusses getting the compiler to translate your
+first program using the NetRexxF.jar - after that the process of
+adding the translator to your environment is shown, what we will call
+'installing' here. There is no requirement for a 'setup' type of
+install, and when you can execute Java on your system, there is no
+need to be 'Administrator' or 'root' on your system - NetRexx runs
+fine from your home directory.
+
+\section{First steps with NetRexx}
+\begin{enumerate}
+\item Verify the working of java on your system with the command:
+	java -version\newline
+If this does not work, obtain a version at \url{http://java.com} and install it.
+
+\item Create a file named hello.nrx in the directory that contains NetRexxF.jar, with the line:
+	say 'hello, netrexx world!'
+
+\item In this directory, verify the working of the interpreter with:
+\begin{verbatim}
+	java -jar NetRexxF.jar -exec hello
+\end{verbatim}
+\item Verify the creating of a .class file using the compiler with:
+\begin{verbatim}
+	java -Dnrx.compiler=ecj -jar NetRexxF.jar hello
+\end{verbatim}
+This should create hello.class, to be executed with the command:
+\begin{verbatim}
+	java -cp NetRexxF.jar:. hello
+\end{verbatim}
+(on windows, the colon should be a semicolon)
+\end{enumerate}
+The -jar directive tells the JVM to ignore the set classpath and to
+start a method that is indicated in the jar metadata.This method is,
+for the NetRexxF.jar: 
+ \begin{verbatim}
+        java org.netrexx.process.NetRexxC
+\end{verbatim}
+just as shown in \ref{testing} on page \pageref{testing}. Now that you
+have seen that it works, you can use this method of
+execution\footnote{Taking into account that you will have to add
+  additional entries to the -jar argument for all but the most trivial
+applications.}, or
+proceed with installing a more flexible way of using NetRexx.
+
+When a class calls another class that is located in the same
+directory, we need to add this directory to the \emph{classpath}. For
+example, if we want to compile the charOblong.nrx example from page
+\pageref{charoblong}, which extends the Oblong class, we need to
+invoke it as:
+ \begin{verbatim}
+        java -Dnrx.compiler=ecj -jar NetRexxF.jar -cp NetRexxF.jar;. charOblong.nrx
+\end{verbatim}
+This can be done in a more straightforward way, by installing the
+NetRexxC.jar on the classpath and using the provided \texttt{nrc}
+script; this is the subject of the next section.
+
 \section{Installing the NetRexx Translator}
 The NetRexx package includes the NetRexx translator – a Java application which can be used for compiling, interpreting, or syntax-checking NetRexx programs. The procedure for installation is as follows\footnote{For Windows operating systems, forward slashes are backslashes.}:
 \begin{enumerate}
@@ -126,7 +209,6 @@ The NetRexx package includes the NetRexx translator – a Java application which
 \begin{itemize} 
 \item Add the full path and filename of the NetRexx/lib/NetRexxC.jar to the CLASSPATH environment variable for your operating system.\footnote{if you have a NetRexxC.zip in your CLASSPATH from an earlier version of NetRexx, remove it (NetRexxC.jar replaces NetRexxC.zip).}
 \item Or (deprecated): Copy the file NetRexx/lib/NetRexxC.jar to the jre/lib/ext directory in the Java installation tree. The JVM will automatically find it there and make it available\footnote{ This has serious drawbacks, however:
-This breaks NetRexx applications running in custom class loader environments such as jEdit and NetRexxScript, as well as some JSP containers.
 As soon as the Java version is updated, NetRexx applications may
 mysteriously – due to the now obsolete path - fail. The contents of
 the extensions directory are unversioned.
@@ -135,16 +217,7 @@ with an application that included another version of NetRexx will become very ha
 \end{itemize}
 \item Copy all the files in the NetRexx/bin directory to a directory in your PATH. This is not essential, but makes shorthand scripts and a test case available. 
 \item Make the file [...]/lib/tools.jar (which contains the javac compiler) in the Java tree visible to the JVM. You can do this either by adding its path and filename to the CLASSPATH environment variable, or by moving it to the jre/lib/ext directory in the Java tree. This file sometime goes under different names, that will be mentioned in the platform-specific appendices.
-\item Test the installation by making the /bin directory the current directory and issuing the following two commands exactly as written: 
-\begin{verbatim}
-       java org.netrexx.process.NetRexxC hello
-       java hello
-\end{verbatim}
-The first of these should translate the test program and then invoke the javac compiler to generate the class file (hello.class) for the program. The second should run the program and
-display a simple greeting.
 \end{enumerate}
-If you have any problems or errors in the above process, please read the detailed instructions and problem-solving tips that follow. 
-
 \section{Installing just the NetRexx Runtime}
 \index{runtime,installation}
 \index{installation,runtime only}
@@ -236,8 +309,17 @@ to work, the following remarks can be helpful:
 After installing NetRexx, it is recommended that you test that it is
 working correctly. If there are any problems, check the
 \emph{Troubleshooting} section of this document, chapter
-\ref{troubleshooting} on page \pageref{troubleshooting}. 
-To test your installation, make the directory to which you copied the executables the current directory, then (being very careful to get the case of letters correct):
+\ref{troubleshooting} on page \pageref{troubleshooting}.
+
+Test the installation by typing in a file named 'hello.nrx' containing the line:
+\begin{verbatim} 
+       say 'hello, world' 
+\end{verbatim}
+ If you want to avoid typing in the file yourself,
+\begin{verbatim} 
+       ./examples/ibm-historic/hello.nrx
+\end{verbatim}
+has the original version of this program.
 \begin{enumerate}
 \item Enter the command
  \begin{verbatim}
@@ -248,12 +330,18 @@ authorization for the directory that contains the source.\footnote{For example,
 more modern versions of Windows do not allow non-admin userids to
 write into the program files directories. In this case, make a
 directory under your home directory and copy the hello.nrx file there,
-and start the nrc command from the same location.}
+and start the nrc command from the same location. Running it from the
+examples directory will work.}
 This should run the NetRexx compiler, which first translates the
 NetRexx program hello.nrx to the Java program hello.java. It then
 invokes the default Java compiler (javac\footnote{In fact, the class
   that the javac program also calls for compilation - but you can use
-  other java compilers}), to compile the file hello.java to make the binary class file hello.class. The intermediate hello.java file is then deleted, unless an error occurred or you asked for it to be kept.
+  other java compilers}), to compile the file hello.java to make the
+binary class file hello.class. The intermediate hello.java file is
+then deleted, unless an error occurred or you asked for it to be
+kept. You can also specify the source filename as 'hello.nrx' - for
+convenience, the translator will look for a file with a '.nrx' suffix
+if this is not specified.
 \item Enter the command
  \begin{verbatim} 
 java hello 

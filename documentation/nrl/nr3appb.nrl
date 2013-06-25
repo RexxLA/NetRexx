@@ -1,0 +1,248 @@
+.* ------------------------------------------------------------------
+.* NetRexx indirect properties                                    mfc
+.* Copyright (c) Mike Cowlishaw 1997, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+.*  Change History
+.*
+.*  2009.05.06 -- initial from supp
+.*
+:h1 id=refappb.Appendix B &ndash. JavaBean Support
+.pi /Experimental feature
+:p.
+This appendix describes an experimental feature, :i.indirect
+properties:ei., which is supported by the NetRexx reference
+implementation.
+.* It will not necessarily be included in a future
+.* NetRexx language definition, should there be an updated definition.
+:p.
+.pi /JavaBean properties
+.pi /Properties/for JavaBeans
+The intention of the feature is to make it easier to write a certain
+kind of class known as a :i.JavaBean:ei..
+Almost all JavaBeans will have :hp1.properties:ehp1., which are data items
+that a user of a JavaBean is expected to be able to customize (for
+example, the text on a pushbutton).  The names and types of the
+properties of a JavaBean are inferred from :q.:hp1.design
+patterns:ehp1.:eq. (in this context, conventions for naming methods) or
+from PropertyDescriptor objects associated with the JavaBean.
+:p.
+The JavaBean properties do not necessarily correspond to instance
+variables in the class &dash. although very often they do.  The
+JavaBean specification does not guarantee that JavaBean properties
+that can be set can also be inspected, nor does it describe how
+ambiguities of naming and method signatures are to be handled.
+:p.
+The NetRexxC compiler
+.* (as of 15 Feb 1997)
+allows a more rigorous
+treatment of JavaBean properties, by allowing an optional attribute of
+properties in a class that declares them to be :i.indirect
+properties:ei..  Indirect properties are properties of a known type
+that are private to the class, but which are expected to be publicly
+accessible indirectly, though certain conventional method calls.
+:p.
+Declaring properties to be indirect offers the following advantages:
+:ul.
+:li.For many simple cases, the access methods for the properties can be
+generated automatically; there is no need to explicitly code them in the
+source file for the class.  This is especially helpful for Indexed
+Properties (where four methods are needed, in general).
+:li.Where access methods are explicitly provided in the class, they can
+be checked for correct form, signature and accessibility.  This detects
+errors at compile time that otherwise would only be determined by
+testing.
+:li.Similarly, attention can be drawn to the presence of methods that
+may be intended to be an access method for an indirect property, but
+will not be recognized as such by builders.
+:eul.
+:p.The next section describes the use of indirect properties in more
+detail.
+.*
+.cp 7
+.* --- This could become a new chapter in the book, with a short
+.*     cross-reference from the properties instruction.
+:h2 id=refindprop.Indirect properties
+.pi /PROPERTIES instruction
+.pi /Instructions/PROPERTIES
+.pi /INDIRECT/on PROPERTIES instruction
+.pi /Indirect properties
+.pi /Properties/indirect
+:p.
+The :a id=refprop.:kw.properties:ekw. instruction:ea. is used to
+define the attributes of following :i.property:ei. variables.
+The :hp1.visibility:ehp1. of properties may include a new alternative:
+:kw.indirect:ekw..
+Properties with this form of visibility are known as :i.indirect
+properties:ei..  These are properties of a known type that are private
+to the class, but which are expected to be publicly accessible
+indirectly, though certain conventional method calls.
+.*
+:p.
+For example, consider the simple program:
+:xmp.
+class Sandwich extends Canvas implements Serializable
+  properties indirect
+    slices=Color.gray
+    filling=Color.red
+
+  method Sandwich
+    resize(100,30)
+
+  method paint(g=Graphics)
+    g.setColor(slices)
+    g.fillRect(0, 0, size.width, size.height)
+    g.setColor(filling)
+    g.fillRect(12, 12, size.width-12, size.height-12)
+:exmp.
+:pc.This declares the :hp4.Sandwich:ehp4. class as having two indirect
+properties, called :hp4.slices:ehp4. and :hp4.filling:ehp4., both being
+of type :hp4.java.awt.Color:ehp4..
+:p.
+In the example, no access methods are provided for the properties, so
+the compiler will add them.  By implementation-dependent convention, the
+names are prefixed with verbs such as :hp4.get:ehp4. and :hp4.set:ehp4.,
+&etc., and have the first character of their name uppercased to form the
+method names.
+Hence, in this Java-based example, the following four methods are added:
+:xmp.
+method getSlices  returns java.awt.Color
+  return slices
+method getFilling returns java.awt.Color
+  return filling
+method setSlices($1=java.awt.Color)
+  slices=$1
+method setFilling($2=java.awt.Color)
+  filling=$2
+:exmp.
+:pc.(where :hp4.$1:ehp4. and :hp4.$2:ehp4. are :q.hidden:eq. names used for
+accessing the method arguments).
+:p.
+Note that the :kw.indirect:ekw. attribute for a property is an
+alternative to the :kw.public:ekw., :kw.private:ekw., and
+:kw.inheritable:ekw., and :kw.shared:ekw. attributes.
+Like private properties, indirect properties can only be accessed
+directly by name from within the class in which they occur; other
+classes can only access them using the access methods (or other methods
+that may use, or have a side-effect on, the properties).
+:p.
+Indirect properties may be :kw.constant:ekw. (implying that only
+a :m.get:em. method is generated or allowed, though the private property
+may be changed by methods within the class)
+or :a id=refpropmod.:kw.transient:ekw.:ea..
+They may not be :kw.static:ekw. or :kw.volatile:ekw..
+:p.
+In detail, the rules used for generating automatic methods for a
+property whose name is :hp4.xxxx:ehp4. are as follows:
+:ol.
+:li.A method called :hp4.getXxxx:ehp4. which returns the value of the
+property is generated.  The returned value will have the same type
+as :hp4.xxxx:ehp4..
+:li.If the type of :hp4.xxxx:ehp4. is :hp4.boolean:ehp4. then the generated
+method will be called :hp4.isXxxx:ehp4. instead of :hp4.getXxxx:ehp4..
+:li.If the property is not :kw.constant:ekw. then a method for setting the
+property will also be generated.  This will be called :hp4.setXxxx:ehp4.,
+and take a single argument of the same type as :hp4.xxxx:ehp4..  This
+assigns the argument to the property and returns no value.
+:eol.
+:p.
+If the property has an array type (for example, :hp4.char&lbrk.&rbrk.:ehp4.),
+then it must only have a single dimension.
+.* :p keep.
+Two further methods may then be generated, according to the rules:
+:ol.
+:li.A method called :hp4.getXxxx:ehp4. which takes a single :hp4.int:ehp4.
+as an argument and which returns an item from the property array is
+generated. The returned value will have the same type as :hp4.xxxx:ehp4.,
+without the :hp4.&lbrk.&rbrk.:ehp4..  The integer argument is used to
+index into the array.
+:li.As before, if the result type of the method would be :hp4.boolean:ehp4.
+then the name of the method will be :hp4.isXxxx:ehp4. instead
+of :hp4.getXxxx:ehp4..
+:li.If the property is not :kw.constant:ekw. then a method for setting an
+item in the property array will also be generated.
+This will be called :hp4.setXxxx:ehp4., and take two arguments: the
+first is an :hp4.int:ehp4. that is used to select the item to be
+changed, and the second is an undimensioned argument of the same type
+as :hp4.xxxx:ehp4..  It assigns the second argument to the item in the
+property array indexed by the first argument, and returns no value.
+:eol.
+:p.For example, for an indirect property declared thus:
+:xmp.
+properties indirect
+  fred=foo.Bar&lbrk.&rbrk.
+:exmp.
+:pc.the four methods generated would be:
+:xmp.
+method getFred returns foo.Bar&lbrk.&rbrk.; return fred
+method getFred($1=int) returns foo.Bar; return fred[$1]
+method setFred($2=foo.Bar&lbrk.&rbrk.); fred=$2
+method setFred($3=int, $4=foo.Bar); fred[$3]=$4
+:exmp.
+:p.
+Note that in all cases a method will only be generated if it would not
+exactly
+.* -- 1998.03.07 superclass rule removed:
+.* override a method in a superclass or exactly
+match a method explicitly coded in the current class.
+.*
+.cp 7
+:h4.Explicit provision of access methods
+:p.
+Often, for example when an indirect property has an on-screen
+representation, it is desirable to redraw the property when the property
+is changed (and in more complicated cases, there may be interactions
+between properties).
+These and other actions will require extra processing which will not be
+carried out by automatically generated methods.  To add this processing
+the access methods will have to be coded explicitly.  In the
+:q.Sandwich:eq. example, we only need to supply the :hp4.set:ehp4.
+methods, perhaps by adding the following to the example class above:
+:xmp.
+method setSlices(col=Color)
+  slices=col      -- update the property
+  this.repaint    -- redraw the component
+
+method setFilling(col=Color)
+  filling=col
+  this.repaint
+:exmp.
+:pc.If we add these two methods, they will no longer be added
+automatically (the two :hp4.get:ehp4. methods will continue to be
+provided automatically, however).  Further, since the names match
+possible access methods for properties that are declared to be indirect,
+the compiler will check the method declaration: the method signatures
+and return type (if any) must be correct, for example.  Also, since the
+names of access methods are case-sensitive (in a Java environment), you
+will be warned if a method appears to be intended to be an access method
+but the case of one or more letters is wrong.
+:p.
+Specifically, the checks carried out are as follows:
+:ol.
+:li.For methods whose names exactly match a potential access method for
+an indirect property (that is, start with :hp4.is:ehp4., :hp4.get:ehp4.,
+or :hp4.set:ehp4., which is then followed by the name of an indirect
+property with the first character of the name uppercased):
+:ul.
+:li.The argument list for (signature of) the method must match one of
+those that could possibly be automatically generated for the property.
+:li.The returns type (if any) must match the expected returns type for
+that method.
+:li.If the returns type is simply :hp4.boolean:ehp4., then the method name
+must start with :hp4.is:ehp4..
+Conversely, if the method name starts with :hp4.is:ehp4. then the returns
+type must be just :hp4.boolean:ehp4..
+:li.If the property is :kw.constant:ekw. then the name of the method
+cannot start with :hp4.set:ehp4..
+:li.A warning is given if the method is not :kw.public:ekw. (the default).
+:eul.
+:li.For methods whose names match a potential access method, as above,
+except in case:
+:ul.
+:li.A warning is given that the method in question may be intended to
+be an indirect property access method, but will not be recognized as
+such by builders.
+:eul.
+:eol.
+:p.These checks detect a wide variety of errors at compile time, hence
+speeding the development of classes that use indirect properties.
+.* ------

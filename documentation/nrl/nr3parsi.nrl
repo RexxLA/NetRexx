@@ -1,0 +1,523 @@
+.* ------------------------------------------------------------------
+.* NetRexx language definition                                    mfc
+.* Copyright (c) Mike Cowlishaw 1996, 2009.  All Rights Reserved.
+.* ------------------------------------------------------------------
+:h2 id=refparsing.Parsing templates
+.pi start /Parsing
+.pi start /Parsing templates
+.pi start /Templates, parsing
+.pi /PARSE/parsing rules
+.pi /Parsing/general rules
+.pi /Templates, parsing/general rules
+:p.The :kw.parse:ekw. instruction allows a selected string to
+be parsed (split up) and assigned to variables, under the control of a
+:i.template:ei..
+:p.
+The various mechanisms in the template allow a string to be split up by
+explicit matching of strings (called :i.patterns:ei.), or by
+specifying numeric positions (:i.positional patterns:ei. &dash. for
+example, to extract data from particular columns of a line read from a
+character stream).
+Once split into parts, each segment of the string can then be assigned
+to variables as a whole or by words (delimited by blanks).
+:p.
+This section first gives some informal examples of how the parsing
+template can be used, and then defines the algorithms in detail.
+.*
+.pi /Parsing/introduction
+:h3.Introduction to parsing
+:p.The simplest form of parsing template consists of a list of variable
+names.
+The string being parsed is split up into words (characters delimited by
+blanks), and each word from the string is assigned to a
+variable in sequence from left to right.
+The final variable is treated specially in that it will be assigned
+whatever is left of the original string and may therefore contain
+several words.
+For example, in the :kw.parse:ekw. instruction:
+:xmp.
+parse 'This is a sentence.' v1 v2 v3
+:exmp.
+:pc.the term (in this case a literal string) following the instruction
+keyword is parsed, and then:  the variable :hp4.:hp1.v1:ehp1.:ehp4.
+would be assigned the value :q.:hp4.This:ehp4.:eq., :hp4.:hp1.v2:ehp1.:ehp4.
+would be assigned the value :q.:hp4.is:ehp4.:eq.,
+and :hp4.:hp1.v3:ehp1.:ehp4. would be assigned the
+value :q.:hp4.a_sentence.:ehp4.:eq..
+:p.
+Leading blanks are removed from each word in the string before it is
+assigned to a variable, as is the blank that delimits the end of the
+word.
+Thus, variables set in this manner (:hp4.:hp1.v1:ehp1.:ehp4.
+and :hp4.:hp1.v2:ehp1.:ehp4. in the example) will never have leading or
+trailing blanks, though :hp4.:hp1.v3:ehp1.:ehp4. could have both leading
+and trailing blanks.
+:p.Note that the variables assigned values in a template are always
+given a new value and so if there are fewer words in the string than
+variables in the template then the unused variables will be set to the
+null string.
+.*
+:p.The second parsing mechanism uses a literal string in a template as a
+pattern, to split up the string.
+For example:
+:xmp.
+parse 'To be, or not to be?' w1 ',' w2
+:exmp.
+:pc.would cause the string to be scanned for the comma, and then split
+at that point; the variable :hp4.:hp1.w1:ehp1.:ehp4. would be set
+to :q.:hp4.To_be:ehp4.:eq., and :hp4.:hp1.w2:ehp1.:ehp4. is set to
+:q.:hp4._or_not_to_be?:ehp4.:eq..
+Note that the pattern itself (and :hp2.only:ehp2. the pattern) is
+removed from the string.
+Each section of the string is treated in just the same way as the whole
+string was in the previous example, and so either section could be split
+up into words.
+.cp 5
+:p.Thus, in:
+:xmp.
+parse 'To be, or not to be?' w1 ',' w2 w3 w4
+:exmp.
+:pc.:hp4.:hp1.w2:ehp1.:ehp4. and :hp4.:hp1.w3:ehp1.:ehp4. would be
+assigned the values :q.:hp4.or:ehp4.:eq. and :q.:hp4.not:ehp4.:eq.,
+and :hp4.:hp1.w4:ehp1.:ehp4. would be assigned the remainder:
+:q.:hp4.to_be?:ehp4.:eq..
+:p.
+If the string in the last example did not contain a comma, then
+the pattern would effectively :q.match:eq. the end of the string, so
+the variable to the left of the pattern would get the entire input
+string, and the variables to the right would be set to a null string.
+:p.The pattern may be specified as a variable, by putting the variable
+name in parentheses.  The following instructions therefore have the
+same effect as the last example:
+:xmp.
+c=','
+parse 'To be, or not to be?' w1 (c) w2 w3 w4
+:exmp.
+.*
+:p.The third parsing mechanism is the numeric positional
+pattern.
+This works in the same way as the string pattern except that it
+specifies a column number.  So:
+:xmp.
+parse 'Flying pigs have wings' x1 5 x2
+:exmp.
+:pc.would split the string at the fifth column,
+so :hp4.:hp1.x1:ehp1.:ehp4. would be :q.:hp4.Flyi:ehp4.:eq.
+and :hp4.:hp1.x2:ehp1.:ehp4. would start at column 5 and
+so be :q.:hp4.ng_pigs_have_wings:ehp4.:eq..
+:p.More than one pattern is allowed, so for example:
+:xmp.
+parse 'Flying pigs have wings' x1 5 x2 10 x3
+:exmp.
+:pc.would split the string at columns 5 and 10,
+so :hp4.:hp1.x2:ehp1.:ehp4. would be
+:q.:hp4.ng_pi:ehp4.:eq. and :hp4.:hp1.x3:ehp1.:ehp4. would be
+:q.:hp4.gs_have_wings:ehp4.:eq..
+:p.The numbers can be relative to the last number used, so:
+:xmp.
+parse 'Flying pigs have wings' x1 5 x2 +5 x3
+:exmp.
+:pc.would have exactly the same effect as the last example; here
+the :hp4.+5:ehp4. may be thought of as specifying the length of the
+string to be assigned to :hp4.:hp1.x2:ehp1.:ehp4..
+:p.As with literal string patterns, the positional patterns can
+be specified as a variable by putting the name of a variable, in
+parentheses, in place of the number.
+An absolute column number should then be indicated by using an equals
+sign (:q.:hp4.=:ehp4.:eq.) instead of a plus or minus sign.
+The last example could therefore be written:
+:xmp.
+start=5
+length=5
+data='Flying pigs have wings'
+parse data  x1 =(start) x2 +(length) x3
+:exmp.
+:p.String patterns and positional patterns can be mixed (in effect the
+beginning of a string pattern just specifies a variable column number)
+and some very powerful things can be done with templates.
+The next section describes in more detail how the various mechanisms
+interact.
+.*
+.cp 20
+.pi /Parsing/definition
+:h3.Parsing definition
+:p.This section describes the rules that govern parsing.
+.pi /Parsing/general rules
+:p.In its most general form, a template consists of alternating pattern
+specifications and variable names.  Blanks may be added between
+patterns and variable names to separate the tokens and to improve
+readability.  The patterns and variable names are used strictly in
+sequence from left to right, and are used once only.  In practice,
+various simpler forms are used in which either variable names or
+patterns may be omitted; we can therefore have variable names without
+patterns in between, and patterns without intervening variable names.
+:p.In general, the value assigned to a variable is that sequence of
+characters in the input string between the point that is matched by the
+pattern on its left and the point that is matched by the pattern on its
+right.
+:p.If the first item in a template is a variable, then there is an
+implicit pattern on the left that matches the start of the string, and
+similarly if the last item in a template is a variable then there is an
+implicit pattern on the right that matches the end of the string.
+Hence the simplest template consists of a single variable name which in
+this case is assigned the entire input string.
+:p.Setting a variable during parsing is identical in effect to setting a
+variable in an assignment.
+.*
+:p.The constructs that may appear as patterns fall into two categories;
+patterns that act by searching for a matching string (literal
+patterns), and numeric patterns that specify an absolute or relative
+position in the string (positional patterns).
+Either of these can be specified explicitly in the template, or
+alternatively by a reference to a variable whose value is to be used
+as the pattern.
+:p.For the following examples, assume that the following sample string
+is being parsed; note that all blanks are significant &dash. there are
+two blanks after the first word :q.:hp4.is:ehp4.:eq. and also after the
+second comma:
+:xmp.
+'This is  the text which, I think,  is scanned.'
+:exmp.
+.cp 5
+:h4.Parsing with literal patterns
+.pi start /Parsing/patterns
+.pi start /Patterns/in parsing
+.pi /Parsing/literal patterns
+.pi /Literal patterns
+:p.Literal patterns cause scanning of the data string to find a
+sequence that matches the value of the literal.  Literals are expressed
+as a quoted string.  The null string matches the end of the data.
+.cp 4
+:p.The template:
+:xmp.
+w1 ',' w2 ',' w3
+:exmp.
+:pc.when parsing the sample string, results in:
+:xmp.
+:hp1.w1:ehp1. :hp0.has the value:ehp0. "This is  the text which"
+:hp1.w2:ehp1. :hp0.has the value:ehp0. " I think"
+:hp1.w3:ehp1. :hp0.has the value:ehp0. "  is scanned."
+:exmp.
+:p.Here the string is parsed using a template that asks that each of
+the variables receive a value corresponding to a portion of the
+original string between commas; the commas are given as quoted strings.
+Note that the patterns themselves are removed from the data being
+parsed.
+.*
+:p.A different parse would result with the template:
+:xmp.
+w1 ',' w2 ',' w3 ',' w4
+:exmp.
+:pc.which would result in:
+:xmp.
+:hp1.w1:ehp1. :hp0.has the value:ehp0. "This is  the text which"
+:hp1.w2:ehp1. :hp0.has the value:ehp0. " I think"
+:hp1.w3:ehp1. :hp0.has the value:ehp0. "  is scanned."
+:hp1.w4:ehp1. :hp0.has the value:ehp0. ""  (null string)
+:exmp.
+:p.This illustrates an important rule.  When a match for a pattern
+cannot be found in the input string, it instead :q.matches:eq. the end
+of the string.  Thus, no match was found for the third :hp4.',':ehp4. in
+the template, and so :hp4.:hp1.w3:ehp1.:ehp4. was assigned the rest of
+the string. :hp4.:hp1.w4:ehp1.:ehp4. was assigned a null string
+because the pattern on its left had already reached the end of the
+string.
+:p.Note that :hp2.all:ehp2. variables that appear in a template in this
+way are assigned a new value.
+.*
+.cp 5
+:h4.Parsing strings into words
+.pi /Words/in parsing
+.pi /Parsing/selecting words
+:p.If a variable is directly followed by one or more other variables,
+then the string selected by the patterns is assigned to the variables
+in the following manner.
+Each blank-delimited word in the string is
+assigned to each variable in turn, except for the last variable in the
+group (which is assigned the remainder of the string).
+The values of the variables which are assigned words will have neither
+leading nor trailing blanks.
+.cp 4
+:p.Thus the template:
+:xmp.
+w1 w2 w3 w4 ','
+:exmp.
+.cp 6
+:pc.would result in:
+:xmp.
+:hp1.w1:ehp1. :hp0.has the value:ehp0. "This'
+:hp1.w2:ehp1. :hp0.has the value:ehp0. "is"
+:hp1.w3:ehp1. :hp0.has the value:ehp0. "the"
+:hp1.w4:ehp1. :hp0.has the value:ehp0. "text which"
+:exmp.
+:pc.Note that the final variable (:hp4.:hp1.w4:ehp1.:ehp4. in this
+example) could have had both leading blanks and trailing blanks, since
+only the blank that delimits the previous word is removed from the data.
+:p.Also observe that this example is not the same as specifying
+explicit blanks as patterns, as the template:
+:xmp.
+w1 ' ' w2 ' ' w3 ' ' w4 ','
+:exmp.
+:pc.would in fact result in:
+:xmp.
+:hp1.w1:ehp1. :hp0.has the value:ehp0. "This'
+:hp1.w2:ehp1. :hp0.has the value:ehp0. "is"
+:hp1.w3:ehp1. :hp0.has the value:ehp0. ""  (null string)
+:hp1.w4:ehp1. :hp0.has the value:ehp0. "the text which"
+:exmp.
+:pc.since the third pattern would match the third blank in the data.
+:p.In general, when a variable is followed by another variable then
+parsing of the input into individual words is implied.
+The parsing process may be thought of as first splitting the original
+string up into other strings using the various kinds of patterns, and
+then assigning each of these new strings to (zero or more) variables.
+.cp 5
+:h4 id=refplaceh.Use of the period as a placeholder
+.pi /Period/as placeholder in parsing
+.pi /. (period)/as placeholder in parsing
+:p.A period (separated from any symbols by at least one blank) acts as a
+placeholder in a template.
+It has exactly the same effect as a variable name, except that no
+variable is set.
+It is especially useful as a :q.dummy variable:eq. in a list of
+variables, or to collect (ignore) unwanted information at the end of a
+string.  Thus the template:
+:xmp.
+ . . . word4 .
+:exmp.
+:pc.would extract the fourth word (:q.:hp4.text:ehp4.:eq.) from the sample
+string and place it in the variable :hp4.:hp1.word4:ehp1.:ehp4..
+Blanks between successive periods in templates may be omitted, so the
+template:
+:xmp.
+ ... word4 .
+:exmp.
+:pc.would have the same result as the last template.
+.*
+.cp 5
+:h4.Parsing with positional patterns
+.pi /Parsing/positional patterns
+.pi /Positional patterns
+:p.Positional patterns may be used to cause the parsing to occur on the
+basis of position within the string, rather than on its contents.
+.pi /Signs in parsing templates
+They take the form of whole numbers, optionally preceded by a plus,
+minus, or equals sign which indicate relative or absolute positioning.
+These may cause the matching operation to :q.back up:eq. to an earlier
+position in the data string, which can only occur when positional
+patterns are used.
+.cp 5
+.pi /Absolute/column specification in parsing
+.pi /Column specification in parsing
+:p.:hp2.Absolute positional patterns::ehp2.
+A number in a template that is :hp2.not:ehp2. preceded by a sign
+refers to a particular (absolute)
+character column in the input, with 1 referring to the first
+column.
+For example, the template:
+:xmp.
+s1 10 s2 20 s3
+:exmp.
+:pc.results in:
+:xmp.
+:hp1.s1:ehp1. :hp0.has the value:ehp0. "This is  "
+:hp1.s2:ehp1. :hp0.has the value:ehp0. "the text w"
+:hp1.s3:ehp1. :hp0.has the value:ehp0. "hich, I think,  is scanned."
+:exmp.
+:p.Here :hp4.:hp1.s1:ehp1.:ehp4. is assigned characters from the first
+through the ninth character, and :hp4.:hp1.s2:ehp1.:ehp4. receives input
+characters 10 through 19.
+As usual the final variable, :hp4.:hp1.s3:ehp1.:ehp4., is assigned the
+remainder of the input.
+:p.
+.pi /= equals sign/in parsing template
+.pi /Parsing/absolute columns
+An equals sign (:q.:hp4.=:ehp4.:eq.) may be placed before the number
+to indicate explicitly that it is to be used as an absolute column
+position; the last template could have been written:
+:xmp.
+s1 =10 s2 =20 s3
+:exmp.
+:p.A positional pattern that has no sign or is preceded by the
+equals sign is known as an :i.absolute positional pattern:ei..
+.pi /Absolute/positional pattern
+.cp 5
+.pi /Relative column specification in parsing
+.pi /+ plus sign/in parsing template
+.* .pi key /+- sig/z/z/ /- sign in parsing template
+.pi /&idash. minus sign/in parsing template
+:p.:hp2.Relative positional patterns::ehp2.
+A number in a template that is preceded by a plus or minus sign
+indicates
+movement relative to the character position at which the previous
+pattern match occurred.
+This is a :i.relative positional pattern:ei..
+.pi /Relative positional pattern
+:p.If a plus or minus
+is specified, then the position used for the next
+match is calculated by adding (or subtracting) the number given to the
+last matched position.
+The last matched position is the position of the first character of the
+last match, whether specified numerically or by a string.
+.cp 4
+:p.
+For example, the instructions:
+:xmp.
+parse '123456789'  3 w1 +3 w2 3 w3
+:exmp.
+:pc.result in
+:xmp.
+:hp1.w1:ehp1. :hp0.has the value:ehp0. "345"
+:hp1.w2:ehp1. :hp0.has the value:ehp0. "6789"
+:hp1.w3:ehp1. :hp0.has the value:ehp0. "3456789"
+:exmp.
+:pc.The :hp4.+3:ehp4. in this case is equivalent to the absolute
+number :hp4.6:ehp4. in the same position, and may also be considered to
+be specifying the length of the data string to be assigned to the
+variable :hp4.:hp1.w1:ehp1.:ehp4..
+:p.This example also illustrates the effects of a positional pattern
+that implies movement to a character position to the left of (or to)
+the point at which the last match occurred.
+The variable on the left is assigned characters through the end of the
+input, and the variable on the right is, as usual, assigned characters
+starting at the position dictated by the pattern.
+.*
+.cp 4
+:p.A useful effect of this is that multiple assignments can be made:
+:xmp.
+parse x 1 w1 1 w2 1 w3
+:exmp.
+:pc.This results in assigning the (entire) value
+of :hp4.:hp1.x:ehp1.:ehp4.
+to :hp4.:hp1.w1:ehp1.:ehp4., :hp4.:hp1.w2:ehp1.:ehp4.,
+and :hp4.:hp1.w3:ehp1.:ehp4..
+(The first :q.:hp4.1:ehp4.:eq. here could be omitted as it is
+effectively the same as the implicit starting pattern described at the
+beginning of this section.)
+.*
+:p.If a positional pattern specifies a column that is greater than the
+length of the data, it is equivalent to specifying the end of the data
+(&ie., no padding takes place).
+Similarly, if a pattern specifies a column to the left of the first
+column of the data, this is not an error but instead is taken to
+specify the first column of the data.
+:p.Any pattern match sets the :q.last position:eq. in a string to which
+a relative positional pattern can refer.
+The :q.last position:eq. set by a literal pattern is the position at
+which the match occurred, that is, the position in the data of the
+:hp1.first:ehp1. character in the pattern.
+The literal pattern in this case is :hp2.not:ehp2. removed from the
+parsed data.
+Thus the template:
+:xmp.
+',' -1 x +1
+:exmp.
+.cp 5
+:p.will:
+:ol.
+:li.Find the first comma in the input (or the end of the string if
+there is no comma).
+:li.Back up one position.
+:li.Assign one character (the character immediately preceding the comma
+or end of string) to the variable :hp4.:hp1.x:ehp1.:ehp4..
+:eol.
+:p.One possible application of this is looking for abbreviations in a
+string. Thus the instruction:
+:xmp.
+/&z. Ensure options have a leading blank and are
+   in uppercase before parsing. &z./
+parse (' 'opts).upper ' PR' +1 prword ' '
+:exmp.
+:pc.will set the variable :hp4.:hp1.prword:ehp1.:ehp4. to the first word
+in :hp4.:hp1.opts:ehp1.:ehp4. that starts with :q.:hp4.PR:ehp4.:eq. (in
+any case), or will set it to the null string if no such word exists.
+.cp 4;
+:p.:hp2.Notes::ehp2.
+:ol.
+:li.The positional patterns :hp4.+0:ehp4. and :hp4.-0:ehp4. are valid,
+have the same effect, and may be used to include the whole of a previous
+literal (or variable) pattern within the data string to be parsed into
+any following variables.
+:li.As illustrated in the last example, patterns may follow each other
+in the template without intervening variable names.  In this case each
+pattern is obeyed in turn from left to right, as usual.
+:li.There may be blanks between the sign in a positional pattern and
+the number, because NetRexx defines that blanks adjacent to special
+characters are removed.
+:eol.
+.cp 5
+:h4.Parsing with variable patterns
+.pi /Variables/in parsing patterns
+.pi /Parsing/variable patterns
+.pi /Parentheses/in parsing templates
+:p.It is sometimes desirable to be able to specify a pattern by using
+the value of a variable instead of a fixed string or number.
+This may be achieved by placing the name of the variable to be used as
+the pattern in parentheses (blanks are not necessary either inside or
+outside the parentheses, but may be added if desired).
+.pi /Variable reference/in parsing template
+This is called a :i.variable reference:ei.; the value of the variable
+is converted to string before use, if necessary.
+:p.If the parenthesis to the left of the variable name is not preceded
+by an equals, plus, or minus sign (:q.:hp4.=:ehp4.:eq.,
+:q.:hp4.+:ehp4.:eq., or :q.:hp4.-:ehp4.:eq.)
+the value of the variable is then used as though it were a literal
+(string) pattern.
+The variable may be one that has been set earlier in the parsing
+process, so for example:
+:xmp.
+.* [%www
+.* delim='?'                -- for testing
+.* ]]
+input="L/look for/1 10"
+parse input  verb 2 delim +1 string (delim) rest
+:exmp.
+:pc.will set:
+:xmp.
+:hp1.verb:ehp1. :hp0.to:ehp0. 'L'
+:hp1.delim:ehp1. :hp0.to:ehp0. '/'
+:hp1.string:ehp1. :hp0.to:ehp0. 'look for'
+:hp1.rest:ehp1. :hp0.to:ehp0. '1 10'
+:exmp.
+.cp 3
+:p.If the left parenthesis :hp2.is:ehp2. preceded by an equals, plus,
+or minus sign then the value of the variable is used as an absolute or
+relative positional pattern (instead of as a literal string pattern).
+In this case the value of the variable must be a non-negative
+whole number, and (as before) it may have been set earlier in the
+parsing process.
+.pi end /Patterns/in parsing
+.pi end /Parsing
+.pi end /Parsing templates
+.pi end /Templates, parsing
+.*  /* This is the test code for the examples in this section */
+.*  /* [Not quite .. see DiagParse in diagnostics for checked set] */
+.*  /* Introductory examples */
+.*  Parse 'This is a sentence.'     v1 v2 v3
+.*  Parse 'To be, or not to be?'    w1 ',' w2
+.*  Parse 'To be, or not to be?'    w1 ',' w2 w3 w4
+.*  Parse 'Flying pigs have wings'  x1 5 x2
+.*  Parse 'Flying pigs have wings'  x1 5 x2 10 x3
+.*  Parse 'Flying pigs have wings'  x1 5 x2 +5 x3
+.*  /* Definition examples */
+.*  in='This is  the text which, I think,  is scanned.'
+.*  Parse in w1 ',' w2 ',' rest
+.*  Parse in w1 ',' w2 ',' w3 ',' rest
+.*  Parse in w1 w2 w3 rest
+.*  Parse in w1 ' ' w2 ' ' w3 ' ' rest
+.*  Parse in s1 10 s2 20 s3
+.*  Parse source . . . filetype .
+.*  /* statement sequences ... */
+.*  a = '123456789'
+.*  parse a  3 w1 +3 w2 3 w3
+.*  x=' abc '
+.*  parse x 1 w1 1 w2 1 w3
+.*  fred='abc,def'
+.*  parse fred',' -1 x +1
+.*  opts='primer'
+.*  parse (' 'opts).upper ' PR' +1 prword ' '
+.*  opts="peter's pretty primer"
+.*  parse (' 'opts).upper ' PR' +1 prword ' '
+.*  opts=' wonderful pyx'
+.*  parse (' 'opts).upper ' PR' +1 prword ' '
+.cp 40

@@ -16,6 +16,7 @@
 /* Change list (see RxLanguage for master change list)                */
 /* 1996.05.28 Initial                                                 */
 /* 1997.06.27 UTF8 can no longer be changed by OPTIONS [Java 1.1]     */
+/* 2013.05.27 Warning for ignored options issued RVJ                  */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -38,10 +39,10 @@ class NrOptions implements RxClauseParser
   if parser.cursor.curclass\=null then signal RxQuit(rxt, tokens[0], 'options.after.class')
 
   if \rxt.pass0 then return        -- handled in pass 0
-  scan(0)
+  --scan(0) -- rvj NETREXX-100 : this seems a superfluous call?
 
  /** Pass processing */
- method scan(pass=int)
+  method scan(pass=int)
   if pass>0 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrOptions: 1')
   if tokens[1].type=RxToken.END then signal RxQuit(rxt, tokens[1], 'option.word.expected')
   if tokens[1].type=RxToken.SP then n=1; else n=0
@@ -49,7 +50,7 @@ class NrOptions implements RxClauseParser
   loop forever
     n=n+1; tok=tokens[n]; t=tok.type
     if t<>RxToken.SYM then signal RxQuit(rxt, tok, 'option.word.expected')
-    rxt.program.flag.setFlag(tok.value)      -- unknown options are quietly ignored
+    if \rxt.program.flag.setFlag(tok.value) then RxWarn(rxt, tok, 'unknown.program.option',tok.value, 'ignored') -- rvj NETREXX-100 20130527
     if rxt.program.flag.utf8\=oldutf8 then do
       rxt.program.flag.utf8=oldutf8          -- restore
       signal RxQuit(rxt, tok, 'cannot.change.flag', 'UTF8')

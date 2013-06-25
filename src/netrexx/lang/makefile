@@ -16,6 +16,6 @@ all::	$(NRX_OBJS)
 clean: 
 	rm -f *.class
 	rm -f *.crossref
-
+	rm -f *.java
 
 
