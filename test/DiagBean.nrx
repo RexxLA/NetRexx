@@ -1,0 +1,76 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagBean                                                           */
+/*                                                                    */
+/*   An object that tests bean features.                              */
+/*                                                                    */
+/*   This tests some basic Bean properties, and some interactions     */
+/*   between manual and automatic methods.                            */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 1997.02.13 Initial                                                 */
+/* 2012.11.15 recast as junit test                                    */
+/* ------------------------------------------------------------------ */
+options binary strictargs
+import junit.framework.
+
+class DiagBean extends TestCase
+
+ properties indirect
+
+   dbbool     =boolean 1
+   dbboolarray=boolean[]
+   dbstring   =String
+   dbsarray   =String[]
+   dbcarray   =char[]
+
+ properties constant indirect
+   dbfixed    =int 77
+
+  method testDiagBean
+    flag=boolean 1
+    
+    /* First some boolean shenanigans */
+    flag = flag & isdbbool()
+    setdbbool(0)
+    flag = flag & \isdbbool()
+    dbboolarray=boolean[3]
+    dbboolarray[0]=1; dbboolarray[1]=0; dbboolarray[2]=1
+    flag = flag & getdbboolarray().length==3
+    flag = flag & isdbboolarray(0)
+    flag = flag & \isdbboolarray(1)
+    flag = flag & isdbboolarray(2)
+    AssertTrue(flag)
+    
+    /* More primitives */
+    flag=flag & getdbfixed()==77
+    setdbstring('foo blah')
+    flag=flag & getdbstring()=='foo blah'
+    dbcarray=char[] getdbstring()
+    flag = flag & getdbcarray(0)=='f'
+    flag = flag & getdbcarray(3)==' '
+    flag = flag & getdbcarray(4)=='b'
+    setdbcarray(3,'-')
+    flag=flag & dbcarray=='foo-blah'
+    
+    
+    /* And a classy set */
+    dbsarray=String[5]
+    setdbsarray(4, 'acrAaL')
+    flag=flag & getdbsarray(4).charAt(4)=='a'
+    flag=flag & getdbsarray(2)==null
+    flag=flag & getdbsarray().length==5
+    
+    AssertTrue(flag)
+    
+ method isdbbool returns boolean; return dbbool
+
+ method getdbsarray(i=int) returns String
+   return dbsarray[i]

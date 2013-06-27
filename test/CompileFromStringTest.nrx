@@ -1,0 +1,42 @@
+import junit.framework.
+import org.netrexx.process.
+
+class CompileFromStringTest extends TestCase
+
+  method testCompileFromString()
+
+    f = File("MyProgram.java")
+    g = File("MyProgram.class")
+    if f.exists() then f.delete()
+    if g.exists() then g.delete()
+
+    -- the files do not exist at this moment
+    assertFalse(f.exists())
+    assertFalse(g.exists())
+
+    translator=RxTranslator() -- construct translator
+    langs=[Rexx 'Nr'] -- languages supported
+    translator.setlanguages(langs) -- should always work
+    
+    programstring="say '.\-'"
+    programsource=RxFileReader(translator)
+    programsource.openfile("MyProgram.nrx",programstring)
+    
+    flags=["-replace","-format"]
+    
+    files=RxSource[1]
+    files[0]=programsource
+    
+    ok=translator.translate(flags, files)
+    
+    argarray=String[] null -- arguments for -exec [iff not null]
+    if ok then translator.exec(argarray) -- .. so interpret
+
+    if ok then translator.compile(0)     --	can compile also if java file was created!
+    -- java and class files exist now
+    assertTrue(f.exists())
+    assertTrue(g.exists())
+    -- clean up after us
+    f.delete() 
+    g.delete()
+    
