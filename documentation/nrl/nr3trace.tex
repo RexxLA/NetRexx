@@ -1,0 +1,307 @@
+\chapter{Trace instruction}\label{"id"}
+\index{TRACE,instruction}
+\index{Trace setting,altering with TRACE instruction}
+\index{Instructions,TRACE}
+\index{Tracing,execution of programs}
+\index{,}
+\index{,}
+\begin{shaded}
+\begin{alltt}
+\textbf{trace} \emph{traceoption};
+
+where \emph{traceoption} is one of:
+    \emph{tracesetting}
+    \textbf{var} [\emph{varlist}]
+
+where \emph{tracesetting} is one of:
+
+    \textbf{all}
+    \textbf{methods}
+    \textbf{off}
+    \textbf{results}
+
+and \emph{varlist} is one or more variable \emph{names}, optionally prefixed with a :m.+:em. or :m.-:em.
+\end{alltt}
+\end{shaded}
+ The \texttt{trace} instruction is used to control the tracing of the
+execution of NetRexx methods, and is primarily used for debugging.
+It may change either the general trace \emph{setting} or may select
+or deselect the tracing of individual variables.
+ 
+Within methods, the \texttt{trace} instruction changes the trace setting
+or variables tracing when it is executed, and affects the tracing of
+all clauses in the method which are then executed (until changed by a
+later \texttt{trace} instruction).
+ 
+One or more \texttt{trace} instructions may appear before the first
+method in a class, one of which may set the initial trace setting
+for all methods in the class (the default is \texttt{off}) and others
+may set up variables tracing that applies to all the methods in the
+class.
+These act as though the \texttt{trace} instructions were
+placed immediately following the \texttt{method} instruction in each
+method (except that they will not be traced).
+ 
+Similarly, one or more \texttt{trace} instructions may be placed
+before the first \texttt{class} instruction in a program; they do not
+imply the start of a class.  One of these may set the initial trace
+setting and others may set up variables tracing for all classes in
+the program (except interface classes) and act as though the
+\texttt{trace} instructions were placed immediately following the
+\texttt{class} instruction in each class.
+\subsubsection{Tracing clauses}
+\index{Trace setting,}
+\index{Tracing,clauses}
+ 
+The trace \emph{setting} controls the tracing of clauses in a program, and
+may be one of the following:
+\begin{description}
+\item[all]\label{reftrall}
+\index{ALL,TRACE setting}
+ All clauses (except null clauses without commentary) which are in
+methods and which are executed after the \texttt{trace} instruction will
+be traced.
+If \texttt{trace all} is placed before the first method in the current
+class, the \texttt{method} instructions in the class,
+together with the values of the arguments passed to each method,
+will be traced when the method is invoked (that is, \texttt{trace all}
+implies \texttt{trace methods}).
+\item[methods]\label{reftrmeth}
+\index{METHODS,TRACE setting}
+ 
+All \texttt{method} clauses in the class will be traced when the method
+they introduce is invoked, together with the values of the arguments
+passed to each method; no other clauses, or results, will be traced.
+The \texttt{trace methods} instruction must be placed before the first
+method in the current class (as otherwise it would have no effect).
+\item[off]\label{reftroff}
+\index{OFF,TRACE setting}
+ 
+Turns tracing off; no following clauses, variables, or results will be traced.
+\item[results]\label{reftrres}
+\index{RESULTS,TRACE setting}
+ All clauses (except null clauses without commentary) which are in
+methods and which are executed after the \texttt{trace} instruction will
+be traced, as though \texttt{trace all} had been requested.
+In addition, the results of all \emph{expression} evaluations and
+any results assigned to a variable by an assignment, \texttt{loop}, or
+\texttt{parse} instruction are also traced.
+ 
+If \texttt{trace results} is placed before the first method in the
+current class, the \texttt{method} instructions in the class will be
+traced when the method is invoked, together with the values of the
+arguments passed to each method.
+\end{description}
+ \textbf{Notes:}
+\begin{enumerate}
+\item Tracing of clauses shows the data from the source of the program,
+starting at the first character of the first token of the clause and
+including any commentary from that point until the end of the clause.
+\item When a loop is being traced, the \texttt{loop} clause itself will be
+traced on every iteration of the loop, as indicated by the
+ programmer's model (see page \pageref{refloopmod}) ; the \texttt{end} clause is only
+traced once, when the loop completes normally.
+\item With \texttt{trace results}, an expression is not traced if it is
+immediately used for an assignment (in an assignment instruction, or
+when the control variable is initialized in a \texttt{loop}
+instruction).
+The assignment will trace the result of the expression.
+\end{enumerate}
+\subsubsection{Tracing variables}
+\index{Tracing,variables}
+ 
+The \texttt{var} option adds names to a list of monitored
+variables; it can also remove names from the list.  If the name of a
+variable in the current class or method is in the list, then \texttt{trace
+results} is turned on for any assignment, \texttt{loop}, or
+\texttt{parse} clause that assigns a new value to the named
+variable.
+ 
+Variable names are specified by listing them after the \texttt{var}
+keyword.
+Each name may be optionally prefixed by a :m.+:em. or a :m.-:em. sign.
+A :m.+:em. sign indicates that the variable is to be added to the list
+of monitored variables (the default), and a :m.-:em. sign indicates that
+the variable is to be removed from the list.  Blanks may be added before
+and after variable names and signs to separate the tokens and to improve
+readability.
+ For example:
+\begin{alltt}
+trace var a b c
+-- now variables a, b, and c will be traced
+trace var -b -c d
+-- now variables a and d will be traced
+\end{alltt}
+ \textbf{Notes:}
+\begin{enumerate}
+\item 
+Names in the list following the \texttt{var} keyword are simple symbols
+that name variables in the current class or current method.
+The variables may be properties, method arguments, or local variables,
+and may be of any type, including arrays.
+The names are not case-sensitive; any variables whose names match,
+independent of case, will be monitored.
+\item 
+No variable name can appear more than once in the list on one
+\texttt{trace var} instruction.  However, it is not an error to add the
+name of a variable which does not exist or is not then assigned a value.
+Similarly, it is not an error to remove a name which is not currently
+being monitored.
+\item 
+One or more \texttt{trace var} instructions (along with one other
+\texttt{trace} instruction) are allowed before the first method in a
+class.  They all modify an initial list of monitored variables which
+is then used for all methods in the class.  Similarly, \texttt{trace
+var} instructions are allowed before the first class in a program,
+in which case they apply to all classes (except interface classes).
+\item 
+Other \texttt{trace} instructions do not affect the list of monitored
+variables.
+The \texttt{trace off} instruction may be used to turn off tracing
+completely; in this case \texttt{trace var} (with or without any
+variable names) will then turn the tracing of variables back on, using
+the current (or modified) variable list.
+\item 
+For a \texttt{parse} instruction, only monitored variables have their
+assignments traced (unless \texttt{trace results} is already in effect).
+\end{enumerate}
+\subsubsection{The format of trace output}
+\index{Indention during tracing,}
+\index{Formatting,of output during tracing}
+ 
+Trace output is either clauses from the program being traced, or results
+(such as the results from expressions).
+ 
+\index{Tracing,line numbers}
+\index{Line numbers, in tracing,}
+The first clause or result traced on any line will be preceded by its
+line number in the program; this is right-justified in a space which
+allows for the largest line number in the program, plus one blank.
+Following clauses or results from the same line are preceded by white
+space of the same width; however, any change of line number causes the
+line number to be included.
+ 
+Clauses that are traced will be displayed with the formatting
+(indention) and layout used in the original source stream for the
+program, starting with the first character of the first token of the
+clause.
+ 
+Results (if requested) are converted to a string for tracing if
+necessary, are not indented, and have a double quote prefixed and
+suffixed so that leading and trailing blanks are apparent; if, however,
+the result being traced is  \textbf{null} (see page \pageref{refswnull})  then the
+string "\textbf{[null]}" is shown (without quotes).
+For results with an associated name (the values assigned to local
+variables, method arguments, or properties in the current class), the
+name of the result precedes the data, separated by a single blank.
+ 
+For clarity, implementations may replace "control codes"
+in the encoding of results (for example, EBCDIC values less
+than \textbf{'\\x40'}, or Unicode values less than \textbf{'\\x20'})
+by a question mark ("\textbf{?}").
+\index{Tracing,data identifiers}
+ All lines displayed during tracing have a three character tag to
+identify the type of data being traced.  This tag follows the line
+number (or the space for a line number), and is separated from the line
+number by a single blank.
+The traced clause or result follows the tag, after another
+blank.
+The identifier tags may be:
+\begin{description}
+\item{*=*}
+\index{*=* tracing flag,}
+identifies the first line of the source of a single clause, \emph{i.e.},
+the data actually in the program.
+\item{*-*}
+\index{*-* tracing flag,}
+identifies a continuation line from the source of a single clause.
+Continuations may be due to the use of a  continuation (see page \pageref{refsemis}) 
+character:ea. or to the use of a  block comment (see page \pageref{refblockco}) 
+which spans more than one line.
+\item{>a>}
+\index{>a> tracing flag,}
+Identifies a value assigned to a method argument of the current
+method.
+The name of the argument is included in the trace.
+\item{>p>}
+\index{>p> tracing flag,}
+Identifies a value assigned to a property.
+The name of the property is included in the trace if the property is in
+the current class.
+\item{>v>}
+\index{>v> tracing flag,}
+Identifies a value assigned to a local variable in the current
+method.
+The name of the variable is included in the trace.
+\item{>>>}
+\index{>>> tracing flag,}
+Identifies the result of an expression evaluation that is not used
+for an assignment (for example, an argument expression in a method
+call).
+\item{+++}
+\index{+++ tracing flag,}
+Reserved for error messages that are not supplied by the environment
+underlying the implementation.
+\end{description}
+
+\index{Trace,context}
+\index{Thread,tracing}
+If a trace line is produced in a different context (program or thread)
+from the preceding trace line (if any) then a \emph{trace context}
+line is shown.  This shows the name of the program that produced the
+trace line, and also the name of the thread (and thread group) of the
+context.
+ 
+The thread group name is not shown if it is :m.main:em., and in this
+case the thread name is then also suppressed if its name is :m.main:em..
+ \textbf{Examples:}
+ If the following instructions, starting on line 53 of a 120-line
+program, were executed:
+\begin{alltt}
+trace all
+if i=1 then say 'Hello'
+       else say 'i<>1'
+say -
+ 'A continued line'
+\end{alltt}
+the trace output (if \emph{i} were \textbf{1}) would be:
+\begin{alltt}
+  54 *=* if i=1
+     *=*        then
+     *=*             say 'Hello'
+  56 *=* say -
+  57 *-*  'A continued line'
+\end{alltt}
+ Similarly, for the 3-line program:
+\begin{alltt}
+trace results
+number=1/7
+parse number before '.' after
+\end{alltt}
+the trace output would be:
+\begin{alltt}
+ 2 *=* number=1/7
+   >v> number "0.142857143"
+ 3 *=* parse number before '.' after
+   >v> before "0"
+   >v> after "142857143"
+\end{alltt}
+ \textbf{Notes:}
+\begin{enumerate}
+\item 
+Trace output is written to an implementation-defined output stream
+\index{stderr, used by TRACE,}
+(typically the "standard error" output stream, which lets it be
+redirected to a destination separate from the default destination for
+output which is used by the \texttt{say} instruction).
+\item In some implementations, the use of \texttt{trace} instructions
+may substantially increase the size of classes and the execution time of
+methods affected by tracing.
+\footnote{
+\emph{In the reference implementation, \texttt{options notrace} may be
+used to disable all \texttt{trace} instructions and hence ensure that
+tracing overhead is not accidentally incurred.}
+}
+\item With some implementations it may be possible to switch tracing on
+externally, without requiring modification to the program.
+\end{enumerate}

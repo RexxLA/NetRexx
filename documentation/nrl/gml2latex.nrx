@@ -23,7 +23,7 @@ class gml2latex
 	if line.left(6) = "[%char" then iterate
 	if line.left(2) = "]]" then iterate
 	if line.left(6) = "[%smff" then iterate
-	if line.left(7) = ".synnum" then iterate
+	if line.left(4) = ".syn" then iterate
 	line=this.substitute(line,in)
 	out.println(line)
       end
@@ -36,6 +36,9 @@ class gml2latex
 
     line = line.changestr('_',' ')
     line = line.changestr(':p.',' ')
+    line = line.changestr(':br.','')
+    line = line.changestr('%','\\%')
+    line = line.changestr('&amp.','\\&')
     
     line = line.changestr(':kw.','\\texttt{')
     line = line.changestr(':ekw.','}')
@@ -43,8 +46,11 @@ class gml2latex
     line = line.changestr(':hp1.','\\emph{')
     line = line.changestr(':ehp1.','}')
 
-    line = line.changestr(':hp2.','\\emph{')
+    line = line.changestr(':hp2.','\\textbf{')
     line = line.changestr(':ehp2.','}')
+
+    line = line.changestr(':hp3.','\\emph{')
+    line = line.changestr(':ehp3.','}')
 
     line = line.changestr(':hp4.','\\textbf{')
     line = line.changestr(':ehp4.','}')
@@ -88,9 +94,14 @@ class gml2latex
     line = line.changestr('&vq.',"'")
     line = line.changestr('&sdq.','"')
     line = line.changestr('&ie.','\\emph{i.e.}')
-    line = line.changestr('&bslash.','\\textbackslash')
+    line = line.changestr('&eg.','\\emph{e.g.}')
+    line = line.changestr('&qv.','\\emph{q.v.}')
+    line = line.changestr('&th.','\\emph{th}') -- todo superscript
+    line = line.changestr('&ellipsis.','\\ldots')
+    line = line.changestr('&bslash.','\\textbackslash ')
     line = line.changestr('&minus.','-')
-    line = line.changestr('&euro.','TODO EURO')
+    line = line.changestr('&idash.','-') -- todo check
+    line = line.changestr('&euro.','TODO EURO') --todo euro
     line = line.changestr('&underscore.','\\_')
     line = line.changestr('&vbar.','|')
     line = line.changestr('&Ea.',"\\'{E}")
@@ -104,27 +115,57 @@ class gml2latex
     
     line = line.changestr(':li.','\\item ')
 
+    line = line.changestr('&sub1.','1') --subscript
+    line = line.changestr('&sub2.','2')
+    line = line.changestr('&sub3.','3')
+    line = line.changestr(':pc.','')
+    line = line.changestr(':dd.','')
+    line = line.changestr(':note.','\\textbf{Note: }')
+
     select
-      when line.left(3)=':h2' then do
-	parse line ':h2 id='id'.'title
-	return "\\subsection{"title"}\\label{"id"}"
-      end
       when line=":p." then return ""
-      when line=":xmp." then return "\\begin{verbatim}"
-      when line=":exmp." then return "\\end{verbatim}"
+      when line=":xmp." then return "\\begin{alltt}"
+      when line=":exmp." then return "\\end{alltt}"
       when line.left(3)='.pi' then do
 	parse line '.pi /'first '/' second
 	return '\\index{'first','second'}'
-      end
-      when line.left(3)=':h3' then do
-	parse line ':h3.'rest
-	return '\\subsubsection{'rest'}'
       end
       when line.left(3)=':h1' then do
 	parse line ':h1 id='id'.'rest
 	return '\\chapter{'rest'}\\label{'id'}'
       end
-	    
+      when line.left(4)=':h1.' then do
+	parse line ':h1.'rest
+	return '\\chapter{'rest'}'
+      end
+      when line.left(4)=':h2.' then do
+	parse line ':h2.'title
+	return "\\chapter{"title"}"
+      end
+      when line.left(3)=':h2' then do
+	parse line ':h2 id='id'.'rest
+	return '\\chapter{'rest'}\\label{"id"}'
+      end
+      when line.left(3)=':h3' then do
+	parse line ':h3 id='id'.'rest
+	return '\\subsection{'rest'}\\label{"id"}'
+      end
+      when line.left(4)=':h3.' then do
+	parse line ':h3.'rest
+	return '\\subsection{'rest'}'
+      end
+      when line.left(4)=':h4.' then do
+	parse line ':h4.'rest
+	return '\\subsubsection{'rest'}'
+      end
+      when line.left(3)=':h4' then do
+	parse line ':h4 id='id'.'rest
+	return '\\subsubsection{'rest'}\\label{"id"}'
+      end
+      when line.pos('a id=') > 0 then do
+	parse line start ':a id='label'.'title':ea.'rest
+	return start title '(see page \\pageref{'label'})' rest
+	end
       when line.left(6) = '[%book' then do
 	line = Rexx in.readLine()
 	returnstring = this.substitute(line,in)
@@ -145,9 +186,13 @@ class gml2latex
       when line.left(4) = ':edl' then do
 	return '\\end{description}'
       end
+      when line.left(4) = ':dt.' then do
+	parse line ':dt.'title
+	return '\\item{'title'}'
+      end
       when line.left(3) = ':dt' then do
-	parse line ':dt. id='id'.'title
-	return '\\item{'title'}\\label{'id'}'
+	parse line ':dt id='id'.'title
+	return '\\item['title']\\label{'id'}'
       end
 
       otherwise

@@ -1,0 +1,127 @@
+\subsection{Binary types and conversions}\label{refobinar}
+\index{Overview,binary types}
+\index{Overview,conversions}
+\index{Binary numbers,overview}
+\index{Conversion,overview}
+:p.
+Most programming environments support the notion of fixed-precision
+"primitive" binary types, which correspond closely to the binary
+operations usually available at the hardware level in computers.
+For the reference implementation, these types are:
+:ul.
+:li.
+\emph{byte, short, int,} and \emph{long} - signed integers
+that will fit in 8, 16, 32, or 64 bits respectively
+:li.
+\emph{float} and \emph{double} - signed floating point
+numbers that will fit in 32 or 64 bits respectively.
+:li.
+\emph{char} - an unsigned 16-bit quantity, holding a Unicode
+character
+:li.
+\emph{boolean} - a 1-bit logical value,
+representing :m.0:em. or :m.1:em. ("false" or "true").
+:eul.
+:p.
+Objects of these types are handled specially by the implementation
+"under the covers" in order to achieve maximum efficiency; in
+particular, they cannot be constructed like other objects - their
+value is held directly.  This distinction rarely matters to the NetRexx
+programmer: in the case of string literals an object is
+constructed automatically; in the case of an :m.int:em. literal, an
+object is not constructed.
+:p.
+Further, NetRexx automatically allows the conversion between the various
+forms of character strings in implementations
+:fn.
+In the reference implementation, these
+are :m.String:em., :m.char:em., :m.char[]:em. (an
+array of characters), and the NetRexx string type, :m.Rexx:em..
+:efn.
+and the primitive types.  The "golden rule" that is followed by
+NetRexx is that any automatic conversion which is applied must not lose
+information: either it can be determined before execution that the
+conversion is safe (as in :m.int:em. to :m.String:em.) or it
+will be detected at execution time if the conversion fails (as
+in :m.String:em. to :m.int:em.).
+:p.
+The automatic conversions greatly simplify the writing of programs;
+the exact type of numeric and string-like method arguments rarely needs
+to be a concern of the programmer.
+:p.
+For certain applications where early checking or performance override
+other considerations, the reference implementation of NetRexx provides
+options for different treatment of the primitive types:
+:ol.
+:li.
+\texttt{options strictassign} - ensures exact type matching for all
+assignments.  No conversions (including those from shorter integers to
+longer ones) are applied.  This option provides stricter type-checking
+than most other languages, and ensures that all types are an exact match.
+:li.
+\texttt{options binary} - uses implementation-dependent fixed
+precision arithmetic on binary types (also, literal numbers, for
+example, will be treated as binary, and local variables will be given
+"native" types such as :m.int:em. or :m.String:em., where
+possible).
+:p.
+Binary arithmetic currently gives better performance than NetRexx
+decimal arithmetic, but places the burden of avoiding overflows and
+loss of information on the programmer.
+:eol.
+:p.
+The options instruction (which may list more than one option) is placed
+before the first class instruction in a file; the \texttt{binary}
+keyword may also be used on a \texttt{class} or \texttt{method}
+instruction, to allow an individual class or method to use binary
+arithmetic.
+:h4.Explicit type assignment
+:p.
+You may explicitly assign a type to an expression or variable:
+\index{Example,program}
+\begin{verbatim}
+i=int 3000000  -- 'i' is an 'int' with value 3000000
+j=int 4000000  -- 'j' is an 'int' with value 4000000
+k=int          -- 'k' is an 'int', with no initial value
+say i*j        -- multiply and display the result
+k=i*j          -- multiply and assign result to 'k'
+\end{verbatim}
+:p.
+This example also illustrates an important difference between
+\texttt{options nobinary} and \texttt{options binary}.  With the former
+(the default) the \texttt{say} instruction would display the result
+":m.1.20000000E+13:em." and a conversion overflow would be
+reported when the same expression is assigned to the variable :m.k:em..
+:p.
+With \texttt{options binary}, binary arithmetic would be used for the
+multiplications, and so no error would be detected; the \texttt{say}
+would display ":m.-138625024:em." and the variable :m.k:em.
+takes the incorrect result.
+:h4.Binary types in practice
+:p.
+In practice, explicit type assignment is only occasionally needed in
+NetRexx.  Those conversions that are necessary for using existing
+classes (or those that use \texttt{options binary}) are generally
+automatic.
+For example, here is an "Applet" for use by Java-enabled
+browsers:
+\index{Example,applet}
+\begin{verbatim}
+/* A simple graphics Applet */
+class Rainbow extends Applet
+  method paint(g=Graphics)  -- called to repaint window
+    maxx=size.width-1
+    maxy=size.height-1
+    loop y=0 to maxy
+      col=Color.getHSBColor(y/maxy, 1, 1) -- new colour
+      g.setColor(col)                     -- set it
+      g.drawLine(0, y, maxx, y)           -- fill slice
+    end y
+\end{verbatim}
+:p.
+In this example, the variable :m.col:em. will have
+type :m.Color:em., and the three arguments to the
+method :m.getHSBColor:em. will all automatically be converted to
+type :m.float:em..  As no overflows are possible in this example,
+\texttt{options binary} may be added to the top of the program with no
+other changes being necessary.

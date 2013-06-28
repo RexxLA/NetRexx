@@ -1,0 +1,199 @@
+\chapter{Type conversions}\label{"id"}
+\index{Types,conversions}
+\index{Datatypes,}
+\index{Data,conversions}
+\index{Primitive types,conversions}
+\index{Conversion,of types}
+\index{Conversion,automatic}
+ 
+As described in the section on  \emph{Types and (see page \pageref{reftypes}) 
+classes}:ea., all values that are manipulated in NetRexx have an
+associated type.  On occasion, a value involved in some operation may
+have a different type than is needed, and in this case conversion of
+a value from one type to another is necessary.
+ 
+NetRexx considerably simplifies the task of programming, without losing
+robustness, by making many such conversions automatic.  It will
+automatically convert values providing that there is no loss of
+information caused by the automatic conversion (or if there is, an
+exception would be raised).
+ 
+\index{,}
+Conversions can also be made explicit by  concatenating (see page \pageref{reftypeops}) 
+a type:ea. to a value and in this case less robust conversions
+(sometimes known as \emph{casts}) may be effected.
+See below for details of the permitted automatic and explicit
+conversions.
+ 
+Almost all conversions carry some risk of failure, or have a performance
+cost, and so it is expected that implementations will provide options to
+either report costly conversions or require that programmers make all
+conversions explicit.
+\footnote{
+\emph{In the reference implementation, \texttt{options strictassign} may be
+used to disallow automatic conversions.}
+}
+Such options might be recommended for certain critical programming
+tasks, but are not necessary for general programming.
+\subsubsection{Permitted automatic conversions}
+\index{Conversion,automatic}
+\index{Types,simplification}
+ 
+In general, the semantics of a type is unknown, and so conversion (from
+a \emph{source type} to a \emph{target type}) is only possible in
+the following cases:
+\begin{itemize}
+\item The target type and the source type are identical (the trivial
+case).
+\item 
+The target type is a superclass of the source type, or is an
+interface class implemented by the source type.
+This is called \emph{type simplification}, and in this case the value
+is not altered, no information is lost, and an explicit conversion may
+be used later to revert the value to its original type.
+\item 
+The source type has a dimension, and the target type
+is \textbf{Object}.
+\item 
+The source type is \textbf{null} and the target type is not primitive.
+\item 
+\index{Conversion,of well-known types}
+\index{Well-known conversions,}
+The target and source types have known semantics (that is, they are
+"well-known" to the implementation) and the conversion can be
+effected without loss of information (other than knowledge of the
+original type).
+These are called \emph{well-known conversions}.
+\end{itemize}
+ 
+Necessarily, the well-known conversions are implementation-dependent, in
+that they depend on the standard classes for the implementation and on
+the primitive types supported (if any).
+Equally, it is this automatic conversion between strings and the
+primitive types of an implementation that offer the greatest
+simplifications of NetRexx programming.
+ 
+\index{Rexx,class/conversions}
+For example, if the implementation supported an \textbf{int}
+binary type (perhaps a 32-bit integer) then this can safely be
+converted to a NetRexx string (of type \textbf{Rexx}).
+Hence a value of type \textbf{int} can be added to a number which is a
+NetRexx string (resulting in a NetRexx string) without concern over the
+difference in the types of the two terms used in the operation.
+ 
+Conversely, converting a long integer to a shorter one without checking
+for truncation of significant digits could cause a loss of information
+and would not be permitted.
+ 
+\index{Strings,types of}
+\index{char,as a string}
+\index{Binary numbers,}
+\emph{In the reference implementation, the semantics of each of the
+following types is known to the language processor (the first four are
+all \emph{string} types, and the remainder are known as \emph{binary
+number}s):}
+\begin{itemize}
+\item \emph{\textbf{netrexx.lang.Rexx} - the NetRexx string class}
+\item \emph{\textbf{java.lang.String} - the Java string class}
+\item \emph{\textbf{char} - the Java primitive which represents a single
+character}
+\item \emph{\textbf{char[]} - an array of
+\textbf{char}s}
+\item \emph{\textbf{boolean} - a single-bit primitive}
+\item \emph{\textbf{byte}, \textbf{short}, \textbf{int}, \textbf{long},
+- signed integer primitives (8, 16, 32, or 64 bits)}
+\item \emph{\textbf{float}, \textbf{double} - floating-point
+primitives (32 or 64 bits)}
+\end{itemize}
+\emph{Under the rules described above, the following well-known
+conversions are permitted:}
+\begin{itemize}
+\item \emph{\textbf{Rexx} \emph{to} \textbf{binary number}, \textbf{char[]}, \textbf{String},
+or \textbf{char}}
+\item \emph{\textbf{String} \emph{to} \textbf{binary number}, \textbf{char[]}, \textbf{Rexx},
+or \textbf{char}}
+\item \emph{\textbf{char} \emph{to} \textbf{binary number}, \textbf{char[]}, \textbf{String},
+or \textbf{Rexx}}
+\item \emph{\textbf{char[]} \emph{to} \textbf{binary number}, \textbf{Rexx}, \textbf{String},
+or \textbf{char}}
+\item \emph{\textbf{binary number} \emph{to} \textbf{Rexx}, \textbf{String}, \textbf{char[]},
+or \textbf{char}}
+\item \emph{\textbf{binary number} \emph{to} \textbf{binary number} (if no loss of
+information can take place - no sign, high order digits, decimal
+part, or exponent information would be lost)}
+\end{itemize}
+ \emph{\textbf{Notes:}}
+\begin{enumerate}
+\index{Exceptions,during conversions}
+\item \emph{Some of the conversions can cause a run-time error (exception), as
+when a string represents a number that is too large for an \textbf{int}
+and a conversion to \textbf{int} is attempted, or when a string that
+does not contain exactly one character is converted to a
+\textbf{char}.}
+\item 
+\emph{The \textbf{boolean} primitive is treated as a binary number that may
+only take the values 0 or 1.
+\index{boolean type, value of,}
+A boolean may therefore be converted to
+any binary number type, as well as any of the string
+(or \textbf{char}) types, as the character "\textbf{0}" or
+"\textbf{1}".
+Similarly, any binary number or string can be converted to boolean (and
+must have a value of 0 or 1 for the conversion to succeed).}
+\item 
+\emph{The \textbf{char} type is a single-character string (it is not a
+number that represents the encoding of the character).}
+\index{char,as a string}
+\end{enumerate}
+\subsubsection{Permitted explicit conversions}
+\index{Conversion,explicit}
+ 
+Explicit conversions are permitted for all permitted automatic
+conversions and, in addition, when:
+\begin{itemize}
+\item 
+The target type is a subclass of the source type, or implements
+the source type.
+This conversion will fail if the value being converted was not
+originally of the target type (or a subclass of the target type).
+\item 
+Both the source and target types are primitive and (depending on the
+implementation) the conversion may fail or truncate information.
+\item 
+The target type is \textbf{Rexx} or a well-known string type (all
+values have an explicit string representation).
+\end{itemize}
+\subsubsection{Costs of conversions}\label{"id"}
+\index{Conversion,cost of}
+ 
+All conversions are considered to have a cost, and, for permitted
+automatic conversions, these costs are used to select a method for
+execution when several possibilities arise, using the algorithm
+described in  \emph{Methods and Constructors} (see page \pageref{refsmeth}) .
+ 
+For permitted automatic conversions, the cost of a conversion from a
+\emph{source type} to a \emph{target type} will range from zero
+through some arbitrary positive value, constrained by the following
+rules:
+\begin{itemize}
+\item The cost is zero only if the source and target types are the same,
+or if the source type is \textbf{null} and the target type is not
+primitive.
+\item 
+Conversions from a given primitive source type to different primitive
+target types should have different costs.
+For example, conversion of an 8-bit number to a 64-bit number might cost
+more than conversion of a 8-bit number to a 32-bit number.
+\item 
+Conversions that may require the creation of a new object cost more than
+those that can never require the creation of a new object.
+\item 
+Conversions that may fail (raise an exception) cost more than those
+that may require the creation of an object but can never fail.
+\end{itemize}
+ 
+Within these constraints, exact costs are arbitrary, and (because they
+mostly involve implementation-dependent primitive types) are necessarily
+implementation-dependent.
+The intent is that the "best performance" method be selected when
+there is a possibility of more than one.

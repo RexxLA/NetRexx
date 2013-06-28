@@ -1,0 +1,269 @@
+\chapter{Class instruction}\label{"id"}
+\index{,}
+\index{Instructions,CLASS}
+\index{,}
+\index{Class,starting}
+\begin{shaded}
+\begin{alltt}
+\textbf{class} \emph{name} [\emph{visibility}] [\emph{modifier}] [\textbf{binary}] [\textbf{deprecated}]
+               [\textbf{extends} \emph{classname}]
+               [\textbf{uses} \emph{useslist}]
+               [\textbf{implements} \emph{interfacelist}];
+
+where \emph{visibility} is one of:
+
+    \textbf{private}
+    \textbf{public}
+    \textbf{shared}
+
+and \emph{modifier} is one of:
+
+    \textbf{abstract}
+    \textbf{adapter}
+    \textbf{final}
+    \textbf{interface}
+
+and \emph{useslist} and \emph{interfacelist} are lists of one or more \emph{classname}s, separated by commas.
+\end{alltt}
+\end{shaded}
+ The \texttt{class} instruction is used to introduce a class, as
+described in the sections  \emph{Types and (see page \pageref{reftypes}) 
+Classes}:ea. and  \emph{Program structure} (see page \pageref{refpstruct}) ,
+and define its attributes.
+The class must be given a \emph{name}, which must be different from
+the name of any other classes in the program.
+\index{Short name,of classes}
+\index{Class,short name of}
+The \emph{name}, which must be a non-numeric symbol, is known as the
+\emph{short name} of the class.
+ 
+\index{Class,name of}
+A \emph{classname} can be either the short name of a class (if that is
+unambiguous in the context in which it is used), or the qualified name
+of the class - the name of the class prefixed by a package name and
+a period, as described under the  \texttt{package} (see page \pageref{refpackage}) 
+instruction:ea..
+ 
+\index{Body,of classes}
+\index{Class,body of}
+The \emph{body} of the class consists of all clauses following the
+class instruction (if any) until the next \texttt{class} instruction or
+the end of the program.
+ 
+The \emph{visibility}, \emph{modifier}, and \texttt{binary}
+keywords, and the \texttt{extends}, \texttt{uses}, and
+\texttt{implements} phrases, may appear in any order.
+\subsubsection{Visibility}
+\index{PUBLIC,on CLASS instruction}
+\index{PRIVATE,on CLASS instruction}
+\index{SHARED,on CLASS instruction}
+\index{Visibility,of classes}
+\index{Classes,private}
+\index{Classes,public}
+\index{Classes,shared}
+ 
+Classes may be \texttt{public}, \texttt{private}, or
+\texttt{shared}:
+\begin{itemize}
+\item A \emph{public class} is visible to (that is, may be used by)
+all other classes.
+\item A \emph{private class} is visible only within same program and to
+classes in the same  package (see page \pageref{refpackage}) .
+\item A \emph{shared class} is also visible only within same program and to
+classes in the same package.
+\footnote{
+The \texttt{shared} keyword on the \texttt{class} instruction means
+exactly the same as the keyword \texttt{private}, and is accepted for
+consistency with the other meanings of \texttt{shared}.
+}
+\end{itemize}
+ 
+A program may have only one public class, and if no class is marked
+public then the first is assumed to be public (unless it is explicitly
+marked private).
+\subsubsection{Modifier}
+\index{ABSTRACT,on CLASS instruction}
+\index{ADAPTER,on CLASS instruction}
+\index{FINAL,on CLASS instruction}
+\index{INTERFACE,on CLASS instruction}
+ 
+Most classes are collections of data (properties) and the procedures
+that can act on that data (methods); they completely implement a
+datatype (type), and are permitted to be subclassed.
+\index{Standard classes,}
+\index{Classes,standard}
+These are called \emph{standard classes}.
+The \emph{modifier} keywords indicate that the class is not a standard
+class - it is special in some way.
+Only one of the following modifier keywords is allowed:
+\begin{description}
+\index{Abstract classes,}
+\index{Abstract methods,}
+\index{Classes,abstract}
+\index{Methods,abstract}
+\item{abstract}
+
+An \emph{abstract class} does not completely implement a datatype; one
+or more of the methods that it defines (or which it inherits from
+classes it extends or implements) is abstract - that is, the name
+of the method and the types of its arguments are defined, but no
+instructions to implement the method are provided.
+ 
+Since some methods are not provided, an object cannot be constructed
+from an abstract class.  Instead, the class must be extended and any
+missing methods provided.  Such a subclass can then be used to construct
+an object.
+ 
+Abstract classes are useful where many subclasses can share common data
+or methods, but each will have some unique attribute or attributes (data
+and/or methods).  For example, some set of geometric objects might share
+dimensions in X and Y, yet need unique methods for calculating the area
+of the object.
+\index{Adapter classes,}
+\index{Classes,adapter}
+\item{adapter}
+
+An \emph{adapter class} is a class that is guaranteed to implement all
+unimplemented abstract methods of its superclasses and interface classes
+that it inherits or lists as implemented on the \texttt{class} instruction.
+ 
+If any unimplemented methods are found, they will be automatically
+generated by the language processor.  Methods generated in this way will
+have the same visibility and signature as the abstract method they
+implement, and if a return value is expected then a default value is
+returned (as for the initial value of variables of the same type: that
+is, \textbf{null} or, for values of primitive type, an
+implementation-defined value, typically 0).  Other than possibly
+returning a value, these methods are empty; that is, they have no
+side-effects.
+ 
+An adapter class provides a concrete representation of its superclasses
+and the interface classes it implements.  As such, it is especially
+useful for implementing event handlers and the like, where only a small
+number of event-handling methods are needed but many more might be
+specified in the interface class that describes the event model.
+\footnote{
+For example, see the "Scribble" sample in the NetRexx package.
+}
+ 
+An adapter class cannot have any abstract methods.
+\index{Final classes,}
+\index{Classes,final}
+\item{final}
+
+A \emph{final class} is considered to be complete; it cannot be
+subclassed (extended), and all its methods are considered complete.
+\footnote{
+This modifier is provided for consistency with other languages, and may
+allow compilers to improve the performance of classes that refer to the
+final class.
+In many cases it will reduce the reusability of the class, and hence
+should be avoided.
+}
+\index{Interface classes,}
+\index{Classes,interface}
+\item[interface]\label{refinterf}
+
+An \emph{interface class} is an abstract class that contains only
+abstract method definitions and/or constants.  That is, it defines
+neither instructions that implement methods nor modifiable properties,
+and hence cannot be used to construct an object.
+ 
+Interface classes are used by classes that claim to \emph{implement}
+them (see the \texttt{implements} keyword, described below).
+The difference between abstract and interface classes is that
+the former may have methods which are not abstract, and hence can only
+be subclassed (extended), whereas the latter are wholly abstract and
+may only be implemented.
+\end{description}
+\subsubsection{Binary}\label{"id"}
+\index{BINARY,on CLASS instruction}
+\index{Binary classes,}
+\index{Classes,binary}
+ 
+The keyword \texttt{binary} indicates that the class is a \emph{binary
+class}.
+In binary classes, literal strings and numeric symbols are assigned
+native string or binary (primitive) types, rather than NetRexx types,
+and native binary operations are used to implement operators where
+possible.
+When \texttt{binary} is not in effect (the default), terms in
+expressions are converted to NetRexx types before use by operators.
+The section  \emph{Binary values and operations} (see page \pageref{refbinary}) 
+describes the implications of binary classes in detail.
+ 
+Individual methods in a class which is not binary can be made into
+\emph{binary methods} using the \texttt{binary} keyword on the
+ \texttt{method} instruction (see page \pageref{refmethod}) .
+\subsubsection{Deprecated}\label{"id"}
+\index{DEPRECATED,on CLASS instruction}
+ 
+The keyword \texttt{deprecated} indicates that the class
+is \emph{deprecated}, which implies that a better alternative is
+available and documented.  A compiler can use this information to warn
+of out-of-date or other use that is not recommended.
+\subsubsection{Extends}
+\index{EXTENDS,on CLASS instruction}
+\index{Subclass of a class,}
+\index{Superclass of a class,}
+\index{Classes,and subclasses}
+\index{Classes,and superclasses}
+ 
+Classes form a hierarchy, with all classes (except the top of the tree,
+the \textbf{Object}
+\footnote{
+\emph{In the reference implementation, \textbf{java.lang.Object}.}
+}
+class) being a \emph{subclass} of some other class.
+The \texttt{extends} keyword identifies the \emph{classname} of the
+immediate \emph{superclass} of the new class - that is, the
+class immediately above it in the hierarchy.
+If no \texttt{extends} phrase is given, the superclass is assumed to
+be \textbf{Object} (or \textbf{null}, in the case where the current
+class is \textbf{Object}).
+\subsubsection{Uses}
+\index{USES,on CLASS instruction}
+\index{Constants,used by classes}
+\index{Functions,used by classes}
+\index{Static methods,used by classes}
+ 
+The \texttt{uses} keyword introduces a list of the names of one or
+more classes that will be used as a source of constant (or static)
+properties and/or methods.
+ 
+When a  term (see page \pageref{refterms})  starts with a symbol, method call, or
+indexed reference that is not known in the current context, each class
+in the \emph{useslist} and its superclasses are searched (in the
+order specified in the \emph{useslist}) for a constant or static
+method or property that matches the item.
+If found, the method or property is used just as though explicitly
+qualified by the name of the class in which it was found.
+ 
+The \texttt{uses} mechanism affects only the syntax of terms in the
+current class; it is not inherited by subclasses of the current class.
+\subsubsection{Implements}
+\index{IMPLEMENTS,on CLASS instruction}
+\index{Interfaces,implemented by classes}
+ 
+The \texttt{implements} keyword introduces a list of the names of one or
+more interface classes (see above).
+These interface classes are then known to (inherited by) the current
+class, in the order specified in the \emph{interfacelist}.
+Their methods (which are all abstract) and constant properties act as
+though part of the current class, unless they are overridden (hidden) by
+a method or constant of the same name in the current class.
+ 
+If the current class is not an interface class then it must implement
+(provide non-abstract methods for) all the methods inherited from the
+interface classes in the implements list.
+ 
+Interface classes, therefore, can be used to:
+\begin{enumerate}
+\item Define a common set of methods (possibly with associated constants)
+that will be implemented by other classes.
+\item Conveniently package collections of constants for use by other
+classes.
+\end{enumerate}
+ 
+The implements list may not include the superclass of the current class.
+\index{,}

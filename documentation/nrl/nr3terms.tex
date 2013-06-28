@@ -1,0 +1,363 @@
+\chapter{Terms}\label{"id"}
+\index{Terms,}
+\index{Data,terms}
+\index{Period,in terms}
+\index{. (period),in terms}
+\index{Parentheses,in terms}
+\index{Brackets,in terms}
+\index{References,in terms}
+ 
+A \emph{term} in NetRexx is a syntactic unit which describes some
+value (such as a literal string, a variable, or the result of some
+computation) that can be manipulated in a NetRexx program.
+ 
+Terms may be either \emph{simple} (consisting of a single element) or
+\emph{compound} (consisting of more than one element, with a period
+and no other characters between each element).
+\subsubsection{Simple terms}\label{"id"}
+ A simple term may be:
+\index{Terms,simple}
+\index{Simple terms,}
+\begin{itemize}
+\index{Literal strings,in terms}
+\index{Strings,in terms}
+\item A  \emph{literal string} (see page \pageref{refxstr})  - a character string
+delimited by quotes, which is a constant.
+\index{Symbols,in terms}
+\index{Symbols,numeric}
+\index{Numeric symbols,}
+\item A  \emph{symbol} (see page \pageref{refsyms}) .
+A symbol that does not begin with a digit identifies a variable, a
+value, or a type.
+One that does begin with a digit is a \emph{numeric symbol}, which is
+a constant.
+\index{Method,calls in terms}
+\index{Parentheses,in method calls}
+\item A  \emph{method call} (see page \pageref{refmethcon}) , which is of the form
+\begin{alltt}
+\emph{symbol}([\emph{expression}[,\emph{expression}]...])
+\end{alltt}
+\index{Indexed references,in terms}
+\index{Brackets,in indexed references}
+\index{Square brackets,in indexed references}
+\item An  \emph{indexed reference} (see page \pageref{refinstr}) , which is of the form
+\footnote{
+The notations \texttt{'['} and \texttt{']'}
+indicate square brackets appearing in the NetRexx program.
+}
+\begin{alltt}
+\emph{symbol}\texttt{'['}[\emph{expression}[,\emph{expression}]...]\texttt{']'}
+\end{alltt}
+\index{Array initializer,in terms}
+\index{Brackets,in array initializers}
+\index{Square brackets,in array initializers}
+\item An  \emph{array initializer} (see page \pageref{refarrin}) , which is of the form
+\begin{alltt}
+\texttt{'['}\emph{expression}[,\emph{expression}]...\texttt{']'}
+\end{alltt}
+\index{Sub-expressions, in terms,}
+\item A  \emph{sub-expression} (see page \pageref{refpreced}) , which consists of any
+expression enclosed within a left and a right parenthesis.
+\end{itemize}
+
+Blanks are not permitted between the symbol in a method call and the
+"\textbf{(}", or between the symbol in an indexed reference and
+the "\textbf{[}".
+ 
+\index{Parentheses,omitting from method calls}
+Within simple terms, method calls with no arguments (that is, with no
+expressions between the parentheses) may be expressed without the
+parentheses provided that they refer to a method in the current class
+(or to a static method in a class \emph{used} by the current class)
+and do not refer to a  constructor (see page \pageref{refcons}) .
+An implementation may optionally provide a mechanism that disallows this
+parenthesis omission.
+\subsubsection{Compound terms}\label{"id"}
+\index{Terms,compound}
+\index{Compound terms,}
+ 
+Compound terms may start with any simple term, and, in addition, may
+start with a  qualified class name (see page \pageref{refpackage})  or a
+ qualified constructor (see page \pageref{refmethcon}) .
+These last two both start with a package name (a sequence of non-numeric
+symbols separated by periods and ending in a period).
+ 
+\index{Terms,stub of}
+\index{Stub, of term,}
+This first part of a compound term is known as the \emph{stub} of the
+term.
+ \textbf{Example stubs:}
+\begin{alltt}
+"A string"
+Arca
+12.10
+paint(g)
+indexedVar[i+1]
+("A" "string")
+java.lang.Math        -- qualified class name
+netrexx.lang.Rexx(1)  -- qualified constructor
+\end{alltt}
+ 
+All stubs are syntactically valid terms (either simple or compound) and
+may optionally be followed by a \emph{continuation}, which is one or
+more additional non-numeric symbols, method calls, or indexed
+references, separated from each other and from the stub by
+\emph{connectors} which are periods.
+ \textbf{Example compound terms:}
+\begin{alltt}
+"A rabbit".word(2).pos('b')
+Fluffy.left(3)
+12.10.max(j)
+paint(g).picture
+indexedVar[i+1].length
+("A" "string").word(1)
+java.lang.Math.PI
+java.lang.Math.log(10)
+\end{alltt}
+ 
+\index{Parentheses,omitting from method calls}
+Within compound terms, method calls with no arguments (that is, with no
+expressions between the parentheses) may be expressed without the
+parentheses provided that they do not refer to a
+ constructor (see page \pageref{refcons}) .
+For example, the term:
+\begin{alltt}
+Thread.currentThread().suspend()
+\end{alltt}
+could be written:
+\begin{alltt}
+Thread.currentThread.suspend
+\end{alltt}
+An implementation may optionally provide a mechanism that disallows this
+parenthesis omission.
+\subsection{Evaluation of terms}\label{"id"}
+\index{Terms,evaluation of}
+\index{Evaluation,of terms}
+ 
+Simple terms are evaluated as a whole, as described below.
+Compound terms are evaluated from left to right.  First the stub is
+evaluated according to the rules detailed below.
+The type of the value of the stub then qualifies the next element of the
+term (if any) which is then evaluated (again, the exact rules are
+detailed below).
+This process is then repeated for each element in the term.
+ 
+For instance, for the example above:
+\begin{alltt}
+"A rabbit".word(2).pos('b')
+\end{alltt}
+the evaluation proceeds as follows:
+\begin{enumerate}
+\item The stub (\textbf{"A rabbit"}) is evaluated, resulting in a string
+of type \textbf{Rexx}.
+\item 
+Because that string is of type \textbf{Rexx}, the \textbf{Rexx} class
+is then searched for the \textbf{word} method.  This is then invoked
+on the string, with argument \textbf{2}.
+In other words, the \textbf{word} method is invoked with the string
+"\textbf{A rabbit}" as its current context (the properties of the
+Rexx class when the method is invoked reflect that value).
+ 
+This returns a new string of type \textbf{Rexx},
+"\textbf{rabbit}" (the second word in the original string).
+\item 
+In the same way as before, the \textbf{pos} method of
+the \textbf{Rexx} class is then invoked on the new string, with
+argument "\textbf{b}".
+ 
+This returns a new string of type \textbf{Rexx}, "\textbf{3}"
+(the position of the first "\textbf{b}" in the previous result).
+\end{enumerate}
+This value, "\textbf{3}", is the final value of the term.
+ 
+The remainder of this section gives the details of term
+evaluation; it is best skipped on first reading.
+\subsubsection{Simple term evaluation}
+ 
+All simple terms may also be used as stubs, and are evaluated in
+precisely the same way as stubs, as described below.  For example,
+numeric symbols are evaluated as though they were enclosed in quotes;
+their value is a string of type \textbf{Rexx}.
+ 
+In  binary classes (see page \pageref{refbincla}) , however, simple terms that are
+strings or numeric symbols are given an implementation-defined string or
+primitive type respectively, as described in the section on
+ \emph{Binary values and operations} (see page \pageref{refbinary}) 
+\subsubsection{Stub evaluation}
+\index{Search order,for term evaluation}
+ 
+A term's stub is evaluated according to the following rules:
+\begin{itemize}
+\item 
+If the stub is a literal string, its value is the string, of
+type \textbf{Rexx}, constructed from that literal.
+\item 
+If the stub is a numeric symbol, its value is the string, of
+type \textbf{Rexx}, constructed from that literal (as though the
+literal were enclosed in quotes).
+\item 
+If the stub is an unqualified method or constructor call, or a
+qualified constructor call, then its value and type is the result of
+invoking the method identified by the stub, as described in
+ \emph{Methods and Constructors} (see page \pageref{refmethcon}) .
+\item 
+If the stub is a (non-numeric) symbol, then its value and type will be
+determined by whichever of the following is first found:
+\begin{enumerate}
+\item A local variable or method argument within the current method, or a
+property in the current class.
+\item A method whose name matches the symbol, and takes no arguments, and
+that is not a constructor, in the current class.
+\footnote{
+Unless parenthesis omission is disallowed by an implementation option,
+such as \texttt{options strictargs}.
+}
+If the stub is part of a compound symbol, then it may also be in a
+superclass, searching upwards from the current class.
+\item A static or constant property, or a static method,
+\footnote{
+Unless parenthesis omission is disallowed by an implementation option,
+such as \texttt{options strictargs}.
+}
+whose name matches the symbol (and that takes no arguments, if a method)
+in a class listed in the \texttt{uses} phrase of the \texttt{class}
+instruction.
+Each class from the list is searched for a matching property or method, and
+then its superclasses are searched upwards from the class in the same
+way; this process is repeated for each of the classes, in the order
+specified in the list.
+\item One of the allowed special words described in
+ \emph{Special words and methods} (see page \pageref{refspecial}) , such
+as \textbf{this} or \textbf{version}.
+\item The short name of a known class or primitive type (in which
+case the stub has no value, just a type).
+\end{enumerate}
+\item 
+If the stub is an indexed reference, then its value and type will be
+determined by whichever of the following is first found:
+\begin{enumerate}
+\item The symbol naming the reference is an undimensioned local variable
+or method argument within the current method, or a property in the
+current class, which has type \textbf{Rexx}.  In this case, the
+reference is to an  \emph{indexed string} (see page \pageref{refinstr}) ;
+the expressions within the brackets must be convertible to
+type \textbf{Rexx}, and the type of the result will
+be \textbf{Rexx}.
+\item The symbol naming the reference is a dimensioned local variable
+or method argument within the current method, or a property in the
+current class.
+In this case, the reference is to an
+ \emph{array} (see page \pageref{refarray}) , and the expressions within the
+brackets must be convertible to whole numbers allowed for array indexes.
+The type of the result will have the type of the array, with dimensions
+reduced by the number of dimensions specified in the stub.
+ For example, if the array \textbf{foo} was of
+type \textbf{Baa[,,,]} and the stub referred
+to \textbf{foo[1,2]}, then the result would be of
+type \textbf{Baa[,]}.
+It would have been an error for the stub to have specified more than
+four dimensions.
+\item The symbol naming the reference is the name of a static or constant
+property in a class listed in the \texttt{uses} phrase of the
+\texttt{class} instruction.
+Each class from the list is searched in the same way as for symbols,
+above.  The reference may be to an \emph{indexed string} or an
+\emph{array}, as for properties in the current class.
+\item The symbol naming the reference is the name of a primitive type or
+the short name of a known class, and there are no expressions within the
+brackets (just optional commas).
+In this case, the stub describes a  \emph{dimensioned (see page \pageref{refdimtype}) 
+type}:ea..
+\item The symbol naming the reference is the name of a primitive type or
+is the short name of a known class, and there are one or more
+expressions within the brackets.
+In this case, the reference is to an  \emph{array (see page \pageref{refarray}) 
+constructor}:ea.; the expressions within the brackets must
+be convertible to non-negative whole numbers allowed for array indexes,
+and the value is an array of the specified type, dimensions, and size.
+\end{enumerate}
+\item 
+If the stub is a sub-expression, then its value and type will be
+determined by evaluating the  \emph{expression} (see page \pageref{refexpr}) 
+within the parentheses.
+\item 
+If the stub starts with the name of a package, then it will either
+describe a qualified  type (see page \pageref{reftypes})  or a qualified
+ constructor (see page \pageref{refcons}) .
+Its type will be same in either case, and if a constructor then its
+value will be the value returned by the constructor.
+\end{itemize}
+ 
+If the stub is not followed by further segments, the final value and
+type of the term is the value and type of the stub.
+\subsubsection{Continuation evaluation}
+ 
+Each segment of a term's continuation is evaluated from left to right,
+according to the type of the evaluation of the term so far (the
+\emph{continuation type}) and the syntax of the new segment:
+\begin{itemize}
+\item 
+If the segment is a method call, then its value and type is the result
+of invoking the matching method in the class defining the continuation
+type (or a superclass or subclass of that class), as described in
+ \emph{Methods and Constructors} (see page \pageref{refmethcon}) .
+Note that method calls in term continuations cannot be constructors.
+\item 
+If the stub is an indexed reference, then it will refer to a property
+in the class defining the continuation type (or a superclass of that
+class).
+That property will either be an undimensioned NetRexx string
+(type \textbf{Rexx}) or a dimensioned array.  In either case, it is
+evaluated in the same way as an indexed reference found in the stub,
+except that it is not necessarily in the current class, cannot
+be an array constructor, and cannot result in a dimensioned type.
+\item 
+If the segment is a symbol, then it refers to either a property
+or a method in the class defining the continuation type (or a superclass
+of that class).
+\footnote{
+Unless parenthesis omission is disallowed by an implementation option,
+such as \texttt{options strictargs}, in which case it can only be a
+property.
+}
+ 
+The search for the property or method starts with the class defining the
+continuation type.  If a property name matches, it is used; if not, a
+method of the same name and having no arguments (or only optional
+arguments) will match.
+If neither property nor method is found, then the same search is applied
+to each of the continuation class's superclasses in turn, starting with
+the class that it extends.
+ 
+\index{Length,of arrays}
+\index{LENGTH,special word}
+As a convenient special case, if the property or method is not found,
+then if the segment is the final segment of the term and is the simple
+symbol \textbf{length} and the continuation type is a
+single-dimensioned array, then the segment evaluates to the size of the
+array.
+This will be a non-negative whole number of an appropriate primitive
+type (or of type \textbf{Rexx} if there is no appropriate
+type).
+\end{itemize}
+ 
+The final value and type of the term is the value and type determined by
+the evaluation of the last segment of the continuation.
+\subsubsection{Arrays in terms}\label{"id"}
+\index{Arrays,in terms}
+ 
+If a partially-evaluated term results in a dimensioned
+ array (see page \pageref{refarray}) , its type is treated as type
+\textbf{Object} so that evaluation of the term can continue.  For
+example, in
+\begin{alltt}
+ca=char[] "tosh"
+say ca.toString()
+\end{alltt}
+the variable \textbf{ca} is an array of characters; in the expression
+on the second line the method \textbf{toString()} of the
+class \textbf{Object} will be found.
+\footnote{
+\emph{In the reference implementation, this would return an identifier
+for the object.}
+}

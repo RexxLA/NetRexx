@@ -1,0 +1,216 @@
+\chapter{Binary values and operations}\label{"id"}
+\index{Binary,arithmetic}
+\index{Binary,operations}
+\index{Binary,values}
+ 
+By default, arithmetic and string operations in NetRexx are carried out
+using the NetRexx string class, \textbf{Rexx}, which offers the robust
+set of operators described in  \emph{Expressions and (see page \pageref{refexpr}) 
+operators}:ea..
+ 
+\index{Primitive types,}
+\index{Types,primitive}
+NetRexx implementations, however, may also provide \emph{primitive}
+datatypes, as described in  \emph{Types and (see page \pageref{refprims}) 
+Classes}:ea..  These primitive types are used for compact storage
+of numbers and for fast binary arithmetic, features which are built-in
+to the hardware of most computers.
+ 
+\index{Binary classes,}
+To make use of binary arithmetic, a class is declared to be a
+ \emph{binary class} (see page \pageref{refbincla})  by using the \texttt{binary}
+keyword on the \texttt{class} instruction.
+In such a class, literal strings and numeric symbols are assigned native
+string or primitive types, rather than NetRexx types, where appropriate,
+and native binary operations are used to implement operators where
+possible, as detailed below.
+Implementations may also provide a keyword on the
+ \texttt{options} (see page \pageref{refoptions})  instruction that indicates that
+all classes in a program are binary classes.
+\footnote{
+\emph{In the reference implementation, \texttt{options binary} is
+used}.
+}
+ 
+\index{Binary methods,}
+Alternatively, individual methods within a class may be declared to
+be a  \emph{binary method} (see page \pageref{refbinme})  by using the \texttt{binary}
+keyword on the \texttt{method} instruction.
+ 
+\index{Integers, binary,}
+\index{Floating-point numbers, binary,}
+\index{Real numbers, binary,}
+\index{Binary numbers,}
+Binary classes and methods should be used with care.  Although binary
+arithmetic can have a considerable performance advantage over
+arithmetic that is not implemented in hardware, it can give incorrect
+or unexpected results.
+In particular, whole numbers (integers) are often held in fixed-sized
+data areas (of 8, 16, 32, or 64 bits), and overflowing the data area
+during a calculation can result in a positive number becoming negative
+and vice versa.
+Similarly, binary numbers that are not whole numbers (floating-point
+numbers) cannot exactly represent common numbers in the decimal system
+(\textbf{0.1}, \textbf{0.2}, \&), and hence can give unexpected
+results.
+\subsubsection{Operations in binary classes and methods}\label{"id"}
+ 
+In a binary class or method, the following (and only the following)
+rules differ from the usual rules:
+\begin{description}
+\item{Dyadic operations in expressions}
+\index{Binary operations,dyadic}
+ 
+If the operands of a dyadic operator both have primitive numeric types
+\footnote{
+\emph{In the reference implementation, \textbf{boolean} is considered to
+be a numeric type (having the values \textbf{0} or \textbf{1})
+but \textbf{char} is not.
+Characters, and strings or arrays of characters, always use the rules
+defined for NetRexx strings.}
+}
+then binary operations are carried out.  The type of the result is
+implementation defined, and is typically the type of the more precise of
+the two operands, or of some minimum precision.
+\footnote{
+\emph{In the reference implementation, the minimum precision is 32 bits,
+so an \textbf{int} is returned for results that would otherwise
+be \textbf{byte} or \textbf{short}.
+If both operands are \textbf{boolean}, however, and the operation is a
+logical operation, then the type of the result
+is \textbf{boolean}.}
+}
+Arithmetic operations follow the usual rules of binary arithmetic, as
+defined for the underlying environment of the implementation.
+ 
+Note that NetRexx provides both divide and integer divide operators; in
+a binary class or method, the divide operator ("\textbf{/}")
+converts its operands to floating-point types and returns a
+floating-point result, whereas the integer divide operator
+("\textbf{\%}") converts its operands to integer types and
+returns an integer result.
+The remainder operator must accept both integer and floating-point
+types.
+ 
+Logical operations (\emph{and}, \emph{or}, and \emph{exclusive
+or}) apply to all the bits of the operands, and are not permitted
+on floating-point types.
+\item{Prefix operations in expressions}
+\index{Binary operations,prefix}
+\index{Binary operations,monadic}
+ 
+If the operand of a prefix operator has a primitive numeric type, then
+the type of the result is the type of the operand, subject to
+the same minimum as dyadic operations.
+Prefix plus and minus follow the rules of dyadic operators (because they
+are defined as being zero plus or minus the operand) with the additional
+rule that if acting on a literal number (a constant in the program) then
+the result is also considered to be a literal constant.
+Logical not (prefix "\textbf{\textbackslash }") does not apply to all
+the bits of its operand; instead, it changes a \textbf{0}
+to \textbf{1} and vice versa.
+\item{Assignments}
+\index{Binary classes,assignment}
+\index{Binary methods,assignment}
+\index{Binary literals,}
+\index{Literals, binary,}
+\index{Assignment,of literals}
+\index{Assignment,binary}
+ 
+In assignments where the value being assigned is the result of an
+expression which comprises a string or number literal constant, the
+type of the result is defined as follows:
+\begin{enumerate}
+\item Strings are given the native string type, even for a
+single-character literal.
+\footnote{
+\emph{In the reference implementation, this type is \textbf{java.lang.String}}.
+}
+\item Numbers are given the smallest possible primitive numeric type that
+will contain the literal without loss of information (or minimal loss of
+information for numbers with decimal or exponential parts).
+If this is smaller than the implementation-defined minimum precision
+used for the result of adding the literal to \textbf{0}, then the type
+of that minimum precision is used.
+ 
+If the constant is an integer, and no primitive integer binary type has
+sufficient precision to hold the number without loss of information,
+then the number is treated as a literal string (that is, as though it
+were enclosed in quotes).  NetRexx arithmetic would then be used if it
+were involved in an arithmetic operation.
+\end{enumerate}
+ 
+These rules can apply in assignment instructions, the initial assignment
+to the control variable in the \texttt{loop} instruction, or the
+assignment of a default value to the argument of a method; the result
+type may define the type of the variable (if new, or a method argument).
+\item{Control variables in loops}
+\index{Binary classes,control variables}
+\index{Binary classes,LOOP instruction}
+\index{Binary methods,control variables}
+\index{Binary methods,LOOP instruction}
+\index{Loops,in binary classes and methods}
+ 
+In the \texttt{loop} instruction, if the control variable has a
+primitive integer type, and the increment (\texttt{by} value) has a
+primitive integer type, then binary arithmetic will be used for stepping
+the control variable, following the rules for binary arithmetic in
+expressions described above.
+ 
+Similarly, if the control variable has a primitive integer type, and the
+end (\texttt{to}) value has a primitive integer type, then binary
+arithmetic will be used for the comparison that tests for loop
+termination.
+\item{Numeric instruction}
+\index{Binary classes,NUMERIC instruction}
+\index{Binary methods,NUMERIC instruction}
+\index{NUMERIC,in binary classes and methods}
+ 
+The \texttt{numeric} instruction does not affect binary operations.
+It has the usual effects on operations carried out using NetRexx
+arithmetic.
+\end{description}
+\textbf{Note: }
+At all times (whether in binary classes, binary methods, or anywhere
+else) implementations may use primitive types and operations, and
+techniques such as late binding of types, as an optimization
+providing that the results obtained are identical to those defined in
+this language definition.
+\subsubsection{Binary constructors}\label{"id"}
+\index{Binary constructors,}
+\index{Constructors,binary}
+\index{Conversion,binary constructors}
+\index{Conversion,of characters}
+\index{Character,encodings}
+\index{Character,converting to binary}
+\index{Encodings,binary}
+ 
+NetRexx provides special constructors for implementation-defined
+primitive types that allow bit-wise construction of primitives.
+These \emph{binary constructors} are especially useful for
+manipulating the binary encodings of individual characters.
+ 
+The binary constructors follow the same syntax as other constructors,
+with the name being that of a primitive type.  All binary constructors
+take one argument, which must have a primitive type.
+ 
+The bits of the value of the argument are extended or truncated on the
+left to the same length as the bits required for the type of the
+constructor (following the usual binary rules of sign extension if the
+argument type is a signed numeric type), and a value with the type of
+the constructor is then constructed directly from those bits and
+returned.
+ \textbf{Example:}
+ This example illustrates types from the reference implementation,
+with 32-bit signed integers of type \textbf{int} and 16-bit Unicode
+characters of type \textbf{char}.
+\begin{alltt}
+i=int 77   -- i is now the integer 77
+c=char(i)  -- c is now the character 'M'
+j=int(c)   -- j is now the integer 77
+\end{alltt}
+Note that the conversion
+\begin{alltt}
+j=int c
+\end{alltt}
+would have failed, as "\textbf{M}" is not a number.

@@ -1,0 +1,67 @@
+\chapter{Signal instruction}\label{"id"}
+\index{SIGNAL instruction,}
+\index{Instructions,SIGNAL}
+\index{Flow control,abnormal, with SIGNAL}
+\index{,}
+\index{,}
+\index{Trapping of exceptions,}
+\index{Raising exceptions,}
+\index{Exceptions,raising}
+\index{Exceptions,signalling}
+\index{Exceptions,throwing}
+\begin{shaded}
+\begin{alltt}
+\textbf{signal} \emph{term};
+\end{alltt}
+\end{shaded}
+ The \texttt{signal} instruction causes an "abnormal" change
+in the flow of control, by raising an \emph{exception}.
+ 
+The exception \emph{term} may be a term that constructs or evaluates
+to an exception object, or it may be expressed as the name of an
+exception type (in which case the default constructor, with no
+arguments, for that type is used to construct an exception object).
+The exception object then represents the exception and is available, if
+required, when the exception is handled.
+ 
+The handling of exceptions is detailed in the
+ \emph{Exceptions} (see page \pageref{refexcep}) 
+section:ea..
+In summary, when an exception is signalled, all active pending
+\texttt{do} groups, \texttt{loop} loops, \texttt{if} constructs, and
+\texttt{select} constructs may be ended.
+For each one in turn, from the innermost:
+\begin{enumerate}
+\item No further clauses within the body of the construct will be executed
+(in this respect, \texttt{signal} acts like a \texttt{leave} for the
+construct).
+\item The \emph{instructionlist} following the first \texttt{catch}
+clause that matches the exception, if any, is executed.
+\item The \emph{instructionlist} following the \texttt{finally}
+clause for the construct, if any, is executed.
+\end{enumerate}
+If a \texttt{catch} matched the exception the exception is deemed
+handled, and execution resumes as though the construct ended normally
+(unless a new exception was signalled in the \texttt{catch} or
+\texttt{finally} instruction lists, in which case it is processed).
+Otherwise, any enclosing construct is ended in the same manner.
+If there is no enclosing construct, then the current method is ended and
+the exception is signalled in the caller.
+ \textbf{Examples:}
+\begin{alltt}
+signal RxErrorTrace
+signal DivideException('Divide by zero')
+\end{alltt}
+
+\emph{In the reference implementation, the \emph{term} must
+either}
+\begin{itemize}
+\item 
+\emph{evaluate to an object that is assignable to the
+type \textbf{Throwable} (for example, a subclass
+of \textbf{Exception} or \textbf{RuntimeException}).}
+\item 
+\emph{be a type that is a subclass of \textbf{Throwable}, in which case
+the default constructor (with no arguments) for the given type is used
+to construct the exception object.}
+\end{itemize}

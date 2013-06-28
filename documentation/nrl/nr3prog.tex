@@ -1,0 +1,170 @@
+\chapter{Program structure}\label{"id"}
+\index{Programs,}
+\index{Programs,structure}
+\index{Program,structure}
+ A NetRexx \emph{program} is a collection of
+ clauses (see page \pageref{refclau})  derived from a single implementation-defined
+source stream (such as a file).
+When a program is processed by a language processor
+\footnote{
+Such as a compiler or interpreter.
+}
+it defines one or more classes.
+Classes are usually introduced by the  \texttt{class} (see page \pageref{refclass}) 
+instruction:ea., but if the first is a standard class, intended to be
+run as a stand-alone application, then the \texttt{class} instruction
+can be omitted.  In this case, NetRexx defines an implied class
+and initialization method that will be used.
+ 
+The implied class and method permits the writing of "low
+boilerplate" programs, with a minimum of syntax.
+The simplest, documented, NetRexx program that has an effect might
+therefore be:
+ \textbf{Example:}
+\index{Example,Hello World}
+\begin{alltt}
+/* This is a very simple NetRexx program */
+say 'Hello World!'
+\end{alltt}
+ 
+In more detail, a NetRexx program consists of:
+\index{Program,prolog}
+\index{Prolog, of a program,}
+\begin{enumerate}
+\item An optional \emph{prolog} (\texttt{package}, \texttt{import}, and
+\texttt{options} instructions).  Only one \texttt{package} instruction
+is permitted per program.
+\item  One or more class definitions, each introduced by a \texttt{class}
+instruction.
+\end{enumerate}
+ 
+\index{Class,definition}
+A \emph{class definition} comprises:
+\begin{enumerate}
+\item The \texttt{class} instruction which introduces the class (which may
+be inferred, see below).
+\item 
+Zero or more property variable assignments,
+\index{Properties,initialization}
+\index{Assignment,property initialization}
+along with optional \texttt{properties}
+instructions that can alter their attributes, and optional
+\texttt{numeric} and \texttt{trace} instructions.
+Property variable assignments take the form of an
+ \emph{assignment} (see page \pageref{refassign}) , with an optional
+"\textbf{=}" and expression, which may:
+\begin{itemize}
+\item just name a property (by omitting the "\textbf{=}"
+and expression of the assignment), in which case it refers to a string of
+type \textbf{Rexx}
+\item assign a type to the property (when the expression evaluates to just
+a type)
+\item 
+assign a type and initial value to the property (when the expression
+returns a value).
+\end{itemize}
+\item Zero or more method definitions, each introduced by a
+\texttt{method} instruction (which may be inferred if the \texttt{class}
+instruction is inferred, see below).
+\end{enumerate}
+ 
+\index{Method,definition}
+A \emph{method definition} comprises:
+\begin{itemize}
+\item 
+Any NetRexx instructions, except the \texttt{class}, \texttt{method},
+and \texttt{properties} instructions and those allowed in the prolog
+(the \texttt{package}, \texttt{import}, and \texttt{options}
+instructions).
+\end{itemize}
+ \textbf{Example:}
+\index{Example,of two classes}
+\begin{alltt}
+/* A program with two classes */
+import java.applet.   -- for example
+
+class testclass extends Applet
+  properties public
+    state             -- property of type 'Rexx'
+    i=int             -- property of type 'int'
+  properties constant
+    j=int 3           -- property initialized to '3'
+
+  method start
+    say 'I started'
+    state='start'
+
+  method stop
+    say 'I stopped'
+    state='stop'
+
+class anotherclass
+  method testing
+    loop i=1 to 10
+      say '1, 2, 3, 4...'
+      if i=7 then return
+     end
+    return
+
+  method anothertest
+    say '1, 2, 3, 4'
+\end{alltt}
+This example shows a prolog (with just an \texttt{import}
+instruction) followed by two classes.  The first class includes
+two public properties, one constant property, and two methods.
+The second class includes no properties, but also has two methods.
+ 
+Note that a \texttt{return} instruction implies no static scoping; the
+content of a method is ended by a \texttt{method} (or \texttt{class})
+instruction, or by the end of the source stream.
+The \texttt{return} instruction at the end of the \textbf{testing}
+method is, therefore, unnecessary.
+\subsection{}\label{"id"}
+ 
+The following defaults are provided for NetRexx programs:
+\begin{enumerate}
+\item If, while parsing prolog instructions, some instruction that is not
+valid for the prolog and is not a \texttt{class} instruction is
+encountered, then a default \texttt{class} instruction (with an
+implementation-provided short name, typically derived from the name of
+the source stream) is inserted.  If the instruction was not a
+\texttt{method} instruction, then a default \texttt{method} instruction
+(with a name and attributes appropriate for the environment, such
+as \textbf{main}) is also inserted.
+ 
+In this latter case, it is assumed that execution of the program will
+begin by invocation of the default method.
+In other words, a "stand-alone" application can be written without
+explicitly providing the class and method instructions for the first
+method to be executed.
+[\%book
+An example of such a program is given in  Appendix A (see page \pageref{refappa}) .
+[\%odt
+An example of such a program is given in  Appendix A (see page \pageref{refappa}) .
+ 
+\emph{In the reference implementation, the \textbf{main} method in a
+stand-alone application is passed the words forming the command string
+as an array of strings of type \textbf{java.lang.String} (one word to
+each element of the array).
+When the NetRexx reference implementation provides the \textbf{main}
+method instruction by default, it also constructs a NetRexx string of
+type \textbf{Rexx} from this array of words, with a blank added
+between words, and assigns the string to the variable
+\textbf{arg}.}
+ 
+\emph{The command string may also have been edited by the underlying
+operating system environment; certain characters may not be
+allowed, multiple blanks or whitespace may have been reduced to
+single blanks, etc.
+}
+\item If a method ends and the last instruction at the outer level of the
+method scope is not \texttt{return} then a \texttt{return} instruction
+is added if it could be reached.
+In this case, if a value is expected to be returned by the method (due
+to other \texttt{return} instructions returning values, or there being a
+\texttt{returns} keyword on the \texttt{method} instruction), an error
+is reported.
+\end{enumerate}
+ 
+Language processors may provide options to prevent, or warn of, these
+defaults being applied, as desired.

@@ -1,0 +1,357 @@
+\chapter{Methods and Constructors}\label{"id"}
+\index{Methods,}
+\index{Methods,invocation of}
+\index{Parentheses,in method calls}
+\index{Comma,in method calls}
+\index{,}
+ 
+Instructions in NetRexx are grouped into \emph{methods}, which are
+named routines that always belong to (are part of) a \emph{class}.
+ 
+\index{References,to methods}
+Methods are invoked by being referenced in a  term (see page \pageref{refterms}) ,
+which may be part of an expression or be a clause in its own right (a
+method call instruction).
+In either case, the syntax used for a method invocation is:
+\begin{alltt}
+\emph{symbol}([\emph{expression}[,\emph{expression}]...])
+\end{alltt}
+\index{Arguments,of methods}
+\index{Arguments,passing to methods}
+ The \emph{symbol}, which must be non-numeric, is called the
+\emph{name} of the method.
+It is important to note that the name of the method must be followed
+immediately by the "\texttt{(}", with \textbf{no} blank in
+between, or the construct will not be recognized as a method call
+(a \emph{blank operator} would be assumed at that point instead).
+ The \emph{expression}s (separated by commas) between the
+parentheses are called the \emph{arguments} to the method.
+Each argument expression may include further method calls.
+ The argument expressions are evaluated in turn from left to right
+and the resulting values are then passed to the method (the procedure
+for locating the method is described below).
+The method then executes some algorithm (usually dependent on any
+arguments passed, though arguments are not mandatory) and will
+eventually return a value.
+This value is then included in the original expression just as though
+the entire method reference had been replaced by the name of a variable
+whose value is that returned data.
+ 
+For example, the \textbf{substr} method is provided for strings of
+type \textbf{Rexx} and could be used as:
+\begin{alltt}
+c='abcdefghijk'
+a=c.substr(3,7)
+/* would set A to "cdefghi" */
+\end{alltt}
+Here, the value of the variable \textbf{c} is a string (of
+type \textbf{Rexx}).
+The \textbf{substr} (substring) method of the \textbf{Rexx} class is
+then invoked, with arguments \textbf{3} and \textbf{7}, on the value
+referred to by \textbf{c}.
+That is, the the properties available to (the context of)
+the \textbf{substr} method are the properties constructed from the
+literal string \textbf{'abcdefghijk'}.
+The method returns the substring of the value, starting at the third
+character and of length seven characters.
+\index{Arguments,passing to methods}
+ 
+A method may have a variable number of arguments: only those
+required need be specified.
+For example, \textbf{'ABCDEF'.substr(4)} would return the
+string \textbf{'DEF'}, as the \textbf{substr} method will assume
+that the remainder of the string is to be returned if no length is
+provided.
+ 
+Method invocations that take no arguments may omit the (empty)
+parentheses in circumstances where this would not be ambiguous.
+See the section on  \emph{Terms} (see page \pageref{refterms})  for details.
+ 
+\textbf{Implementation minimum:} At least 10 argument expressions
+should be allowed in a method call.
+\subsection{Method call instructions}\label{"id"}
+\index{Method call instructions,}
+\index{Subroutines,calling}
+ 
+When a clause in a method consists of just a term, and the final part of
+the term is a method invocation, the clause is a \emph{method call
+instruction}:
+\begin{shaded}
+\begin{alltt}
+\emph{symbol}([\emph{expression}[,\emph{expression}]...]);
+\end{alltt}
+\end{shaded}
+The method is being called as a subroutine of the current method, and
+any returned value is discarded.
+In this case (and in this case only), the method invoked need not return
+a value (that is, the \texttt{return} instruction that ends it need not
+specify an expression).
+\footnote{
+A method call instruction is equivalent to the \texttt{call} instruction
+of other languages, except that no keyword is required.
+}
+ 
+A method call instruction that is the first instruction in a constructor
+(see below) can only invoke the special constructors \textbf{this}
+and \textbf{super}.
+\subsection{Method resolution (search order)}\label{"id"}
+\index{Resolution of methods,}
+\index{Search order,for methods}
+\index{Methods,resolution of}
+ 
+Method resolution in NetRexx proceeds as follows:
+\begin{itemize}
+\item 
+If the method invocation is the first part (stub) of a term, then:
+\begin{enumerate}
+\item 
+The current class is searched for the method (see below for details of
+searching).
+\item If not found in the current class, then the superclasses of the
+current class are searched, starting with the class that the current
+class extends.
+\item 
+If still not found, then the classes listed in the \texttt{uses} phrase
+of the \texttt{class} instruction are searched for the method, which in
+this case must be a  static method (see page \pageref{refstatmet}) .
+Each class from the list is searched for the method, and then its
+superclasses are searched upwards from the class; this process is
+repeated for each of the classes, in the order specified in the list.
+\item 
+If still not found, the method invocation must be a constructor (see
+below) and so the method name, which may be qualified by a package name,
+should match the name of a primitive type or a known class (type).
+The specified class is then searched for a constructor that matches the
+method invocation.
+\end{enumerate}
+\item 
+If the method invocation is not the first part of the term, then the
+evaluation of the parts of the term to the left of the method invocation
+will have resulted in a value (or just a type), which will have a known
+type (the continuation type).
+Then:
+\begin{enumerate}
+\item 
+The class that defines the continuation type is searched for the method
+(see below for details of searching).
+\item If not found in that class, then the superclasses of that class are
+searched, starting with the class that that class extends.
+\end{enumerate}
+ If the search did not find a method, an error is reported.
+ 
+If the search did find a method, that is the method which is invoked,
+except in one case:
+\begin{itemize}
+\item If the evaluation so far has resulted in a value (an object), then
+that value may have a type which is a subclass of the continuation type.
+If, within that subclass, there is a method that
+ exactly overrides (see page \pageref{refoverrid})  the method that was found in the
+search, then the method in the subclass is invoked.
+\end{itemize}
+
+This case occurs when an object is earlier assigned to a variable of a
+type which is a superclass of the type of the object.  This type
+simplification hides the real type of the object from the language
+processor, though it can be determined when the program is executed.
+\end{itemize}
+ 
+\index{Methods,searching for}
+\index{Matching methods,}
+Searching for a method in a class proceeds as follows:
+\begin{enumerate}
+\item 
+Candidate methods in the class are selected.
+To be a candidate method:
+\begin{itemize}
+\item 
+the method must have the same name as the method invocation (independent
+of the  case (see page \pageref{refcase})  of the letters of the name)
+\item 
+the method must have the same number of arguments as the method
+invocation (or more arguments, provided that the remainder are shown as
+optional in the method definition)
+\item 
+it must be possible to assign the result of each argument expression to
+the type of the corresponding argument in the method definition (if
+strict type checking is in effect, the types must match exactly).
+\end{itemize}
+\item 
+If there are no candidate methods then the search is complete; the
+method was not found.
+\item If there is just one candidate method, that method is used; the
+search is complete.
+\item 
+If there is more than one candidate method, the sum of the
+ costs of the conversions (see page \pageref{refcosts})  from the type of each
+argument expression to the type of the corresponding argument defined
+for the method is computed for each candidate method.
+\item 
+The costs of those candidates (if any) whose names match the method
+invocation exactly, including in case, are compared; if one has a lower
+cost than all others, that method is used and the search is complete.
+\item 
+The costs of all the candidates are compared; if one has a lower
+cost than all others, that method is used and the search is complete.
+\item 
+If there remain two or more candidates with the same minimum cost, the
+method invocation is ambiguous, and an error is reported.
+\end{enumerate}
+\textbf{Note: }When a method is found in a class, superclasses of that class are
+not searched for methods, even though a lower-cost method may exist in a
+superclass.
+\subsection{Method overriding}\label{"id"}
+\index{Methods,overriding}
+\index{Overriding methods,}
+ 
+A method is said to \emph{exactly override} a method in another class
+if
+\begin{enumerate}
+\item the method in the other class has the same name as the current method
+\item the method in the other class is not \texttt{private}
+\item the other class is a superclass of the current class, or is a class
+that the current class implements (or is a superclass of one of those
+classes).
+\item the number and type of the arguments of the method in the other
+class exactly match the number and type of the arguments of the current
+method (where subsets are also checked, if either method has optional
+arguments).
+\end{enumerate}
+For example, the \textbf{Rexx} class includes a
+ \textbf{substr} (see page \pageref{refsubstr})  method, which takes from one to
+three strings of type \textbf{Rexx}.  In the class:
+\begin{alltt}
+class mystring extends Rexx
+  method substr(n=Rexx, length=Rexx)
+    return this.reverse.substr(n, length)
+
+  method substr(n=int, length=int)
+    return this.reverse.substr(Rexx n, Rexx length)
+\end{alltt}
+the first method exactly overrides the \textbf{substr} method in
+the \textbf{Rexx} class, but the second does not, because the types of
+the arguments do not match.
+ 
+A method that exactly overrides a method is assumed to be an extension
+of the overridden method, to be used in the same way.  For such a
+method, the following rules apply:
+\begin{itemize}
+\item It must return a value of the same type as the overridden method (or
+none, if the overridden method returns none).
+\item It must be at least as visible as the overridden routine.
+For example, if the overridden routine is \texttt{public} then it must
+also be \texttt{public}.
+\item If the overridden method is \texttt{static} then it must also
+be \texttt{static}.
+\item If the overridden method is not \texttt{static} then it must
+not be \texttt{static}.
+\item If the underlying implementation checks  exceptions (see page \pageref{refexcep}) ,
+only those checked exceptions that are signalled by the overridden
+method may be left uncaught in the current method.
+\end{itemize}
+\subsection{Constructor methods}\label{"id"}
+\index{Constructors,}
+\index{,}
+\index{Methods,constructor}
+\index{Objects,constructing}
+\index{Instance, of a class,}
+\index{Class,instances of}
+ 
+As described above, methods are usually invoked in the context of an
+existing value or type.
+A special kind of method, called a constructor method, is used to
+actually create a value of a given type (an object).
+ 
+Constructor methods always have the same short name as the class in
+which they are found, and construct and return a value of the type
+defined by that class (sometimes known as an \emph{instance} of that
+class).
+If the class is part of a package, then the constructor call may be
+qualified by the package name.
+ \textbf{Example constructors:}
+\begin{alltt}
+File('Dan.yr.Ogof')
+java.io.File('Speleogroup.letter')
+Rexx('some words')
+netrexx.lang.Rexx(1)
+\end{alltt}
+ 
+\index{Constructors,default}
+There will always be at least one constructor if values can be created
+for a class.  NetRexx will add a default public constructor that takes
+no arguments if no constructors are provided, unless the components of
+the class are all static or constant, or the class is an interface
+class.
+ 
+All constructors follow the same rules as other methods, and in
+addition:
+\begin{enumerate}
+\item Constructor calls always include parentheses in the syntax, even
+if no arguments are supplied.  This distinguishes them from a reference
+to the type of the same name.
+\item Constructors must call a constructor of their superclass (the class
+they extend) before they carry out any initialization of their own.
+This is so any initialization carried out by the superclass takes
+place, and at the appropriate moment.
+Only after this call is complete can they make any reference to the
+special words  \textbf{this} or \textbf{super} (see page \pageref{refspecial}) .
+ 
+Therefore, the first instruction in a constructor must be either a call
+to the superclass, using the special constructor \textbf{super()}
+(with optional arguments), or a call to to another constructor in the
+same class, using the special constructor \textbf{this()} (with
+optional arguments).
+In the latter case, eventually a constructor that explicitly
+calls \textbf{super()} will be invoked and the chain of local
+constructor calls ends.
+ 
+As a convenience, NetRexx will add a default call to \textbf{super()},
+with no arguments, if the first instruction in a constructor is not a
+call to \textbf{this()} or \textbf{super()}.
+\item 
+The properties of a constructed value are initialized, in the order
+given in the program, after the call to \textbf{super()} (whether
+implicit or explicit).
+\item 
+By definition, constructors create a value (object) whose type is
+defined by the current class, and then return that value for use.
+Therefore, the \texttt{returns} keyword on the
+ \texttt{method} instruction (see page \pageref{refmethod})  that introduces the
+constructor is optional (if given, the type specified must be that of
+the class).
+Similarly, the only possible forms of the \texttt{return} instruction
+used in a constructor are either "\textbf{return this;}", which
+returns the value that has just been constructed, or just
+"\textbf{return;}", in which case, the "\textbf{this}" is
+assumed (this form will be assumed at the end of a method, as usual, if
+necessary).
+\end{enumerate}
+ 
+\index{Example,of constructors}
+Here is an example of a class with two constructors, showing the use
+of \textbf{this()} and \textbf{super()}, and taking advantage of
+some of the assumptions:
+\begin{alltt}
+class MyChars extends SomeClass
+
+  properties private
+    /* the data 'in' the object */
+    value=char[]
+
+  /* construct the object from a char array */
+  method MyChars(array=char[])
+    /* initialize superclass */
+    super()
+    value=array             -- save the value
+
+  /* construct the object from a String */
+  method MyChars(s=String)
+    /* convert to char[] and use the above */
+    this(s.toCharArray())
+\end{alltt}
+ 
+Objects of type \textbf{MyChars} could then be created thus:
+\begin{alltt}
+myvar=MyChars("From a string")
+\end{alltt}
+
+or by using an argument that has type \textbf{char[]}.

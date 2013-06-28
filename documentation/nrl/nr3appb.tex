@@ -1,0 +1,226 @@
+\chapter{Appendix B - JavaBean Support}\label{refappb}
+\index{Experimental feature,}
+ 
+This appendix describes an experimental feature, \emph{indirect
+properties}, which is supported by the NetRexx reference
+implementation.
+ 
+\index{JavaBean properties,}
+\index{Properties,for JavaBeans}
+The intention of the feature is to make it easier to write a certain
+kind of class known as a \emph{JavaBean}.
+Almost all JavaBeans will have \emph{properties}, which are data items
+that a user of a JavaBean is expected to be able to customize (for
+example, the text on a pushbutton).  The names and types of the
+properties of a JavaBean are inferred from "\emph{design
+patterns}" (in this context, conventions for naming methods) or
+from PropertyDescriptor objects associated with the JavaBean.
+ 
+The JavaBean properties do not necessarily correspond to instance
+variables in the class - although very often they do.  The
+JavaBean specification does not guarantee that JavaBean properties
+that can be set can also be inspected, nor does it describe how
+ambiguities of naming and method signatures are to be handled.
+ 
+The NetRexxC compiler
+allows a more rigorous
+treatment of JavaBean properties, by allowing an optional attribute of
+properties in a class that declares them to be \emph{indirect
+properties}.  Indirect properties are properties of a known type
+that are private to the class, but which are expected to be publicly
+accessible indirectly, though certain conventional method calls.
+ 
+Declaring properties to be indirect offers the following advantages:
+\begin{itemize}
+\item For many simple cases, the access methods for the properties can be
+generated automatically; there is no need to explicitly code them in the
+source file for the class.  This is especially helpful for Indexed
+Properties (where four methods are needed, in general).
+\item Where access methods are explicitly provided in the class, they can
+be checked for correct form, signature and accessibility.  This detects
+errors at compile time that otherwise would only be determined by
+testing.
+\item Similarly, attention can be drawn to the presence of methods that
+may be intended to be an access method for an indirect property, but
+will not be recognized as such by builders.
+\end{itemize}
+ The next section describes the use of indirect properties in more
+detail.
+\chapter{Indirect properties}\label{"id"}
+\index{PROPERTIES instruction,}
+\index{Instructions,PROPERTIES}
+\index{INDIRECT,on PROPERTIES instruction}
+\index{Indirect properties,}
+\index{Properties,indirect}
+ 
+The  \texttt{properties} instruction (see page \pageref{refprop})  is used to
+define the attributes of following \emph{property} variables.
+The \emph{visibility} of properties may include a new alternative:
+\texttt{indirect}.
+Properties with this form of visibility are known as \emph{indirect
+properties}.  These are properties of a known type that are private
+to the class, but which are expected to be publicly accessible
+indirectly, though certain conventional method calls.
+ 
+For example, consider the simple program:
+\begin{alltt}
+class Sandwich extends Canvas implements Serializable
+  properties indirect
+    slices=Color.gray
+    filling=Color.red
+
+  method Sandwich
+    resize(100,30)
+
+  method paint(g=Graphics)
+    g.setColor(slices)
+    g.fillRect(0, 0, size.width, size.height)
+    g.setColor(filling)
+    g.fillRect(12, 12, size.width-12, size.height-12)
+\end{alltt}
+This declares the \textbf{Sandwich} class as having two indirect
+properties, called \textbf{slices} and \textbf{filling}, both being
+of type \textbf{java.awt.Color}.
+ 
+In the example, no access methods are provided for the properties, so
+the compiler will add them.  By implementation-dependent convention, the
+names are prefixed with verbs such as \textbf{get} and \textbf{set},
+\&, and have the first character of their name uppercased to form the
+method names.
+Hence, in this Java-based example, the following four methods are added:
+\begin{alltt}
+method getSlices  returns java.awt.Color
+  return slices
+method getFilling returns java.awt.Color
+  return filling
+method setSlices(\$1=java.awt.Color)
+  slices=\$1
+method setFilling(\$2=java.awt.Color)
+  filling=\$2
+\end{alltt}
+(where \textbf{\$1} and \textbf{\$2} are "hidden" names used for
+accessing the method arguments).
+ 
+Note that the \texttt{indirect} attribute for a property is an
+alternative to the \texttt{public}, \texttt{private}, and
+\texttt{inheritable}, and \texttt{shared} attributes.
+Like private properties, indirect properties can only be accessed
+directly by name from within the class in which they occur; other
+classes can only access them using the access methods (or other methods
+that may use, or have a side-effect on, the properties).
+ 
+Indirect properties may be \texttt{constant} (implying that only
+a :m.get:em. method is generated or allowed, though the private property
+may be changed by methods within the class)
+or  \texttt{transient} (see page \pageref{refpropmod}) .
+They may not be \texttt{static} or \texttt{volatile}.
+ 
+In detail, the rules used for generating automatic methods for a
+property whose name is \textbf{xxxx} are as follows:
+\begin{enumerate}
+\item A method called \textbf{getXxxx} which returns the value of the
+property is generated.  The returned value will have the same type
+as \textbf{xxxx}.
+\item If the type of \textbf{xxxx} is \textbf{boolean} then the generated
+method will be called \textbf{isXxxx} instead of \textbf{getXxxx}.
+\item If the property is not \texttt{constant} then a method for setting the
+property will also be generated.  This will be called \textbf{setXxxx},
+and take a single argument of the same type as \textbf{xxxx}.  This
+assigns the argument to the property and returns no value.
+\end{enumerate}
+ 
+If the property has an array type (for example, \textbf{char[]}),
+then it must only have a single dimension.
+Two further methods may then be generated, according to the rules:
+\begin{enumerate}
+\item A method called \textbf{getXxxx} which takes a single \textbf{int}
+as an argument and which returns an item from the property array is
+generated. The returned value will have the same type as \textbf{xxxx},
+without the \textbf{[]}.  The integer argument is used to
+index into the array.
+\item As before, if the result type of the method would be \textbf{boolean}
+then the name of the method will be \textbf{isXxxx} instead
+of \textbf{getXxxx}.
+\item If the property is not \texttt{constant} then a method for setting an
+item in the property array will also be generated.
+This will be called \textbf{setXxxx}, and take two arguments: the
+first is an \textbf{int} that is used to select the item to be
+changed, and the second is an undimensioned argument of the same type
+as \textbf{xxxx}.  It assigns the second argument to the item in the
+property array indexed by the first argument, and returns no value.
+\end{enumerate}
+ For example, for an indirect property declared thus:
+\begin{alltt}
+properties indirect
+  fred=foo.Bar[]
+\end{alltt}
+the four methods generated would be:
+\begin{alltt}
+method getFred returns foo.Bar[]; return fred
+method getFred($1=int) returns foo.Bar; return fred[$1]
+method setFred($2=foo.Bar[]); fred=$2
+method setFred($3=int, $4=foo.Bar); fred[$3]=$4
+\end{alltt}
+ 
+Note that in all cases a method will only be generated if it would not
+exactly
+match a method explicitly coded in the current class.
+\subsubsection{Explicit provision of access methods}
+ 
+Often, for example when an indirect property has an on-screen
+representation, it is desirable to redraw the property when the property
+is changed (and in more complicated cases, there may be interactions
+between properties).
+These and other actions will require extra processing which will not be
+carried out by automatically generated methods.  To add this processing
+the access methods will have to be coded explicitly.  In the
+"Sandwich" example, we only need to supply the \textbf{set}
+methods, perhaps by adding the following to the example class above:
+\begin{alltt}
+method setSlices(col=Color)
+  slices=col      -- update the property
+  this.repaint    -- redraw the component
+
+method setFilling(col=Color)
+  filling=col
+  this.repaint
+\end{alltt}
+If we add these two methods, they will no longer be added
+automatically (the two \textbf{get} methods will continue to be
+provided automatically, however).  Further, since the names match
+possible access methods for properties that are declared to be indirect,
+the compiler will check the method declaration: the method signatures
+and return type (if any) must be correct, for example.  Also, since the
+names of access methods are case-sensitive (in a Java environment), you
+will be warned if a method appears to be intended to be an access method
+but the case of one or more letters is wrong.
+ 
+Specifically, the checks carried out are as follows:
+\begin{enumerate}
+\item For methods whose names exactly match a potential access method for
+an indirect property (that is, start with \textbf{is}, \textbf{get},
+or \textbf{set}, which is then followed by the name of an indirect
+property with the first character of the name uppercased):
+\begin{itemize}
+\item The argument list for (signature of) the method must match one of
+those that could possibly be automatically generated for the property.
+\item The returns type (if any) must match the expected returns type for
+that method.
+\item If the returns type is simply \textbf{boolean}, then the method name
+must start with \textbf{is}.
+Conversely, if the method name starts with \textbf{is} then the returns
+type must be just \textbf{boolean}.
+\item If the property is \texttt{constant} then the name of the method
+cannot start with \textbf{set}.
+\item A warning is given if the method is not \texttt{public} (the default).
+\end{itemize}
+\item For methods whose names match a potential access method, as above,
+except in case:
+\begin{itemize}
+\item A warning is given that the method in question may be intended to
+be an indirect property access method, but will not be recognized as
+such by builders.
+\end{itemize}
+\end{enumerate}
+ These checks detect a wide variety of errors at compile time, hence
+speeding the development of classes that use indirect properties.

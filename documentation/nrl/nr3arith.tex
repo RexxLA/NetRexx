@@ -1,0 +1,701 @@
+\chapter{Numbers and Arithmetic}\label{"id"}
+\index{,}
+\index{,}
+\index{,}
+\index{,}
+\index{,}
+\index{Arbitrary precision arithmetic,}
+\index{Precision,arbitrary}
+\index{Rexx,arithmetic}
+ NetRexx arithmetic attempts to carry out the usual operations
+(including addition, subtraction, multiplication, and division) in as
+"natural" a way as possible.
+What this really means is that the rules followed are those that are
+conventionally taught in schools and colleges.
+However, it was found that unfortunately the rules used vary
+considerably (indeed much more than generally appreciated) from person
+to person and from application to application and in ways that are not
+always predictable.
+The NetRexx arithmetic described here is therefore a compromise which
+(although not the simplest) should provide acceptable results in most
+applications.
+\subsection{}\label{"id"}
+ 
+\index{Numbers,}
+Numbers can be expressed in NetRexx very flexibly (leading and trailing
+blanks are permitted, exponential notation may be used) and follow
+conventional syntax.
+Some valid numbers are:
+\begin{alltt}
+     12          /* A whole number               */
+   '-76'         /* A signed whole number        */
+     12.76       /* Some decimal places          */
+ ' +  0.003 '    /* Blanks around the sign, etc. */
+     17.         /* Equal to 17                  */
+      '.5'       /* Equal to 0.5                 */
+     4E+9        /* Exponential notation         */
+      0.73e-7    /* Exponential notation         */
+\end{alltt}
+\index{Exponential notation,}
+(Exponential notation means that the number includes a sign and a power
+of ten following an "\textbf{E}" that indicates how the decimal
+point will be shifted.  Thus \textbf{4E+9} above is just a short way
+of writing \textbf{4000000000}, and \textbf{0.73e-7} is short
+for \textbf{0.000000073}.)
+\index{Operators,arithmetic}
+\index{Numbers,arithmetic on}
+\index{Arithmetic,operators}
+\index{Integer division,}
+\index{Division,integer}
+\index{Remainder operator,}
+ The arithmetic operators include
+addition (indicated by a "\textbf{+}"),
+subtraction ("\textbf{-}"),
+multiplication ("\textbf{*}"),
+power ("\textbf{**}"), and
+division ("\textbf{/}").
+There are also two further division operators:
+integer divide ("\textbf{\%}") which divides and returns the integer part, and
+remainder ("\textbf{//}") which divides and returns the remainder.
+Prefix plus ("\textbf{+}") and
+prefix minus ("\textbf{-}") operators are also provided.
+\index{Rounding,}
+ When two numbers are combined by an operation, NetRexx uses a set of
+rules to define what the result will be (and how the result is to be
+represented as a character string).
+These rules are defined in the next section, but in summary:
+\begin{itemize}
+\item Results will be calculated with up to some maximum number of
+significant digits.
+That is, if a result required more than 9 digits it would normally be
+rounded to 9 digits.
+For instance, the division of 2 by 3 would result in 0.666666667 (it
+would require an infinite number of digits for perfect accuracy).
+ 
+You can change the default of 9 significant digits by using the
+\texttt{numeric digits} instruction.  This lets you calculate using
+as many digits as you need - thousands, if necessary.
+\item Except for the division and power operators, trailing zeros are
+preserved (this is in contrast to most electronic calculators, which
+remove all trailing zeros in the decimal part of results).
+So, for example:
+\begin{alltt}
+2.40 + 2  =>  4.40
+2.40 - 2  =>  0.40
+2.40 * 2  =>  4.80
+2.40 / 2  =>  1.2
+\end{alltt}
+This preservation of trailing zeros is desirable for most
+calculations (and especially financial calculations).
+ If necessary, trailing zeros may be easily removed with the
+ \textbf{strip} method (see page \pageref{refstrip}) , or by division by 1.
+\item A zero result is always expressed as the single
+digit \textbf{'0'}.
+\item 
+Exponential form is used for a result depending on its value and
+the setting of \texttt{numeric digits} (the default is 9 digits).
+If the number of places needed before the decimal point exceeds this
+setting, or the absolute value of the number is less
+than \textbf{0.000001}, then the number will be expressed in
+exponential notation; thus
+\begin{alltt}
+1e+6 * 1e+6
+\end{alltt}
+results in "\textbf{1E+12}" instead of
+"\textbf{1000000000000}", and
+\begin{alltt}
+1 / 3E+10
+\end{alltt}
+results in "\textbf{3.33333333E-11}" instead of
+"\textbf{0.0000000000333333333}".
+\item 
+Any mixture of Arabic numerals (0-9) and  Extra digits (see page \pageref{refsyms}) 
+can be used for the digits in numbers used in calculations.  The results
+are expressed using Arabic numerals.
+\end{itemize}
+\subsection{}\label{"id"}
+ This definition describes arithmetic for NetRexx strings
+(type \textbf{Rexx}).
+The arithmetic operations are identical to those defined in the ANSI
+standard for Rexx.
+\index{ANSI standard,arithmetic definition}
+\footnote{
+:cit.American National Standard for Information Technology -
+Programming Language REXX, X3.274-1996:ecit., American National
+Standards Institute, New York, 1996.
+}
+\subsubsection{Numbers}\label{"id"}
+\index{Numbers,definition}
+ A \emph{number} in NetRexx is a character string that includes one or
+more decimal digits, with an optional decimal point.
+The decimal point may be embedded in the digits, or may be prefixed or
+suffixed to them.
+The group of digits (and optional point) thus constructed may have
+leading or trailing blanks, and an optional sign ("\textbf{+}"
+or "\textbf{-}") which must come before any digits or decimal
+point.
+The sign may also have leading or trailing blanks.
+Thus:
+\index{Numeric,part of a number}
+\index{Digits,in numbers}
+\begin{alltt}
+sign    ::=  + | -
+digit   ::=  0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+digits  ::=  digit [digit]...
+numeric ::=  digits . [digits]
+             | [.] digits
+number  ::=  [blank]... [sign [blank]...]
+             numeric [blank]...
+\end{alltt}
+
+\index{Extra digits,in numbers}
+where if the implementation supports  extra digits (see page \pageref{refsyms}) 
+these are also accepted as \emph{digit}s, providing that they
+represent values in the range zero through nine.
+In this case each extra digit is treated as though it were
+the corresponding character in the range 0-9.
+\index{Period,in numbers}
+\index{. (period),in numbers}
+ Note that a single period alone is not a valid number.
+\subsubsection{Precision}\label{"id"}
+\index{Arithmetic,precision}
+\index{Precision,of arithmetic}
+\index{Significant digits, in arithmetic,}
+\index{DIGITS,on NUMERIC instruction}
+\index{NUMERIC,DIGITS}
+ The maximum number of significant digits that can result from an
+arithmetic operation is controlled by the \texttt{digits} keyword on the
+ \texttt{numeric} instruction (see page \pageref{refnumeric}) :
+\begin{alltt}
+\texttt{numeric digits} [\emph{expression}];
+\end{alltt}
+The expression is evaluated and must result in a positive whole
+number.
+This defines the precision (number of significant digits) to which
+arithmetic calculations will be carried out; results will be rounded to
+that precision,
+if necessary.
+ If no expression is specified, then the default precision is used.
+The default precision is 9, that is, all implementations must support
+at least nine digits of precision.  An implementation-dependent maximum
+(equal to or larger than 9) may apply: an attempt to exceed this will
+cause execution of the instruction to terminate with an exception.
+Thus if an algorithm is defined to use more than 9 digits then if
+the \texttt{numeric digits} instruction succeeds then the computation
+will proceed and produce identical results to any other implementation.
+ Note that \texttt{numeric digits} may set values below the default of
+nine.
+Small values, however, should be used with care - the loss of
+precision and rounding thus requested will affect all NetRexx
+computations, including (for example) the computation of new values for
+the control variable in loops.
+ 
+In the remainder of this section, the notation \textbf{digits} refers
+to the current setting of \texttt{numeric digits}.
+This setting may also be referred to in expressions in programs by using
+the \textbf{digits}  special word (see page \pageref{refspecial}) .
+\subsubsection{Arithmetic operators}
+\index{Operators,arithmetic}
+\index{Numbers,arithmetic on}
+\index{Arithmetic,operators}
+ 
+NetRexx arithmetic is effected by the operators "\textbf{+}",
+"\textbf{-}", "\textbf{*}", "\textbf{/}",
+"\textbf{\%}", "\textbf{//}", and "\textbf{**}"
+(add, subtract, multiply, divide, integer divide, remainder, and power)
+which all act upon two terms, together with the prefix operators
+"\textbf{+}" and "\textbf{-}" (plus and minus)
+which both act on a single term.
+The result of all these operations is a NetRexx string, of
+type \textbf{Rexx}.
+This section describes the way in which these operations are carried
+out.
+ Before every arithmetic operation, the term or terms being operated
+upon have any extra digits converted to the corresponding Arabic numeral
+(the digits 0-9).  They then have leading zeros removed (noting the
+position of any decimal point, and leaving just one zero if all the
+digits in the number are zeros) and are then truncated
+to \textbf{digits+1} significant digits
+\footnote{
+\index{Guard digit in arithmetic,}
+That is, to the precision set by \texttt{numeric digits}, plus one extra
+"guard" digit.
+}
+(if necessary) before being used in the computation.
+The operation is then carried out under up to double that precision, as
+described under the individual operations below.
+When the operation is completed, the result is rounded if necessary to
+the precision specified by the \texttt{numeric digits} instruction.
+\index{Rounding,definition}
+ Rounding is done in the "traditional" manner, in that the extra
+(guard) digit is inspected and values of 5 through 9 are rounded up,
+and values of 0 through 4 are rounded down.
+\footnote{
+\index{,}
+Even/odd rounding would require the ability to calculate to arbitrary
+precision (that is, to a precision not governed by the setting of
+\texttt{numeric digits}) at any time and is therefore not the mechanism
+defined for NetRexx.
+}
+ A conventional zero is supplied preceding a decimal point if
+otherwise there would be no digit before it.  Trailing zeros are
+retained for addition, subtraction, and multiplication, according to
+the rules given below, except that a result of zero is always expressed
+as the single character \textbf{'0'}.  For division, insignificant
+trailing zeros are removed after rounding.
+ 
+The  \textbf{format} method (see page \pageref{refformat})  is defined to allow a
+number to be represented in a particular format if the standard result
+provided by NetRexx does not meet requirements.
+\subsubsection{}\label{"id"}
+\index{Trailing zeros,}
+\index{Arithmetic,operation rules}
+ The basic operators (addition, subtraction, multiplication, and
+division) operate on numbers as follows:
+\begin{description}
+\item{Addition and subtraction}
+\index{Addition,definition}
+\index{+ plus sign,addition operator}
+\index{Subtraction,definition}
+\index{- minus sign,subtraction operator}
+\index{Prefix operators,arithmetic}
+
+If either number is zero then the other number, rounded
+to \textbf{digits} digits if necessary, is used as the result (with
+sign adjustment as appropriate).
+Otherwise, the two numbers are extended on the right and left as
+necessary up to a total maximum of \textbf{digits+1} digits.
+ 
+The number with smaller absolute value may therefore lose some or
+all of its digits on the right.
+\footnote{
+In the example, the number \textbf{yy.yyyyy} would have three digits
+truncated if \textbf{digits} were \textbf{5}.
+}
+The numbers are then added or subtracted as appropriate.  For example:
+\begin{alltt}
+xxxx.xxx + yy.yyyyy
+\end{alltt}
+becomes:
+\begin{alltt}
+  xxxx.xxx00
++ 00yy.yyyyy
+------------
+  zzzz.zzzzz
+\end{alltt}
+.sumadd
+The result is then rounded to \textbf{digits} digits if necessary,
+taking into account any extra (carry) digit on the left after an
+addition, but otherwise counting from the position corresponding to the
+most significant digit of the terms being added or subtracted.
+Finally, any insignificant leading zeros are removed.
+ The \emph{prefix operators} are evaluated using the same rules;
+the operations "\textbf{+number}" and "\textbf{-number}"
+are calculated as "\textbf{0+number}" and
+"\textbf{0-number}", respectively.
+\item{Multiplication}
+\index{Multiplication,definition}
+\index{* multiplication operator,}
+
+The numbers are multiplied together ("long multiplication")
+resulting in a number which may be as long as the sum of the lengths of
+the two operands.  For example:
+\begin{alltt}
+xxx.xxx * yy.yyyyy
+\end{alltt}
+becomes:
+\begin{alltt}
+zzzzz.zzzzzzzz
+\end{alltt}
+and the result is then rounded to \textbf{digits} digits if
+necessary, counting from the first significant digit of the result.
+\item{Division}
+\index{,}
+\index{Division,definition}
+
+For the division:
+\begin{alltt}
+yyy / xxxxx
+\end{alltt}
+the following steps are taken: first, the number
+"\textbf{yyy}" is extended
+with zeros on the right until it is larger than
+the number "\textbf{xxxxx}" (with note being taken of the change
+in the power of ten that this implies).  Thus in this example,
+"\textbf{yyy}"
+might become
+"\textbf{yyy00}".
+Traditional long division then takes place, which can be written:
+\begin{alltt}
+         zzzz
+      .------
+xxxxx | yyy00
+\end{alltt}
+.sumdiv
+The length of the result ("\textbf{zzzz}") is such that the
+rightmost "\textbf{z}" will be at least as far right as the
+rightmost digit of the (extended) "\textbf{y}" number in the
+example.  During the division, the "\textbf{y}" number will be
+extended further as necessary, and the "\textbf{z}" number
+(which will not include any leading zeros) may increase up
+to \textbf{digits+1} digits, at which point the division stops and the
+result is rounded.
+Following completion of the division (and rounding if necessary),
+insignificant trailing zeros are removed.
+\end{description}
+ \textbf{Examples:}
+\begin{alltt}
+/* With 'numeric digits 5' */
+12+7.00     ==  19.00
+1.3-1.07    ==  0.23
+1.3-2.07    ==  -0.77
+1.20*3      ==  3.60
+7*3         ==  21
+0.9*0.8     ==  0.72
+1/3         ==  0.33333
+2/3         ==  0.66667
+5/2         ==  2.5
+1/10        ==  0.1
+12/12       ==  1
+8.0/2       ==  4
+\end{alltt}
+\textbf{Note: }With all the basic operators, the position of the decimal point
+in the terms being operated upon is arbitrary.
+The operations may be carried out as integer operations with the
+exponent being calculated and applied afterwards.
+Therefore the significant digits of a result are not in any way
+dependent on the position of the decimal point in either of the terms
+involved in the operation.
+\subsubsection{Arithmetic operation rules - additional operators}
+ The operation rules for the power ("\textbf{**}"),
+integer division ("\textbf{\%}"), and remainder
+("\textbf{//}") operators are as follows:
+\begin{description}
+\item[Power]\label{refpower}
+
+\index{Exponentiation,definition}
+\index{Power operator,definition}
+\index{,}
+The "\textbf{**}" (power) operator raises a number (on the
+left of the operator) to a power (on the right of the operator).
+The term on the right is rounded to \textbf{digits} digits (if
+necessary), and must, after any rounding, be a whole number, which may
+be positive, negative, or zero.
+If negative, the absolute value of the power is used, and then the
+result is inverted (divided into 1).
+ 
+For calculating the power, the number is effectively multiplied by
+itself for the number of times expressed by the power, and finally
+trailing zeros are removed (as though the result were divided by one).
+ In practice (see note below for the reasons), the power is
+calculated by the process of left-to-right binary reduction.
+For "\textbf{x**n}": "\textbf{n}" is converted to
+binary, and a temporary accumulator is set to 1.
+If "\textbf{n}" has the value 0 then the initial calculation is
+complete.
+Otherwise each bit (starting at the first non-zero bit) is inspected
+from left to right.
+If the current bit is 1 then the accumulator is multiplied by
+"\textbf{x}".
+If all bits have now been inspected then the initial calculation is
+complete, otherwise the accumulator is squared by multiplication and the
+next bit is inspected.
+When the initial calculation is complete, the temporary result is
+divided into 1 if the power was negative.
+ 
+The multiplications and division are done under the normal
+arithmetic operation rules, detailed earlier in this section, using a
+precision of \textbf{digits+elength+1} digits.
+Here, \textbf{elength} is the length in decimal digits of the integer
+part of the whole number "\textbf{n}" (\emph{i.e.}, excluding any sign,
+decimal part, decimal point, or insignificant leading zeros, as though
+the operation \textbf{n\%1} had been carried out and any sign removed).
+Finally, the result is rounded to \textbf{digits} digits, if
+necessary, and insignificant trailing zeros are removed.
+\item{Integer division}
+
+\index{Integer division,definition}
+\index{,}
+The "\textbf{\%}" (integer divide) operator divides two numbers
+and returns the integer part of the result.
+The result returned is defined to be that which would result from
+repeatedly subtracting the divisor from the dividend while the dividend
+is larger than the divisor.  During this subtraction, the absolute
+values of both the dividend and the divisor are used: the sign of the
+final result is the same as that which would result if normal division
+were used.
+ The result returned will have no fractional part (that is, no
+decimal point or zeros following it).
+If the result cannot be expressed exactly within \textbf{digits}
+digits, the operation is in error and will fail - that is, the
+result cannot have more digits than the current setting of \texttt{numeric
+digits}.
+For example, \textbf{10000000000\%3} requires ten digits to express the
+result exactly (\textbf{3333333333}) and would therefore fail
+if \textbf{digits} were \textbf{9} or smaller.
+\item{Remainder}
+
+\index{Remainder operator,definition}
+\index{,}
+\index{,}
+\index{,}
+The "\textbf{//}" (remainder) operator will return the remainder
+from integer division, and is defined
+as being the residue of the dividend after the operation of calculating
+integer division as just described.
+The sign of the remainder, if non-zero, is the same as that of the
+original dividend.
+ This operation will fail under the same conditions as integer
+division (that is, if integer division on the same two terms would
+fail, the remainder cannot be calculated).
+\end{description}
+ \textbf{Examples:}
+\begin{alltt}
+/* Again with 'numeric digits 5' */
+2**3        ==  8
+2**-3       ==  0.125
+1.7**8      ==  69.758
+2\%3         ==  0
+2.1//3      ==  2.1
+10\%3        ==  3
+10//3       ==  1
+-10//3      ==  -1
+10.2//1     ==  0.2
+10//0.3     ==  0.1
+3.6//1.3    ==  1.0
+\end{alltt}
+ \textbf{Notes:}
+\begin{enumerate}
+\item A particular algorithm for calculating powers is described, since
+it is efficient (though not optimal) and considerably reduces the
+number of actual multiplications performed.
+It therefore gives better performance than the simpler definition of
+repeated multiplication.
+Since results could possibly differ from those of repeated
+multiplication, the algorithm must be defined here so that different
+implementations will give identical results for the same operation on
+the same values.
+Other algorithms for this (and other) operations may always be used, so
+long as they give identical results to those described here.
+\item The integer divide and remainder operators are defined so that they
+may be calculated as a by-product of the standard division operation
+(described above).  The division process is ended as soon as the
+integer result is available; the residue of the dividend is the
+remainder.
+\end{enumerate}
+\subsubsection{}\label{"id"}
+\index{Arithmetic,comparisons}
+\index{Operators,comparative}
+\index{Comparison,of numbers}
+\index{Numbers,comparison of}
+ Any of the  comparative operators (see page \pageref{refcomps})  may be used
+for comparing numeric strings.
+However, the strict comparisons (for example, "\textbf{==}" and
+"\textbf{>>}") are not numeric comparative operators and should
+not normally be used for comparing numbers, since they compare from left
+to right and leading and trailing blanks (and leading zeros) are
+significant for these operators.
+ Numeric comparison, using the normal comparative operators, is
+effected by subtracting the two numbers (calculating the difference) and
+then comparing the result with \textbf{'0'} - that is, the
+operation:
+\begin{alltt}
+A ? B
+\end{alltt}
+where "\textbf{?}" is any normal comparative operator, is
+identical to:
+\begin{alltt}
+(A - B) ? '0'
+\end{alltt}
+It is therefore the \emph{difference} between two numbers, when
+subtracted under NetRexx subtraction rules, that determines their equality.
+\subsubsection{Exponential notation}
+\index{Ten, powers of,}
+\index{Pure numbers,}
+ The definition of numbers  above (see page \pageref{refdefnum}) 
+describes "pure" numbers, in the sense that the character strings
+that describe numbers can be very long.
+ \textbf{Examples:}
+\begin{alltt}
+say  10000000000 * 10000000000
+/* would display: 100000000000000000000 */
+
+say  0.00000000001 * 0.00000000001
+/* would display: 0.0000000000000000000001 */
+\end{alltt}
+For both large and small numbers some form of exponential notation
+is useful, both to make such long numbers more readable and to make
+evaluation possible in extreme cases.  In addition, exponential notation
+is used whenever the "pure" form would give misleading
+information.  For example:
+\begin{alltt}
+numeric digits 5
+say 54321*54321
+\end{alltt}
+would display "\textbf{2950800000}" if long form were to be
+used.
+This is misleading, as it appears that the result is an exact multiple
+of 100000, and so NetRexx would express the result in exponential
+notation, in this case "\textbf{2.9508E+9}".
+\index{Numbers,definition}
+\index{Mantissa of exponential numbers,}
+\index{Significand of exponential numbers,}
+\index{Numeric,part of a number}
+\index{Powers of ten in numbers,}
+\index{Exponential notation,definition}
+\index{E-notation,definition}
+ The definition of \emph{number} (see above) is therefore extended
+by replacing the description of \textbf{numeric} by the following:
+\begin{alltt}
+mantissa ::=  digits . [digits]
+              | [.] digits
+numeric  ::=  mantissa [E sign digits]
+\end{alltt}
+In other words, the numeric part of a number may be followed by an
+"\textbf{E}" (indicating an exponential part), a sign,
+and an integer following the sign that represents a power of ten that is
+to be applied.
+The "\textbf{E}" may be in uppercase or lowercase.
+Note that no blanks are permitted within this part of a number, but the
+integer may have leading zeros.
+ \textbf{Examples:}
+\begin{alltt}
+12E+11  =  1200000000000
+12E-5   =  0.00012
+ 12e+4  =  120000
+\end{alltt}
+ All valid numbers may be used as data for arithmetic.  The results
+of calculations will be returned in exponential form depending on the
+setting of \texttt{numeric digits}.
+If the number of places needed before the decimal point
+exceeds \textbf{digits}, or if the absolute value of the result is
+less than \textbf{0.000001}, then exponential form will be used.
+The exponential form generated by NetRexx always has a sign following the
+"\textbf{E}".
+If the exponent is 0 then the exponential part is omitted - that
+is, an exponential part of "\textbf{E+0}" will never be
+generated.
+ If the default format for a number is not satisfactory for a
+particular application, then the \textbf{format} method may be used to
+control its format.  Using this, numbers may be explicitly converted to
+exponential form or even forced to be returned in "pure" form.
+\index{Notation,scientific}
+\index{Notation,engineering}
+\index{Exponential notation,}
+\index{E-notation,}
+\index{Scientific notation,}
+\index{Engineering notation,}
+\index{FORM,option of NUMERIC instruction}
+\index{NUMERIC,FORM}
+:mark id=refnfo2.
+ Different exponential notations may be selected with the
+ \texttt{numeric form} instruction (see page \pageref{refnform}) .
+This instruction allows the selection of either scientific or
+engineering notation.
+\emph{Scientific notation} adjusts the power of ten so there is a
+single non-zero digit to the left of the decimal point.
+\emph{Engineering notation} causes powers of ten to be expressed as a
+multiple of three - the integer part may therefore range
+from \textbf{1} through \textbf{999}.
+ \textbf{Examples:}
+\begin{alltt}
+numeric form scientific
+say 123.45 * 1e11
+/* would display: 1.2345E+13 */
+
+numeric form engineering
+say 123.45  * 1e11
+/* would display: 12.345E+12 */
+\end{alltt}
+ The default exponential notation is scientific.
+\subsubsection{Whole numbers}\label{"id"}
+\index{Whole numbers,definition}
+\index{DIGITS,effect on whole numbers}
+ Within the set of numbers understood by NetRexx it is useful to
+distinguish the subset defined as \emph{whole numbers}.
+ 
+A \emph{whole number} in NetRexx is a number that has a decimal part
+which is all zeros (or that has no decimal part).
+\subsubsection{Numbers used directly by NetRexx}\label{"id"}
+\index{Numbers,use of by NetRexx}
+\index{Functions,numeric arguments of}
+\index{Rounding,when numbers used}
+\index{DIGITS,rounding when numbers used}
+ As discussed above, the result of any arithmetic operation is
+rounded (if necessary) according to the setting of \texttt{numeric digits}.
+Similarly, when a number (which has not necessarily been involved in an
+arithmetic operation) is used directly by NetRexx then the same rounding
+is also applied, just as though the operation of adding the number
+to \textbf{0} had been carried out.
+After this operation, the integer part of the number must have no more
+digits than the current setting of \texttt{numeric digits}.
+ 
+In the following cases, the number used must be a whole number and
+an implementation restriction on the largest number that can be used
+may apply:
+\begin{itemize}
+\item positional patterns, including variable positional patterns,
+in  parsing templates (see page \pageref{refparsing}) 
+\item the power value (right hand operand) of the  power (see page \pageref{refpower}) 
+operator:ea.
+\item the values of \emph{exprr} and \emph{exprf} (following the
+\texttt{for} keyword) in the  \texttt{loop} instruction (see page \pageref{refloop}) 
+\item the value of \emph{exprd} (following the \texttt{digits}
+keyword) in the  \texttt{numeric} instruction (see page \pageref{refnumeric}) .
+\end{itemize}
+ \textbf{Implementation minimum:} A minimum length of 9 digits must
+be supported for these uses of whole numbers by a NetRexx language
+processor.
+\subsubsection{Implementation independence}
+\index{Arithmetic,implementation independence}
+ The NetRexx arithmetic rules are defined in detail, so that when a
+given program is run the results of all computations are sufficiently
+defined that the same answer will result for all correct
+implementations.  Differences due to the underlying machine
+architecture will not affect computations.
+ This contrasts with most other programming languages, and with
+ binary arithmetic (see page \pageref{refbinary})  in NetRexx, where the
+result obtained may depend on the implementation because the precision
+and algorithms used by the language processor are defined by the
+implementation rather than by the language.
+\subsubsection{Exceptions and errors}
+\index{Exceptions,during arithmetic}
+\index{Errors during arithmetic,}
+\index{Arithmetic,exceptions}
+\index{Arithmetic,errors}
+\index{Arithmetic,overflow}
+\index{Arithmetic,underflow}
+\index{Overflow, arithmetic,}
+\index{Underflow, arithmetic,}
+ The following exceptions and errors may be signalled during arithmetic:
+\begin{itemize}
+\item Divide exception
+ This exception will be signalled if division by zero was attempted,
+or if the integer result of an integer divide or remainder operation had
+too many digits.
+\item Overflow/Underflow exception
+ This exception will be signalled if the exponential part of a result
+(from an operation that is not an attempt to divide by zero) would
+exceed the range that can be handled by the language processor, when the
+result is formatted according to the current settings of \texttt{numeric
+digits} and \texttt{numeric form}.
+The language defines a minimum capability for the exponential part,
+namely exponents whose absolute value is at least as large as the
+largest number that can be expressed as an exact integer in default
+precision.
+Thus, since the default precision is nine, implementations must support
+exponents in the range \textbf{-999999999}
+through \textbf{999999999}.
+\item Insufficient storage
+ Storage is needed for calculations and intermediate results, and on
+occasion an arithmetic operation may fail due to lack of storage.
+This is considered an operating environment error as usual, rather
+than an arithmetical exception.
+\end{itemize}
+ \emph{In the reference implementation, the exceptions and error types
+used for these three cases
+are \textbf{DivideException}, \textbf{ExponentOverflowException},
+and \textbf{OutOfMemoryError}, respectively.}
+\index{,}
+\index{,}
+\index{,}

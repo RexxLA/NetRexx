@@ -1,0 +1,263 @@
+\chapter{Indexed strings and Arrays}\label{"id"}
+\index{Indexed references,indexed strings}
+\index{Indexed strings,}
+\index{Strings,indexed}
+\index{Variables,indexed}
+\index{Variables,subscripts}
+\index{Sub-values, of strings,}
+\index{Strings,sub-values of}
+\index{Index strings,for sub-values}
+\index{References,to indexed strings}
+\index{Brackets,in indexed strings}
+\index{Comma,in indexed strings}
+ 
+Any NetRexx string (that is, a value of type \textbf{Rexx}), has the
+ability to have \emph{sub-values}, values (also of type \textbf{Rexx})
+which are associated with the original string and are indexed by an
+\emph{index string} which identifies the sub-value.
+Any string with such sub-values is known as an \emph{indexed string}.
+ 
+The sub-values of a NetRexx string are accessed using \emph{indexed
+references}, where the name of a variable of type \textbf{Rexx} is
+followed immediately by square brackets enclosing one or more
+expressions separated by commas:
+\footnote{
+The notations \texttt{'['} and \texttt{']'}
+indicate square brackets appearing in the NetRexx program.
+}
+\begin{shaded}
+\begin{alltt}
+\emph{symbol}'['[\emph{expression}[, \emph{expression}]...]']'
+\end{alltt}
+\end{shaded}
+It is important to note that the \emph{symbol} that names the
+variable must be followed immediately by the "\texttt{[}",
+with \textbf{no} blank in between, or the construct will not be
+recognized as an indexed reference.
+ The \emph{expression}s (separated by commas) between the
+brackets are called the \emph{indexes} to the string.
+These index expressions are evaluated in turn from left to right, and
+each must evaluate to a value is of type \textbf{Rexx} or that can be
+converted to type \textbf{Rexx}.
+ 
+The resulting index strings are taken "as-is" - that is, they
+must match exactly in content, case, and length for a reference to find
+a previously-set item.
+They may have any length (including the null string) and value (they are
+not constrained to be just those strings which are numbers, for
+example).
+ 
+If a reference does not find a sub-value, then a copy of the non-indexed
+value of the variable is used.
+ \textbf{Example:}
+\begin{alltt}
+surname='Unknown'         -- default value
+surname['Fred']='Bloggs'
+surname['Davy']='Jones'
+try='Fred'
+say surname[try] surname['Bert']
+\end{alltt}
+would say "\textbf{Bloggs Unknown}".
+ 
+When multiple indexes are used, they indicate accessing a hierarchy of
+strings.  A single NetRexx string has a single set of indexes and
+subvalues associated with it.  The sub-values, however, are also NetRexx
+strings, and so may in turn have indexes and sub-values.  When more than
+one index is specified in an indexed reference, the indexes are applied
+in turn from left to right to each retrieved sub-value.
+ 
+For example, in the sequence:
+\begin{alltt}
+x='?'
+x['foo', 'bar']='OK'
+say x['foo', 'bar']
+y=x['foo']
+say y['bar']
+\end{alltt}
+both \texttt{say} instructions would display the string
+"\textbf{OK}".
+ Indexed strings may be used to set up "associative arrays", or
+dictionaries, in which the subscript is not necessarily numeric, and
+thus offer great scope for the creative programmer.
+A useful application is to set up a variable in which the subscripts
+are taken from the value of one or more variables, so effecting a form
+of associative (content addressable) memory.
+[\%book
+The  \emph{justone} program (see page \pageref{refjust1})  is an example of this
+technique.
+ \textbf{Notes:}
+\begin{enumerate}
+\item 
+A variable of type \textbf{Rexx} must have been assigned a value
+before indexing is used on it.
+This is the value that is used as the default value whenever an indexed
+reference finds no sub-value.
+\item 
+The indexes, and hence the sub-values, of a \textbf{Rexx} object can
+be retrieved in turn using the  \texttt{over} (see page \pageref{refloopov})  keyword
+of the \texttt{loop} instruction.
+\item 
+The  \textbf{exists} method (see page \pageref{refexists})  of the \textbf{Rexx}
+class may be used to test whether an indexed reference has an
+explicitly-set value.
+\item 
+Assigning \textbf{null} to an indexed reference (for example, the
+assignment \textbf{switch[7]=null;}) drops the sub-value;
+until set to a new value, any reference to the sub-value (including use
+of the \textbf{exists} method) will return the same result as
+when it had never been set.
+\end{enumerate}
+\subsection{Arrays}\label{"id"}
+\index{Arrays,}
+\index{Indexed references,arrays}
+\index{Brackets,in array references}
+\index{Comma,in array references}
+ 
+In addition to indexed strings, NetRexx also includes the concept of
+fixed-size \emph{arrays}, which may be used for indexing values of any
+type (including strings).
+ 
+Arrays are used with the same syntax and in the same manner as
+indexed strings, but with important differences that allow for
+compact implementations and access to equivalent data structures
+constructed using other programming languages:
+\begin{enumerate}
+\item 
+The indexes for arrays must be whole numbers that are zero or positive.
+There will usually be an implementation restriction on the maximum value
+of the index (typically 999999999 or higher).
+\item 
+The elements of an array are considered to be \emph{ordered}; the
+first element has index \textbf{0}, the second \textbf{1}, and so on.
+\item 
+An array is of fixed size;
+\index{Fixed size, of arrays,}
+it must be constructed before use.
+\item 
+Variables that are assigned arrays can only be assigned arrays (of the
+same dimension, see below) in the future.  That is, being an array
+changes the type of a value; it becomes a
+ \emph{dimensioned type} (see page \pageref{refdimtype}) .
+\end{enumerate}
+ 
+\index{Arrays,references}
+\index{References,to arrays}
+\index{Arrays,constructors}
+\index{Constructors,array}
+Array references use the NetRexx \emph{indexed reference} syntax
+defined above.  The same syntax is used for constructing arrays, except
+that the symbol before the left bracket describes a type (and hence may
+be qualified by a package name).  The expression or expressions between
+the brackets indicate the size of the array in each dimension, and must
+be a positive whole number or zero:
+\begin{alltt}
+arg=String[4]       -- makes an array for four Strings
+arg=java.io.File[4] -- makes an array for four Files
+i=int[3]            -- makes an array for three 'int's
+\end{alltt}
+
+(Another way of describing this is that array constructors look
+just like other object constructors, except that brackets are
+used instead of parentheses.)
+ 
+Once an array has been constructed, its elements can be referred to
+using brackets and expressions, as before:
+\begin{alltt}
+i[2]=3 -- sets the '2'-indexed value of 'i'
+j=i[2] -- sets 'j' to the '2'-indexed value of 'i'
+\end{alltt}
+ 
+Regular multiple-dimensioned arrays may be constructed and referenced by
+using multiple expressions within the brackets:
+\begin{alltt}
+i=int[2,3] -- makes a 2x3 array of 'int' type objects
+i[1,2]=3   -- sets the '1,2'-indexed value of 'i'
+j=i[1,2]   -- sets 'j' to the '1,2'-indexed value of 'i'
+\end{alltt}
+ As with indexed strings, when multiple indexes are used, they
+indicate accessing a hierarchy of arrays (the underlying model is
+therefore of a hierarchy of single-dimensioned arrays).
+When more than one index is specified in an indexed reference to an
+array, the indexes are applied in turn from left to right to each
+array.
+ 
+As described in the section on  \emph{Types} (see page \pageref{reftypes}) , the
+type of a variable that refers to an array can be set (declared) by
+assignment of the type with array notation that indicates the dimension
+of an array without any sizes:
+\begin{alltt}
+k=int[]     -- one-dimensional array of 'int' objects
+m=float[,,] -- 3-dimensional array of 'float' objects
+\end{alltt}
+
+The same syntax is also used when describing an array type in the
+arguments of a \texttt{method} instruction or when converting types.
+For example, after:
+\begin{alltt}
+gg=char[] "Horse"
+\end{alltt}
+the variable \textbf{gg} has as its value an array of
+type \textbf{char[]} containing the five
+characters \textbf{H}, \textbf{o}, \textbf{r}, \textbf{s},
+and \textbf{e}.
+\subsubsection{Array initializers}\label{"id"}
+\index{Arrays,initializing}
+\index{Initializing arrays,}
+\index{Array initializer,in terms}
+\index{Brackets,in array initializers}
+\index{Square brackets,in array initializers}
+ 
+An \emph{array initializer} is a \emph{simple term} which is
+recognized if it does not immediately follow (abut) a symbol, and has
+the form
+\footnote{
+The notations \texttt{'['} and \texttt{']'}
+indicate square brackets appearing in the NetRexx program.
+}
+\begin{alltt}
+\texttt{'['}\emph{expression}[,\emph{expression}]...\texttt{']'}
+\end{alltt}
+ 
+An array initializer therefore comprises a list of one or more
+expressions, separated by commas, within brackets.  When an array
+initializer is evaluated, the expressions are evaluated in turn from
+left to right, and all must result in a value.
+An array is then constructed, with a number of elements
+equal to the number of expressions in the list, with each element
+initialized by being assigned the result of the corresponding
+expression.
+ 
+The type of the array is derived by adding one dimension to the type of
+the result of the first expression in the list, where the type of that
+expression is determined using the same rules as are used to select the
+type of a variable when it is first  assigned a (see page \pageref{refassign}) 
+value:ea..
+All the other expressions in the list must have types that could be
+assigned to the chosen type without error.
+ 
+For example, in
+\begin{alltt}
+var1=['aa', 'bb', 'cc']
+var2=[char 'a', 'b', 'c']
+var3=[String 'a', 'bb', 'c']
+var4=[1, 2, 3, 4, 5, 6]
+var5=[[1,2], [3,4]]
+\end{alltt}
+the types of the variables would
+be \textbf{Rexx[]}, \textbf{char[]}, \textbf{String[]}, \textbf{Rexx[]},
+and \textbf{Rexx[,]} respectively.
+In a binary class in the reference implementation, the types would
+be \textbf{String[]}, \textbf{char[]}, \textbf{String[]}, \textbf{int[]},
+and \textbf{int[,]}.
+ 
+Array initializers are most useful for initializing properties and
+variables, but like other simple terms, they may start a compound term.
+ 
+So, for example
+\begin{alltt}
+say [1,1,1,1].length
+\end{alltt}
+would display \textbf{4}.
+ Note that an array of length zero cannot be constructed with an array
+initializer, as its type would be undefined.  An explicitly typed array
+constructor (for example, \textbf{int[0]}) must be used.
