@@ -1,7 +1,7 @@
 TARGET		:= colofon
 PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
-LATEX_EXE	:= xelatex
+LATEX_EXE	:= xelatex -shell-esc
 RAIL_EXE	:= rail
 
 .SUFFIXES: .nrx .nry .njp .class .skel .xsl .java .pdf
