@@ -27,6 +27,7 @@
 /* 1998.08.12 Allow euro in names (\u20ac)                            */
 /* 2000.04.08 Add match utility (for skipping over argument lists)    */
 /* 2000.04.30 Get date from RxSource, not streamer                    */
+/* 2013.07.10 change Character.isLetter to .isJavaIdentifierStart     */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -404,8 +405,8 @@ class RxClauser
       when cchar=' ' then /* blank */ do     -- special-case, for speed
         hadblank=pos; pos=pos+1; iterate; end
       when cchar<=tranmax then ctype=trantable[int(cchar)]
-      when Character.isLetter(cchar) then ctype='s'         -- symbol start
-      when cchar='\u20ac'            then ctype='s'         -- the euro
+      when Character.isJavaIdentifierStart(cchar) then ctype='s' -- symbol start NETREXX-6 rvj 20130710
+      -- when cchar='\u20ac'            then ctype='s'         -- the euro (is a true JavaIdentifierStart now)
       when Character.isDigit(cchar) & -                     -- number start?
            Character.digit(cchar, 10)>=0 then ctype='n'     -- base 10?
       otherwise ctype=BAD
@@ -504,7 +505,7 @@ class RxClauser
            if ctype<>'n' then leave symbol   -- [not symbol character]
           end
          else do                             -- Maybe Unicode
-          if \Character.isLetterOrDigit(cchar)
+          if \Character.isJavaIdentifierPart(cchar) -- NETREXX-6 rvj 20130710
            then leave symbol                 -- [not symbol character]
           end
         tok.len=tok.len+1
@@ -548,7 +549,7 @@ class RxClauser
         cchar=line[pos-1]
         if cchar<=tranmax then ctype=trantable[int(cchar)]
          else /* exotic */ select
-          when Character.isLetter(cchar) then ctype='s'     -- symbol start
+          when Character.isJavaIdentifierStart(cchar) then ctype='s'     -- symbol start NETREXX-6 rvj 20130710
           when Character.isDigit(cchar) &-                  -- number start?
                Character.digit(cchar, 10)>=0 then do        -- base 10?
             ctype='n'
@@ -756,8 +757,9 @@ class RxClauser
     if ctype=BAD then do
       if rxt.program.flag.diag then do
         say '# BAD char ctype: '''ctype''''-
-            Character.isLetter(cchar) Character.isDigit(cchar)-
-            Character.isLetterOrDigit(cchar) Character.isDefined(cchar)
+          Character.isLetter(cchar) Character.isDigit(cchar)-
+          Character.isLetterOrDigit(cchar) Character.isDefined(cchar) -
+	  Character.isJavaIdentifierStart(cchar) Character.isJavaIdentifierPart(cchar)
         end
       signal RxQuit(rxt, tok, 'invalid.character', cchar,-
                     Rexx(int(cchar)).d2x(4))
