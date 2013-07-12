@@ -1,5 +1,5 @@
 NRX_COMPILE_COMMAND = java org.netrexx.process.NetRexxC
-NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -nocompile -utf8
+NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -nocompile -utf8 -format
 
 JAVA_COMPILE_COMMAND = java org.eclipse.jdt.internal.compiler.batch.Main 
 JAVA_COMPILE_FLAGS = -warn:-unusedPrivate -warn:-unusedLocal -Xemacs

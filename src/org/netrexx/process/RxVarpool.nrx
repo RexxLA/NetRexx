@@ -68,6 +68,7 @@
 /* 2000.02.19 Make cursor based, so there is no 'current varpool'     */
 /* 2000.02.19 Move variables to static, object, or local pools        */
 /* 2000.04.05 Three pools simplified down to local and class pools    */
+/* 2013.07.12 removed conversion to unicode escapes due to NETREXX-102*/
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -189,14 +190,19 @@ class RxVarpool uses RxVariable
   /* === It's new and OK.  Record and return. === */
 
   /* Change any exotic characters to Unicode escapes for the Java spelling */
+  -- don't. rvj 20130712
+  -- commented out to fix NETREXX-102; now non-ascii unicode can be in interpreted method names
+  -- this conversion precluded interpretation of programs with unicode indirect properties
+  -- java generation for compiled classes stays fine:
+  -- identifiers are vetted already for Character.isJavaIndentifierPart()
   varspell=varname
-  car=varspell.toCharArray()
-  loop i=car.length-1 to 0 by -1  -- from right
-    if car[i]<<='\x7f' then iterate
-    varspell=varspell.left(i)-
-         ||'\\u'Rexx(car[i]).c2x().right(4, 0) -
-         ||varspell.substr(i+2)
-    end i
+  -- car=varspell.toCharArray()
+  -- loop i=car.length-1 to 0 by -1  -- from right
+  --   if car[i]<<='\x7f' then iterate
+  --   varspell=varspell.left(i)-
+  --        ||'\\u'Rexx(car[i]).c2x().right(4, 0) -
+  --        ||varspell.substr(i+2)
+  --   end i
 
   /* We avoid Java reserved words if possible by prefixing local
      variable names and arguments which are Java reserved words with
