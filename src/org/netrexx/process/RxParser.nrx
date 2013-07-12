@@ -35,6 +35,7 @@
 /* 1999.10.19 If exec set then collect clauses in methods and classes */
 /* 2000.02.11 Prologue TRACE/NUMERIC defer scan as well as generate   */
 /* 2000.02.18 Provide a parsing cursor object, always updated         */
+/* 2013.07.12 Issue warning for unqualified properties statement      */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -309,6 +310,11 @@ class RxParser uses RxCode
        We expect either X; or X=expr; */
     if t2=RxToken.DOT | t2=RxToken.LBRK then
       signal RxError(rxt, tok, 'complex.property.name')
+    -- warn for a properties statement without visibility or modifier NETREXX-85 rvj 20130712
+    if rxt.pass1 then if iskey(tok.value,'PROPERTIES') then
+      do
+	if t2=RxToken.END then RxWarn(rxt, tok, 'lonely.properties')
+      end
     /* Can only be a property if followed by either '=' or RxToken.END */
     isplain =boolean 0
     isassign=boolean 0
@@ -344,7 +350,7 @@ class RxParser uses RxCode
         assign=NrAssign cursor.curclause.lookaside  -- retrieve
       assign.process(term, 1)           -- process RHS on both passes
       if rxt.pass2 then                 -- generate code
-       if rxt.program.flag.java then assign.generate()
+	if rxt.program.flag.java then assign.generate()
       iterate                           -- and go for next clause
       end property
     /* other cases drop through for different message */
