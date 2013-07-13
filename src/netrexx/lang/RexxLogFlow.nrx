@@ -1,0 +1,57 @@
+/*  Copyright (C) 2013 Jason Monroe Martin (JMM)                              */
+/* -------------------------------------------------------------------------- */
+/*  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.   */
+/*  See LICENSE for the licence and information on using, copying, modifying, */
+/*  and distributing this program.                                            */
+/* -------------------------------------------------------------------------- */
+/*  netrexx.lang.RexxLogFlow -- Direct streams to use Android Logging         */
+/* -------------------------------------------------------------------------- */
+/*  2013.07.13 Initial version                                          (JMM) */
+
+package netrexx.lang
+options binary strictargs nodecimal nodiag
+
+class RexxLogFlow public extends OutputStream
+
+    properties private
+        output = ByteArrayOutputStream
+        eolval = int
+        logclass = Class
+        logmethod = Method
+        logstream = String
+
+    method RexxLogFlow( instream=String )
+        this.logstream = instream
+        output = ByteArrayOutputStream()
+        linesep = System.getProperty("line.separator")
+        if linesep.length()=1 then do
+            eolval = linesep.codePointAt(0)
+            do
+                javaloader=this.getClass().getClassLoader()
+                logclass=javaloader.loadClass('android.util.Log')
+                logmethod = logclass.getMethod('v', [String.class,String.class])
+            catch e=Exception
+                say e.getMessage()
+                exit
+            end
+        end
+        else do
+            say "Can not re-direct streams on systems" -
+                "where the line separator is two characters."
+            exit
+        end
+
+    method write( b=int )
+        if b == eolval then do
+                msg = String(this.output.toByteArray())
+                do
+                    logmethod.invoke(logclass, -
+                        [String "NetRexx - " || this.logstream, msg])
+                catch e=Exception
+                    say e.getMessage()
+                end
+                this.output = ByteArrayOutputStream()
+        end
+        else do
+            this.output.write(b)
+        end
