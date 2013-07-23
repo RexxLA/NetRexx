@@ -1,0 +1,16 @@
+\chapter{ARM ABI Remarks}
+For the next two chapters, it is relevant to know about a specific issue with ARM processors, as used in both the Raspberry Pi and the Beaglebone Black, with regard to the JVM distribution that is used. ARM processors are available in many different configurations, and because of considerations of pricing and power requirements, not all of these include hardware floating point units. The difference between these is the reason of the existence of two Embedded Application Binary Interfaces or EABIs for ARM: soft float and VFP (Vector Floating Point).  Although there is forward compatibility between soft and hard float, there is no backward compatibility. In the Linux community, releases built using  these EABI's are called \emph{armel} based distributions. 
+
+Unfortunately, VFP has an inefficient way of passing floating point values through intermediate integer registers to the floating point registers where they can be used. This has given rise to a third EABI, which is called \emph{armhf}, also called \emph{hard float}. This architecture can be seen as the future, because the important Linux distributions are moving towards it. Depending on the release of your operating system, your Raspberry Pi or Beaglebone Black's software can be operating in \emph{armel} or \emph{armhf} mode. The consequence of this is that the JVM implementation must match the architecture, or it will not work.
+
+The JVM that are installed using the package manager that is native to the operating system will choose the right architecture. For the Oracle Java versions, it is important to know that the released version 7 JVM is soft-float \emph{armel} and that there is currently a JVM 8 preview that is hard-float. The recommended OS for the Raspberry Pi is Debian Wheezy ``Raspbian'', which is hard float. The Beaglebone Black comes with Ångstrom Linux, which is soft-float and cannot run the Oracle Java 8 preview.
+
+The easiest way to spot the architecture is to look for these components (armel of armhf) in the package names when installing software. There is a way to determine which EABI conventions were used, which is mentioned here for completeness: the command
+\begin{alltt}
+readelf -A /proc/self/exe | grep Tag_ABI_VFP_args
+\end{alltt}
+returns:
+\begin{alltt}
+Tag_ABI_VFP_args: VFP registers
+\end{alltt}
+when the OS distribution is \emph{armhf} and nothing, when it is \emph{armel}.
