@@ -20,7 +20,7 @@ JAVA_OBJS	:= $(JAVA_SRC:.java=.class)
 # target all compiles the netrexx and java code
 #
 all::	DiagInterface.class $(NRX_OBJS) $(JAVA_OBJS)
-
+	java zAllTests
 fromscratch::
 	$(NRX_COMPILE_COMMAND) *.nrx $(NRX_COMPILE_FLAGS)
 	$(JAVA_COMPILE_COMMAND) $(JAVA_COMPILE_FLAGS) *.java
