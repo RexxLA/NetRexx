@@ -1,12 +1,9 @@
-NRX_COMPILE_COMMAND = java org.netrexx.process.NetRexxC
-NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -nocompile -utf8 -format
-
-JAVA_COMPILE_COMMAND = java org.eclipse.jdt.internal.compiler.batch.Main 
-JAVA_COMPILE_FLAGS = -warn:-unusedPrivate -warn:-unusedLocal -Xemacs
+CLASSPATH = -cp .:../build/lib/NetRexxC.jar:../lib/junit-4.8.2.jar:../lib/ecj-4.2.jar
+NRX_COMPILE_COMMAND = java $(CLASSPATH) -Dnrx.compiler=ecj  org.netrexx.process.NetRexxC 
+NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -utf8 -format
 
 .nrx.class:
-	$(NRX_COMPILE_COMMAND) $< $(NRX_COMPILE_FLAGS)
-	$(JAVA_COMPILE_COMMAND) $(JAVA_COMPILE_FLAGS) $*.java
+	$(NRX_COMPILE_COMMAND) $(NRX_COMPILE_FLAGS) $< 
 
 NRX_SRC		:= $(wildcard *.nrx)
 NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
@@ -20,10 +17,7 @@ JAVA_OBJS	:= $(JAVA_SRC:.java=.class)
 # target all compiles the netrexx and java code
 #
 all::	DiagInterface.class $(NRX_OBJS) $(JAVA_OBJS)
-	java zAllTests
-fromscratch::
-	$(NRX_COMPILE_COMMAND) *.nrx $(NRX_COMPILE_FLAGS)
-	$(JAVA_COMPILE_COMMAND) $(JAVA_COMPILE_FLAGS) *.java
+	java -Dnrx.compiler=ecj $(CLASSPATH) zAllTests
 
 test::
 	java zAllTests
