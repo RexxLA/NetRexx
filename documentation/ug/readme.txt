@@ -1,4 +1,4 @@
-You are looking at the readme for the \nr{} 3.02 package - \nr{}-3.02GA.zip
+You are looking at the readme for the NetRexx 3.02 package - NetRexx-3.02GA.zip
 
 
 Changes since 3.02 RC1 include:
@@ -10,7 +10,7 @@ Changes since 3.02 RC1 include:
   constructor argument was chosen in preference to type Rexx; this has
   been corrected
 
-- a fix for the running of the \nr{}F.jar file on some JVM 1.5
+- a fix for the running of the NetRexxF.jar file on some JVM 1.5
   releases. This is now supported again.
 
 - ongoing documentation work, e.g. for the options
