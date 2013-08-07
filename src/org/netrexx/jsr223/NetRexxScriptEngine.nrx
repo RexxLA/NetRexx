@@ -1,0 +1,554 @@
+/*
+ *  NetRexxScriptEngine.nrx - NetRexx JSR223 Scripting Engine 
+ *  Copyright (C) 2012 Kermit Kiser and others
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ * Version 0.1.0 (November 28, 2012)
+ * First version working - simple feasibility demo! 
+ * Version 0.0.1 (November 5, 2009)
+ * Mod to extend AbstractScriptEngine class for simplicity! 
+ * Version 0.0.2 (November 14, 2009)
+ * add code to return an object placed in bindings by the script like this: NetRexxScriptEngine.instance.put("returnobject",~someobject~)
+ * add instance pointer variable to see if scripts can use it to access bindings
+ * add signal ScriptException if parse failed
+ * fix "run from reader" code 
+ * Version 0.0.3 (November 15, 2009)
+ * Add code to reroute print output via teestreams 
+ * Version 0.0.4 (November 16, 2009)
+ * change package to org.netrexx.jsr223 for open source NetRexx project
+ * remove jEdit plugin stuff and teestream class
+ * Create simplified version using new NetRexxA API to interpret a string from memory
+ */
+
+package org.netrexx.jsr223
+import javax.script.ScriptEngine
+import javax.script.
+import org.netrexx.process.NetRexxA
+import org.netrexx.process.NrVersion
+import org.apache.tools.ant.AntClassLoader
+
+options strictcase nobinary
+
+class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine uses javax.script.ScriptEngine
+  
+  properties private constant
+  
+  TRUE	= boolean 1		--	"true"
+  FALSE	= boolean 0		--	"false"
+  
+  properties static
+  
+  MY_ENGINE_VERSION   = String "V1.0.0"
+  MY_NAME	      = String "NetRexx Script Engine"
+  MY_SHORT_NAME	      = String "NetRexx"
+  MY_LANGUAGE	      = String "NetRexx"
+  MY_LANGUAGE_VERSION = NrVersion().getVersion().toString()
+  
+  myFactory = ScriptEngineFactory NetRexxScriptEngineFactory()
+  
+  properties public static
+  
+  instance=NetRexxScriptEngine
+  scriptname=String
+  foundprogramname=String
+  scriptargs=String
+  scriptflags=String
+  verbose=String
+  
+  properties private
+  
+  ps=File.pathSeparator
+  fs=File.separator
+  interpreter=NetRexxA
+  saveclasspath=String ""
+  antscript=boolean FALSE
+  scanstart
+  commentlevel
+  
+  mybindings=SimpleBindings
+  
+  -----------------------------------------------   Constructors   ---------------------------------------		
+  
+  method NetRexxScriptEngine()
+    this(SimpleBindings())
+    
+  method NetRexxScriptEngine(bs=Bindings)
+    super(bs)
+    put(LANGUAGE_VERSION, MY_LANGUAGE_VERSION)
+    put(LANGUAGE, MY_LANGUAGE)
+    put(ENGINE, MY_NAME)
+    put(ENGINE_VERSION, MY_ENGINE_VERSION)
+    --        put(ARGV, "") 	--	// TO DO: set correct value
+    --        put(FILENAME, "")	--	 // TO DO: set correct value
+    put(NAME, MY_SHORT_NAME)
+    
+    put("THREADING", null)
+    instance=this
+    mybindings=SimpleBindings()
+    mybindings.putAll(getBindings(ScriptContext.ENGINE_SCOPE))		--	save bindings copy	
+									--		say "ENGINE_SCOPE bindings="
+									--    	dumpbindings(getBindings(ScriptContext.ENGINE_SCOPE))
+    
+    -----------------------------------------------  Engine interface methods   ------------------------------        
+    
+  method eval(script=String , scriptcontext=ScriptContext ) signals ScriptException returns Object
+    hisbindings=scriptcontext.getBindings(ScriptContext.ENGINE_SCOPE)
+    --    	say "ENGINE_SCOPE bindings="
+    --    	dumpbindings(hisbindings)
+    --		    	say "My bindings="
+    --    	dumpbindings(mybindings)
+    
+    hisbindings.putAll(mybindings)	      --  pass my environment settings
+					      --  if hisbindings.get(ARGV)=null then hisbindings.put(ARGV,String[0])		--	default to no args
+					      --  if hisbindings.get(FILENAME)=null then hisbindings.put(FILENAME,String "")	--	default to no filename    		
+    
+    scp=System.getProperty("java.class.path") --  get the global classpath
+    if scp\=saveclasspath then do	      --  if it has changed we need a new interpreter
+      interpreter=null
+      saveclasspath=scp
+    end
+
+    tcl=ClassLoader Thread.currentThread().getContextClassLoader()  --	find the thread context classloader
+    
+    if tcl<=java.net.URLClassLoader then do
+      tclurl=java.net.URLClassLoader tcl
+      addpath=""
+      urlarray=tclurl.getURLs()
+      loop u over urlarray
+	addpath=addpath||ps||u.getPath()
+      end
+      addpath=addpath.strip('b',ps)
+      System.setProperty("java.class.path",scp||ps"NetRexxC.jar"ps||addpath) 
+    end
+    
+    antpack="org.apache.tools.ant"
+    loaderpack=Rexx(tcl.getClass().getName())
+    if antpack=loaderpack.left(antpack.length()) then do   --	is this an Ant classloader? if yes, we need to add his local classpath for NetRexxA to use
+							   --		 if tcl<=org.apache.tools.ant.AntClassLoader then do			--		is this an Ant classloader? if yes, we need to add his local classpath for NetRexxA to use
+      antscript=TRUE
+      getpathmethod=tcl.getClass().getMethod('getClasspath',null)
+      antpath=getpathmethod.invoke(tcl,null)
+      --			tclant=org.apache.tools.ant.AntClassLoader tcl
+      --			say tclant.getClasspath()
+      System.setProperty("java.class.path",scp||ps||antpath)  
+      --			System.setProperty("java.class.path",scp||ps||tclant.getClasspath())  
+    catch e=Exception
+      say e
+    end
+    else antscript=FALSE
+    
+    scriptflags=getflags()		--		get any parse flags passed for interpreter
+    /*   	  		
+       say "***********************"
+       saystring(script)
+       say "***********************"
+     */		 
+     scriptname=getname(script)		--		get a name for the script
+     
+     script=prefixed(script)	--	add all engine scope variables to the script
+     
+     if foundprogramname\=null then scriptname=foundprogramname		--	the prefix scan found a class instruction with a name
+     
+     scriptargs=getargs()		--		get any arguments to pass to the script
+     
+     if interpreter=null then interpreter=NetRexxA()
+     
+     rc=interpreter.interpret(scriptname, script, scriptargs, scriptflags)		--	parse and execute the script with parameters
+     
+     do
+       exitingmethod=interpreter.getClass().getMethod('exiting',null)
+       exiting=Boolean exitingmethod.invoke(interpreter,null)
+       if exiting.booleanValue() then interpreter=null
+       --    	if interpreter.exiting() then interpreter=null
+     catch e=Exception
+       --    		say e
+       interpreter=null
+     end
+     
+     System.setProperty("java.class.path",scp) 		--		restore the classpath we modified
+     
+     if rc>1 then signal ScriptException("Script parse failed")    		
+     
+     return get("returnobject")
+     
+  method eval(reader=Reader , scriptcontext=ScriptContext ) signals ScriptException returns Object
+    return eval(getScriptFromReader(reader), scriptcontext)	--	change reader call to string call
+    
+  method createBindings() returns Bindings 
+    return getBindings(ScriptContext.ENGINE_SCOPE)
+    
+  method getFactory() returns ScriptEngineFactory 
+    return myFactory
+    
+    ---------------------------------		methods not part of interface definition:      --------------------------------  
+    
+  method getObject(name=String) static returns Object
+    return instance.get(name)
+    
+  method putObject(key=String,value=Object) static
+    instance.put(key,value)
+    
+  method itsastring(s=Rexx) returns String
+    return s.toString()
+    
+  method getflags
+    flags='nocrossref '			--	this can be overridden if flags provided by host
+    verbose="verbose3"
+    
+    if antscript then do
+      
+      proj=org.apache.tools.ant.Project get('project')
+      --			help=org.apache.tools.ant.PropertyHelper org.apache.tools.ant.PropertyHelper.getPropertyHelper(proj)
+      props=Hashtable proj.getProperties()
+      ks=props.keySet()
+      it=ks.iterator()
+      loop while it.hasNext()
+	o=it.next()
+	delegateobject=org.apache.tools.ant.PropertyHelper.getProperty(proj,o.toString())
+	if get(o.toString())\=null then
+	  if delegateobject\=get(o.toString()) then put(o.toString(),delegateobject)
+      end
+      
+      p='ant.netrexxc.'
+      verboseobject=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'verbose'))
+      if verboseobject \= null then do
+	verbose=verboseobject.toString()
+	flags=flags verbose
+      end
+      compact=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'compact'))
+      if compact \= null then flags=flags compact
+      console=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'console'))
+      if console \= null then flags=flags console
+      crossref=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'crossref'))
+      if crossref \= null then flags=flags crossref
+      decimal=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'decimal'))
+      if decimal \= null then flags=flags decimal
+      diag=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'diag'))
+      if diag \= null then flags=flags diag
+      explicit=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'explicit'))
+      if explicit \= null then flags=flags explicit
+      logo=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'logo'))
+      if logo \= null then flags=flags logo
+      savelog=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'savelog'))
+      if savelog \= null then flags=flags savelog
+      strictargs=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'strictargs'))
+      if strictargs \= null then flags=flags strictargs
+      strictassign=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'strictassign'))
+      if strictassign \= null then flags=flags strictassign
+      strictcase=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'strictcase'))
+      if strictcase \= null then flags=flags strictcase
+      strictimport=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'strictimport'))
+      if strictimport \= null then flags=flags strictimport
+      strictprops=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'strictprops'))
+      if strictprops \= null then flags=flags strictprops
+      strictsignal=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'strictsignal'))
+      if strictsignal \= null then flags=flags strictsignal
+      trace=org.apache.tools.ant.PropertyHelper.getProperty(proj,itsastring(p'trace'))
+      if trace \= null then flags=flags trace
+    end
+    
+    if get("netrexxflags")\=null then flags= flags get("netrexxflags").toString() 
+    
+    return flags 
+    
+  method getargs   
+    if antscript then do
+      antarg=org.apache.tools.ant.PropertyHelper.getProperty(org.apache.tools.ant.Project get('project'),'arg')
+      if antarg\=null then return antarg.toString() 
+    end
+    
+    if get(ARGV) \= null then return Rexx(get(ARGV).toString())
+    else if get("arg") \= null then return Rexx(get("arg").toString())
+    
+    return ""
+    
+  method getname(script=String)
+    scriptname='jsr223.nrx'
+    tscriptname='jsr223.nrx'
+    
+    if get(FILENAME)=null,get(FILENAME).toString()="" then 
+      if antscript then do
+	self=org.apache.tools.ant.Task get('self')
+	if self\=null then
+	  scriptname=self.getOwningTarget().getName()
+      end
+    else nop
+    else tscriptname=get(FILENAME).toString()
+    
+    rexxname=Rexx(tscriptname)
+    if rexxname.pos(fs)>0 then rexxname=rexxname.substr(rexxname.lastpos(fs)+1)
+    if rexxname.pos(".")>0 then rexxname=rexxname.substr(1,rexxname.lastpos('.')-1)
+    if rexxname.verify('_$€'||'a'.sequence('z')||'A'.sequence('Z')||'0'.sequence('9'))>0 then tscriptname=scriptname
+    else scriptname=rexxname'.nrx'
+    
+    return scriptname
+    
+  method dumpbindings(bs=Map) 			--		used for debugging
+    say "dumping keySet"
+    ks=bs.keySet()
+    it=ks.iterator()
+    loop while it.hasNext()
+      o=it.next() 
+      say o o.getClass() 			
+    end
+    
+  method saystring(s=String) --	 used for debugging
+    say "-----------------------------------"
+    do
+      bsr= BufferedReader(StringReader(s))
+      loop forever
+	in=bsr.readLine()
+	if in=null then return
+	say "==>"in"<=="
+      end
+    catch err=IOException
+      say err
+    end
+    
+  method prefixed(script=String)		--	adds bindings to the script's property space 
+    if antscript then do
+      rexxscript=Rexx(script).strip('b','\n')
+      nl=rexxscript.pos("\n")
+      if nl>0 then
+	if rexxscript.left(nl).verify(' \t\n')=0 then rexxscript=rexxscript.substr(nl+1)
+	script=rexxscript
+    end
+    do
+      bindingprefix=getbindingprefix(script)
+      bsr= BufferedReader(StringReader(bindingprefix))
+      bssr= BufferedReader(StringReader(script))
+      tosb=StringWriter(4096) 										--		temp script holder
+      tofs=BufferedWriter(tosb)										--		open temp file with append
+      foundprogramname=null		--	init class name to null -- prefixfile may find one while scanning
+      
+      info=prefixfile(bsr,bssr,tofs,scriptname)
+      tofs.close()
+      if verbose="verbose4",verbose="verbose5" then do
+	say "***********************"
+	saystring(Rexx(tosb.getBuffer()))
+	say "***********************"
+      end
+    catch err=IOException
+      say err
+    end
+    return Rexx(tosb.getBuffer())
+    
+  method getbindingprefix(script=String)	returns String	--	adds bindings to the script's property space 
+								-- note that Ant does not pass "dotted" property names so they must be accessed via project.getPropery("x.y") if needed 
+    
+    prefix='properties private static'
+    sufix='properties private static unused'
+    nsi=instance		
+    bind=SimpleBindings nsi.getBindings(ScriptContext.ENGINE_SCOPE)
+    ks=bind.keySet()
+    it=ks.iterator()
+    loop while it.hasNext()
+      item=it.next()
+      if item.toString()="arg" then iterate		--	cannot override script arg property
+      val=nsi.get(String item)
+      titem=Rexx(item.toString()).changestr('.','_')
+      if val = null then do
+	if verbose="verbose4",verbose="verbose5" then
+	  say item.toString()"= Object null"
+      prefix=prefix';'titem"= Object null"
+      sufix=sufix';nowarn$'titem"="titem
+      end
+      else do
+	type=Rexx(val.getClass().getName())
+	if type.left(1)="[" then type=gettype(type)
+	if verbose="verbose4",verbose="verbose5" then
+	  say titem"="type val
+	prefix=prefix';'titem"="type 'NetRexxScriptEngine.instance.get("'item.toString()'")'
+	sufix=sufix';nowarn$'titem"="titem
+      end
+    end
+    
+    return prefix';'sufix
+    
+  method gettype(ct)
+    dim=ct.countstr('[')
+    ct=ct.right(ct.length()-dim)
+    code=ct.left(1)
+    if code="L" then ct=ct.substr(2,ct.length()-2)
+    else do
+      types="boolean byte char double float int long short"
+      tc="ZBCDFIJS"
+      if tc.pos(code)=0 then ct="Object"
+      else ct=types.word(tc.pos(code))
+    end
+    ct=ct'['||','.copies(dim-1)']'
+    return ct
+    
+  method getScriptFromReader(ireader=Reader) returns String 
+    do 
+      script = StringWriter()
+      copybin(ireader,script)
+      script.flush()
+      return script.toString()
+    catch  ex = IOException
+      say ex
+    end
+    
+    return null
+    
+  method copybin(ifq=Reader,ofq=Writer) binary signals IOException
+    bite=ifq.read()
+    loop while bite \= -1
+      ofq.write(bite)
+      bite=ifq.read()
+    end		        	
+    
+    --		this method adds a prefix to scripts to load the environment bindings into the script namespace 
+    -- 		it may add class and method main (but does not modify programs with a class statement in them) 
+  method prefixfile(pfq=java.io.BufferedReader,ifq=java.io.BufferedReader,ofq=java.io.BufferedWriter,sn=Rexx) returns Rexx 
+    foundprogramname=null
+    fileinfo="empty"
+    fileinfo['linecount']=0	
+    commentlevel=0
+    loop label readloop forever
+      rline=ifq.readLine()
+      if rline = null then leave
+      line=Rexx(rline)
+      if line='' then do; if fileinfo['linecount']>0 then ofq.newLine();fileinfo['linecount']=fileinfo['linecount']+1;iterate;end	
+	scanstart=1
+	loop label scanline forever
+	  if line.verify(' \t','n',scanstart)=0 then do
+	    if fileinfo['linecount']>0 then ofq.newLine()
+	    ofq.write(String line,0,line.length())
+	    fileinfo['linecount']=fileinfo['linecount']+1
+	    iterate readloop 		--	if remainder is all blanks, pass it on
+	  end
+	  if commentlevel=0 then
+	    if prolog(line) then do -- still in prolog
+	      if scanstart<line.length() then iterate scanline		-- more to check on this line?
+	      if fileinfo['linecount']>0 then ofq.newLine()
+	      ofq.write(String line,0,line.length())
+	      fileinfo['linecount']=fileinfo['linecount']+1
+	      iterate readloop
+	    end
+	  else do			--	not in prolog = class, method, or other
+	    if fileinfo['linecount']>0 then ofq.newLine()
+	    if line.substr(scanstart).changestr('\t',' ').word(1).lower()="class" then do		--		if found class then skip prefix
+	      foundprogramname=line.substr(scanstart).changestr('\t',' ').word(2)
+	    end
+	    else do																				  --		if found method or something else, add a suitable prefix
+	      if line.substr(scanstart).changestr('\t',' ').word(1)="method" then fileinfo['prefixlength']=addprefix(pfq,ofq,sn,'nomain')
+	      else fileinfo['prefixlength']=addprefix(pfq,ofq,sn)
+	      --					  ofq.newLine()
+	    end
+	    --	write the current line and copy the rest of the program code						
+	    ofq.write(String line,0,line.length())
+	    ofq.newLine()
+	    copyfile(ifq,ofq)		--		copy remainder of program
+	    return fileinfo
+	    
+	  end -- not prolog
+	  if stillcomment(line) then iterate scanline
+	end scanline
+	
+      catch err=IOException
+	say err
+    end readloop
+    
+    return fileinfo
+    
+  method addprefix(ifq=BufferedReader,ofq=BufferedWriter,sn=Rexx,pt='withmain') returns Rexx signals IOException
+    linesadded=0
+    
+    line=";		import javax.script."
+    ofq.write(String line,0,line.length())			--		write an import statement for JSR223
+    linesadded=linesadded+1
+    
+    line=";		import org.netrexx.jsr223.NetRexxScriptEngine"
+    --  ofq.newLine()
+    ofq.write(String line,0,line.length())			--		write an import statement for this JSR223 ScriptEngine
+    linesadded=linesadded+1
+    
+    line=";		import javax.swing."
+    --  ofq.newLine()
+    ofq.write(String line,0,line.length())			--		write an import statement for Swing
+    linesadded=linesadded+1
+    
+    if sn.lastpos('.')>0 then cn=sn.left(sn.lastpos('.')-1)
+    else cn=sn
+    line="; class" cn ';'
+    --  ofq.newLine()
+    ofq.write(String line,0,line.length())			--		write a class statement
+    linesadded=linesadded+1
+    
+    --	ofq.newLine()
+    linesadded=linesadded+copyfile(ifq,ofq)
+    
+    if pt='nomain' then return linesadded
+    
+    line=';    method main($007=String[]) static;arg=Rexx($007);arg=arg;'
+    --	ofq.newLine()
+    ofq.write(String line,0,line.length())			--		write a method statement
+    linesadded=linesadded+1
+    
+    return linesadded
+    
+  method stillcomment(line=Rexx) returns boolean
+    cd=line.verify('*/','m',scanstart) 	--	possible comment delimiter
+    
+    if cd=0 then do			--		no comment change on this line
+      scanstart=line.length()+1
+      return 1
+    end
+    
+    if line.substr(cd,2)='/*' then do
+      commentlevel=commentlevel+1	--	 deeper in debt
+      scanstart=cd+2
+      return 1
+    end
+    
+    if line.substr(cd,2)='*/' then do
+      commentlevel=commentlevel-1		--	less of a hole
+      scanstart=cd+2
+      if commentlevel = 0 then return 0
+      else return 1
+    end
+    
+    say "this can't happen!"
+    return 1
+    
+  method prolog(line=Rexx) returns boolean
+    nb=line.verify(' \t','n',scanstart) 		--	find first non blank
+    
+    if nb=0 then do			--	nothing found ==> ignore it
+      scanstart=line.length()+1
+      return 1
+    end
+    
+    if line.substr(nb,2)='/*' 	then do
+      commentlevel=commentlevel+1
+      scanstart=nb+2
+      return 1
+    end
+    
+    if line.substr(nb,2)='--', 'options package import'.wordpos(line.substr(nb).word(1).lower())>0 then do
+      scanstart=line.length()+1			--		line comment or prolog statement ==> ignore rest of line
+      return 1
+    end
+    
+    return 0 		--		found something that does not look like prolog
+    
+  method copyfile(ifq=java.io.BufferedReader,ofq=java.io.BufferedWriter) returns Rexx signals IOException
+    line=ifq.readLine()
+    if line = null then return 0
+    linecount=1
+    ofq.write(String line,0,line.length())
+    loop forever
+      line=ifq.readLine()
+      if line = null then leave
+      linecount=linecount+1
+      ofq.newLine()
+      ofq.write(String line,0,line.length())
+    end	
+    return linecount
+
+    
+    

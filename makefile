@@ -36,7 +36,7 @@ package:
 	cp minimalmanifest scratch/
 	cd scratch;jar cmf minimalmanifest NetRexxF.jar *
 	mv scratch/NetRexxF.jar lib
-	zip NetRexx-3.02GA.zip lib/NetRexxF.jar
+	zip NetRexx-3.03RC1.zip lib/NetRexxF.jar
 	mv lib/NetRexxF.jar build/lib
 	rm -rf scratch
 
