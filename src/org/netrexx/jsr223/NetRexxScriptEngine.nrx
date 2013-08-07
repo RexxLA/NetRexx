@@ -1,26 +1,26 @@
 /*
  *  NetRexxScriptEngine.nrx - NetRexx JSR223 Scripting Engine 
- *  Copyright (C) 2012 Kermit Kiser and others
+ *  Copyright (C) 2009,2012 Kermit Kiser and others
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  *
- * Version 0.1.0 (November 28, 2012)
- * First version working - simple feasibility demo! 
- * Version 0.0.1 (November 5, 2009)
- * Mod to extend AbstractScriptEngine class for simplicity! 
- * Version 0.0.2 (November 14, 2009)
- * add code to return an object placed in bindings by the script like this: NetRexxScriptEngine.instance.put("returnobject",~someobject~)
- * add instance pointer variable to see if scripts can use it to access bindings
- * add signal ScriptException if parse failed
- * fix "run from reader" code 
- * Version 0.0.3 (November 15, 2009)
- * Add code to reroute print output via teestreams 
- * Version 0.0.4 (November 16, 2009)
- * change package to org.netrexx.jsr223 for open source NetRexx project
- * remove jEdit plugin stuff and teestream class
- * Create simplified version using new NetRexxA API to interpret a string from memory
+ *  Create simplified version using new NetRexxA API to interpret a string from memory
+ *  remove jEdit plugin stuff and teestream class
+ *  change package to org.netrexx.jsr223 for open source NetRexx project
+ *  Version 0.0.4 (November 16, 2009)
+ *  Add code to reroute print output via teestreams 
+ *  Version 0.0.3 (November 15, 2009)
+ *  fix "run from reader" code 
+ *  add signal ScriptException if parse failed
+ *  add instance pointer variable to see if scripts can use it to access bindings
+ *  add code to return an object placed in bindings by the script like this: NetRexxScriptEngine.instance.put("returnobject",~someobject~)
+ *  Version 0.0.2 (November 14, 2009)
+ *  Mod to extend AbstractScriptEngine class for simplicity! 
+ *  Version 0.0.1 (November 5, 2009)
+ *  First version working - simple feasibility demo! 
+ *  Version 0.1.0 (November 28, 2012)
  */
 
 package org.netrexx.jsr223
@@ -35,12 +35,10 @@ options strictcase nobinary
 class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine uses javax.script.ScriptEngine
   
   properties private constant
-  
   TRUE	= boolean 1		--	"true"
   FALSE	= boolean 0		--	"false"
   
   properties static
-  
   MY_ENGINE_VERSION   = String "V1.0.0"
   MY_NAME	      = String "NetRexx Script Engine"
   MY_SHORT_NAME	      = String "NetRexx"
@@ -50,21 +48,19 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
   myFactory = ScriptEngineFactory NetRexxScriptEngineFactory()
   
   properties public static
-  
-  instance=NetRexxScriptEngine
-  scriptname=String
-  foundprogramname=String
-  scriptargs=String
-  scriptflags=String
-  verbose=String
+  instance	   = NetRexxScriptEngine
+  scriptname	   = String
+  foundprogramname = String
+  scriptargs	   = String
+  scriptflags	   = String
+  verbose	   = String
   
   properties private
-  
-  ps=File.pathSeparator
-  fs=File.separator
-  interpreter=NetRexxA
-  saveclasspath=String ""
-  antscript=boolean FALSE
+  ps		= File.pathSeparator
+  fs		= File.separator
+  interpreter	= NetRexxA
+  saveclasspath	= String ""
+  antscript	= boolean FALSE
   scanstart
   commentlevel
   
@@ -96,11 +92,6 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
   method eval(script=String , scriptcontext=ScriptContext ) signals ScriptException returns Object
     hisbindings=scriptcontext.getBindings(ScriptContext.ENGINE_SCOPE)
-    --    	say "ENGINE_SCOPE bindings="
-    --    	dumpbindings(hisbindings)
-    --		    	say "My bindings="
-    --    	dumpbindings(mybindings)
-    
     hisbindings.putAll(mybindings)	      --  pass my environment settings
 					      --  if hisbindings.get(ARGV)=null then hisbindings.put(ARGV,String[0])		--	default to no args
 					      --  if hisbindings.get(FILENAME)=null then hisbindings.put(FILENAME,String "")	--	default to no filename    		
@@ -110,7 +101,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       interpreter=null
       saveclasspath=scp
     end
-
+    
     tcl=ClassLoader Thread.currentThread().getContextClassLoader()  --	find the thread context classloader
     
     if tcl<=java.net.URLClassLoader then do
@@ -131,49 +122,40 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       antscript=TRUE
       getpathmethod=tcl.getClass().getMethod('getClasspath',null)
       antpath=getpathmethod.invoke(tcl,null)
-      --			tclant=org.apache.tools.ant.AntClassLoader tcl
-      --			say tclant.getClasspath()
       System.setProperty("java.class.path",scp||ps||antpath)  
-      --			System.setProperty("java.class.path",scp||ps||tclant.getClasspath())  
     catch e=Exception
       say e
     end
     else antscript=FALSE
     
     scriptflags=getflags()		--		get any parse flags passed for interpreter
-    /*   	  		
-       say "***********************"
-       saystring(script)
-       say "***********************"
-     */		 
-     scriptname=getname(script)		--		get a name for the script
-     
-     script=prefixed(script)	--	add all engine scope variables to the script
-     
-     if foundprogramname\=null then scriptname=foundprogramname		--	the prefix scan found a class instruction with a name
-     
-     scriptargs=getargs()		--		get any arguments to pass to the script
-     
-     if interpreter=null then interpreter=NetRexxA()
-     
-     rc=interpreter.interpret(scriptname, script, scriptargs, scriptflags)		--	parse and execute the script with parameters
-     
-     do
-       exitingmethod=interpreter.getClass().getMethod('exiting',null)
-       exiting=Boolean exitingmethod.invoke(interpreter,null)
-       if exiting.booleanValue() then interpreter=null
-       --    	if interpreter.exiting() then interpreter=null
-     catch e=Exception
-       --    		say e
-       interpreter=null
-     end
-     
-     System.setProperty("java.class.path",scp) 		--		restore the classpath we modified
-     
-     if rc>1 then signal ScriptException("Script parse failed")    		
-     
-     return get("returnobject")
-     
+    
+    scriptname=getname(script)		--		get a name for the script
+    
+    script=prefixed(script)	--	add all engine scope variables to the script
+    
+    if foundprogramname\=null then scriptname=foundprogramname		--	the prefix scan found a class instruction with a name
+    
+    scriptargs=getargs()		--		get any arguments to pass to the script
+    
+    if interpreter=null then interpreter=NetRexxA()
+    
+    rc=interpreter.interpret(scriptname, script, scriptargs, scriptflags)		--	parse and execute the script with parameters
+    
+    do
+      exitingmethod=interpreter.getClass().getMethod('exiting',null)
+      exiting=Boolean exitingmethod.invoke(interpreter,null)
+      if exiting.booleanValue() then interpreter=null
+    catch e=Exception
+      interpreter=null
+    end
+    
+    System.setProperty("java.class.path",scp) 		--		restore the classpath we modified
+    
+    if rc>1 then signal ScriptException("Script parse failed")    		
+    
+    return get("returnobject")
+    
   method eval(reader=Reader , scriptcontext=ScriptContext ) signals ScriptException returns Object
     return eval(getScriptFromReader(reader), scriptcontext)	--	change reader call to string call
     
@@ -182,7 +164,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
   method getFactory() returns ScriptEngineFactory 
     return myFactory
-    
+
     ---------------------------------		methods not part of interface definition:      --------------------------------  
     
   method getObject(name=String) static returns Object
@@ -201,7 +183,6 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     if antscript then do
       
       proj=org.apache.tools.ant.Project get('project')
-      --			help=org.apache.tools.ant.PropertyHelper org.apache.tools.ant.PropertyHelper.getPropertyHelper(proj)
       props=Hashtable proj.getProperties()
       ks=props.keySet()
       it=ks.iterator()
@@ -391,7 +372,6 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     catch  ex = IOException
       say ex
     end
-    
     return null
     
   method copybin(ifq=Reader,ofq=Writer) binary signals IOException
@@ -463,29 +443,28 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     linesadded=linesadded+1
     
     line=";		import org.netrexx.jsr223.NetRexxScriptEngine"
-    --  ofq.newLine()
+    
     ofq.write(String line,0,line.length())			--		write an import statement for this JSR223 ScriptEngine
     linesadded=linesadded+1
     
     line=";		import javax.swing."
-    --  ofq.newLine()
+    
     ofq.write(String line,0,line.length())			--		write an import statement for Swing
     linesadded=linesadded+1
     
     if sn.lastpos('.')>0 then cn=sn.left(sn.lastpos('.')-1)
     else cn=sn
     line="; class" cn ';'
-    --  ofq.newLine()
+    
     ofq.write(String line,0,line.length())			--		write a class statement
     linesadded=linesadded+1
     
-    --	ofq.newLine()
     linesadded=linesadded+copyfile(ifq,ofq)
     
     if pt='nomain' then return linesadded
     
     line=';    method main($007=String[]) static;arg=Rexx($007);arg=arg;'
-    --	ofq.newLine()
+
     ofq.write(String line,0,line.length())			--		write a method statement
     linesadded=linesadded+1
     
