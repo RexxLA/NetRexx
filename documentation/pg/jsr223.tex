@@ -1,0 +1,119 @@
+\chapter{Interfacing to Scripting Languages}
+\nr{} contains standardized Java Scripting
+support\marginpar{\color{gray}3.03}, and the NetRexxC.jar file is a self-contained JSR223 scripting engine. This facility opens up a number of possibilities to interface in a standardized manner with several scripting languages and other infrastructure, and offers an easy way for including intrepreted \nr{} code in JVM applications. JSR223 is a standard for interacting with scripting languages that consists of:
+\begin{enumerate}
+\item A mechanism to find out for which scripting languages support is
+  available
+\item A way to choose one of them
+\item An eval() call to dynamically specify and execute a program
+\item A \emph{bindings} mechanism to bind variable names to values, to exchange objects with scripts
+\item Optionally, a way to execute methods, functions or routines from
+  larger programs
+\item Optionally, a way to keep already compiled scripts around for repeated execution (with associated higher performance)
+\end{enumerate}
+
+The JSR223 specification\footnote{\url{http://www.jcp.org/en/jsr/detail?id=223}}
+details the calls that are available in the \keyword{javax.scripting}
+package. To use the JSR223 interface, Java 6 or higher is
+required. The JAR file specification defines a service as a well-known
+set of interfaces and (usually) abstract classes. A service provider
+is a specific implementation of such a service. For scripting, the
+service consists of \keyword{javax.script.ScriptEngineFactory}. All
+classes that implement this interface are service providers. Service
+providers identify themselves by placing a so-called
+provider-configuration file in META-INF/services. Its filename
+corresponds to the fully qualified name of the service class, which is
+\keyword{javax.script.ScriptEngineFactory}. Each line of this file contains the
+fully qualified name of a service provider. The factory
+class of the \nr{} connector is \keyword{org.netrexx.jsr223.NetRexxScriptEngineFactory}. So the file \keyword{META-INF/services/javax.script.ScriptEngineFactory} contains one line with exactly this class name.
+\section{Which JSR223 engines are on my system?}
+The number of JSR223 engines available varies per JVM implementation. The following code can be used to list these.
+\begin{lstlisting}[label=enumeratejsr223,caption=Enumerate the JSR223 Engines on a JVM]
+import javax.script.
+
+class ScriptDemo
+  
+  method main(args=String[]) static
+    
+    sem=ScriptEngineManager()
+    list = sem.getEngineFactories()
+    f=ScriptEngineFactory
+    
+    loop i=0 to list.size-1
+      f=ScriptEngineFactory list.get(i)
+      engineName = f.getEngineName()
+      engineVersion = f.getEngineVersion()
+      langName = f.getLanguageName()
+      langVersion = f.getLanguageVersion()
+      say engineName engineVersion langName langVersion
+   end -- loop i
+
+\end{lstlisting}
+For example, the Java 8 SE version by Oracle on MacOSX delivers out of the box:
+\begin{alltt}
+AppleScriptEngine 1.1 AppleScript 2.2.4
+Oracle Nashorn 1.8.0  ECMAScript ECMA - 262 Edition 5.1
+\end{alltt}
+As one can see, the name of the engine, the language and its release are standard features for this query. The NetRexxC.jar file on the classpath adds the \nr{} implementation:
+\begin{alltt}
+NetRexx Script Engine V1.0.0 NetRexx \nrversion{}
+\end{alltt}
+There can be any number of additional jar archives on the classpath to deliver engines for different JSR223 implementations for different languages.
+\section{Selecting an engine}
+When developing a program one is probably interested in using a specific implementation, and it is possible to request the loading of a specific JSR223 engine by name.
+\begin{lstlisting}[label=choosingjsr223,caption=Choosing an engine]
+import javax.script.
+
+manager = ScriptEngineManager()
+nrEngine = manager.getEngineByName("NetRexx")
+\end{lstlisting}
+The language engine can be selected by its short name, so there is no need to specify the longer name or its version.
+\section{Evaluating a script}
+This example shows how to do a simple thing that illustrates the value of being able to do this from other environments: calculating some number with \emph{numeric precision} set to some value that other languages cannot handle.
+\begin{lstlisting}[label=evaljsr223,caption=Evaluating a script]
+/* simple script invocation */
+nrEngine.eval('numeric digits 17; say 111111111 * 111111111')
+\end{lstlisting}
+The output from this script would be:
+\begin{alltt}
+12345678987654321
+\end{alltt}
+\section{Bindings}
+Bindings are name-value pairs whose keys are strings - they can be of \Rexx{} type. Their behavior is defined through the \keyword{javax.script.Bindings} interface. As for \keyword{ScriptContext}, a basic implementation is provided called \keyword{SimpleBindings}. Although bindings belong to script contexts, \keyword{ScriptEngine} provides \keyword{createBindings()}, which returns an uninitialized binding. Another method, \keyword{getBindings()}, exists to return the bindings of a certain scope. There are at least two scopes, \keyword{ScriptContext.GLOBAL\_SCOPE} and \keyword{ScriptContext.ENGINE\_SCOPE}. They represent key-value pairs that are either visible to all instances of a script engine that have been created by the same \keyword{ScriptengineManager}, or visible only during the lifetime of a certain script engine instance. The following program illustrates the use of bindings to store a value, 42, into the binding called \keyword{answer} and then using its retrieved value in the evaluation of the statement \keyword{'say ``the answer is'' answer '}. The next action uses the handle \keyword{one} for a value of 1, and uses its retrieved value to add it to the value previously contained in the binding \keyword{answer}.
+\begin{lstlisting}[label=bindingsjsr223,caption=Object Bindings]
+import javax.script.
+nrEngine = ScriptEngineManager().getEngineByName("NetRexx")
+
+/* script invocation with bindings */
+answer = 42
+nrEngine.put("answer", answer)
+nrEngine.eval('say ''the answer is ''answer')
+
+one = 1
+nrEngine.put("onemore",one)
+nrEngine.eval('say ''one more is ''answer+onemore')
+\end{lstlisting}
+Note that in line two, the invocation is shortened a bit by getting rid of the intermediate \keyword{manager} object for instantiation of the language interface. Also note that in line 10, we chose, for illustration purposes, to store the \keyword{one} object into the bindings structure using a different name, \keyword{onemore}. This shows that the string used as identifier for the object is just a handle to it, and nothing more.
+This would yield:
+\begin{alltt}
+the answer is 42
+one more is 43
+\end{alltt}
+The different possibilities and language combinations will be discussed in the paragraphs below.
+ 
+\section{Interpreted execution of \nr{} scripts from NetRexx}
+ 
+\section{Interpreted execution of \nr{} scripts from Java}
+ 
+\section{Calling other scripting languages from \nr{} programs}
+ 
+\subsection{Calling Javascript (ECMAScript, Rhino, V8, Nashorn, …) from \nr{} programs}
+ 
+\subsection{Using AppleScript on MacOSX}
+ 
+\section{Execution of \nr{} scripts from ANT tasks}
+ 
+\section{Integration of NetRexx scripting in applications}
+ 
+\section{Interfacing between ooRexx and \nr{} using BSF4ooRexx}
+BSF is a system for language interaction that originated in a research project at IBM, and predates JSR223 (and certainly its implementation in Java 6) for a number of years. BSF 2.x has its own interface, while modern BSF versions are an implementation of the JSR223 interfaces. BSF4ooRexx enables a bidirectional interface between ooRexx and Java, and enables one to use the large class library support for Java in ooRexx programs, but likewise the execution of ooRexx code from Java (including \nr{}) programs. BSF4ooRexx contains some special support for JVM programs written in \nr{}.
