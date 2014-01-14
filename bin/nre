@@ -1,0 +1,212 @@
+#!/bin/bash
+# ---------------------------------------------------------------------------
+#
+#  BASH script to batch execute NetRexx plain text files and shebang utility
+#
+#  REQUIRES: sed: a stream editor for filtering and transforming text
+#
+#  REMINDER: place in PATH and set executable: chmod 751 nre
+#
+#  Copyright (C) 2014 Jason Monroe Martin agrellum@gmail.com
+#
+#  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+#  See LICENSE for the licence and information on using, copying, modifying,
+#  and distributing this program.
+#
+# ---------------------------------------------------------------------------
+
+if [ "$0" = "./nre" ]; then
+  echo "Script should not be run as $0"
+  echo "It will not result in a portable shebang"
+  echo "Run with a full PATH or simply nre"
+  echo "Example: nre one.nrx two.nrx three.nrx"
+  exit 1
+fi
+
+HELD_OPTS=""
+
+KEEPSPACE=" "
+
+MYSHEBANG="#!"$0
+
+NRX_FILES=0
+
+SEPARATOR=";"
+
+USE_CHMOD="NO"
+
+VERSION="1.0.0"
+
+execute_netrexx () {
+  HAD_SHEBANG="NO"
+  delete_shebang
+  java org.netrexx.process.NetRexxC "$thisFILE" $USE_OPTS
+  if [ "$HAD_SHEBANG" = "YES" ]; then
+    insert_shebang
+  fi
+}
+
+insert_shebang () {
+  verify_shebang
+  if [ "$FIRST_LINE" != "$MYSHEBANG" ]; then
+    sed -i 1i\ "$MYSHEBANG" "$thisFILE"
+    if [ "$USE_CHMOD" = "YES" ]; then
+      chmod 751 "$thisFILE"
+    fi
+  fi
+}
+
+delete_shebang () {
+  verify_shebang
+  if [ "$FIRST_LINE" = "$MYSHEBANG" ]; then
+    sed -i 1d "$thisFILE"
+    HAD_SHEBANG="YES"
+    if [ "$USE_CHMOD" = "YES" ]; then
+      chmod 664 "$thisFILE"
+    fi
+  fi
+}
+
+verify_shebang () {
+  FIRST_LINE=`sed 1q "$thisFILE"`
+}
+
+usage() {
+  cat <<EOF
+`basename $0` $VERSION, a NetRexx plain text file executor and shebang utility
+Usage: $0 [ --chmod ] [Option] [Files [NetRexx Options]]
+
+--chmod:               Allow chmod 751 on insert / chmod 664 on delete shebang
+
+Options:
+  -a, --add                insert shebang in [Files]
+  -d, --delete             delete shebang from [Files]
+  -e, --examine            do nothing, echo quoted processing
+  -h, --help, ?            print this help, then exit
+  -v, --version            print name and version number, then exit
+  (If none are passed)     begin executing [Files]
+
+Files:
+  One or more plain text NetRexx files with extension .nrx separated by spaces
+  To execute a file that depends on others, only the first should include
+   the .nrx extension. (nre One.nrx two three four)
+
+NetRexx Options:
+  Each file can be followed with any of the NetRexx options except "-run"
+  This overrides the script default of "-nologo -verbose0 -exec"
+  All [NetRexx Options] are ignored when an add or delete option is used
+
+Example: nre --chmod -i hello.nrx
+    ./hello.nrx from the command prompt runs file
+
+NOTE: [Files] with a shebang are not usable by plain NetRexx
+      Use the delete shebang option to restore them
+
+EOF
+exit 0
+}
+
+if test $# -eq 0; then
+  usage
+fi
+
+case "$1" in
+  "--chmod" ) USE_CHMOD="YES"; shift;;
+esac
+
+if test $# -eq 0; then
+  usage
+fi
+
+case "$1" in
+  "-a" | "--add" ) RUN_MODE="insert"; shift;;
+  "-d" | "--delete" ) RUN_MODE="delete"; shift;;
+  "-e" | "--examine" ) RUN_MODE="examine"; shift;;
+  "-h" | "--help" | ? ) usage;;
+  "-v" | "--version" ) echo `basename $0` $VERSION; exit 0;;
+  * ) RUN_MODE="execute";;
+esac
+
+if test $# -eq 0; then
+  usage
+fi
+
+# Filter arguments passed
+for thisARG; do
+
+  if [ "$RUN_MODE" = "examine" ]; then
+    echo \"$thisARG\"
+  fi
+
+  # Does it end with the .nrx extension
+  if [[ `expr match "$thisARG" '.*\([\.][Nn][Rr][Xx]\)'` ]]; then
+    # Test for regular file
+    if [ -f "$thisARG" ]; then
+      # Test writable
+      if [ -w "$thisARG" ]; then
+        # Close last file's options unless this was our first
+        if [ "$NRX_FILES" -eq 0 ]; then
+          if [ ! -z "$HELD_OPTS" ]; then
+            echo "ERROR: \"$HELD_OPTS\" FOUND BEFORE FIRST FILE"
+            exit 1
+          fi
+        else
+          # Add our option separator
+          HELD_OPTS=$HELD_OPTS$SEPARATOR
+        fi
+        ((NRX_FILES++))
+      else
+        echo "ERROR: $thisARG : NO WRITE PERMISSIONS"
+        exit 1
+      fi
+    else
+      echo "ERROR: $thisARG : NOT A REGULAR FILE or DOES NOT EXIST"
+      exit 1
+    fi
+  else
+    # Keep as option
+    HELD_OPTS=$HELD_OPTS$thisARG$KEEPSPACE
+    shift
+  fi
+done
+
+# Terminate options for the last file
+HELD_OPTS=$HELD_OPTS$SEPARATOR
+
+if test $# -eq 0; then
+  echo "ERROR: NO [Files] FOUND."
+  echo "Did you use .nrx extension?"
+  exit 1
+fi
+
+# Run
+for thisFILE; do
+
+  # Our default options
+  USE_OPTS="-nologo -verbose0 -exec"
+
+  if [ ${#HELD_OPTS} -gt 0 ]; then
+    # Still some options left to process
+    if [ ${HELD_OPTS:0:1} = $SEPARATOR ]; then
+      # No options for this file; Remove it's separator
+      HELD_OPTS=${HELD_OPTS#$SEPARATOR}
+    else
+      # Find the end of the next option group
+      FIRST_SEPARATOR=`expr index "$HELD_OPTS" $SEPARATOR`
+      # Extract group minus trailing space and separator; replace default
+      USE_OPTS=${HELD_OPTS:0:$FIRST_SEPARATOR-2}
+      # Remove group from the list
+      HELD_OPTS=${HELD_OPTS#$USE_OPTS$KEEPSPACE$SEPARATOR}
+    fi
+  fi
+
+  case "$RUN_MODE" in
+    "insert" ) insert_shebang;;
+    "delete" ) delete_shebang;;
+    "examine" ) echo \"$thisFILE\" \"$USE_OPTS\";;
+    "execute" ) execute_netrexx;;
+  esac
+done
+
+exit 0
+
