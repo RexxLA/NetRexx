@@ -24,6 +24,7 @@
 /* 1998.04.27 Adjust dependent's constructor signatures [drop Arg1]   */
 /* 1998.05.05 Change from string interface to RxField                 */
 /* 2000.04.07 Expose the binary data                                  */
+/* 2013.10.10 include JVM 7 class constants                           */
 /* ------------------------------------------------------------------ */
 /* 2- & 3-byte UTF8 untested, except as used in RxStreamer            */
 /*                                                                    */
@@ -80,6 +81,13 @@ class RxClassImage binary-
 
  properties private constant
   ACC_SUPER =32                    -- (not in RuntimeConstants)
+
+  -- copy here from sun.tools.RuntimeConstants to insure compiling on Java 6 is possible
+  CONSTANT_INVOKEDYNAMIC = int 18
+  CONSTANT_METHODTYPE	 = int 16
+  CONSTANT_METHODHANDLE	 = int 15
+
+  
 
  /** Construct a ClassImage
     Arg1 is the translator root
@@ -157,11 +165,14 @@ class RxClassImage binary-
       when CONSTANT_DOUBLE          then do; len=9; index=index+1; end
       when CONSTANT_INTERFACEMETHOD then len=5
       when CONSTANT_NAMEANDTYPE     then len=5
+      when CONSTANT_INVOKEDYNAMIC   then len=5 -- jvm 7
+      when CONSTANT_METHODTYPE      then len=3 -- jvm 7
+      when CONSTANT_METHODHANDLE    then len=4 -- jvm 7
       when CONSTANT_UNICODE         then len=u2(start+1)*2+3 -- unused
       otherwise                              -- bad (unknown) tag
         len=1                                -- for javac
         signal RxQuit(rxt, tok, 'cannot.parse.class', classname, 'bad tag')
-      end
+    end -- select
     -- say '# constant' index 'tag' tag 'len' len
     start=start+len
     end index
