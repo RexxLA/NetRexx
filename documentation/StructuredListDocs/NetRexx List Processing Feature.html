@@ -1,0 +1,201 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html><head>
+
+
+
+
+
+<meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>NetRexx List Processing Feature</title></head><body>
+<h2 style="text-align: center;">NetRexx List Processing</h2>
+<h3>NetRexx can support list processing by use of the structured list
+format. The structured list object uses the native NetRexx data
+type to store lists as ordered sequences of elements and also as
+associative maps of attribute elements (name value pairs) when names
+are provided as they are in many list formats. A structured list
+also stores lists in the serialized (string encoded) format
+and has functions to convert between the string encoded format and the
+structured list format as well as to extract list elements or to
+merge lists. This document will show samples of some of the features
+provided by this utility format.<br>
+</h3>
+<h4>Examples of Lists (encoded in various string formats as noted):</h4>
+DSV<br>
+<br>
+data1,this item contains \, a comma, data2<br>
+<br>
+CSV<br>
+<br>
+data1,"this item contains a , comma and a "" double quote", data2<br>
+<br>
+XML<br>
+<br>
+&lt;taskdef name="nrc"
+classname="org.apache.tools.ant.taskdefs.optional.NetRexx"
+classpath="${build.classpath}"&gt;&nbsp; do something here
+&lt;/taskdef&gt;<br>
+<br>
+WORDLIST<br>
+<br>
+a list of words separated by blanks where "a quoted string is a phrase treated as a single word"<br>
+<br>
+JSON<br>
+<br>
+{"firstName": "John", "lastName": "Smith", "age": 25, "address":
+{"streetAddress": "21 2nd Street", "city": "New York", "state": "NY",
+"postalCode": 10021}, "phoneNumber": [{"type": "home", "number": "212
+555-1234"}, {"type": "fax", "number": "646 555-4567"}]}<br>
+<br>
+The last example above shows a list containing
+attribute strings which are name value pairings where the value is a
+string which may also contain an encoded list of elements which are
+strings or attributes or sublists. <br>
+<br>
+A structured list object understands these types of lists and
+provides easy access to the elements sequentially, or even by name
+where name value pairs are provided. <br>
+<br>
+<h3>An example of how to use a structured list object:</h3>
+------------------------------------------------------------------------------------------------------------<br>
+-- Given a list of named data items in a string format:<br>
+<br>If "input" is a structured list object which has been initialized with the following list encoded as a string:<br>
+<br>
+'President(name(last(Johnson) first(Roger)) address("123 NetRexx
+Street, somecity, someplace")) Vice-President(name(first(George)
+last(Banks))) Treasurer(name(last(Kunkel) first(Leo)) address("321 Rexx
+Ave, somecity, someplace"))'<br>
+<br>
+-- Convert the list string into a structured list object:<br>
+<br>
+inlist=input.buildlist<br>
+<br>
+-- Display the list as an encoded string:<br>
+<br>
+say inlist&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;  --&nbsp;&nbsp; gives this output:<br>
+<br>
+President(name(last(Johnson) first(Roger)) address("123 NetRexx Street,
+somecity, someplace")) Vice-President(name(first(George) last(Banks)))
+Treasurer(name(last(Kunkel) first(Leo)) address("321 Rexx Ave,
+somecity, someplace")) <br>
+<br>
+-- Display the first item in the list:<br>
+<br>
+say inlist.first&nbsp;&nbsp;&nbsp; --&nbsp;&nbsp;  produces this output:<br>
+<br>
+President(name(last(Johnson) first(Roger)) address("123 NetRexx Street, somecity, someplace")) <br>
+<br>
+-- Display the remaining items in the list:<br>
+<br>
+say inlist.rest&nbsp;&nbsp;&nbsp; --&nbsp;&nbsp;  produces this output:<br>
+<br>
+(Vice-President(name(first(George) last(Banks)))
+Treasurer(name(last(Kunkel) first(Leo)) address("321 Rexx Ave,
+somecity, someplace"))) <br>
+<br>
+-- Display the first of the remaining items:<br>
+<br>
+say inlist.rest.first&nbsp;&nbsp;&nbsp; --&nbsp;&nbsp;  produces this output:<br>
+<br>
+Vice-President(name(first(George) last(Banks))) <br>
+<br>
+-- But random access to the elements is also a good idea - display the third item in the list:<br>
+<br>
+say inlist[3]&nbsp;&nbsp;&nbsp; --&nbsp;&nbsp;  produces this output:<br>
+<br>
+Treasurer(name(last(Kunkel) first(Leo)) address("321 Rexx Ave, somecity, someplace")) <br>
+<br>
+-- Or display only the second part of the third element:<br>
+<br>
+say inlist[3,2]&nbsp;&nbsp;&nbsp; --&nbsp;&nbsp;  produces this output:<br>
+<br>address("321 Rexx Ave, somecity, someplace")<br>
+<br>
+-- Show the name (title) associated with the third member in the list:<br>
+<br>
+say inlist[3,"elementname"]&nbsp;&nbsp; --&nbsp; (note that element
+numbers and names can be mixed as indexes) -- produces this output:<br>
+<br>
+Treasurer<br>
+<br>
+-- Since this list format uses a paired name value structure, we can access the elements by name also:<br>
+<br>
+say inlist["President","name","last",1] -- this will display the last name element for the "President" entry:<br>
+<br>
+Johnson <br>
+<br>
+-- What if I want to know which entry was for the Vice-President?<br>
+<br>
+say inlist[inlist["Vice-President"]]&nbsp;&nbsp; --&nbsp;&nbsp;
+displays the sequence number of the Vice-President entry using a
+reverse list mapping:<br>
+<br>
+2<br>
+<br>
+-----------------------------------------------------------------------------------------------------------------<br>
+<br>Note that the preceeding example may falsely give the impression
+that the structured list object automatically figures out the format of
+lists.
+Actually, the data from the last example was in the default "bootstrap"
+format which is built into the object to enable it to understand other
+list formats. Some well known list formats are already stored
+internally by the class.
+Here is an example of how to use the class to process data in the CSV
+format:<br>
+<h3>An example using a known list format:<br>
+</h3>If csvin is a structured list object initialized with the string:<br>
+<br>
+'alpha,beta,"ga,m""ma"'<br>
+<br>
+csvlist=csvin.buildlist("CSV")&nbsp; -- convert the string to a structured list using the built-in CSV ruleset<br>
+<br>
+say "element 3 =" csvlist[3]&nbsp; -- display the third element in the list like this:<br>
+<br>
+element 3 = ga,m"ma<br>
+<br>
+-------------------------------------------------------------------------------------------------------------------<br>
+<br>However the structured list object is not limited to it's
+internally known formats. The following example shows how to create a
+new
+list format and access a list which uses that structure:<br>
+<br>
+-- A structured list object named "in" has been initialized with a list in a string format not known to the class:<br>
+<br>
+" { 1 , 2 3 , { 9 8 , { 7 , 6 } } , , 4 5&nbsp; }"<br>
+<br>
+-- A description of the format of the list:<br>
+<br>
+ruleset='delimiters(start("{") end("}") separator(","))
+options("separators follow sublists" "adjacent separators produce empty
+elements")'<br>
+<br>
+-- Now analyze the list according to the special format:<br>
+<br>
+listout=in.buildlist(ruleset)<br>
+<br>
+-- now display the second element in this list (note that the entire
+list was provided as a sublist so we need to go down an extra list
+level to find it):<br>
+<br>
+say listout.first.rest.first&nbsp; -- will show the following output:<br>
+<br>
+&nbsp;2 3 <br>
+<br>
+-- now display the third element in this list (again with the extra list level):<br>
+
+<br>
+
+say listout[1,3]&nbsp; -- shows the following output:<br>
+
+<br>
+{ 9 8 , { 7 , 6 } }<br>
+<br>
+-------------------------------------------------------------------------------------------------------------------<br>
+<br>
+<a href="Documentation%20for%20a%20NetRexx%20Structured%20List%20Class.html">Click here to see </a><a href="Documentation%20for%20a%20NetRexx%20Structured%20List%20Class.html"> documentation defining</a><a href="Documentation%20for%20a%20NetRexx%20Structured%20List%20Class.html"> a structured list class.</a><br>
+<br>
+<a href="NetRexx%20Structured%20List%20Format.html">The NetRexx structured list definition is here.</a><br>
+<br>
+<a href="NetRexx%20Structured%20List%20Ruleset%20Description.html">The description of NetRexx structured list rulesets is here.</a><br>
+<br>
+
+  
+
+</body></html>
