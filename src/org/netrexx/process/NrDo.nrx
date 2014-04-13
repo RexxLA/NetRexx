@@ -16,6 +16,7 @@
 /* 1997.07.17 Add endmain code generation                             */
 /* 1997.11.06 Omit javalabel block if no block label                  */
 /* 2000.02.24 Add interpretation                                      */
+/* 2014.04.12 Add do binary   - KK                              */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -29,6 +30,7 @@ class NrDo extends NrBlock implements RxClauseParser uses RxCode
   tokens    =RxToken[]             -- local reference
   labelchunk=int                   -- insert point for label code
   loopitem  =NrLoop                -- divert us to LOOP [kindness]
+  dobinary = boolean
 
  /** Construct an object from the current clause */
  method NrDo(newrxt=RxTranslator)
@@ -36,11 +38,13 @@ class NrDo extends NrBlock implements RxClauseParser uses RxCode
   rxt      =newrxt                           -- the boss
   parser   =rxt.program.parser               -- our parser
   tokens   =parser.cursor.curclause.tokens   -- local reference
+  dobinary=parser.cursor.curbinary  -- inherited binary setting
 
  /** Pass processing */
  method scan(pass=int)
   if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrDo', pass)
   parser.pushlevel('DO')                -- new level
+  parser.thislevel.dobinarysave=dobinary		--	save binary setting since do blocks can change it -- kk 2014-04-12
 
  /* Apart from initialization, /*select*/ and error messages, this
     is identical to NrSelect.nrx -- could share code */
@@ -90,6 +94,10 @@ class NrDo extends NrBlock implements RxClauseParser uses RxCode
         parser.cursor.curclause.startprot=1  -- and add alert
         n=next-1 /* will bump */
         end
+      when parser.iskey(tok.value, 'BINARY') then do
+        dobinary = 1	--	set binary do block flag
+        parser.cursor.curbinary = 1	--	set current binary mode -- end will revert it
+        end
       otherwise
         -- signal RxError(rxt, tok, 'do.keyword.expected')
         RxWarn(rxt, tok, 'wrong.do.syntax.retry')
@@ -101,6 +109,13 @@ class NrDo extends NrBlock implements RxClauseParser uses RxCode
       end
     end /* keywords loop */
 
+ /** set or get binary mode flag  */
+ method setBinary(bf=boolean)
+ 	 dobinary = bf
+ 	 
+ method getBinary returns boolean
+ 	 return dobinary
+    
  /** Trace names list */
  method getAssigns returns String[]
   return null
@@ -135,6 +150,8 @@ class NrDo extends NrBlock implements RxClauseParser uses RxCode
     rxt.program.streamer.outpart('}while(false);', 1)
     parser.indention=parser.indention+1
     end
+    
+  parser.cursor.curbinary = parser.thislevel.dobinarysave		--		restore last binary mode
   return
 
  /** Interpretation */
