@@ -31,7 +31,7 @@ documents:
 package:
 	java -jar ant/ant-launcher.jar package
 	mkdir -p scratch/META-INF
-	cd scratch;unzip -o ../lib/ecj-4.2.jar
+	cd scratch;unzip -o ../lib/ecj-I20140402-0100.jar
 	cd scratch;unzip -o ../build/lib/NetRexxC.jar
 	cp minimalmanifest scratch/
 	cd scratch;jar cmf minimalmanifest NetRexxF.jar *
