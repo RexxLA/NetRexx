@@ -1,4 +1,4 @@
-CLASSPATH = -cp .:../build/lib/NetRexxC.jar:../lib/junit-4.8.2.jar:../lib/ecj-4.2.jar
+CLASSPATH = -cp .:../build/lib/NetRexxF.jar:../lib/junit-4.8.2.jar
 NRX_COMPILE_COMMAND = java $(CLASSPATH) -Dnrx.compiler=ecj  org.netrexx.process.NetRexxC 
 NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -utf8 -format
 
