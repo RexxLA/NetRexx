@@ -20,7 +20,7 @@ all::	DiagInterface.class $(NRX_OBJS) $(JAVA_OBJS)
 	java -Dnrx.compiler=ecj $(CLASSPATH) zAllTests
 
 test::
-	java zAllTests
+	java $(CLASSPATH) zAllTests
 #
 # target clean removes compiled products
 #
