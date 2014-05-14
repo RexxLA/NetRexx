@@ -81,7 +81,8 @@
 /* 2012.11.24 Add buildMap bif as suggested by Bill Fenlason for collections support. (Kermit Kiser)      */
 /* 2012.12.21 Add copyindexed method name per issue NETREXX-94. Also isindexed method name for same reason. (Kermit Kiser)      */
 /* 2013.01.04 match b2d, d2b output to api doc in new 3.02 release notes. (Kermit Kiser)      */
-/* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */     
+/* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */
+/* 2014-05-14 Add dummy implementations of new signatures required for implemented Collection classes to enable separate compilation for Java 8 */
 /* ------------------------------------------------------------------ */
 package netrexx.lang
 options binary nodecimal strictargs strictcase   noformat
@@ -1052,6 +1053,7 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable
       -- when ochar='S' then ok=verify('\u20ac''$_'Lowers||Uppers||Digits09)==0 -
       --      & left(1).verify(Digits09)\==0
       -- rvj 20130718: make compliant with JVM standard for identifiers, and what RxClauser does
+      
       when ochar='S' then do
       	ok=0
       	if \Character.isJavaIdentifierStart(left(1)) then return 0
@@ -2438,8 +2440,14 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable
 		return Rexx.ValueCollection(this)
 		
 	method iterator() returns Iterator
-		return Rexx.BaseIterator(this)
-		
+	  return Rexx.BaseIterator(this)
+
+	  -- dummy implementations to satisfy the new requirements of the implemented interfaces
+
+  method forEach(c=Consumer)
+  method spliterator() returns Spliterator
+    return null
+    
 class Rexx.BaseIterator implements Iterator
 	
 	base=Rexx
@@ -2477,7 +2485,10 @@ class Rexx.BaseIterator implements Iterator
 		if last\=null then base.getnode(last).leaf=null
 			else signal IllegalStateException
 		last=null
-	
+
+		-- dummy methods
+  method forEachRemaining(c=Consumer)
+    
 class Rexx.KeySet implements Set
 	
 	base=Rexx
@@ -2568,7 +2579,20 @@ class Rexx.KeySet implements Set
 			ta[i]=it.next()
 			end
 		return ta				
-		
+
+
+		--dummy
+  method removeIf(p=Predicate) returns boolean
+    return boolean 0
+  method forEach(c=Consumer)
+  method spliterator() returns Spliterator
+    return null
+  method stream() returns Stream
+    return null
+  method parallelStream() returns Stream
+    return null
+    
+    
 class Rexx.EntrySet extends Rexx.KeySet
 	
 	base2=Rexx
@@ -2697,7 +2721,19 @@ class Rexx.ValueCollection extends AbstractCollection
 		return base.size()
 		
 	method iterator() returns Iterator
-		return Rexx.ValueIterator(base)
+	  return Rexx.ValueIterator(base)
+
+	  -- dummy
+  method removeIf(p=Predicate) returns boolean
+    return boolean 0
+    
+  method forEach(c=Consumer)
+  method spliterator() returns Spliterator
+    return null
+  method stream() returns Stream
+    return null
+  method parallelStream() returns Stream
+    return null
 		
 class Rexx.ValueIterator extends Rexx.BaseIterator
 	
@@ -2726,4 +2762,30 @@ class Rexx.RxMap extends Rexx implements java.util.Map
 
 	method RxMap(rx=Rexx)
 		super(rx)
-		this.coll=rx.coll			
+	  this.coll=rx.coll
+
+
+	  --dummy
+  method compute(o=Object, b=BiFunction) returns java.lang.Object
+    return null
+  method putIfAbsent(o=Object, oo=Object)  returns java.lang.Object
+    return null
+  method computeIfAbsent(o=Object, f=Function)  returns java.lang.Object
+    return null
+
+  method forEach(b=BiConsumer)
+  method replaceAll(b=BiFunction)
+  method merge(o=Object,oo=Object,b=BiFunction) returns java.lang.Object
+    return null
+  method remove(o=Object,oo=Object) returns boolean
+    return boolean 0
+  method replace(o=Object,oo=Object,ooo=Object)  returns boolean
+    return boolean 0
+  method replace(o=Object,oo=Object) returns  java.lang.Object
+    return null
+  method getOrDefault(o=Object,oo=Object,ooo=Object)
+  method getOrDefault(o=Object,oo=Object) returns java.lang.Object
+    return null
+  method computeIfPresent(o=Object,b=BiFunction) returns java.lang.Object
+    return null
+    

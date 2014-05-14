@@ -3,7 +3,7 @@
 
 all:
 	java -jar ant/ant-launcher.jar compile
-	java -jar ant/ant-launcher.jar jars
+	# java -jar ant/ant-launcher.jar jars
 
 .PHONY: jars
 jars:
@@ -29,6 +29,17 @@ documents:
 
 .PHONY: package
 package:
+	rm build/classes/COM/ibm/netrexx/process/*.class
+	rm build/classes/org/netrexx/process/*.class
+	rm build/classes/org/netrexx/jsr223/*.class
+	rm build/classes/org/apache/tools/ant/taskdefs/optional/*.class
+	rm build/classes/netrexx/lang/*.class
+	ecj -warn:none -source 1.5 -target 1.5 build/classes/COM/ibm/netrexx/process/*.java
+	ecj -warn:none -source 1.5 -target 1.5 build/classes/netrexx/lang/*.java
+	ecj -warn:none -source 1.5 -target 1.5 -cp ant/ant.jar:ant/ant-launcher.jar:lib/NetRexxC.jar build/classes/org/netrexx/jsr223/*.java
+	ecj -warn:none -source 1.5 -target 1.5 -cp ant/ant.jar:ant/ant-launcher.jar:lib/NetRexxC.jar build/classes/org/apache/tools/ant/taskdefs/optional/*.java
+	ecj -warn:none -source 1.5 -target 1.5 -cp $(CLASSPATH):lib/NetRexxC.jar build/classes/org/netrexx/process/*.java
+	java -jar ant/ant-launcher.jar jars
 	java -jar ant/ant-launcher.jar package
 	mkdir -p scratch/META-INF
 	cd scratch;unzip -o ../lib/ecj-I20140402-0100.jar
