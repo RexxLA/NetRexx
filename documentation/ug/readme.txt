@@ -1,20 +1,8 @@
-You are looking at the readme for the NetRexx 3.02 package - NetRexx-3.02GA.zip
+You are looking at the readme for the NetRexx 3.03RC1 package - NetRexx-3.03RC1.zip
 
+If you are new to NetRexx, please read the contents of the file
+read.me.first, and the NetRexx Quick Start Guide (in a pdf in this package).
 
-Changes since 3.02 RC1 include:
-
-- documentation fixes for the comment formatter and elimination of
-  extra spaces in program sources
-
-- a fix for a problem with the Map support, in which a Map as
-  constructor argument was chosen in preference to type Rexx; this has
-  been corrected
-
-- a fix for the running of the NetRexxF.jar file on some JVM 1.5
-  releases. This is now supported again.
-
-- ongoing documentation work, e.g. for the options
-
-- a fix for silently ignored incorrect program options. For these, a
-  warning is issued now.
+This is release candidate 1 for 3.03 and not the GA package.
+There have been no changes compared to releasenotes.txt in this directory.
 

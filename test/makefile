@@ -30,5 +30,6 @@ clean:
 	rm -f *.crossref
 	rm -f *.bak
 	rm -f *~
+	rm *.java
 	find . -name "*.nrx" | awk '{$$2 = $$1 ; sub ( /\.nrx/,".java",$$1 ) ; print $$1 }' | xargs rm -f
 
