@@ -111,6 +111,9 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable
     MinArg  = -999999999         -- minimum argument integer
     MaxArg  = 999999999          -- maximum argument integer
 
+  properties private constant unused
+  serialVersionUID=long 5056979525654423820
+  
   /* ----- Properties ----- */
   properties shared
     /** The immutable character value of the object.
@@ -1046,13 +1049,23 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable
       when ochar='L' then ok=verify(Lowers)==0
       when ochar='M' then ok=verify(Lowers||Uppers)==0
       when ochar='N' then ok=\(ind=NotaNum)
-      when ochar='S' then ok=verify('_'Lowers||Uppers||Digits09)==0 -
-                             & left(1).verify(Digits09)\==0
+      -- when ochar='S' then ok=verify('\u20ac''$_'Lowers||Uppers||Digits09)==0 -
+      --      & left(1).verify(Digits09)\==0
+      -- rvj 20130718: make compliant with JVM standard for identifiers, and what RxClauser does
+      when ochar='S' then do
+      	ok=0
+      	if \Character.isJavaIdentifierStart(left(1)) then return 0
+      	last=chars.length
+      	loop i=2 to last
+      	  if \Character.isJavaIdentifierPart(substr(i,1)) then return 0
+      	end
+	ok=1
+      end
       when ochar='U' then ok=verify(Uppers)==0
       when ochar='W' then do
         /* If a number, make canonical and divide by 1, then just look for '.' */
         if ind=NotaNum then ok=0
-         else do
+        else do
           if mant.length>DefaultDigits then set=RexxSet(mant.length)
                                        else set=null
           ok=this.OpDiv(set, '1').pos('.')==0
