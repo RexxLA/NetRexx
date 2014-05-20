@@ -33,6 +33,8 @@
   <property name="ant.netrexxc.console"                        value="false"/>
   <property name="ant.netrexxc.java"                        value="true"/>
   <property name="ant.netrexxc.time"                        value="true"/>
+  <property name="ant.netrexxc.source"                        value="1.5"/>
+  <property name="ant.netrexxc.target"                        value="1.5"/>
   <!-- <property name="ant.netrexxc.javacompiler"           value="ecj"/> -->
   <!-- <property name="nrx.compiler"                        value="ecj"/> -->
 
@@ -52,6 +54,7 @@
 
   <property name="runtimeDir"    value="netrexx/lang"/>
   <property name="compilerDir"   value="org/netrexx/process"/>
+  <property name="eclipseDir"   value="org/eclipse"/>
   <property name="jsr223Dir"     value="org/netrexx/jsr223"/>
   <property name="antsrcDir"     value="tools/ant-task"/>
   <property name="anttaskDir"    value="org/apache/tools/ant/taskdefs/optional"/>
@@ -127,6 +130,7 @@
     <!-- two netrexx compilers, one for building, later the built one for testing -->
     <taskdef name="buildnrc" classname="org.apache.tools.ant.taskdefs.optional.NetRexx" classpath="${build.classpath}"/>
     
+    
   </target>
   
   <target name="post.jar.prepare" depends="prepare" description="post jar build - define new NetRexx compiler">  
@@ -147,7 +151,13 @@
     <echo message="|   |"/>
     
     <buildnrc srcDir="${sources}/${runtimeDir}" destDir="${build.classes}/${runtimeDir}" classpath="${build.classpath}"
-      includes="*.nrx" excludes="RexxDictionary.nrx"    />
+      includes="*.nrx" excludes="RexxDictionary.nrx"  java="yes" compile="no"  />
+      
+    <javac srcdir="${build.classes}/${runtimeDir}" destdir="${build.classes}"  listfiles="yes"
+    	classpath="${build.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter"  line="-nowarn" />
+    	</javac>
+      
   </target>
   
   <target name="clean.runtime"  description="delete built runtime files">
@@ -162,15 +172,47 @@
     -->
     <buildnrc srcDir="${sources}/${compilerDir}" destDir="${build.classes}/${compilerDir}" classpath="${build.classpath}"
 	      includes="NrVersion.nrx RxChunk.nrx RxConvert.nrx RxFixup.nrx RxProcessor.nrx RxSource.nrx RxToken.nrx
-			RxSignalPend.nrx RxType.nrx RxMessageOutput.nrx RxMessage.nrx"/>
+			RxSignalPend.nrx RxType.nrx RxMessageOutput.nrx RxMessage.nrx"  java="yes" compile="no"  />
+      
+    <javac srcdir="${build.classes}/${compilerDir}" destdir="${build.classes}"  listfiles="yes"
+    	classpath="${build.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter"  line="-nowarn" />
+    	</javac>    	
+    	
     <buildnrc srcDir="${sources}/${compilerDir}" destDir="${build.classes}/${compilerDir}" classpath="${build.classpath}"
-	      includes="*.nrx" excludes="NetRexxS.nrx,NetRexxInterpreter.nrx,Nrx.nrx"/>
+	      includes="*.nrx" excludes="NetRexxS.nrx,NetRexxInterpreter.nrx,Nrx.nrx"  java="yes" compile="no"  />
+      
+    <javac srcdir="${build.classes}/${compilerDir}" destdir="${build.classes}"  listfiles="yes"
+    	classpath="${build.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter" line="-nowarn" />
+    	</javac>    	
+	      
     <buildnrc srcDir="${sources}/${jsr223Dir}" destDir="${build.classes}/${jsr223Dir}" classpath="${build.classpath}"
-	      includes="*.nrx"/>
+	      includes="*.nrx"  java="yes" compile="no"  />
+      
+    <javac srcdir="${build.classes}/${jsr223Dir}" destdir="${build.classes}"  listfiles="yes"
+    	classpath="${build.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter"  line="-nowarn" />
+    	</javac>    	
+	      
     <buildnrc srcDir="${sources}/${oldAPI}" destDir="${build.classes}/${oldAPI}" classpath="${build.classpath}"
-	      includes="*.nrx" />      
-    <buildnrc srcDir="${antsrcDir}" destDir="${build.classes}/${anttaskDir}" classpath="${build.classpath}" includes="*.nrx" excludes="Nrxc.nrx" />      
+	      includes="*.nrx"   java="yes" compile="no"  />   
+      
+    <javac srcdir="${build.classes}/${oldAPI}" destdir="${build.classes}"  listfiles="yes"
+    	classpath="${build.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter"  line="-nowarn" />
+    	</javac>    	
+	      
+    <buildnrc srcDir="${antsrcDir}" destDir="${build.classes}/${anttaskDir}" classpath="${build.classpath}"
+    	      includes="*.nrx" excludes="Nrxc.nrx"   java="yes" compile="no"  />   
+      
+    <javac srcdir="${build.classes}/${anttaskDir}" destdir="${build.classes}"  listfiles="yes"
+    	classpath="${build.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter" line="-nowarn" />
+    	</javac>    	
+    	      
     <copy file="${sources}/${compilerDir}/NetRexxC.properties" todir="${build.classes}/${compilerDir}"/>
+    
   </target>
   
   <target name="clean.process"  description="delete built translator files">
@@ -195,13 +237,41 @@
     <echo message="|   |"/>
     
     <testnrc srcDir="${sources}/${testsDir}" destDir="${build.classes}/${testsDir}" classpath="${test.classpath}" strictcase="no" strictargs="no" strictsignal="no"
-	     includes="DiagX.nrx"/>
+	     includes="DiagX.nrx"  java="yes" compile="no" />
+      
+    <javac srcdir="${build.classes}/${testsDir}" destdir="${build.classes}"  listfiles="yes"
+    	 includes="DiagX.java"
+    	classpath="${test.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter" line="-nowarn" />
+    	</javac>    
+    	
     <testnrc srcDir="${sources}/${testsDir}" destDir="${build.classes}/${testsDir}" classpath="${test.classpath}" strictcase="no" strictargs="no" strictsignal="no"
-	     includes="*.nrx" excludes="DiagUTF8.nrx DiagAll.nrx"/>
+	     includes="*.nrx" excludes="DiagUTF8.nrx DiagAll.nrx"  java="yes" compile="no" />
+      
+    <javac srcdir="${build.classes}/${testsDir}" destdir="${build.classes}"  listfiles="yes"
+    	includes="*.java" excludes="DiagUTF8.java DiagAll.java" 
+    	classpath="${test.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter" line="-nowarn" />
+    	</javac>    
+	     
     <testnrc srcDir="${sources}/${testsDir}" destDir="${build.classes}/${testsDir}" classpath="${test.classpath}" strictcase="no" strictargs="no" strictsignal="no" utf8="true"
-	     includes="DiagUTF8.nrx"/>
+	     includes="DiagUTF8.nrx"  java="yes" compile="no" />
+      
+    <javac srcdir="${build.classes}/${testsDir}" destdir="${build.classes}"  listfiles="yes"
+    	includes="DiagUTF8.java"
+    	classpath="${test.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter" line="-nowarn" />
+    	</javac>    
+	     
     <testnrc srcDir="${sources}/${testsDir}" destDir="${build.classes}/${testsDir}" classpath="${test.classpath}" strictcase="no" strictargs="no" strictsignal="no"
-	     includes="DiagAll.nrx"/>
+	     includes="DiagAll.nrx"  java="yes" compile="no" />
+	           
+    <javac srcdir="${build.classes}/${testsDir}" destdir="${build.classes}"  listfiles="yes"
+     	includes="DiagAll.java"
+    	classpath="${test.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
+    	<compilerarg compiler="org.eclipse.jdt.core.JDTCompilerAdapter" line="-nowarn" />
+    	</javac>    
+
   </target>
   
   <target name="-checkRunTestsRequired" depends="compile.tests">
@@ -223,8 +293,8 @@
   
   <target name="tests" depends="run.tests" description="compile and run tests"/>
   
-  
   <target name="jars" depends="init,compile" description="create jars">
+  
     <jar jarfile="${build.lib}/NetRexxR.jar" compress="yes" filesonly="true">
       <fileset dir="${build.classes}">
         <include name="${runtimeDir}/*.class"/>
@@ -239,6 +309,7 @@
 	<attribute name="Implementation-Build" value="${build.id.string}"/>
       </manifest>
     </jar>
+    
     <jar jarfile="${build.lib}/NetRexxC.jar" compress="yes" filesonly="true" manifest="${sources}/manifest">
       <fileset dir="${build.classes}">
         <include name="${runtimeDir}/*.class"/>
@@ -256,12 +327,13 @@
       
       <manifest>
 	<attribute name="Implementation-Vendor" value="Rexx Language Association"/>
-	<attribute name="Implementation-Title" value="NetRexx"/>
+	<attribute name="Implementation-Title" value="NetRexx Translator"/>
 	<attribute name="Implementation-Version" value="${ant.project.name} ${version}, ${build.id.string}"/>
 	<attribute name="Implementation-Build" value="${build.id.string}"/>
 	<attribute name="Main-Class" value="org.netrexx.process.NetRexxC"/>
       </manifest>
     </jar>
+    
     <jar jarfile="${build.lib}/ant-netrexx.jar" compress="yes" filesonly="true">
       <fileset dir="${build.classes}">
         <include name="${anttaskDir}/*.class"/>
@@ -276,6 +348,41 @@
 	<attribute name="Implementation-Build" value="${build.id.string}"/>
       </manifest>
     </jar>    
+    
+	<unzip dest="${build.classes}">
+		 <fileset dir="ant">
+			<include name="ecj*.jar"/>
+		</fileset>
+	</unzip>    
+ 
+    <jar jarfile="${build.lib}/NetRexxF.jar" compress="yes" filesonly="true" manifest="${sources}/manifest">
+      <fileset dir="${build.classes}">
+        <include name="${runtimeDir}/*.class"/>
+        <include name="${compilerDir}/*.class"/>
+        <include name="${jsr223Dir}/*.class"/>
+        <include name="${oldAPI}/*.class"/>
+        <include name="${compilerDir}/*.properties"/>
+        <include name="${eclipseDir}/"/>
+         <include name="META-INF/"/>
+         <include name="about.html"/>
+      </fileset>
+      <fileset dir="${root}">
+        <include name="LICENSE"/>
+        <include name="minimalmanifest"/>
+      </fileset>
+      <fileset dir="${root}">
+        <include name="META-INF/"/>
+      </fileset>
+      
+      <manifest>
+	<attribute name="Implementation-Vendor" value="Rexx Language Association"/>
+	<attribute name="Implementation-Title" value="NetRexx with Eclipse compiler"/>
+	<attribute name="Implementation-Version" value="${ant.project.name} ${version}, ${build.id.string}"/>
+	<attribute name="Implementation-Build" value="${build.id.string}"/>
+	<attribute name="Main-Class" value="org.netrexx.process.NetRexxC"/>
+      </manifest>
+    </jar>
+    
   </target>
   
   <target name="clean.jar" description="delete built jars">
@@ -299,6 +406,7 @@
 
   <target name="setecj"  description="set compiler to ecj">
   	<property name="ant.netrexxc.javacompiler" value="ecj"/>
+  	<property name="build.compiler" value="org.eclipse.jdt.core.JDTCompilerAdapter"/>
   </target>  
 
   <target name="setjavac"  description="set compiler to javac">
@@ -322,15 +430,15 @@
 	<mkdir  dir="${package}/examples"/>
 	<mkdir  dir="${package}/documents"/>
 	<copy file="build/lib/NetRexxC.jar" todir="${package}/lib"/>
+	<copy file="build/lib/NetRexxF.jar" todir="${package}/lib"/>
 	<copy file="build/lib/NetRexxR.jar" todir="${package}/runlib"/>
-	<!-- <copy file="lib/ecj-I20140402-0100.jar" todir="${package}/lib"/> -->
 	<copy todir="${package}/lib">
-		<fileset dir="lib" includes="ecj*.jar"/>
+		<fileset dir="ant" includes="ecj*.jar"/>
 	  </copy>
-	<copy todir="${package}/documents">
-		<fileset dir="documentation/ug" includes="*.pdf"/>
+	<copy todir="${package}/documents">
+		<fileset dir="documentation/ug" includes="*.pdf"/>
 		<fileset dir="documentation/pg" includes="*.pdf"/>
-		<fileset dir="documentation/nrl" includes="*.pdf"/>
+		<fileset dir="documentation/nrl" includes="*.pdf" excludes="nrl3.02.pdf" />
 	 </copy>
 	<copy file="documentation/ug/releasenotes.txt" todir="${package}"/>
 	<copy file="documentation/ug/readme.txt" todir="${package}"/>
@@ -349,7 +457,8 @@
 			 <manifest>
 			  <attribute name="Implementation-Vendor" value="Rexx Language Association"/>
 			  <attribute name="Implementation-Title" value="NetRexx"/>
-			  <attribute name="Implementation-Version" value="${build.id.string}"/>
+			  <attribute name="Implementation-Version" value="${ant.project.name} ${version}, ${build.id.string}"/>
+			  <attribute name="Implementation-Build" value="${build.id.string}"/>
 			</manifest>
     </jar>	
   </target>
