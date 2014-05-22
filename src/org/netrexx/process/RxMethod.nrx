@@ -36,6 +36,7 @@
 /* 1999.10.19 Add method body clause list [used iff exec]             */
 /* 2000.02.28 Allow the construction of synthetic methods             */
 /* 2013.01.14 Allow Java 5+ covariant return types	--	2013-01-14 -- KK -- issue 95  */
+/* 2014.04.13 Allow Java 8+ default and static methods in interfaces	--	KK -- issue 108  */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -60,6 +61,7 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   methodstatic       =boolean 0    -- method is static
   methodsynthetic    =boolean 0    -- method is synthetic
   methoddefault      =boolean 0    -- method is implied (default method)
+  methodtypeisdefault  =boolean 0    -- method is Java 8 default method in interface (Java 8 also allows static in interfaces) -- kk 20140413
   methodclauses      =RxClause     -- -> first clause in method (used iff exec)
   methodprotopool    =Hashtable    -- prototype local variables pool
   methodargvars      =RxVariable[] -- variables corresponding to arguments
@@ -196,6 +198,7 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   native     =boolean 0            -- method is native
   protect    =boolean 0            -- method is synchronized
   static     =boolean 0            -- method is static
+  default    =boolean 0            -- method is default (allowed in Java 8 interfaces, same for static)
   binary     =boolean 0            -- method is explicitly binary
   rettype    =RxType null          -- RETURNS determined type
   visib      =int VIS_UNKNOWN      -- visibility
@@ -319,6 +322,16 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
           signal RxQuit(rxt, tok, 'not.allowed.in.interface')
         final=1
         end
+      when parser.iskey(tok.value, 'DEFAULT') then do		--	Java 8 allows default type methods in interfaces  -- kk -- 20140413
+        if modifier\=='' then do
+        	signal RxQuit(rxt, tok, 'duplicate.modifier', modifier)
+          end
+         else modifier='default'
+         if methodconstructor then
+          signal RxQuit(rxt, tok, 'not.allowed.for.constructor')
+        describe='function'
+        default=1
+        end        
       when parser.iskey(tok.value, 'STATIC') then do
         if modifier\=='' then do
           if final then do
@@ -328,8 +341,8 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
            else signal RxQuit(rxt, tok, 'duplicate.modifier', modifier)
           end
          else modifier='static'
-        if classinfo.isinterface then
-          signal RxQuit(rxt, tok, 'not.allowed.in.interface')
+/*        if classinfo.isinterface then
+          signal RxQuit(rxt, tok, 'not.allowed.in.interface')	*/  --  Java 8 allows static methods in interfaces -- kk -- 20140413
         if methodconstructor then
           signal RxQuit(rxt, tok, 'not.allowed.for.constructor')
         describe='function'
@@ -373,6 +386,7 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   methodvisib=visib                     -- save for pass2/endmethod
 
   if pcursor.curclass.classinfo.isinterface then do
+  	if \default & \static then -			--	java 8 allows static and default methods in interfaces  -- kk -- 20140413
     abstract=1                          -- forced abstract
     protect=0                           -- PROTECT is a nop
     end
@@ -385,6 +399,7 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   if abstract then methodabstract=1     -- ..
   if protect  then methodprotected=1    -- ..
   if deprecated then methoddeprecated=1 -- ..
+  if default then methodtypeisdefault=1 -- ..
 
   if static then do
     if abstract then
@@ -527,6 +542,7 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   if abstract   then methodatts=methodatts | ATT_ABSTRACT
   if protect    then methodatts=methodatts | ATT_PROTECT
   if deprecated then methodatts=methodatts | ATT_DEPRECATED
+  if default then methodatts=methodatts | ATT_DEFAULT
 
   /* Now register the method(s): optional first */
   args=methodargvars.length                  -- number of arguments
