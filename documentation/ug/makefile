@@ -3,6 +3,8 @@ PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
 LATEX_EXE	:= xelatex -shell-esc
 RAIL_EXE	:= rail
+RELEASE		:= `java org.netrexx.process.NrVersion`
+DOCNAME         := "NetRexx $(RELEASE) QuickStart Guide.pdf"
 
 .SUFFIXES: .nrx .nry .njp .class .skel .xsl .java .pdf
 
@@ -17,7 +19,7 @@ $(TARGET).pdf: $(TEX_SRC)
 		$(LATEX_EXE) $(TARGET).tex; \
 		makeindex $(TARGET); \
 	done
-	mv quickstart.pdf "NetRexx 3.03RC1 Quickstart Guide.pdf"
+	mv quickstart.pdf $(DOCNAME)
 
 $(TARGET).bbl: $(TEXSRC) $(BIBSRC)
 	$(LATEX_EXE) $(TARGET).tex
