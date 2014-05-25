@@ -1119,7 +1119,178 @@ much more natural, while an iterative algorithm seems complicated or forced.
 \lstinputlisting[label=fibonacci,caption=Fibonacci]{../../../examples/rosettacode/RCFibonacciSeq.nrx}
 \chapter{Using Parse}
 The \texttt{Parse} statement is one of the stalwarts of the Rexx
-family of languages. 
+family of languages, and allows one to easily split a string into parts without needing to resort to more traditional techniques of string processing.
+
+The syntax of a parse statement is 
+
+\begin{verbatim}
+parse term template 
+\end{verbatim}
+where \texttt{term} is a string or a previously initialised variable. The template is a list of instructions describing how to split the string.
+
+\section{Literal Parsing}
+The most common use of \texttt{parse} is to split a string up into parts separated with a delimiter - whilst the most common delimiter is a simple space any string may be used:-
+
+\begin{lstlisting}[label=SimpleParseExample, caption=Simple Parse Example]
+log = "2014/05/15 21:35:47.012 - error in {{[findit]}}"
+parse log year "/" month "/" day hour ":" minute ":" second "." msecond "-" text
+say "On day" day "of month" month "at about" hour":"minute "we got" text
+parse text "{{[" name "]}}"
+say name
+\end{lstlisting}
+
+Here \texttt{log}  is composed of a datestamp separated from a message by a hyphen. The datestamp is composed of a date separated from a time by a space - within the date the year month and day are delimited by a slash and within the date the hour, minute and second fields by a colon. The millisecond field is separated from the seconds by a decimal point.
+
+The first \texttt{parse} divides these using the relevant delimiter - where there is no delimiter then a space is used.
+
+The \texttt{term} is the variable \texttt{log} and the \texttt{template} is 
+\begin{verbatim}
+year "/" month "/" day hour ":" minute ":" second "." msecond "-" text
+\end{verbatim}
+
+This first template may be read as the following sequence of actions
+\begin{enumerate}
+\item Assign the contents of \texttt{log} to the variable \texttt{year} until a \texttt{/} is encountered (\texttt{2014})
+\item Following the \texttt{/} assign \texttt{month} with the sting found up until another \texttt{/} (\texttt{05})
+\item Place the contents following the \texttt{/} until a space into the variable \texttt{day} (\texttt{15})
+\item Following the space, assign the value found up until the \texttt{:} into the hour variable (\texttt{21})
+\item Repeat for the variable \texttt{minute} (\texttt{35})
+\item Assign the \texttt{second} value up until the \texttt{.}
+\item Take the value for \texttt{msecond} until a delimiter of \texttt{-} is seen
+\item Assign the remainder to variable \texttt{text}
+\end{enumerate}
+
+The second \texttt{parse} statement shows how the delimiters can be more complex - the \texttt{template} is 
+\begin{verbatim}
+"{{[" name "]}}"
+\end{verbatim}
+and extracts the value between \{\{[ and ]\}\} to the variable \texttt(name)
+
+Running the above example will produce the following output:-
+\begin{verbatim}
+At about 21:35 we got  error in {{[findit]}} 
+findit 
+\end{verbatim}
+
+As another example, consider
+\begin{lstlisting}[label=WordSplitExample, caption=Parse Word-Split Example]
+quote = "Now is the winter of our discontent"
+loop forever
+	parse quote word quote
+	say word
+	if quote = "" then leave
+end
+\end{lstlisting}
+This will take the first word from \texttt{quote}, and assign the remainder back into \texttt{quote}, print the word taken and repeat until the variable \texttt{quote} is the empty string. The output from this will be
+\begin{verbatim}
+Now 
+is 
+the 
+winter 
+of 
+our 
+discontent
+\end{verbatim}
+
+\subsection{The Placeholder (dummy) Variable}
+The first example assigns values to several variables that are not used - this is unnecessary and can be avoided by the use of a placeholder variable which is the \texttt{.} character.
+
+If this is done, the first parse statement becomes
+\begin{verbatim}
+parse log . "/" month "/" day hour ":" minute ":" . "." . "-" text
+\end{verbatim}
+The output will remain the same.
+
+\section{Positional Parsing}
+
+Whilst the majority of parsing can be done using a fixed literal delimiter, the \texttt{parse} instruction also allows parsing based on positional patterns. This is achieved with the use of numerical values in the template - the values may also take a prefix of \texttt{+}, \texttt{-} or \texttt{=}
+
+\begin{description}
+\item[\texttt{no prefix} or \texttt{=}] indicates that the number is an \textbf{absolute} column value in the string being parsed
+\item[\texttt{+}] indicates a \textbf{relative} position that starts from the specified position \textit{after} the position where the last match occurred
+\item[\texttt{-}] indicates a \textbf{relative} position that starts from the specified position \textit{before} the last match
+\end{description}
+
+These points are best illustrated by example
+\begin{lstlisting}[label=positionalParsing, caption=Positional Parsing]
+quote = "Now is the winter of our discontent"
+tens  = "         11111111112222222222333333"
+units = "12345678901234567890123456789012345"
+
+say quote
+say tens
+say units
+
+parse quote 10 str1 20 -8 str2 +6 str3
+-- str1 starts at column 10 and is 10 chars long
+say  str1 "("str1.length")"
+-- str2 steps back 8 chars and is 6 chars long
+say str2 "("str2.length")"
+-- str3 is the remainder of the string (as should be expected)
+say str3
+\end{lstlisting}
+Running this gives the following
+\begin{verbatim}
+Now is the winter of our discontent 
+         11111111112222222222333333 
+12345678901234567890123456789012345 
+e winter o (10) 
+winter (6) 
+ of our discontent 
+\end{verbatim}
+
+Both \texttt{literal} and \texttt{positional} parsing can be combined. Keen-eyed readers will have noted that the output from the first example contained an extra space before the word \texttt{error}
+\begin{verbatim}
+At about 21:35 we got  error in {{[findit]}} 
+Extra space here     ^^
+\end{verbatim}
+This is the result of assigning the \textit{remainder} of the string to the variable text - leading blanks are normally removed \textit{except} in this special case.
+
+One can use a positional pattern to eliminate this extra space:-
+\begin{lstlisting}[label=combinedParsing, caption=Combined Parsing]
+log = "2014/05/15 21:35:47.012 - error in {{[findit]}}"
+parse log . "/" month "/" day hour ":" minute ":" . "." . "-" +2 text
+say "On day" day "of month" month "at about" hour":"minute "we got" text
+parse text "{{[" name "]}}"
+say name
+\end{lstlisting}
+
+Note that the relative positional pattern used here is \texttt{+2} - \texttt{0} is the position of the last match which is the hyphen, \texttt{+1} is the position of the following space and thus \texttt{+2} is the start of the target string. 
+
+\section{Variable Templates}
+Variables may be used as the pattern in the \texttt{templates} in order to accommodate the occasions when the pattern may need to be specified at runtime. An illustration of this is the following evolution of the first example that will correctly parse dates specified in two distinct ways
+\begin{lstlisting}[label=variablePattern, caption=Variables in Patterns]
+log = ""
+log[1] = "2014/05/15 21:35:47.012 - error in {{[findit]}}"
+log[2] = "2014-05-15 21:35:47.012 - error in {{[findit]}}"
+
+loop i = 1 to 2
+	dtsep = log[i].substr(5,1)
+	parse log[i] . (dtsep) month (dtsep) day hour ":" minute ":" . "." . "-" +2 text
+	say "On day" day "of month" month "at about" hour":"minute "we got" text
+end
+\end{lstlisting}
+Note that he date separator \texttt{dtsep} is determined and then used in the parse pattern by enclosing it in parentheses, thus \texttt{(dtsep)}. The output of this program is
+\begin{verbatim}
+On day 15 of month 05 at about 21:35 we got error in {{[findit]}} 
+On day 15 of month 05 at about 21:35 we got error in {{[findit]}} 
+\end{verbatim}
+It can be seen that the date was successfully parsed in both cases.
+
+It is important to note that any pattern specified by a variable \textit{will be assumed to be literal unless it has a +, - or = prefix}. Should one wish to use positional patterns then the prefix \textbf{must} be used.
+\begin{lstlisting}[label=variablePosPattern, caption=Variables in Positional Patterns]
+message = "this is a message that contains the number 10- just there, see?"
+pat = "10"
+parse message part1 5 (pat) part2
+say "literal:" part1 part2
+parse message part1 5 =(pat) part2
+say "positional:" part1 part2
+\end{lstlisting}
+When run this illustrates the difference between the two parse statements
+\begin{verbatim}
+literal: this - just there, see? 
+positional: this  message that contains the number 10- just there, see?
+\end{verbatim}
 \chapter{Using Trace}
 
 \chapter{Concurrency}
