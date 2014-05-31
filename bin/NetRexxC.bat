@@ -30,16 +30,26 @@
 @REM : 2011.09.01 -- use org.netrexx.process               
 @REM : 2011.09.01 -- remove -xms4M
 @REM : 2011.09.29 -- add error msg for -run with x.nrx name format 
+@REM : 2014.05.30 -- default to ecj compiler and add NetRexxF.jar to classpath 
 
-@echo off
-set netrexxc.bat_run=no
-if not '%1'=='-run' goto compile
-  set netrexxc.bat_run=yes
-  shift
-:compile
-java %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
+@echo off
+set nrcpath=%CLASSPATH%;.
+if not "%nrcpath:NetRexxF.jar=%"=="%nrcpath%" goto setcomp
+set binpath=%~dp0
+set libpath=%binpath:\bin=\lib%NetRexxF.jar
+if exist %libpath% (set nrcpath="%CLASSPATH%;.;%libpath%") else (goto compset)
+:setcomp
+if not "%netrexx_java%"=="" goto compset
+  set netrexx_java=-Dnrx.compiler=ecj
+:compset
+set netrexxc.bat_run=no
+if not '%1'=='-run' goto compile
+  set netrexxc.bat_run=yes
+  shift
+:compile
+java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
 if errorlevel 2 goto quit
 if %netrexxc.bat_run%==no goto quit
 echo Running %1...
-IF EXIST %1.class (java %1) ELSE echo -run error: class file not found - do not add .nrx to name
-:quit:quit
+IF EXIST %1.class (java -cp %nrcpath% %1) ELSE echo -run error: class file not found - do not add .nrx to name
+:quit
