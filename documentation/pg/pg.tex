@@ -1292,6 +1292,231 @@ literal: this - just there, see?
 positional: this  message that contains the number 10- just there, see?
 \end{verbatim}
 \chapter{Using Trace}
+The \texttt{trace} command is the inbuilt debugging facility of the \Rexx{} family, and, as might be expected from its name, allows one to trace the execution of your program. It is possible to trace both program statements and the state of variables within your code.
+
+\texttt{(Trace)} is a compile-time option, and should be disabled once debugging as been completed.
+
+The syntax of the trace command is
+\begin{verbatim}
+trace traceitem 
+\end{verbatim}
+where \texttt{traceitem} defines the behaviour of the trace command. Only one \texttt{traceitem} may be given, and only one of the program statement tracing options will be in use at any time. 
+Variable tracing options, however, are \textit{additive} and such statements may appear multiple times.
+
+All \texttt{trace} output is headed by three hyphens followed by the source file name, as follows
+\begin{verbatim}
+--- TerribleExample.nrx
+\end{verbatim}
+
+\section{Tracing Program Statements}
+The \texttt{traceoptions} that affect the tracing of program statements are
+\begin{description}
+\item[\textbf{all}] will display all statements as they are executed. Each line in the trace output will be prefixed with \texttt{*=*} or a \texttt{*-*} should output span subsequent lines.
+
+The \texttt{trace all} statement can be placed anywhere in the program source. 
+
+\item[\textbf{methods}] will show the each method as it is invoked, along with any parameters to it. The trace output for method traces is prefixed by a \texttt{*=*} for the method call itself and a \texttt{>a>} indicating the assignment of a value to a method parameter. \textit{No other program statements will be traced.}
+
+The \texttt{trace methods} statement should be placed \textit{before} the first method is defined in a class.
+
+\item[\textbf{results}] acts as though the \texttt{trace all} statement had been given, and, if placed \textit{before} any method will also act as though \texttt{trace methods} was also specified.
+
+In addition to the \texttt{all} and \texttt{methods} tracing implied by \texttt{results} the following will also take place
+\begin{description}
+
+\item[Properties] will have their assignments shown. These will be identified by \texttt{>p>}
+
+\item[Local variables] will also be traced, with assignments identified by \texttt{>v>}
+
+\item[Expressions] will have their evaluations shown if not shown for as a part of \texttt{properties} or \texttt{local variable} trace output. Such evaluations are indicated by \texttt{>>>}
+\end{description}
+\item[\textbf{off}] \texttt{trace off} disables tracing. No further tracing output will take place.
+\end{description} 
+
+\section{Tracing Variables}
+The all-or-nothing tracing offered by, for instance \texttt{trace results} can lead to a deluge of trace information in many cases.
+
+In these instances one may more finely control which variables one wishes to monitor using the \texttt{trace var} statement.
+The syntax of the \texttt{trace var} statement is 
+\begin{verbatim}
+trace var var1 [var2...]
+\end{verbatim}
+or
+\begin{verbatim}
+trace var -var1 [-var2...]
+\end{verbatim}
+where the first form adds variables to the list that should be watched, and the second removes them. The forms may be mixed to add some variables and remove others simultaneously, as here:-
+\begin{verbatim}
+trace var var1 -var2 var3 -var4 -var5
+\end{verbatim}
+to  monitor \texttt{var1} and \texttt{var3} and remove \texttt{var2, var5} and \texttt{var5} from the list of watched variables. 
+
+Multiple \texttt{trace var} statements may be used, as mentioned above.
+
+It is not an error to specify a variable name that does not exist.
+
+Each variable can appear only \textit{once} in a \texttt{trace} statement.
+
+A variable name may that of any type - including arrays (without the \texttt{[]}).
+
+Program tracing options never alter the list of watched variables. If tracing has previously been turned off then variable tracing may be resumed simply with a \texttt{trace var} statement.
+
+\section{Examples}
+\subsection{Program Trace}
+\subsubsection{Trace All}
+Running the program below
+\begin{lstlisting}[label=Trace1, caption=Trace Example 1]
+trace all
+
+class traceExample   
+
+	properties
+		aIs
+		bIs
+	
+	method traceExample(a, b)
+		aIs = a
+		bIs = b
+		
+	method times
+		retturn aIs * bIs
+
+	method main($cmdin1=String[]) static
+		arg=Rexx($cmdin1)
+		te = traceExample(2, 3)
+		fred = te.times
+		say fred
+\end{lstlisting}
+gives trace output of
+\begin{verbatim}
+     --- traceExample.nrx 
+  16 *=*  method main($cmdin1=String[]) static
+     >a> $cmdin1 "[Ljava.lang.String;@72ebbf5c" 
+  17 *=*   arg=Rexx($cmdin1)
+  18 *=*   te = traceExample(2, 3)
+   9 *=*  method traceExample(a, b)
+     >a> a "2" 
+     >a> b "3" 
+  10 *=*   aIs = a
+  11 *=*   bIs = b
+  12 *-* 
+  19 *=*   fred = te.times
+  13 *=*  method times
+  14 *=*   return aIs * bIs
+  20 *=*   say fred
+\end{verbatim}
+This output may be read thus
+\begin{description}
+\item[\hphantom{111}--- traceExample.nrx] Identification of the program being traced. This is the \texttt{tracing context}.
+\item[16 *=*  method main(\$cmdin1=String[]) static] The first line that is actually executed is line 16.
+\item[\hphantom{111}>a> \$cmdin1 "[Ljava.lang.String;@72ebbf5c"] Variable \texttt{\$cmdin1} is assigned a string value from the java virtual machine.
+\item[17 *=*   arg=Rexx(\$cmdin1)]Line 17 is executed next...
+\item[18 *=*   te = traceExample(2, 3)] followed by line 18
+\item[\hphantom{1}9 *=*  method traceExample(a, b)] Line 18 is a method call to a method on line 9...
+\item[\hphantom{111}>a> a "2"] which assigns a value of 2 to parameter a
+\item[\hphantom{111}>a> b "3"] and a value of 3 to parameter b
+\item[10 *=*   aIs = a] the following lines document only code execution
+\item[11 *=*   bIs = b] 
+\item[12 *-*] 
+\item[19 *=*   fred = te.times]
+\item[13 *=*  method times]
+\item[14 *=*   return aIs * bIs]
+\item[20 *=*   say fred]
+\end{description}
+
+\subsubsection{Trace Methods}
+Replacing the \texttt{trace all} from line 1 with \texttt{trace results} gives trace output of
+\begin{verbatim}
+    --- traceExample.nrx 
+ 16 *=*  method main($cmdin1=String[]) static
+    >a> $cmdin1 "[Ljava.lang.String;@8094cc7" 
+  9 *=*  method traceExample(a, b)
+    >a> a "2" 
+    >a> b "3" 
+ 13 *=*  method times
+\end{verbatim}
+As should be expected, this is a subset of the output provided when using \texttt{trace all}.
+\subsubsection{Trace Results}
+Replacing the \texttt{trace all} from line 1 with \texttt{trace results} would give
+\begin{verbatim}
+    --- traceExample.nrx 
+ 16 *=*  method main($cmdin1=String[]) static
+    >a> $cmdin1 "[Ljava.lang.String;@72ebbf5c" 
+ 17 *=*   arg=Rexx($cmdin1)
+    >>> "[Ljava.lang.String;@72ebbf5c" 
+    >v> arg "" 
+ 18 *=*   te = traceExample(2, 3)
+    >>> "2" 
+    >>> "3" 
+  9 *=*  method traceExample(a, b)
+    >a> a "2" 
+    >a> b "3" 
+ 10 *=*   aIs = a
+    >p> aIs "2" 
+ 11 *=*   bIs = b
+ 12 *-* 
+ 11 >p> bIs "3"
+ 18 >v> te "traceExample@53606bf5"
+ 19 *=*   fred = te.times
+ 13 *=*  method times
+ 14 *=*   return aIs * bIs
+    >>> "6" 
+ 19 >v> fred "6"
+ 20 *=*   say fred
+    >>> "6" 
+\end{verbatim}
+Here is can be seen that more information is available. Noticeably, the values of assignments are given.
+For instance
+\begin{description}
+\item Line 17 now has an entry of \textbf{>v> arg ""} showing that hte value of the variable \texttt{arg} was set to the empty string
+\item Line 18 now has the values of the specified parameters evaluated (\mbox{\textbf{\textgreater\textgreater> "2"}} and \mbox{\textbf{\textgreater\textgreater>> "3"}})
+\item Lines 10 and 11 show that values were assigned to parameters (\mbox{\textbf{>p> aIs "2"}} and \mbox{\textbf{>p> bIs "3"})}
+\item Line 18 then shows the assignment of the instantiated class to variable \texttt{te}
+\item Line 14 shows the evaluation of the multiplication (\mbox{\textbf{\textgreater\textgreater> "6"}}), which is assigned to variable \texttt{fred} in line 19 (\mbox{\textbf{>v> fred "6"}}) on line 19.
+\item Finally we see the evaluation of variable \texttt{fred} on line 20.
+\end{description}
+\subsection{Variable Tracing}
+Consider the following example:-
+\begin{lstlisting}[label=Trace2, caption=Trace Example 2]
+a = "a"
+b = "b"
+c = 1
+d = 2
+e = 3
+
+trace var a b c d e f y
+z = a || b
+y = c + d
+f = y + 2
+e = f
+
+trace var -a -c -d -e 
+y = y * 2
+a = y
+e = a
+\end{lstlisting}
+Running this will produce the output below
+\begin{verbatim}
+    --- variableTraceExample.nrx 
+  9 *=* y = c + d
+    >v> y "3" 
+ 10 *=* f = y + 2
+    >v> f "5" 
+ 11 *=* e = f
+    >v> e "5" 
+ 14 *=* y = y * 2
+    >v> y "6" 
+\end{verbatim}
+It can be seen that only the lines that contain watched variables are traced. This the variable assignments on lines 9, 10 and 11 are displayed, since the variables being watched from line 7 to line 12 are \texttt{a, b, c, d, e, f} and \texttt{y}.
+
+Following this, however only the assignment to variable \texttt{y} is shown, since the variables \texttt{a, b ,c d} and \texttt{e} are removed from the list with the command \mbox{\texttt{trace var -a -c -d -e}}.
+
+\section{Tracing Notes}
+One further prefix may be encountered in the trace outout \texttt{+++} which signifies an error.
+
+Whenever tracing transfers to a different source file, a new \texttt{tracing context}, identified by the \texttt{---} prefix is output.
+
+Tracing is expensive, and may dramatically impact the run-time performance of the program being traced. Judicious use may therefore be warranted.
 
 \chapter{Concurrency}
 \section{Threads}
