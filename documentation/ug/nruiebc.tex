@@ -29,10 +29,10 @@ runtime available. Test this with the command
 java -version
 \end{verbatim}
 Any version of Java will do, although newer is better. Generally,
-versions from 1.4 to 1.6 are found on mainframes nowadays. If the
+versions from 1.4 to 1.7 are found on mainframes nowadays. If the
 command is not found, don't despair; it might be installed but it may
 be not found on the \$PATH variable. This can be arranged for in the
-\texttt{.profile} or \texttt{.bash\_profile} file in your home direcory. This variable works
+\texttt{.profile} file in your home direcory. This variable works
 just as in other versions of Unix\footnote{z/OS is officially a
   version of Unix, this in addition to everything that it already was}, see
 page \pageref{install_classpath}. If Java is not installed, it is time
@@ -40,10 +40,10 @@ someone did it; there are SMP/E and non-SMP/E installers (using a
 shell script) available -
 the latter comes in handy for a quick install.
 
-\subsubsection{Uploading the \nr translator jar}
+\subsubsection{Uploading the \nr{} translator jar}
 
 The \nr{} binaries are identical for all operating systems; the same
-NetRexxC.jar runs everywhere\footnote{Many thanks to Mark Cathcart
+NetRexxC.jar runs everywhere\footnote{Thanks to Mark Cathcart
   and John Kearney for contributing the details to the original version of this section.}.
 However, during installation it is important to ensure that binary files
 are treated as binary files, whereas text files (such as the
@@ -63,10 +63,13 @@ Specifically:
 FTP or other file transfer with the BINARY option.  The CLASSPATH should
 be set to include this NetRexxC.jar file. When using IND\$FILE as a
 file transfer mechanism to a traditional MVS data set, make sure it is
-allocated as a load library with \texttt{lrecl 0} and a large blocksize.
+allocated as a load library with \texttt{lrecl 0} and a large
+blocksize. A variable length record also works, for example, a dataset
+defined as \texttt{dsorg=ps, recfm=vb, lrecl=1250, blksize=12500}
+works without a problem.
 \item Other files (documentation, etc.) should be copied as Text (that is,
 they will be translated from ASCII to EBCDIC). This can be done by specifying type TEXT on the ftp
-command, or use the ASCII CRFL option on the IND\$FILE command.
+command, or use the ASCII CRLF option on the IND\$FILE command.
 \end{itemize}
 
 In general, files with extension \emph{.au}, \emph{.class}, \emph{.gif}, \emph{.jar},
@@ -74,7 +77,8 @@ or \emph{.zip} are binary files; all others are text files. You may
 opt to leave the additional files on a workstation, the mainframe
 really only needs the .jar file, NetRexxC.jar (or NetRexxR.jar if you
 are only planning to run already compiled classfiles).
-Setting the classpath might look like this on a recent z/OS:
+Setting the classpath might look like this for a Java 1.6 installation
+on a recent z/OS:
 \begin{verbatim}
 JAVA_HOME=/opt/ibm/java-s390x-60
 export JAVA_HOME
@@ -83,15 +87,57 @@ CLASSPATH=$CLASSPATH:$JAVA_HOME/jre/lib/s390x/default/jclSC160/vm.jar
 CLASSPATH=$CLASSPATH:/u/[your userid]/lib/NetRexxC.jar
 export CLASSPATH
 \end{verbatim}
+For a Java 1.6.1 installation, the following settings were
+encountered:
+\begin{verbatim}
+JAVA_HOME=/usr/lpp/java/J6.0.1
+export JAVA_HOME
+CLASSPATH=$CLASSPATH:$JAVA_HOME/lib/tools.jar
+CLASSPATH=$CLASSPATH:$JAVA_HOME/lib/s390/default/jclSC160/vm.jar
+CLASSPATH=$CLASSPATH:/u/[your userid]/lib/NetRexxC.jar
+export CLASSPATH
+\end{verbatim}
+For a 64 bits Java 1.7.0 installation, these settings work:
+\begin{verbatim}
+JAVA_HOME=/usr/lpp/java/J7.0_64
+export JAVA_HOME
+CLASSPATH=$CLASSPATH:$JAVA_HOME/lib/tools.jar
+CLASSPATH=$CLASSPATH:$JAVA_HOME/lib/s390x/default/jclSC170/vm.jar
+CLASSPATH=$CLASSPATH:/u/[your userid]/lib/NetRexxC.jar
+export CLASSPATH
+\end{verbatim}
+
 Note that you are free to put the NetRexxC.jar archive in any
 location, as long as the classpath correctly refers to it. The vm.jar
 has to be on the classpath because otherwise Object.class will not be
 found by the \nr{}C translator.
 
+The \texttt{OCOPY} command can be used under TSO to copy the uploaded
+NetRexxC.jar to a path in an HFS dataset:
+\begin{verbatim}
+/* rexx */                                             
+"free fi(pathname)"                                    
+"free fi(sysut1)"                                      
+"alloc fi(pathname) path('/u/[your userid]/lib/NetRexxC.jar')"
+"alloc fi(sysut1) dsn('netrexx.new')"                  
+"ocopy indd(sysut1) outdd(pathname) binary"            
+\end{verbatim}
+This works when the NetRexxC.jar file already exists, if that is not the
+case, just issue \texttt{touch NetRexxC.jar} in that directory, the
+copy command will overwrite that empty file.
+
+Be sure to add the \texttt{-Xquickstart} option to the java command in
+the nrc binary file in your path:
+\begin{verbatim}
+java -Xquickstart org.netrexx.process.NetRexxC $*
+\end{verbatim}
+because this will shorten the startup time required to a more or less
+acceptable time.
+
 When this is done, we can run some tests with it and see that
 everything works. Edit a program source file with \texttt{oedit},
 which works just like the ISPF/PDF editor and compile or interpret it
-like we do on other versions of Unix. \nr programs can access HFS (and
+like we do on other versions of Unix. \nr{} programs can access HFS (and
 ZFS) files the same way it does on Windows and Unix, and also network
 programming with TCP/IP works in the same way from OMVS.
 
@@ -99,6 +145,13 @@ For a description how \nr can be used in a traditional MVS
 workload environment, with batch JCL and using VSAM and sequentials
 data set and PDS directories, you are referred to the \emph{\nr{}
   Programming Guide)}.
+\subsubsection{A note on character sets}
+z/OS USS is an EBCDIC Unix version, do note that the \texttt{-utf8}
+option does only work when your source file actually is encoded in
+utf8. When \nr{} 3.03 switched to -utf8 as the default character
+set, \nr{} compiles stopped working; for this reason, this version is
+not recommended for use with z/OS. This behavior has been fixed in
+subsequent versions.
 \subsection{z/Linux}
 Installing on z/Linux is straightforward. Make sure the NetRexxC.jar
 is copied untranslated to the z/Linux file system using ftp, scp or
