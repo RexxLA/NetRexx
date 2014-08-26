@@ -1,0 +1,71 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+/** Gate
+
+pass objects thru secondary streams until an object appears on the primary
+stream.  If the strict option is specified, verify that there is not a
+object waiting on stream 0 before passing the selected stream's object.
+
+*/
+-- 98/ 8/28  gate should not care about the object type, it did...  ejt
+-- 98/ 8/26  check for a severed input stream.  ejt
+-- 98/ 8/ 3  explicit commit(-1) stage begins waiting on selectAnyInput.  ejt
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class gate public extends stage
+
+method run()
+
+   a = arg()
+
+   rc = int 0
+   select
+      when a='strict' then
+         f = boolean 1
+      when a='' then
+         f = boolean 0
+      otherwise
+         rc = 1
+   end
+
+   if outStreamState()<2 then        -- ensure no output0
+      rc = 2
+
+   commit(-1)
+
+   do
+      loop while rc=0
+         selectInput(0)                      -- incase it was severed...
+         selectAnyInput()
+         s = inStreamNumber()
+         if s=0 then
+            leave
+         else do
+            if f then do
+               selectInput(0)                -- be extra sure nothing arrived
+               if inStreamState()=0 then
+                  leave
+               selectInput(s)
+            end
+            selectOutput(s)
+            r = peekto()
+            output(r)
+            readto()
+         end
+      end
+
+   catch StageError
+      rc = rc()
+   end
+
+exit(rc*(rc<>12))
+

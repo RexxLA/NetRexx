@@ -1,0 +1,120 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 98/05/30 use == to avoid exceptions.  ejt
+-- 98/09/06 accept from and to.  ejt
+-- 98/ 8/26 support reseting the stage.  ejt
+-- 98/ 8/12 initial.  ejt
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class _rexx extends stage
+
+method run()
+   Emsg(11,'Error - Should be overridden via a stageExit')
+
+
+method stageArg(a=rexx) returns rexx
+   w = a.word(1).upper()
+   if w='IN' | w='OUT' | w='TO' | w='FROM' then
+      return a.subword(2)
+   else
+      return a
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+in  = boolean
+out = boolean
+
+pid  = pInfo            -- pipe name
+name = pInfo[3]         -- stage name
+args = pInfo[4]         -- arguement
+
+w = args.word(1).upper()
+select
+   when w='IN' | w='TO' then do
+     in = 1
+     out = 0
+     parse args . stg rest
+   end
+   when w='OUT' | w='FROM' then do
+     in = 0
+     out = 1
+     parse args . stg rest
+   end
+   otherwise
+     in = 1
+     out = 1
+     parse args stg rest
+end
+
+if stg='' then
+   signal StageError(13,'Error - 'pInfo' - REXX expects a selection stage to follow')
+
+n = o[0]
+
+cname = stageName(name'_'stg,pid,pInfo[1])
+o[n+1] ='class 'cname' extends 'stg' uses IRange private'
+n = n+2
+if in then do
+   o[n+1] ='_o_ = object'     -- current object
+   o[n+2] ='_c_ = Rexx'       -- converted object
+   o[n+3] ='_f_ = boolean 0'  -- recursion safety flag
+   n = n+4
+
+   o[n+1] ='method stage_reset()'
+   o[n+2] ='   super.stage_reset()'
+   o[n+3] ='   _f_ = 0'
+   n = n+4
+end
+
+
+if in then do
+   o[n+1] ='method peekto() returns Object protect signals StageError'
+   o[n+2] ='   if _f_ then'
+   o[n+3] ='      return super.peekto()'
+   o[n+4] ='   _f_ = 1'
+   o[n+5] ='   _d_ = super.peekto()'
+   o[n+6] ='   if _d_\\==_o_ then do'
+   o[n+7] ='      _o_ = _d_'
+   o[n+8] ='      _c_ = object2rexx(_o_)'
+   o[n+9] ='   end'
+   o[n+10]='   _f_ = 0'
+   o[n+11]='   return _c_'
+   n = n+12
+
+   o[n+1] ='method readto() returns Object protect signals StageError'
+   o[n+2] ='   if _f_ then'
+   o[n+3] ='      return super.readto()'
+   o[n+4] ='   _f_ = 1'
+   o[n+5] ='   _d_ = super.readto()'
+   o[n+6] ='   if _d_\\==_o_ then do'
+   o[n+7] ='      _o_ = _d_'
+   o[n+8] ='      _c_ = object2rexx(_o_)'
+   o[n+9] ='   end'
+   o[n+10]='   _f_ = 0'
+   o[n+11]='   return _c_'
+   n = n+12
+end
+
+if out then do
+   o[n+1]='method output(d=object) signals StageError'
+   o[n+2]='   super.output(object2rexx(d))'
+   n = n+3
+end
+
+o[0] = n
+pInfo[3]  = cname                           -- call this stage instead
+pInfo[4]  = rest
+
+return 1
+
+
+

@@ -1,0 +1,64 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- overlay.nrx njPipes stage
+
+/** OVERLAY
+
+              +-BLANK-+
+ >>--OVERlay--+-------+---------------------------------------------->< 
+              +-xorc--+
+
+*/
+
+package org.netrexx.njpipes.stages
+import org.netrexx.njpipes.pipes.
+options binary
+
+class overlay extends stage
+
+method run()
+  arg=arg()
+  pad=Rexx ' '
+  if arg<>'' then
+    do
+      pad=GetXorc(arg)
+      if pad=null then
+        Emsg(11,'Error - 'getName()' option 'arg' is not recognized')
+    end
+  startpos=Rexx 1
+  kicking=boolean 1
+            num=0    -- debugging lines indended like this
+  super.T.setPriority(java.lang.Thread.NORM_PRIORITY-4)
+  loop while kicking   -- more fun than a slimmer "until"!
+            num=num+1
+    kicking=boolean 0
+    folded=Rexx ''
+    loop pick=0 to maxInputStream()
+      do
+            when="select"
+        selectInput(pick)
+            when="peekto"
+        lineP=Rexx peekto()   
+            when="readto"
+        line=Rexx readto()     -- delays one record
+            say "       " num pick line "("lineP")"
+        folded=folded.overlay(line,startpos,line.length,pad)
+        kicking=1
+      catch StageError
+        rc=rc()
+            say "       " num pick "            StageError" rc when
+      end
+    end
+    output(folded)
+  catch StageError
+    rc=mrc()
+  end
+exit(rc*(rc<>12))
+

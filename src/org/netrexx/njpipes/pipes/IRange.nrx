@@ -1,0 +1,690 @@
+-- IRange.nrx NJPipe Class
+/*
+ *  Copyright (C) 1998-2011 Jeffrey Hennick
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 98/ 7/31 removed imports.  ejt
+-- 98/ 7/18 added methods for use in stageExits, new fields, strict and link.  ejt
+-- 98/ 7/18 added STRICT modifier, Strict() and Next() methods
+-- 98/ 6/12 JHennick
+
+/* Futures
+ * Some though needs to be put into buildirange etc about padding.  ie what
+ * gets padded and when?  Its not as simple an issue as it seems at first.
+ */
+
+/** IRange class
+
+    processes Input-Ranges
+
+*/
+
+package org.netrexx.njpipes.pipes
+
+options binary
+
+class IRange public extends Object
+-- 98/ 6/10  JHennick
+
+properties inheritable
+
+start = rexx 0
+endch = rexx 0
+type = rexx  'N'
+next = IRange null
+link = IRange null
+prefix = rexx ''
+residue = rexx ''
+startcol = rexx 1
+endcol = rexx 1
+separator = rexx ''
+strict = boolean 0
+
+
+method IRange()
+start = 1
+endch = '*'
+type = 'C'
+
+method IRange(n = rexx)
+start = n
+
+
+method IRange(c, s, e) returns IRange
+type = c
+start = s
+endch = e
+
+method IRange(c, s, e, sep) returns IRange
+type = c
+start = s
+endch = e
+separator = sep
+
+method IRange(c, s, e, sep, sub = IRange) returns IRange
+type = c
+start = s
+endch = e
+next = sub
+separator = sep
+
+
+method Number() returns Rexx
+return start
+
+method StartCol() returns Rexx
+return start
+
+method EndCol() returns Rexx
+return endch
+
+method StartChar(n = Rexx null) returns Rexx
+old = startcol
+if n \= null then startcol = n
+return old
+
+method EndChar(n = Rexx null) returns Rexx
+old = endcol
+if n \= null then endcol = n
+return old
+
+method Length() returns Rexx
+return endchar - startchar + 1
+
+method Strict() returns boolean
+return strict
+
+method Next() returns IRange
+return next
+
+method SubIRange(n = IRange null, d = 1) returns IRange
+if n \= null then do
+   if next = null then do
+      old = next
+      next = n
+   end
+   else next.SubIRange(n, d+1)
+end
+else old = next
+return old
+
+method Prefix(n = Rexx null) returns Rexx
+old = prefix
+if n \= null then prefix = n
+return old
+
+method Residue(n = Rexx null) returns Rexx
+old = residue
+if n \= null then residue = n
+return old
+
+method Separator(n = Rexx null) returns Rexx
+old = separator
+if n \= null then separator = n
+return old
+
+method Type() returns Rexx
+return type
+
+method toRexx() returns Rexx
+if next = null then n = ''
+else n ='\n{'next'}'
+return 'Type:' type 'Sep:' separator 'Start:' start 'End:' endch 'Cols:' StartCol EndCol 'Next lower:' n 'Residue:' residue
+
+method toString() returns String
+return String this.toRexx()
+
+
+
+method SelIRange(str=rexx,pad=rexx ' ') returns rexx
+-- 98/ 7/29 added pad optional arguement.  ejt
+-- 98/ 6/10 JHennick
+
+/** IRange.SelIRange(string)
+
+         returns an IRange object for a range, including subranges, out of string,
+
+*/
+   d = Sel1IRange(str,pad)
+   if next \= null then do
+      d = next.SelIRange(d,pad)
+      start = start + next.StartCol()
+      endch = start + next.EndCol()
+   end
+
+   return d
+
+
+method Sel1IRange(str=rexx,pad=rexx) returns rexx private
+
+-- 01/05/11  convert a null str to an empty string.  ejt
+-- 98/07/29  made private, pad no longer optional.  ejt
+-- 98/07/18  used an optional arguement (thanks Jeff <grin>).  ejt
+-- 98/07/13  Added pad.  ejt
+-- 98/07/ 1  Fix for negative char or word before start of string.  JHennick
+-- 98/06/12  JHennick
+
+/** IRange.Sel1IRange(string)
+
+         returns the range out of string,
+
+*/
+
+   o = rexx
+
+   s = start
+   e = endch
+
+   if str=null then
+      str = ''
+
+   select
+      when str = '' then do
+         o = ''
+         startcol = 1
+      end
+      when type = 'W' & separator = '' then do    -- standard word
+         if s < 0 & s.datatype('N') then s = str.words() +1 + s
+         if s < 1 then s = 1
+         if e < 0 & e.datatype('N') then e = str.words() +1 + e
+         SELEct
+            when e = '*' then do
+               o = str.subword(s)
+               startcol = str.wordindex(s)
+            end
+            when e < s | e < 1 then do
+               o = ''
+               startcol = 1
+            end
+            otherwise
+               o = str.subword(s,e-s+1)
+               startcol = str.wordindex(s)
+         end
+      end
+      when type = 'W' then do -- with a non-space word separator
+         sp = 0
+         strl = str.length()
+         if s > 1 then do
+            ps = 0
+            loop j = 1 to s -1 until sp = 0     -- start from left
+               sp = str.pos(separator,sp+1)
+               if sp = ps + 1 then j = j - 1    -- eliminate adjacent separator's
+               ps = sp
+            end
+            if sp = 0 then sp = strl
+            else sp = sp + 1
+         end
+         else if s < 0 then do               -- start from right
+            sp = strl
+            ps = sp
+            loop j = 1 to -s until sp = 0
+               sp = str.lastpos(separator,sp-1)
+               if sp = ps - 1 then j = j - 1    -- eliminate adjacent separator's
+               ps = sp
+            end
+            if sp > 0 then sp = sp + 1
+         end
+         if sp = 0 then sp = 1
+         select
+            when e = '*' then do               -- rest to the right
+               o = str.substr(sp)
+               startcol = sp
+            end
+            otherwise
+               ep = 0
+               if e > 0 then do                   -- end from left
+                  pe = 0
+                  loop j = 1 to e until ep = 0
+                     ep = str.pos(separator,ep+1)
+                     if ep = pe + 1 then j = j - 1    -- eliminate adjacent separator's
+                     pe = ep
+                  end
+                  if ep = 0 then ep = strl
+               end
+               else if e < 0 then do                -- end from right
+                  ep = strl
+                  pe = ep
+                  loop j = 1 to -e until ep = 0
+                     ep = str.lastpos(separator,ep-1)
+                     if ep = pe - 1 then j = j - 1    -- eliminate adjacent separator's
+                     pe = ep
+                  end
+               end
+               if ep < strl then ep = ep - 1
+               if ep < 1 then o = str.substr(sp)
+               else o = str.substr(sp,ep-sp+1,pad)
+               startcol = sp
+            end
+      end   -- word
+      when type = 'F' then do                 -- Field
+         sp = 0
+         if separator = '' then separator = '\09'
+         strl = str.length()
+         if s = '' then s = 1
+         if s > 1 then do               -- start from left
+            loop for s -1 until sp = 0
+               sp = str.pos(separator,sp+1)
+            end
+            if sp = 0 then sp = strl
+            else sp = sp + 1
+         end
+         else if s < 0 then do          -- start from right
+            sp = strl
+            loop for -s until sp = 0
+               sp = str.lastpos(separator,sp-1)
+            end
+            if sp > 0 then sp = sp + 1
+         end
+         if sp = 0 then sp = 1
+         select
+            when e = '*' then        -- rest of it
+               o = str.substr(sp)
+            otherwise
+               ep = 0
+               if e > 0 then do                   -- end from left
+                  loop for e until ep = 0
+                     ep = str.pos(separator,ep+1)
+                  end
+                  if ep = 0 then ep = strl
+               end
+               else if e < 0 then do              -- end from right
+                  ep = strl
+                  loop for -e until ep = 0
+                     ep = str.lastpos(separator,ep-1)
+                  end
+               end
+               if ep < strl then ep = ep - 1
+               if ep < 1 then o = str.substr(sp)
+               else o = str.substr(sp,ep-sp+1,pad)
+            end
+         startcol = sp
+      end
+      otherwise                                              -- character
+         if s < 0 then s = str.length() +1 + s        -- start from right
+         if s < 1 then s = 1
+         if e \= '*' & e < 0 then e = str.length() +1 + e  -- end from right
+         select
+            when e = '*' then o = str.substr(s)  -- rest of it
+            when e < s | e < 1 Then o = ''
+            otherwise o = str.substr(s,e-s+1,pad)
+         end
+         startcol = s
+      end
+
+      StartChar(startcol)
+      endcol = 0.max(startcol + o.length() - 1)
+      EndChar(endcol)
+
+
+      if startchar < 2 then Prefix('')
+      else Prefix(str.left(startchar-1))
+
+      Residue(str.substr(endchar+1))
+   return o   -- Sel1IRange
+
+
+
+method GetIRanges(i = rexx, ws = rexx '', fs = rexx null) returns IRange[] static
+--  GetIRanges NJPipe Method
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the GNU GENERAL PUBLIC LICENSE with NO WARRANTIES of ANY kind.
+ *  See CopyLeft.Txt for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+-- 98/ 7/18  added code to detect strict flag, link(s) set correctly.  ejt
+-- 98/ 7/16  Moved from utils.nrx;  Documentation.  JHennick
+-- 98/ 6/12  JHennick
+
+/** GetIRanges(ranges)
+
+
+                  +--+-range--------------+---------------------+
+                     |    <----------+    |
+                     +-(-------range-+--)-+
+                     +-(strict-range-+--)-+
+
+                    range:
+
+                       <----------------------------+
+                    +---+--------------------------++---------->
+                        +-+-FIELDSEParator-+--xorc-+
+                          +-WORDSEParator--+
+
+                       <--------------------------------+
+                    >---+------------------------------++------>
+                        +-SUBSTRing--+ rangePart +--OF-+
+
+                    >--+ rangePart +---------------------------+
+
+                    rangePart:
+
+                    +--+------------+-------------------------->
+                       +-+ wrdSep +-+
+                       +-+ fldSep +-+
+
+                    >--+-snumorstar------------+--------+
+                       +-snumorstar;snumorstar-+
+                       +-numorstar-numorstar---+
+                       +-numorstar.numorstar---+
+
+                    wrdSep:
+
+                    +--+---------------------+--Words----------+
+                       +-WORDSEParator--xorc-+
+
+                    fldSep:
+
+                    +--+----------------------+--Fields--------+
+                       +-FIELDSEParator--xorc-+
+
+
+*/
+
+   parse i.strip() delim 2 ranges ')' rest
+
+   r = IRange[99]
+   rz = IRange[3]
+   rx = IRange()
+   rnum = rexx
+   sf = boolean
+
+   if fs = null then fs = rexx '/t'
+
+   if delim\='(' then
+      do
+         sf = 0
+         parse i ranges rest
+      end
+   else if ranges.word(1).upper()<>'STRICT' then
+      sf = 0
+   else do
+      sf = 1
+      ranges = ranges.subword(2)
+   end
+
+   select
+      when ranges \= '' then do                 -- (range(s))  or  range
+         loop rnum = 1 while ranges \ = ''
+            parse ranges.strip w ranges 1 fc 2
+            w = w.upper
+            select
+               when w.datatype('W') then w = w'.1'              -- Single number
+               when 'WORDSEPARATOR'.abbrev(w, 7) | w = 'WS' then do         -- Wordseparator
+                  parse ranges w ranges
+                  wl = w.length()
+                  wu = w.upper()
+                  select
+                     when wl = 1 then ws = w
+                     when wl = 2 then ws = w.x2c
+                     when wu = 'BLANK' then ws = ''
+                     when wu = 'SPACE' then ws = ''
+                     when 'TABULATE'.abbrev(wu,3) then ws = '\t'
+                     otherwise ws = w.left(1)
+                  end
+                  rnum = rnum - 1
+                  iterate
+               end
+               when 'WORDS'.abbrev(w, 1) then do              -- Words ...
+                  parse ranges w ranges
+                  w = 'WORD'w  ws
+               end
+               when 'FIELDSEPARATOR'.abbrev(w, 8) | w = 'FS' then do       -- Fieldseparator
+                  parse ranges w ranges
+                  wl = w.length()
+                  wu = w.upper()
+                  select
+                     when wl = 1 then fs = w
+                     when wl = 2 then fs = w.x2c
+                     when wu = 'BLANK' then fs = ''
+                     when wu = 'SPACE' then fs = ''
+                     when 'TABULATE'.abbrev(wu,3) then fs = '\t'
+                     otherwise fs = w.left(1)
+                  end
+                  rnum = rnum - 1
+                  iterate
+               end
+               when 'FIELDS'.abbrev(w, 1) then do             -- Fields ...
+                  parse ranges w ranges
+                  w = 'FIELD'w  fs
+               end
+               when 'SUBSTRING'.abbrev(w, 6) then do       -- Substring range Of ...
+                  oranges = ranges
+                  parse ranges w 'of' ranges
+                  if ranges = '' then parse oranges w 'OF' ranges
+                  if ranges = '' then parse oranges w 'Of' ranges
+                  if ranges = '' then parse oranges w 'oF' ranges
+                  if ranges = '' then do
+                     say 'Error - usage: SUBSTRING sub-range OF range'
+                     say '      -' oranges
+                     exit
+                  end
+
+                  rz = getIRanges('('ranges')', ws, fs)
+                  ranges = ''
+                  rnums = rnum
+                  loop i = 1 to rz[0].StartCol()
+                     r[rnum] = rz[i]
+                     rnum = rnum + 1
+                  end
+                  rnum = rnum - 1
+
+                  rx = get1IRange(w)
+
+                  r[rnums].SubIRange(rx)
+
+                  iterate
+               end
+               when fc = 'F' then w = w fs
+               when fc = 'W' then w = w ws
+               otherwise nop
+            end
+            r[rnum] = get1IRange(w)
+            if r[rnum].Type = '' then do    -- not a range at all
+               if rnum = 1 then rest = i
+               rnum = rnum - 1
+            end
+         end
+         rnum = rnum - 1
+      end
+      otherwise
+         rnum = 0           -- not a range at all: whole record
+         rest = i
+   end
+
+   if rnum = 0 then r[1] = IRange()
+   r[0] = IRange(rnum)
+   r[0].Residue(rest)
+
+   loop i=0 to r[0].number-1  -- ensure links are correctly set
+      r[i].link = r[i+1]
+   end
+   r[0].strict = sf           -- save the strict flag
+
+-- with the above logic we do not need to return the complete array, just
+-- r[0] will be enough.  It would save storage if this was implemented, but
+-- methods using IRange would need work - maybe we can do this as we change
+-- them to use the Build...Exits below?
+
+   return r    -- GetIRanges
+
+
+method Get1IRange(i=rexx) returns IRange static
+--  Get1IRange NJPipe Method
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the GNU GENERAL PUBLIC LICENSE with NO WARRANTIES of ANY kind.
+ *  See CopyLeft.Txt for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+-- 98/ 7/16  Moved from utils.nrx;  Documentation.  JHennick
+-- 98/ 7/ 1  Fixed for separator. JHennick
+-- 98/ 6/17  Factored out Xorc. JHennick
+-- 98/ 6/12  JHennick
+
+   parse i.upper() kind 2 1 s1 '-' e1 . 1 s2 '.' e2 . 1 s3 ';' e3 . 1 . sepchar . 1 i
+
+   r = IRange()
+
+   select
+      when kind = 'W' then do                                         -- Words...
+         s = i.Verify('WORDS ')
+         parse i.word(1)  =(s) s1 '-' e1 . =(s) s2 '.' e2 . =(s) s3 ';' e3 .
+         if sepchar = '' then sepchar = r.Separator()
+      end
+      when kind = 'F' then do                                         --Fields...
+         s = i.Verify('FIELDS ')
+         parse i.word(1)  =(s) s1 '-' e1 . =(s) s2 '.' e2 . =(s) s3 ';' e3 .
+         if sepchar = '' then sepchar = r.Separator()
+      end
+      otherwise kind = 'C'
+   end
+   select
+      when (e1.datatype('W') | e1 = '*') & (s1.datatype('W') | s1 = '*') then do   -- m-n
+        startch = s1
+        lastch = e1
+      end
+      when (e1.datatype('W') | e1 = '*') & s1 = '' then do                    -- -m
+        startch = -e1
+        lastch = -e1
+      end
+      when e2.datatype('W') | e2 = '*' then do                          -- m.n
+        startch = s2
+        if startch = '*' then startch = 1
+        select
+           when e2 = '*' then lastch = '*'
+           when startch.datatype('W') & startch < 0 then lastch = e2 + startch
+           when startch.datatype('W') then lastch = e2 + startch - 1
+           otherwise parse '' kind startch lastch
+        end
+      end
+      when e3.datatype('W') | e3 = '*' then do                                -- m;n
+        startch = s3
+        lastch = e3
+      end
+      when s1.datatype('W') then do                                            -- m
+        parse s1 startch .
+        lastch = startch
+      end
+      when s1 = '*' then do                                            -- *
+        startch = s1
+        lastch = startch
+      end
+      otherwise parse '' kind startch lastch                            -- not recognized
+   end
+   if startch = '*' then startch = 1
+   return IRange(kind, startch, lastch, sepchar)   -- Get1IRange
+
+
+/* extract contents of ranges into a string */
+-- 98/ 7/29 use SelIRange, pad all subranges.  ejt
+-- 98/ 7/18 build a range string not allowing overlap or out of order selection.  ejt
+
+method BuildIRangeStrict(a=rexx,p=rexx ' ') returns rexx
+
+curr = link
+o = curr.SelIRange(a,p)
+if curr.link<>null then do
+   prev = curr
+   curr = curr.link
+   loop until curr=null
+      o = o||curr.SelIRange(a,p)
+      if prev.endcol>=curr.startcol then
+         signal StageError(5,'Error - Overlapping ranges')
+      prev = curr
+      curr = curr.link
+   end
+end
+return o
+
+
+/* extract contents of ranges into a string */
+-- 98/ 7/29 use SelIRange, pad all subranges.  ejt
+-- 98/ 7/18 build a range string with rules...  ejt
+
+method BuildIRange(a=rexx,p=rexx ' ') returns rexx
+
+curr = link
+o = curr.SelIRange(a,p)
+curr = curr.link
+loop while curr<>null
+   o = o||curr.SelIRange(a,p)
+   curr = curr.link
+end
+return o
+
+
+/* Generate a command to extract one IRange element.  Return '' if the
+ * full Sel1IRange method is required.  Worker methods can be defined
+ * to handle negitive ranges (-2;-1) etc.  The key is that this routine
+ * must return a single expression to extract the (sub) range.
+ */
+-- 98/ 7/29 reject if next is not null.  ejt
+-- 98/ 7/18 initial.  ejt
+
+method Sel1IRangeExit(str=rexx,pad=rexx) returns rexx
+
+   s = start
+   e = endch
+
+   select
+      when next<>null then                        -- substring of
+         nop
+      when type = 'W' & separator = '' then do    -- standard word
+         if s='*' then
+            s = 1
+         if s>0 & e='*' then
+            return str'.subword('s')'
+         if s>0 & e>=s then
+            return str'.subword('s','e-s+1')'
+      end
+      when type = 'W' then    -- with a non-space word separator
+         nop
+      when type = 'F' then                        -- Field
+         nop
+      otherwise                                   -- character
+         if s='*' then
+            s = 1
+         if s>0 & e='*' then
+            return str'.substr('s')'
+         if s>0 & e>=s then
+            return str'.substr('s','e-s+1',"'pad'")'
+   end
+   return ''
+
+/*
+ * Return an expression that evaluates to the desired range.  Use the, slower,
+ * high level routines when required.  Sel1IRangeExit can be expanded to use
+ * worker methods to keep things fast...
+ */
+-- 98/ 7/29 use SelIRange.  ejt
+-- 98/ 7/18 initial.  ejt
+
+method BuildIRangeExit(r=rexx,str=rexx,pad=rexx ' ') returns rexx
+
+c = rexx ''
+if this.strict then
+   return r'[0].BuildIRangeStrict('str',"'pad'")'
+
+curr = this.link                          -- this = IRange[0]
+loop while curr<>null
+   w = curr.Sel1IRangeExit(str,pad)       -- IRange[1...Number()]
+   if w='' then do
+      if this.number=1 then
+         return r'[1].SelIRange('str',"'pad'")'
+      else
+         return r'[0].BuildIRange('str',"'pad'")'
+   end
+   if c='' then
+      c = w
+   else
+      c = c'||'w
+   curr = curr.link
+end
+return c
+

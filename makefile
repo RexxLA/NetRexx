@@ -3,12 +3,16 @@
 
 all:
 	java -jar ant/ant-launcher.jar compile
-	# java -jar ant/ant-launcher.jar jars
+	make -f pipes.mak
+	java -jar ant/ant-launcher.jar jars
 
 .PHONY: jars
 jars:
 	java -jar ant/ant-launcher.jar jars
 
+.PHONY: pipes
+pipes:	
+	make -f pipes.mak
 
 .PHONY: tests
 tests:
@@ -26,6 +30,8 @@ doc:
 documents:
 	cd documentation/ug;make -B
 	cd documentation/pg;make -B	
+	cd documentation/nrl;make -B	
+	cd documentation/njpipes;make -B	
 
 
 .PHONY: package

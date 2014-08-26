@@ -1,0 +1,224 @@
+-- compare.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program. 
+ */
+-- 98/ 9/22  Added catch to selectInput(0).  JHennick
+-- 98/ 8/24  JHennick
+
+/** compare
+
+               +-TRINARY-+  (1)           +-PAD SPACE-+
+  >>--COMPARE--+---------+------------+---+-----------+----------------------><
+               +-BINARY--+  (2)       |   +-PAD-Xorc--+
+               |                      |
+               | <-----------------+  |
+               +--ANY DString------+--+   (4) (5)
+               +--EQUAL DString----+      (4)
+               +--LESS DString-----+  (3) (4)
+               +--MORE DString-----+  (3) (4)
+               +--NOTEQUAL DString-+      (4)
+
+     (1) -1 = Primary is shorter/less, 0 = equal, 1 = Secondary is shorter/less
+     (2) 0 = equal, 1 = not equal
+     (3) Primary is LESS/shorter (or MORE/longer) than secondary
+     (4) DStrings can use any of the following escapes (or the lowercase) for
+         the unequal situation:
+                 \C (count) for the record number,
+                 \B (byte) for column number
+                 \P (primary) for the primary stream record
+                 \S (secondary) for the secondary stream record
+                 \L (Least) for then stream number that is shortest, -1 if equal
+                 \M (Most) for the stream number that is longest, -1 if equal
+     (5) Equal or not, this DString precedes any of the others.
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class compare extends stage
+
+method run()
+
+   arg = arg()
+
+   aany = boolean 0
+   atrinary = boolean 0
+   abinary = boolean 0
+   aequal = boolean 0
+   aequal = boolean 0
+   aless = boolean 0
+   amore = boolean 0
+   anotequal = boolean 0
+
+   if arg = '' then arg = 'TRINARY'
+
+   loop while arg \= ''
+      parse arg key ds
+
+      select
+         when key = 'TRINARY' then do
+            atrinary = 1
+            arg = ds
+         end
+         when key = 'BINARY' then do
+            abinary = 1
+            arg = ds
+         end
+         when key = 'EQUAL' then do
+            aequal = 1
+            dss = DString(ds)
+            sequal = dss.string
+            arg = dss.residue
+         end
+         when key = 'LESS' then do
+            aless = 1
+            dss = DString(ds)
+            sless = dss.string
+            arg = dss.residue
+         end
+         when key = 'MORE' then do
+            amore = 1
+            dss = DString(ds)
+            smore = dss.string
+            arg = dss.residue
+         end
+         when key = 'NOTEQUAL' then do
+            anotequal = 1
+            dss = DString(ds)
+            snotequal = dss.string
+            arg = dss.residue
+         end
+         when key = 'ANY' then do
+            aany = 1
+            dss = DString(ds)
+            sany = dss.string
+            arg = dss.residue
+         end
+         otherwise
+            arg = ds
+            leave
+      end
+   end
+
+   parse arg key ds .
+
+   apad = rexx ' '
+   if key = 'PAD' then apad = GetXorc(ds)
+
+
+   r0 = rexx ''
+   r1 = rexx ''
+
+   less = -1 -- short stream
+
+   colno = 0 -- nonequal column number
+
+   loop recno = 1  -- non-equal record number
+      do
+         o0 = peekto()
+      catch StageError
+         less = 0
+         leave
+      end
+      r0 = rexx o0
+
+      do
+         selectInput(1)
+         o1 = peekto()
+      catch StageError
+         less = 1
+         leave
+      end
+      r1 = rexx o1
+
+      colno = r1.compare(r0, apad)
+      if colno > 0 then leave
+
+      readto()
+
+      do
+         selectInput(0)
+      catch StageError
+         less = 0
+         leave
+      end
+
+      readto()
+
+   catch StageError
+   end
+
+   if less = 0 then do  -- are we at the end of both?
+      selectInput(1)
+      o1 = peekto()
+   catch StageError
+      less = -1         -- yes!
+   end
+
+   eq = 0
+
+   leastStream = Rexx less
+   mostStream = Rexx
+
+   if less \= -1 then mostStream = \ less
+   else mostStream = -1
+
+   select
+      when less < 0 & colno = 0 then eq = 1
+      when less < 0 then less = r0.substr(colno, 1) > r1.substr(colno, 1)
+      otherwise nop
+   end
+
+   if abinary then less = 1
+   else less = less + less - 1 -- make it -1 or +1
+
+   if eq then less = 0
+
+   -- prepare output record
+
+   o = rexx ''
+
+   if aany then o = o sany
+
+   select
+      when atrinary then o = less
+      when abinary then o = less
+      otherwise
+         if eq & aequal then o = o sequal
+         if \eq & anotequal then o = o snotequal
+         if less < 0 & aless then o = o sless
+         if less > 0 & amore then o = o smore
+         o = o.substr(2)
+   end
+
+   o = o.changestr('\\B',colno)
+   o = o.changestr('\\b',colno)
+   o = o.changestr('\\C',recno)
+   o = o.changestr('\\c',recno)
+   o = o.changestr('\\P',r0)
+   o = o.changestr('\\p',r0)
+   o = o.changestr('\\S',r1)
+   o = o.changestr('\\s',r1)
+   o = o.changestr('\\L',leastStream)
+   o = o.changestr('\\l',leastStream)
+   o = o.changestr('\\M',mostStream)
+   o = o.changestr('\\m',mostStream)
+
+   do
+      output(o)
+   catch StageError
+   end
+
+rc = mrc()
+if rc=4 then rc=12
+
+exit(rc*(rc<>12))
+
+
+
+

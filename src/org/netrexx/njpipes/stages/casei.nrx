@@ -1,0 +1,96 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 98/ 8/26 support resetting the stage.  ejt
+-- 98/ 7/30 use StageError(13,... in stageExit.  ejt
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class casei extends stage
+
+method run()
+   Emsg(11,'Error - Should be overridden via a stageExit')
+
+
+method stageArg(a=rexx) returns rexx
+   return a
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+pid  = pInfo            -- pipe name
+name = pInfo[3]         -- stage name
+args = pInfo[4]         -- arguement
+
+parse args stg rest
+
+if stg='' then
+   signal StageError(13,'Error - 'pInfo' - CASEI expects a selection stage to follow')
+
+if stg.upper()='ZONE' then
+   signal StageError(13,'Error - 'pInfo' - the CASEI stage and ZONE cannot be used together')
+
+n = o[0]
+
+cname = stageName(name'_'stg,pid,pInfo[1])
+o[n+1] ='class 'cname' extends 'stg' uses IRange private'
+o[n+2] ='_o_ = object'     -- current object
+o[n+3] ='_c_ = object'     -- converted object
+o[n+4] ='_f_ = boolean 0'  -- recursion safety flag
+n = n+5
+
+o[n+1] ='method stage_reset()'
+o[n+2] ='   super.stage_reset()'
+o[n+3] ='   _f_ = 0'
+n = n+4
+
+-- The technique of saving one object ONLY works if the stage does
+-- peekto/readto on only one stream at a time.
+
+o[n+1] ='method peekto() returns Object protect signals StageError'
+o[n+2] ='   if _f_ then'
+o[n+3] ='      return super.peekto()'
+o[n+4] ='   _f_ = 1'
+o[n+5] ='   _d_ = super.peekto()'
+o[n+6] ='   if _d_\\=_o_ then do'
+o[n+7] ='      _o_ = _d_'
+o[n+8] ='      _c_ = (rexx _o_).upper()'
+o[n+9] ='   end'
+o[n+10]='   _f_ = 0'
+o[n+11]='   return _c_'
+n = n+12
+
+o[n+1] ='method readto() returns Object protect signals StageError'
+o[n+2] ='   if _f_ then'
+o[n+3] ='      return super.readto()'
+o[n+4] ='   _f_ = 1'
+o[n+5] ='   _d_ = super.readto()'
+o[n+6] ='   if _d_\\=_o_ then do'
+o[n+7] ='      _o_ = _d_'
+o[n+8] ='      _c_ = (rexx _o_).upper()'
+o[n+9] ='   end'
+o[n+10]='   _f_ = 0'
+o[n+11]='   return _c_'
+n = n+12
+
+o[n+1]='method output(d=object) signals StageError'
+o[n+2]='   super.output(_o_)'
+n = n+3
+
+o[n+1]='method setArg(a=rexx)'             -- this needs tp be smarter...
+o[n+2]='   super.setArg(a.upper())'
+n = n+3
+
+o[0] = n
+pInfo[3]  = cname                          -- call this stage instead
+pInfo[4]  = rest
+
+return 1
+
+

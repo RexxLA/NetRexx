@@ -1,0 +1,82 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+package org.netrexx.njpipes.stages
+
+-- 99/05/29 use byte[] directly.  ejt
+-- 98/09/06  add an stream option
+
+import org.netrexx.njpipes.pipes.
+
+class diskr extends stage
+
+method run() public
+
+    a = arg()
+    if a.word(1).upper()<>'STREAM' then
+       do
+          inFile = Filereader(String a)
+          in = BufferedReader(inFile)
+          loop while in.ready()
+             z = counter(1)
+             line = rexx in.readLine()
+             z = counter(z)
+             if line<>null then
+                output(line)
+          catch StageError
+             rc = rc()
+          catch e=IOException
+             Emsg(13,'Error - '||e.getMessage())
+          finally
+             counter(z)
+             do
+                in.close()
+             catch e=IOException
+                Emsg(13,'Error - '||e.getMessage())
+             end
+          end
+       catch FileNotFoundException
+   --     say 'File 'Arg()' Not found'
+          Emsg(13,'Error - File "'a'" not found')
+       end
+    else
+       do
+          bytes = byte[32768]
+          a = a.subword(2)
+          binFile = DataInputStream(FileInputStream(String a))
+          bin = BufferedInputStream(binFile)
+          loop forever
+             z = counter(1)
+             c = bin.read(bytes)
+             z = counter(z)
+             if c=-1 then
+                leave
+             if c=0 then
+                iterate
+             b = byte[c]
+             java.lang.System.arraycopy(bytes,0,b,0,c)
+             output(b)
+          catch StageError
+             rc = rc()
+          catch e=IOException
+             Emsg(13,'Error - '||e.getMessage())
+          finally
+             counter(z)
+             do
+                bin.close()
+             catch e=IOException
+                Emsg(13,'Error - '||e.getMessage())
+             end
+          end
+       catch FileNotFoundException
+   --     say 'File 'a' Not found'
+          Emsg(13,'Error - File "'a'" not found')
+       end
+
+exit(rc*(rc<>12))

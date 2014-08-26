@@ -1,0 +1,180 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/* processNjp - Pipes for NetRexx version 0.50 */
+
+-- diskr arg(string 'fin'} !
+-- a: filternjp arg(string 'xout'} !
+-- pipe2nrx !
+-- c: faninany !
+-- join * / / !
+-- stemw f ?
+-- a: !
+-- diskw arg(string 'xout'}.nrx ?
+-- a: !
+-- c: ?
+-- a: !
+-- diskw arg(string 'xout'}.java ?
+-- a: !
+-- diskw arg(string 'xout'}.nrx 
+
+package org.netrexx.njpipes.pipes
+import org.netrexx.njpipes.stages.
+import org.netrexx.njpipes.tests.
+
+
+options binary
+
+class processNjp extends pipe final
+
+properties static private
+
+   pool = Stack()
+
+properties private
+
+_s_1 = stage
+_s_2 = stage
+_s_3 = stage
+_s_4 = stage
+_s_5 = stage
+_s_6 = stage
+_s_7 = stage
+_s_8 = stage
+_s_9 = stage
+
+
+method setContext(f=Rexx) returns pipe
+
+   setRexx('f',f)
+
+return (pipe this)
+
+method processNjp(a=object null)
+   setup(a)
+
+method reset() private
+
+   stage_reset()
+   pipe_reset()
+
+   _s_1.stage_reset()
+   _s_2.stage_reset()
+   _s_3.stage_reset()
+   _s_4.stage_reset()
+   _s_5.stage_reset()
+   _s_6.stage_reset()
+   _s_7.stage_reset()
+   _s_8.stage_reset()
+   _s_9.stage_reset()
+
+method get(a=object null) returns processNjp static
+
+   do
+      do protect pool
+         e = processNjp pool.pop()
+      end
+      e.reset()
+      e.setArg(a)
+   catch EmptyStackException
+      e = processNjp(a)
+   end
+   e.config()
+   return e
+
+method setup(a=object) private
+
+   setArg(a)
+   setName('processNjp')
+   setRunaway(2000)
+
+   _s_1 = diskr()
+   _s_1.setName('diskr_1')
+
+   _s_2 = filternjp()
+   _s_2.setName('filternjp_2')
+
+   _s_3 = pipe2nrx()
+   _s_3.setName('pipe2nrx_3')
+
+   _s_4 = faninany()
+   _s_4.setName('faninany_4')
+
+   _s_5 = join()
+   _s_5.setName('join_5')
+
+   _s_6 = stemw()
+   _s_6.setName('stemw_6')
+
+   _s_7 = diskw()
+   _s_7.setName('diskw_7')
+
+   _s_8 = diskw()
+   _s_8.setName('diskw_8')
+
+   _s_9 = diskw()
+   _s_9.setName('diskw_9')
+
+   setup2()
+
+   addstage(_s_1)
+   addstage(_s_2)
+   addstage(_s_3)
+   addstage(_s_4)
+   addstage(_s_5)
+   addstage(_s_6)
+   addstage(_s_7)
+   addstage(_s_8)
+   addstage(_s_9)
+
+method config() private
+
+   connect(_s_1,0,_s_2,0)
+   connect(_s_2,0,_s_3,0)
+   connect(_s_3,0,_s_4,0)
+   connect(_s_4,0,_s_5,0)
+   connect(_s_5,0,_s_6,0)
+   connect(_s_2,1,_s_7,0)
+   connect(_s_2,2,_s_4,1)
+   connect(_s_2,3,_s_8,0)
+   connect(_s_2,4,_s_9,0)
+
+method setup2() private
+
+   _s_6.setRelPriority(+2)
+   _s_7.setRelPriority(+2)
+   _s_4.setRelPriority(+1)
+   _s_8.setRelPriority(+2)
+   _s_9.setRelPriority(+2)
+   _s_5.setArg(Rexx "* / /")
+   _s_6.setArg(Rexx "f")
+
+
+method run()
+
+   _s_1.setArg(arg(string 'fin'),boolean 1)
+   _s_2.setArg(arg(string 'xout'),boolean 1)
+   _s_7.setArg(arg(string 'xout')".nrx",boolean 1)
+   _s_8.setArg(arg(string 'xout')".java",boolean 1)
+   _s_9.setArg(arg(string 'xout')".nrx",boolean 1)
+
+   go()
+   do protect pool
+      pool.push(this)
+   end
+
+method main(a=String[]) static
+
+   p = processNjp.get(buildArg(a))
+   p.runpipe()
+   if p.rc()<>0 & p.rc()<>12 then say "RC="p.rc
+   ThreadPool.stop()
+
+exit p.rc()
+

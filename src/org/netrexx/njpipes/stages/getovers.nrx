@@ -1,0 +1,61 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** getovers
+
+Input stream 0 should contain rexx objects.  The getovers stage will output
+will output the index and contents of the stem on stream 0.  If output stream 1 is
+connected, the root is placed there.  Any severed streams will cause then
+stage to exit.  Passing a non rexx object will cause the stage to exit
+with return code 13
+
+*/
+
+-- 98/12/07  output index as well as contents
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class getovers extends stage
+
+method run() public
+
+   f = boolean 0                        -- find the state of out stream 1
+   do
+      selectOutput(1)
+      f = 1
+   catch StageError
+   end
+
+   do
+      selectOutput(0)
+   catch StageError
+   end
+
+   if inStreamNumber()<0 then
+      loop forever
+         a = rexx peekto()
+         if f then do
+            selectOutput(1)
+            output(a)
+            selectOutput(0)
+         end
+         loop i over a
+            output(i)
+            output(a[i])
+         catch StageError
+            rc = rc()
+         end
+         readto()
+      catch StageError
+         rc = rc()
+      end
+
+   exit(rc*(rc<>12))

@@ -1,0 +1,125 @@
+-- RingBuf.nrx NJPipe Class
+/*
+ *  Copyright (C) 1998-2011 Jeffrey Hennick
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+-- 98/ 6/12 JHennick
+
+/** RingBuf class
+
+       an object that has a specific length, is initally empty, and is added to
+       sequencially from the end of the previous entry.  When the end of the
+       buffer is reached, the rest of the input is added at the begining
+       --overwriting existing data.  The overwritten data can be returned.  The
+       whole buffer can be returned, starting at the point where new data would
+       be started.
+
+*/
+
+package org.netrexx.njpipes.pipes
+
+
+class RingBuf public extends Object
+
+-- 98/ 6/ 4 JHennick
+
+point = int 0
+buf = StringBuffer()
+size = int
+full = boolean 0
+
+method RingBuf(i = rexx) returns RingBuf
+
+/** RingBuf(size = rexx)
+
+    Creates an empty ring buffer of size.
+
+*/
+
+-- 98/ 5/ 4 JHennick
+
+size = int i
+buf = StringBuffer(size)
+buf.append((String '*'.copies(size)))
+point = 0
+full = 0
+Return   -- RingBuf
+
+method PutRingBuf(s = rexx)
+
+/** PutRingBuf(string = rexx)
+
+    Adds a Rexx string to a ring buffer, after the preceding data.
+
+*/
+
+-- 98/ 5/ 4 JHennick
+
+i = 1
+loop point =  point for s.length() while point < size
+   c = char s.substr(i,1)
+   buf.setCharAt(point, c)
+   i = i + 1
+end
+loop while i <= s.length()
+   full = 1
+   ps = s.length() - i + 1
+   loop point = 0 for ps while point < size
+      buf.setCharAt(point, s.substr(i,1))
+      i = i + 1
+   end
+end      -- PutRingBuf
+
+method DelayRingBuf(s) returns rexx
+
+/** DelayRingBuf(string = rexx)
+
+    Adds a Rexx string to a ring buffer, after the preceding data.  Any existing
+    data that is writen over is returned as a rexx string.
+
+*/
+
+
+-- 98/ 5/ 4 JHennick
+
+i = 1
+out = ''
+loop point = point for s.length() while point < size
+   if full then out = out || buf.charAt(point)
+   c = char s.substr(i,1)
+   buf.setCharAt(point, c)
+   i = i + 1
+end
+loop while i <= s.length()
+   full = 1
+   ps = s.length() - i + 1
+   loop point = 0 for ps while point < size
+      out = out || buf.charAt(point)
+      buf.setCharAt(point, s.substr(i,1))
+      i = i + 1
+   end
+end
+return out      -- DelayRingBuf
+
+
+method GetRingBuf() returns rexx
+
+/** GetRingBuf
+
+    returns a ring buffer as a rexx string.  The starting point is where new data
+    would be inserted.
+
+*/
+
+-- 98/ 5/ 4 JHennick
+
+o = char[]  ' '.copies(size)
+buf.getChars(0,size,o,0)
+parse o  l +(point) f
+if \full then f = ''
+return f || l            -- GetRingBuf
+-- end of class RingBuf

@@ -1,0 +1,109 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/* writepipe - Pipes for NetRexx version 0.50 */
+
+-- stem o !
+-- diskw arg() 
+
+package org.netrexx.njpipes.pipes
+import org.netrexx.njpipes.stages.
+--import tests.
+
+
+options binary
+
+class writepipe extends pipe final
+
+properties static private
+
+   pool = Stack()
+
+properties private
+
+_s_1 = stage
+_s_2 = stage
+
+
+method setContext(o=Rexx) returns pipe
+
+   setRexx('o',o)
+
+return (pipe this)
+
+method writepipe(a=object null)
+   setup(a)
+
+method reset() private
+
+   stage_reset()
+   pipe_reset()
+
+   _s_1.stage_reset()
+   _s_2.stage_reset()
+
+method get(a=object null) returns writepipe static
+
+   do
+      do protect pool
+         e = writepipe pool.pop()
+      end
+      e.reset()
+      e.setArg(a)
+   catch EmptyStackException
+      e = writepipe(a)
+   end
+   e.config()
+   return e
+
+method setup(a=object) private
+
+   setArg(a)
+   setName('writepipe')
+   setRunaway(2000)
+
+   _s_1 = stemr()
+   _s_1.setName('stemr_1')
+
+   _s_2 = diskw()
+   _s_2.setName('diskw_2')
+
+   setup2()
+
+   addstage(_s_1)
+   addstage(_s_2)
+
+method config() private
+
+   connect(_s_1,0,_s_2,0)
+
+method setup2() private
+
+   _s_2.setRelPriority(+2)
+   _s_1.setArg(Rexx "o")
+
+
+method run()
+
+   _s_2.setArg(arg(),boolean 1)
+
+   go()
+   do protect pool
+      pool.push(this)
+   end
+
+method main(a=String[]) static
+
+   p = writepipe.get(buildArg(a))
+   p.runpipe()
+   if p.rc()<>0 & p.rc()<>12 then say "RC="p.rc
+   ThreadPool.stop()
+
+exit p.rc()
+

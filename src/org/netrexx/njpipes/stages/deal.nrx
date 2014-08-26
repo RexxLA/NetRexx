@@ -1,0 +1,281 @@
+-- deal.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program. 
+ */
+
+-- 98/ 6/11 IRange.  Up to CMS documentation.  JHennick
+
+/** DEAL
+
+
+            +-STOP--ALLEOF--------------------+
+  >>--DEAL--+---------------------------------+--------------------------><
+            +-STOP--+-ALLEOF-+----------------+
+            |       +-ANYEOF-+                |
+            |       +-number-+                |
+            +-SECONDARY--+---------+----------+
+            |            +-RELEASE-+          |
+            +-KEY--inputRange--+-------+------+
+            |                  +-STRIP-+      |
+            +-STREAMid--inputRange--+-------+-+
+                                    +-STRIP-+
+
+  Since java dispatches the stage threads.  Deal may not see a sever immediatly,
+  as the severing thread can get multitasked.  This can make options like 'ANYEOF' 
+  work in unexpected ways. 
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class deal extends stage uses IRange
+
+method run()
+
+   minstm = rexx '-2'
+   strip = 0
+   s = 0
+
+   arg = arg().upper()
+
+   parse arg a a2 . 1 . a3
+
+   if a = '' then parse 'STOP ALLEOF' a a2        -- default conditions
+
+   if a = 'STOP' then select                                        -- STOP
+      when a2 = 'ANYEOF' then startstr = rexx maxOutputStream()
+      when a2.datatype('W') then do
+         minstm = a2 - 1
+         if minstm < 0 then do
+            Emsg(11,'Error -' getName() 'option' a a2 'is not recognized')
+         end
+      end
+      when a2 = 'ALLEOF' then 
+         minstm = maxOutputStream()
+      otherwise
+         Emsg(11,'Error -' getName() 'option' a a2 'is not recognized')
+   end
+
+   streamid = boolean 'STREAMID'.abbrev(a, 6)
+
+   if (a = 'KEY' | streamid) then do
+
+      ri = GetIRanges(a3)
+
+      numr = ri[0].Number()
+
+      if numr \= 1 then do
+         Emsg(11,'Error - 'getName() a 'must have a single inputRange')
+      end
+
+      if numr > 0 then r = ri[1]
+      resid = ri[0].Residue()
+
+      strip = (resid = 'STRIP')
+
+      if \r.StartCol().datatype('W') then do
+         Emsg(11,'Error - 'getName()' startrange 's' must be numeric or "*"')
+      end
+
+      e = r.EndCol()
+
+      if \e.datatype('W') & e \= '*' then do
+         Emsg(11,'Error - 'getName()' endrange 'e' must be numeric or "*"')
+      end
+   end
+
+   select
+      when a a2 = 'SECONDARY RELEASE' then
+         do
+            selectinput(1)
+            loop forever
+               str = Rexx peekto()       -- where do we put the data?
+
+               selectinput(1)          -- back to selection stream
+               readto()
+
+               selectOutput(str)         -- select the stream
+               selectinput(0)
+               aobj = peekto()         -- get the data
+               output(aobj)
+               readto()
+
+               selectinput(1)          -- back to selection stream
+            end
+         catch StageError
+            rc = rc()
+         end
+      when a = 'SECONDARY' then
+         do
+            selectinput(1)
+            loop forever
+               str = Rexx peekto()       -- where do we put the data?
+               selectOutput(str)         -- select the stream
+               selectinput(0)
+               aobj = peekto()         -- get the data
+               output(aobj)
+               readto()
+               selectinput(1)          -- back to selection stream
+               readto()
+            end
+         catch StageError
+            rc = rc()
+         end
+      when streamid & strip & s = 1 then do            -- streamid range_at_start strip
+         loop forever
+            loop i=0 to maxOutputStream()
+               line = rexx peekto()
+               selectOutput(r.SelIRange(line))
+               output(line.substr(r.EndChar()))
+               readto()
+            end i
+         catch StageError
+            rc = rc()
+         end
+      end
+      when streamid & strip then do                     -- streamid range_at_end strip
+         loop forever
+            loop i=0 to maxOutputStream()
+               line = rexx peekto()
+               selectOutput(r.SelIRange(line))
+               output(line.left(r.StartChar()-1))
+               readto()
+            end i
+         catch StageError
+            rc = rc()
+         end
+      end
+      when streamid then do                             -- streamid range \strip
+         loop forever
+            loop i=0 to maxOutputStream()
+               line = rexx peekto()
+               selectOutput(r.SelIRange(line))
+               output(line)
+               readto()
+            end i
+         catch StageError
+            rc = rc()
+         end
+      end
+      when a = 'KEY' & strip & s = 1 then do                    -- key range_at_start strip
+         key = rexx ''
+         keyp = rexx ''
+         loop forever
+            loop i=0 to maxOutputStream()
+               line = rexx peekto()
+               key = r.SelIRange(line)
+               outl = line.substr(r.EndChar())
+               if key \= keyp then selectOutput(i)
+               output(outl)
+               readto()
+               keyp = key
+            end i
+         catch StageError
+            rc = rc()
+         end
+      end
+      when a = 'KEY' & strip then do                           -- key range_at_end strip
+         key = rexx ''
+         keyp = rexx ''
+         loop forever
+            loop i=0 to maxOutputStream()
+               line = rexx peekto()
+               key = r.SelIRange(line)
+               if key \= keyp then selectOutput(i)
+               output(line.left(r.StartChar - 1))
+               readto()
+               keyp = key
+            end i
+         catch StageError
+            rc = rc()
+         end
+      end
+      when a = 'KEY' then do                                    -- key range \strip
+         key = rexx ''
+         keyp = rexx ''
+         loop forever
+            loop i=0 to maxOutputStream()
+               line = rexx peekto()
+               key = r.SelIRange(line)
+               if key \= keyp then selectOutput(i)
+               output(line)
+               readto()
+               keyp = key
+            end i
+         catch StageError
+            rc = rc()
+         end
+      end
+      when a a2 = 'STOP ANYEOF' then do                            -- stop anyeof
+         eofReport('any')
+         loop while maxOutputStream() = startstr
+            loop i=0 to maxOutputStream() 
+               do
+                  selectOutput(i)
+               catch StageError
+                  if rc()=4 then
+                     iterate
+               end
+               aobj = peekto()
+               output(aobj)
+               readto()
+            end i
+         end
+      catch StageError
+         rc = rc()
+      end
+      when a = 'STOP' & minstm > -1 then do                       -- stop number
+
+         eofReport('any')
+         rd = boolean 1
+         loop until minstm<0
+            loop i=0 to maxOutputStream() while minstm>=0
+               do
+                  selectOutput(i)
+               catch StageError
+                  if rc()>4 then
+                     minstm = minstm-1
+                  iterate
+               end
+               do
+                  if rd then
+                     aobj = peekto()
+                  rd = 0
+               catch StageError
+                  if rc()=4 then
+                     minstm = minstm-1
+                  iterate
+               end
+               do
+                  output(aobj)
+               catch StageError
+                  if rc()>4 then
+                     minstm = minstm-1
+                  iterate
+               end
+               do
+                  readto()
+                  rd = 1
+               catch StageError
+                  if rc()=4 then do
+                     minstm = minstm-1
+                     readto()
+                     rd = 1
+                  end
+               end
+            end i
+         end
+      catch StageError
+         rc = rc()
+      end
+      otherwise                                                  -- stop alleof
+         Emsg(13,"deal parsing problem detected at runtime")
+   end
+
+exit(rc*(rc<>12))
+

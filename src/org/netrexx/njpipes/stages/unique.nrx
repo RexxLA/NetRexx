@@ -1,0 +1,337 @@
+-- unique.nrx  njPipes Stage
+
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 98/12/05  now uses BuildIRange, could be improved to use buildirangeexit.  ejt
+-- 98/07/27  New.  JHennick
+
+/** unique.nrx
+
+                          +-NOPAD-----+
+   >>--UNIQue--+-------+--+-----------+--+---------+----------------------->
+               +-COUNT-+  +-PAD--xorc-+  +-ANYcase-+
+
+                            +-LAST-----+
+   >--+------------------+--+----------+----------------------------------><
+      +-+ uniqueRanges +-+  +-SINGLEs--+
+                            +-FIRST----+
+                            +-MULTiple-+
+                            +-PAIRwise-+
+
+   uniqueRanges:
+   +--+-inputRange--------------------------+------------------------------+
+      |    <---------------------------+    |
+      +-(----inputRange--+-----------+-+--)-+
+                         +-NOPAD-----+
+                         +-PAD--xorc-+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class unique extends stage uses IRange
+
+method run()  -- The run method should never get called
+   Emsg(11,'Error - Should be overridden via a stageExit')
+
+
+/*
+ * pInfo    = name of pipe,
+ * pInfo[1] = stage number in pipe
+ * pInfo[2] = stage label, null if no label
+ * pInfo[3] = stage name
+ * pInfo[4] = stage arguments
+ * pInfo[5] = rest of pipe
+ * pInfo[6] = sep
+ * pInfo[7] = end
+ * pInfo[8] = not modifier active
+ * pInfo[9] = stage is a driver
+ * o     = ''
+ * o[0]  = 0
+ *
+ * When stageExit returns with true, the compiler expects:
+ *
+ * pInfo[2] = stage label
+ * pInfo[3] = name of stage
+ * pInfo[4] = stage arguments
+ * pInfo[5] = rest of the pipe
+ * o[0]  = number of lines generated
+ * o[n]  = line n
+ *
+ */
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+if pInfo[9] then
+   signal StageError(13,'Error - 'pInfo' - cannot use as driver at 'pInfo[3]' 'pInfo[4])
+
+n   = o[0]          -- we update this stem and return it
+
+pid  = pInfo
+name = pInfo[3]
+args = pInfo[4]
+
+parse args w1 rest
+
+countem = 0
+acount = w1 = 'COUNT'
+if acount then do
+   countem = 1
+   ocount = 'rcount.right(10) || '
+   args = rest
+   parse args w1 rest
+end
+else ocount = ''
+
+apad = (w1 = 'PAD')
+if apad then do
+   parse rest padc w1 rest
+   padc = GetXorc(padc)
+   if padc = '"' then padc = "'" || '"' || "'"
+   else padc = '"'padc'"'
+end
+
+aanyc = 'ANYCASE'.abbrev(w1.upper, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1.upper) > 0
+if aanyc then parse rest w1 rest
+
+rangarg = w1 rest
+r = IRange[]
+r = GetIRanges(rangarg)
+numranges = r[0].Number
+parse r[0].Residue w1 rest
+
+asingles = 0
+afirst = 0
+amultiple = 0
+apairwise = 0
+w1u = w1.upper
+select
+   when w1 = 'LAST' then nop
+   when 'SINGLES'.abbrev(w1u, 6) then do
+      asingles = 1
+      countem = 1
+   end
+   when w1 = 'FIRST' then afirst = 1
+   when 'MULTIPLE'.abbrev(w1u, 4) then do
+      amultiple = 1
+      countem = 1
+   end
+   when 'PAIRWISE'.abbrev(w1u, 4) then do
+      if acount then signal StageError(13,'Error - 'pInfo' - COUNT & PAIRWISE can not be used together.')
+      apairwise = 1
+   end
+   otherwise
+      rest = w1 rest
+end
+
+
+
+do
+   SelectOutput(1)
+   secc = 1  -- secondary output is connected
+catch StageError
+   secc = 0  -- no secondary output
+end
+
+do
+   SelectOutput(0)
+catch StageError
+end
+
+cname = stageName(name,pid,pInfo[1])
+n=n+1;o[n] ='class 'cname' extends stage private uses IRange'
+
+n=n+1;o[n]='method run()'
+
+if countem then do
+   n=n+1;o[n]='   rcount = rexx 1'
+end
+
+if afirst then do
+   n=n+1;o[n]='   first = 1'
+end
+
+if apad then do
+   n=n+1;o[n]='   padc = rexx' padc
+   end
+else do
+   n=n+1;o[n]='   padc = rexx " "'
+   end
+
+if numranges > 0 then do
+   n=n+1;o[n]='   r = GetIRanges("'rangarg'")'
+end
+
+n=n+1;o[n]='   do'
+n=n+1;o[n]='      aobj = readto()'
+n=n+1;o[n]='   catch StageError'
+n=n+1;o[n]='   end'
+n=n+1;o[n]='   pl = rexx aobj'
+
+if aanyc then do
+   n=n+1;o[n]='   plpart = pl.upper'
+end
+else do
+   n=n+1;o[n]='   plpart = pl'
+end
+
+if numranges > 0 then do
+   n=n+1;o[n]='   plpart = r[0].BuildIRange(plpart,padc)'
+end
+
+n=n+1;o[n]='   pri = 1'
+n=n+1;o[n]='   sec =' secc
+
+n=n+1;o[n]='   loop while pri | sec'
+
+if apairwise then do
+   n=n+1;o[n]='      do'
+   n=n+1;o[n]='         aobj = peekto()'
+   n=n+1;o[n]='      catch StageError'
+   n=n+1;o[n]='         output(pl)'
+   n=n+1;o[n]='         leave'
+   n=n+1;o[n]='      end'
+end
+else do
+   n=n+1;o[n]='      aobj = peekto()'
+end
+n=n+1;o[n]='      l = rexx aobj'
+
+if aanyc then do
+   n=n+1;o[n]='      lpart = l.upper'
+end
+else do
+   n=n+1;o[n]='      lpart = l'
+end
+
+if numranges > 0 then do
+   n=n+1;o[n]='      lpart = r[0].BuildIRange(lpart,padc)'
+end
+
+   n=n+1;o[n]='      nomatch = lpart.compare(plpart) > 0'
+
+select
+   when asingles then do
+      n=n+1;o[n]='      if nomatch & rcount < 2 then do -- SINGLES not same'
+   end
+   when amultiple then do
+      n=n+1;o[n]='      if nomatch & rcount > 1 then do -- MULTIPLE not same'
+   end
+   otherwise
+      n=n+1;o[n]='      if nomatch then do -- not same'
+end
+
+if afirst then do
+   n=n+1;o[n]='         if first then do -- first'
+   n=n+1;o[n]='            first = 0'
+   n=n+1;o[n]='            output('ocount'pl)'
+   n=n+1;o[n]='         catch StageError'
+   n=n+1;o[n]='            pri = 0'
+   n=n+1;o[n]='         end -- first'
+end
+
+n=n+1;o[n]='         do -- pri'
+
+select
+   when apairwise then do
+      n=n+1;o[n]='            output('ocount'pl)'
+      n=n+1;o[n]='            output('ocount'l)'
+   end
+   when afirst then do
+      n=n+1;o[n]='            output('ocount'l)'
+   end
+   otherwise
+      n=n+1;o[n]='            output('ocount'pl)'
+end
+
+n=n+1;o[n]='         catch StageError'
+n=n+1;o[n]='            pri = 0'
+n=n+1;o[n]='         end -- pri'
+n=n+1;o[n]='      end -- not same'
+n=n+1;o[n]='      else do -- same'
+
+if secc then do
+   n=n+1;o[n]='         if sec then do -- sec'
+   n=n+1;o[n]='            selectOutput(1)'
+
+   select
+   when apairwise then do
+      n=n+1;o[n]='            output('ocount'pl)'
+      n=n+1;o[n]='            output('ocount'l)'
+   end
+   when afirst then do
+      n=n+1;o[n]='            output('ocount'l)'
+   end
+   otherwise
+      n=n+1;o[n]='            output('ocount'pl)'
+   end
+
+   n=n+1;o[n]='            selectOutput(0)'
+   n=n+1;o[n]='         catch StageError'
+   n=n+1;o[n]='            sec = 0'
+   n=n+1;o[n]='            do'
+   n=n+1;o[n]='               selectOutput(0)'
+   n=n+1;o[n]='            end'
+   n=n+1;o[n]='         end -- sec'
+end
+
+n=n+1;o[n]='      end -- same'
+
+if countem then do
+   n=n+1;o[n]='   if nomatch then rcount = 1'
+   n=n+1;o[n]='   else rcount = rcount + 1'
+end
+
+if apairwise then do
+   n=n+1;o[n]='      readto() -- previous (even) one'
+   n=n+1;o[n]='      aobj = readto() -- next (odd) one'
+   n=n+1;o[n]='      pl = rexx aobj'
+
+   if aanyc then do
+      n=n+1;o[n]='      plpart = pl.upper'
+   end
+   else do
+      n=n+1;o[n]='      plpart = pl'
+   end
+
+   n=n+1;o[n]='      plpart = lpart'
+end  -- pairwise
+else do
+   n=n+1;o[n]='      plpart = lpart'
+   n=n+1;o[n]='      pl = l'
+   n=n+1;o[n]='      readto()'
+end
+
+n=n+1;o[n]='   catch StageError'
+
+lastone = \afirst & \apairwise & \amultiple
+if \lastone & amultiple then do
+   n=n+1;o[n]='      if rcount > 1 then'
+   lastone = 1
+end
+
+if lastone then do
+   n=n+1;o[n]='      do'
+   n=n+1;o[n]='         output('ocount'l)'
+   n=n+1;o[n]='      catch StageError'
+   n=n+1;o[n]='      end'
+end
+
+n=n+1;o[n]='   end -- main loop'
+
+n=n+1;o[n]='rc = rc()'
+n=n+1;o[n]='exit(rc*(rc<>12))'
+
+o[0]=n+1
+
+pInfo[3] = cname
+pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
+
+return 1
+

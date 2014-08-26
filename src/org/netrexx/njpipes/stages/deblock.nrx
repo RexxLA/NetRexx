@@ -1,0 +1,370 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/* deblock
+ *
+ * FIXED n        { PAD xorc }
+ * C              { EOF xorc {TERMINATE}}
+ * J              { EOF xorc {TERMINATE}} -- System.getProperty('line.separator')
+ * LINEND xorc    { EOF xorc {TERMINATE}}
+ * CRLF           { EOF xorc {TERMINATE}}
+ * STRING dstring { EOF xorc {TERMINATE}}
+ *
+ */
+-- 99/05/29  added byte[] logic, fix EOF logic.  ejt
+-- 98/08/27  upgraded to use new error reporting & stage template.  ejt
+-- 98/08/25  initial.  ejt
+
+options binary
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class deblock extends stage uses utils, java.lang.System
+
+properties private
+
+recl  = rexx
+delim = rexx
+eof   = rexx
+pad   = rexx
+term  = boolean
+rc    = int
+rest  = rexx
+offs  = rexx
+sf4   = boolean
+
+bdel  = byte[]
+bcls  = Class
+boff  = int
+beof  = byte[]
+bpad  = byte[]
+
+
+method deblock_setup() private signals StageError
+
+   parse arg() s a
+
+   s = s.upper()
+
+   eof   = null
+   pad   = null
+   recl  = null
+   delim = null
+   term  = 0
+
+   n = a.upper().wordpos('EOF')
+   if n>0 then do
+      eof = getXorc(a.word(n+1))
+      beof = eof.toString().getBytes()
+      a = a.delword(n,2)
+   end
+
+   n = a.upper().wordpos('TERMINATE')
+   if n>0 then do
+      if eof=null then
+         signal StageError(11,'Cannot use TERMINATE without preceeding EOF')
+      term = 1
+      a = a.delword(n,1)
+   end
+
+   n = a.upper().wordpos('PAD')
+   if n>0 then do
+      pad = getXorc(a.subword(n+1))
+      bpad = pad.toString().getBytes()
+      a = a.delword(n,2)
+   end
+
+   select
+   when s='FIXED' & eof<>null then
+      signal StageError(11,'Cannot use FIXED with EOF')
+   when s='FIXED' & a.word(1).datatype('W') then do
+      recl = a.word(1)
+      a = a.subword(2)
+   end
+   when s='FIXED' then
+      recl = '80'
+   when pad<>null then
+      signal StageError(11,'PAD is only valid with FIXED')
+   when s='SF4' & (eof<>null | pad<>null) then
+      signal StageError(11,'EOF and/or PAD not valid with SF4')
+   when s='SF4' then
+      signal StageError(11,'SF4 not implemented yet')
+   when s='C' then
+      delim = '\n'
+   when s='J' then
+      delim = Rexx System.getProperty('line.separator')
+   when s='LINEND' then do
+      delim = getXorc(a.subword(1,1))
+      a = a.subword(2)
+   end
+   when s='CRLF' then
+      delim = '\r\n'
+   when s='STRING' then do
+      ds = DString(a)
+      delim = ds.String()
+      a = ds.residue()
+   end
+   otherwise
+      Emsg(11,'unknown or unsupported option 's)
+   end
+
+   if delim<>null then
+      do
+         offs = delim.length()
+         bdel = delim.toString().getbytes()
+         boff = bdel.length
+      end
+   else
+      do
+         bdel = [byte 0]
+         boff = 0
+      end
+
+   bcls = bdel.getClass()
+
+   rest = a
+
+
+-- used by StageExits in tcpdata and tcpclient
+
+method residue(a=rexx) returns rexx shared signals StageError
+ 
+   do
+      setArg(a)
+      deblock_setup()
+      return rest
+   catch e=ThreadQ
+      signal StageError(16,e.getMessage)
+   end
+
+
+method run()
+
+   buf = rexx ''
+   bb  = byte[] null
+
+   rc  = 0
+
+   do
+      if doSetup() then
+        deblock_setup()
+
+      obj = peekto()
+      byf = bcls.isInstance(obj)
+
+      select
+
+         when recl<>null then
+            if byf then
+               do
+                  wk = byte[recl]
+                  loop forever
+                     bo = byte[] readto()
+                     if bb=null then
+                        bb = bo
+                     else do
+                        oo = bb
+                        bb = byte[oo.length+bo.length]
+                        arraycopy(oo,0,bb,0,oo.length)
+                        arraycopy(bo,0,bb,oo.length,bo.length)
+                     end
+                     loop while bb.length>=recl
+                        arraycopy(bb,0,wk,0,recl)
+                        output(wk)
+                        bl = bb.length-recl
+                        if bl=0 then
+                           do
+                              bb = null
+			      leave
+                           end
+                        else 
+                           do
+                              oo = bb
+                              bb = byte[bl]
+                              arraycopy(oo,recl,bb,0,bl)
+                           end
+                     catch ee=StageError
+                        rc = rc()
+                        if bb<>null then do
+                           if pad=null then
+                              output(bb)
+                           else do
+                              arraycopy(bb,0,wk,0,bb.length)
+                              loop i=bb.length to recl-1
+                                 wk[i] = bpad[0]
+                              end
+                              output(wk)
+                           end
+                        catch StageError
+                        end
+                     end
+                  end
+               end
+            else
+               loop forever
+                  buf = buf||readto()
+                  loop while buf.length()>=recl
+                     output(buf.left(recl))
+                     buf = buf.substr(recl+1)
+                  end
+               catch ee=StageError
+                  rc = rc()
+                  if buf<>'' then do
+                     if pad<>null then
+                        output(buf.left(recl,pad))
+                     else
+                        output(buf)
+                  catch StageError
+                  end
+               end
+
+         when eof<>null then
+            if byf then
+               loop forever
+                  bo = byte[] readto()
+                  if bb=null then
+                     bb = bo
+                  else do
+                     oo = bb
+                     bb = byte[oo.length+bo.length]
+                     arraycopy(oo,0,bb,0,oo.length)
+                     arraycopy(bo,0,bb,oo.length,bo.length)
+                  end
+                  e = pos(bb,beof)
+                  n = pos(bb,bdel)
+                  if e>-1 & (n=-1 | e<=n) then
+                     n = e
+                  else
+                     e = -1
+                  loop while n>=0
+                     if n=0 then
+                        output(null)
+                     else do
+                        oo = byte[n]
+                        arraycopy(bb,0,oo,0,n)
+                        output(oo)
+                     end
+                     bl = bb.length-boff-n
+                     if bl=0 then
+                        bb = null
+                     else do
+                        oo = bb
+                        bb = byte[bl]
+                        arraycopy(oo,n+boff,bb,0,bl)
+                     end
+                     if e>-1 then
+                        if term then
+                           signal StageError(0,'deblock terminating')
+                        else
+                           loop forever
+                              readto()
+                           end
+                     n = pos(bb,bdel)
+                  end
+               catch ee=StageError
+                  rc = rc()
+                  if bb<>null then do
+                     output(bb)
+                  catch StageError
+                  end
+               end
+            else
+               loop forever
+                  buf = buf||readto()
+                  e = buf.pos(eof)
+                  n = buf.pos(delim)
+                  if e>0 & (n=0 | e<=n) then
+                     n = e
+                  else
+                     e = 0
+                  loop while n>0
+                     output(buf.left(n-1))
+                     buf = buf.substr(n+offs)
+                     if e>0 then
+                        if term then
+                           signal StageError(0,'deblock terminating')
+                        else
+                           loop forever
+                              readto()
+                           end
+                     n = buf.pos(delim)
+                  end
+               catch ee=StageError
+                  rc = rc()
+                  if buf<>'' then do
+                     output(buf)
+                  catch StageError
+                  end
+               end
+
+      otherwise
+         if byf then
+            loop forever
+               bo = byte[] readto()
+               if bb=null then
+                  bb = bo
+               else do
+                  oo = bb
+                  bb = byte[oo.length+bo.length]
+                  arraycopy(oo,0,bb,0,oo.length)
+                  arraycopy(bo,0,bb,oo.length,bo.length)
+               end
+               n = pos(bb,bdel)
+               loop while n>=0
+                  if n=0 then
+                     output(null)
+                  else do
+                     oo = byte[n]
+                     arraycopy(bb,0,oo,0,n)
+                     output(oo)
+                  end
+                  bl = bb.length-boff-n
+                  if bl=0 then
+                     bb = null
+                  else do
+                     oo = bb
+                     bb = byte[bl]
+                     arraycopy(oo,n+boff,bb,0,bl)
+                  end
+                  n = pos(bb,bdel)
+               end
+            catch ee=StageError
+               rc = rc()
+               if bb<>null then do
+                  output(bb)
+               catch StageError
+               end
+            end
+         else
+            loop forever
+               buf = buf||readto()
+               n = buf.pos(delim)
+               loop while n>0
+                  output(buf.left(n-1))
+                  buf = buf.substr(n+offs)
+                  n = buf.pos(delim)
+               end
+            catch ee=StageError
+               rc = rc()
+               if buf<>'' then do
+                  output(buf)
+               catch StageError
+               end
+            end
+      end
+
+   catch ee=StageError
+   end
+
+   rc = rc(ee)
+exit(rc*(rc<>12))
+--stage.exit(rc*(rc<>12))
+

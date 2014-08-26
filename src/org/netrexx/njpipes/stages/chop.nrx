@@ -1,0 +1,254 @@
+-- chop.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program. 
+ */
+-- 99/05/09  use mrc() instead of rc().  ejt
+-- 98/06/17 New.  JHennick
+
+/** chop
+
+                     +-80-----+
+   >>--+-CHOP-----+--+--------+-------------------------------------------><
+       +-TRUNCate-+  +-number-+
+
+
+
+   >>--CHOP--+---------+--+-------------------------+--+-----+------------->
+             +-ANYCase-+  |              +-BEFORE-+ |  +-NOT-+
+                          +-+---------+--+--------+-+
+                            +-snumber-+  +-AFTER--+
+
+   >--+ target +----------------------------------------------------------><
+
+   target:
+   +--+-xrange----------------------+--------------------------------------+
+      +-+-STRing-+--delimitedString-+
+        +-ANYof--+
+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class chop extends stage
+
+method run() public
+--q='';q=q;trace results
+
+   parse arg() key rest
+
+   args = rest
+
+   number = ''
+   if rest = '' then do
+     if key = '' then number = 80
+     else if key.datatype('W') then number = key      -- number | nothing
+   end
+
+   if number = '' then  do
+                                           -- ANYCase
+      parse arg() key rest
+
+      key = key.upper()
+
+      if 'ANYCASE'.abbrev(key, 4) | key.wordpos('CASEANY IGNORECASE CASEIGNORE') > 0 then do
+         anycase = 1
+         args = rest
+      end
+      else do
+         args = arg()
+         anycase = 0
+      end
+                                            -- snumber
+      parse args key rest
+
+      snum = ''
+      if key.datatype('W') then do
+         snum = key
+         args = rest
+         parse args key rest
+      end
+      else snum = 0
+                                            -- BEFORE | AFTER
+      after = 0
+      if key = 'AFTER' then after = 1
+      if key = 'BEFORE' | after then do
+         args = rest
+         parse args key rest
+      end
+                                            -- NOT
+      if key = 'NOT' then do
+         notk = 1
+         args = rest
+         parse args key rest
+      end
+      else notk = 0
+                                             -- target
+      key = key.upper
+      anyof = 0
+      str = 0
+      if 'ANYOF'.abbrev(key, 3) then anyof = 1
+      else if 'STRING'.abbrev(key, 3) then str = 1
+
+      if anyof | str then target = DString(rest).String
+      else do
+         target = GetXRange(args.word(1))
+         anyof = 1
+      catch StageError
+         Emsg(8,'Error - Bad range')
+      end
+                                             -- adjustments
+      if anycase then target = target.upper
+
+      if anyof then tlen = 1
+      else tlen = target.length
+
+      if after then snum = - tlen - snum
+   end
+
+   sec_out = boolean 0              -- set flag if output 1 is connected AT START
+   do
+      selectOutput(1)
+      sec_out = 1
+   catch StageError
+   end
+
+   do                          -- back to output 0
+      selectOutput(0)
+   catch StageError
+   end
+
+   select
+   when number \= '' then                 -- number
+      loop forever
+         line = Rexx peekto()
+         parse line outl +(number) rest
+         output(outl)
+         if sec_out then do
+            selectOutput(1)
+            output(rest)
+            selectOutput(0)
+         catch StageError
+         end
+
+         readto()
+      catch StageError
+      end
+   when str & anycase then                 -- string  anycase
+      loop forever
+         line = Rexx peekto()
+         pp = line.upper.pos(target)
+         p = pp  - snum
+         select
+            when pp < 1 then do
+               outl = line
+               rest = ''
+            end
+            when p < 1 then do
+               outl = ''
+               rest = line
+            end
+            when p = 1 then do
+               outl = line.left(1)
+               rest = line.substr(2)
+            end
+            otherwise parse line outl =(p) rest
+         end
+         if notk then do
+            t = outl
+            outl = rest
+            rest = t
+         end
+         output(outl)
+         if sec_out then do
+            selectOutput(1)
+            output(rest)
+            selectOutput(0)
+         catch StageError
+         end
+
+         readto()
+      catch StageError
+      end
+   when str then                 -- string
+      loop forever
+         line = Rexx peekto()
+         pp = line.pos(target)
+         p = pp  - snum
+         select
+            when pp < 1 then do
+               outl = line
+               rest = ''
+            end
+            when p < 1 then do
+               outl = ''
+               rest = line
+            end
+            when p = 1 then do
+               outl = line.left(1)
+               rest = line.substr(2)
+            end
+            otherwise parse line outl =(p) rest
+         end
+         if notk then do
+            t = outl
+            outl = rest
+            rest = t
+         end
+         output(outl)
+         if sec_out then do
+            selectOutput(1)
+            output(rest)
+            selectOutput(0)
+         catch StageError
+         end
+
+         readto()
+      catch StageError
+      end
+   when anyof then                 -- anyof
+      loop forever
+         line = Rexx peekto()
+         pp = line.verify(target,'M')
+         p = pp  - snum
+         select
+            when pp < 1 then do
+               outl = line
+               rest = ''
+            end
+            when p < 1 then do
+               outl = ''
+               rest = line
+            end
+            when p = 1 then do
+               outl = line.left(1)
+               rest = line.substr(2)
+            end
+            otherwise parse line outl =(p) rest
+         end
+         if notk then do
+            t = outl
+            outl = rest
+            rest = t
+         end
+         output(outl)
+         if sec_out then do
+            selectOutput(1)
+            output(rest)
+            selectOutput(0)
+         catch StageError
+         end
+
+         readto()
+      catch StageError
+      end
+   otherwise nop
+   end
+   rc = mrc()
+
+exit(rc*(rc<>12))

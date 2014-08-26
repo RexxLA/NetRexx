@@ -1,0 +1,139 @@
+/*
+ *  Copyright (C) 1997,1998,1999  R.V. Jansen
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ *
+ */
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.sql.
+import java.util.
+
+-- sqlselect by rvjansen
+-- uses jdbc to select from any jdbc enabled dbms
+
+-- properties file sqlselect.properties is read to find jdbcdriver name and url
+-- sample properties file:
+
+-- #JDBC driver name
+-- #Tue Feb 03 23:29:43 GMT+01:00 1998
+-- jdbcdriver=com.imaginary.sql.msql.MsqlDriver
+-- url=jdbc:msql://localhost:1114/TESTDB
+
+-- if this file is not found default (compiled in) values are used
+-- note 1) when using a sqlselect * (all columns) from the commandline, quote the query
+-- as in java pipes.compiler (query) "sqlselect * from dept ! console"
+-- note 2) the netrexx/jdbc combination is extremely case sensitive for column and table names
+
+class sqlselect extends stage
+
+method run()
+
+a = arg()
+
+-- read from properties file and get url and jdbcdriver values
+do
+fi = BufferedReader(FileReader("sqlselect.properties"))
+
+loop forever
+    textLine = Rexx fi.readLine()
+    if textline = null then leave
+    if textline.left(3) = 'url' then parse textline name '=' url
+    if textline.left(10) = 'jdbcdriver' then parse textline name '=' jdbcdriver
+    name = name -- dummy clause to lose compiler warning
+end
+
+catch IOException
+-- if the properties file is not found, these are the DEFAULT jdbc driver name and url
+jdbcdriver = "COM.ibm.db2.jdbc.app.DB2Driver"
+url = "jdbc:db2:sample"
+end
+
+
+-- force loading of jdbc driver
+do
+  Class.forName(jdbcdriver).newInstance()
+
+catch e1 = Exception
+  say 'JDBC driver could not be loaded.'
+  say 'Exception (' e1 ') caught : \n' e1.getMessage()
+  exit 1
+end
+
+do
+-- make the connection
+  jdbcCon = Connection DriverManager.getConnection(url, '', '')
+
+catch e2 = SQLException
+  say 'SQLException(s) caught while connecting !'
+  loop while (e2 \= null)
+     say 'SQLState:' e2.getSQLState()
+     say 'Message: ' e2.getMessage()
+     say 'Vendor:  ' e2.getErrorCode()
+     say
+     e2 = e2.getNextException()
+   end
+   exit 1
+end
+
+do
+-- the query
+  query = 'Select ' a.space()
+  stmt = Statement jdbcCon.createStatement()
+  rs = ResultSet stmt.executeQuery(query)
+  meta = ResultSetMetaData rs.getMetaData();
+  cols = meta.getColumnCount();
+  helpline=Rexx
+-- get the column names
+  outputline = ''
+  width = ''
+  loop i=1 to cols
+     if meta.getColumnDisplaySize(int i) > meta.getColumnName(int i).length()
+         then width[i] = meta.getColumnDisplaySize(int i)
+     else width[i] = meta.getColumnName(int i).length()+2
+     columnline = meta.getColumnName(int i).toUppercase()
+     helpline = columnline
+     helpline = helpline.left(width[i], '-')
+     outputline = outputline||helpline
+     catch NullPointerException
+  end
+  do
+  output(outputline)
+  catch StageError
+  rc = rc()
+  end
+-- get the data rows
+  loop i=1 while rs.next()
+     outputline = ''
+    loop j=1 to cols
+       columnline = rs.getObject(int j).toString()
+       helpline = columnline
+       helpline = helpline.left(width[j])
+       outputline = outputline||helpline
+       catch NullPointerException
+    end
+     output(outputline)
+  catch StageError
+  rc = rc()
+  end
+
+  rs.close()
+  stmt.close()
+  jdbcCon.close()
+
+catch e3 = SQLException
+  say 'SQLException(s) caught !'
+  loop while (e3 \= null)
+     say 'SQLState:' e3.getSQLState()
+     say 'Message: ' e3.getMessage()
+     say 'Vendor:  ' e3.getErrorCode()
+     say
+     e3 = e3.getNextException()
+   end
+end
+
+
+exit(rc*(rc<>12))
+

@@ -1,0 +1,308 @@
+-- change.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program. 
+ */
+-- 98/09/20 removed the StageExit, it was not helping much...  ejt
+-- 98/07/30 SelIRange WAS correct...  ejt
+-- 98/07/30 use StageError(13,... in stageExit.  ejt
+-- 98/07/18 Sel1IRange should have been called instead of SelIRange.  ejt
+-- 98/06/29 Fix for range of 2.1 .  JHennick
+-- 98/06/12 DString.  IRange.  Up to CMS documentation.  JHennick
+
+/** change
+
+  >>--CHANGE--+---------+--+-----------------+---------------------------->
+              +-ANYcase-+  +-inputRange------+
+                           |    <-------+    |
+                           +-(----range-+--)-+
+
+  >--+-+ changeString +-----------------+--+-----------+-----------------><
+     +-delimitedString--delimitedString-+  +-numorstar-+
+
+  changeString:
+  +--delimiter--string--delimiter--string--delimiter----------------------+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class change extends stage uses IRange
+
+method run() public
+
+   infinity = rexx 999999999
+
+   anyc = boolean 0
+   args = rexx ''
+   key = rexx ''
+   rest = rexx ''
+   outl = rexx ''
+   ri = IRange[]
+
+   parse arg() key rest
+
+   key = key.upper()
+
+   if 'ANYCASE'.abbrev(key, 3) | key.wordpos('CASEANY IGNORECASE CASEIGNORE') > 0 then do
+      anyc = 1
+      args = rest
+   end
+   else args = arg()
+
+   ri = GetIRanges(args)
+   args = ri[0].Residue()
+   nranges = ri[0].Number()
+
+   cmax = args.word(args.words())
+
+   if cmax = '*' then cmax = infinity
+   if cmax.datatype('W') then args = args.delword(args.words())
+   else cmax = infinity
+
+   if cmax < 1 then do
+      Emsg(11,'Error - 'getName()' number 'cmax' must be a positive numeric or "*"')
+   end
+
+   args = args.strip()
+   parse args delim 2 .
+   if args.right(1) = delim & args.countstr(delim) = 3 then do
+     pd = args.pos(delim, 2)
+     args = args.insert(' 'delim, pd)
+   end
+
+   gds = DString(args)
+   from_str = gds.String
+   to_str = DString(gds.Residue()).String
+
+   sec_out = boolean 0              -- set flag if output 1 is connected AT START
+   do
+      selectOutput(1)
+      sec_out = 1
+   catch StageError
+   end
+
+   do                          -- back to output 0
+      selectOutput(0)
+   catch StageError
+   end
+
+   if nranges = 0 then sr = 1
+   else do
+      sr = ri[1].StartCol()
+      if ri[1].Type() \= 'C' then sr = 0
+   end
+
+   select
+   when from_str == '' & to_str \== '' & (sr = 1 | nranges = 0 ) then -- only a "to_str" zone is col 1
+   loop forever
+      line = Rexx peekto()
+      outl = to_str || line
+      chang = 1
+
+      if sec_out then do
+         if chang then output(outl)
+         else do
+            selectOutput(1)
+            output(outl)
+            selectOutput(0)
+         end
+      catch StageError
+      end
+      else output(outl)
+
+      readto()
+   catch StageError
+   end
+   when from_str == '' & to_str \== '' & sr = 0 then do   -- only a "to_str" in indertminate zone
+      loop forever
+         line = Rexx peekto()
+
+         ml = ri[1].SelIRange(line)
+         s = ri[1].StartChar()
+         select
+           when s = 0 then do
+              outl = ''
+              chang = 0
+           end
+           when s = 1 & line \= '' then outl = to_str || line
+           when s > line.length() then outl = line
+           otherwise
+              parse line l1 =(s) z
+              outl = l1 || to_str || z
+         end
+
+         if sec_out then do
+            if chang then output(outl)
+            else do
+               selectOutput(1)
+               output(outl)
+               selectOutput(0)
+            end
+         catch StageError
+         end
+         else output(outl)
+
+         readto()
+      catch StageError
+      end
+   end
+   when from_str == '' & to_str \== '' then do   -- only a "to_str" in zone > 1
+      sm = sr - 1
+      loop forever
+         chang = 1
+         line = Rexx peekto()
+         parse line l1 =(sr) z
+         select
+            when z \= '' then outl = l1 || to_str || z
+            when line.length() = sm then outl = line || to_str
+            otherwise
+               outl = l1
+               chang = 0
+         end
+
+         if sec_out then do
+            if chang then output(outl)
+            else do
+               selectOutput(1)
+               output(outl)
+               selectOutput(0)
+            end
+         catch StageError
+         end
+         else output(outl)
+
+         readto()
+      catch StageError
+      end
+   end
+   when anyc then do               -- have an ANYCASE "from_str" and maybe a "to_str"
+                               -- How should to_str be capitalized?
+      ul = 0
+      ll = 0
+
+      loop i = 1 to from_str.length() until ul
+         ch = from_str.substr(i,1)
+         select
+            when \ch.datatype('M') then nop
+            when ch.datatype('U') then ul = 1
+            otherwise ll = 1
+         end
+      end
+
+      xcase = \ul | \ll
+      if xcase then do
+         parse to_str t1 2 tr
+         tof = t1.upper() || tr.lower()
+         tou = to_str.upper()
+         tol = to_str.lower()
+      end
+
+      from_str = from_str.upper()
+      add = from_str.length()
+      add1 = add + 1
+
+      loop forever                        -- anycase
+         line = Rexx peekto()
+         if nranges = 0 then nranges = 1
+         pl = ''
+         i = 1
+         loop j = 1 to nranges
+            ml = ri[j].SelIRange(line).upper()
+            p = 1 - add
+            loop i = i while i <= cmax        -- find FROMs, from the left
+               p = ml.pos(from_str, p + add)
+               if p = 0 then leave
+               if pl.wordpos(p) = 0 then pl = pl p + ri[j].StartChar() - 1
+               else i = i - 1
+            end
+         end
+         outl = line
+         chang = i > 1
+         loop i = i - 1 to 1 by -1         -- change FROMs to TOs, from the right
+            p = pl.word(i)
+            l = ''
+            if p = 1 then parse outl =(add1) r1
+            else parse outl l =(p) . +(add) r1
+
+            if xcase then do
+               parse line =(p) c1 +1 c2 +1
+               select
+                  when (c1''c2).datatype('U') then to_str = tou
+                  when c1.datatype('U') then to_str = tof
+                  otherwise to_str = tol
+               end
+            end
+
+            outl = l || to_str || r1
+         end
+
+         if sec_out then do
+            if chang then output(outl)
+            else do
+               selectOutput(1)
+               output(outl)
+               selectOutput(0)
+            end
+         catch StageError
+         end
+         else output(outl)
+
+         readto()
+      catch StageError
+      end
+
+   end
+   otherwise                               -- have an exact "from_str" and maybe a "to_str"
+      add = from_str.length()
+      add1 = add + 1
+      loop forever
+         line = Rexx peekto()
+         if nranges = 0 then nranges = 1
+         pl = ''
+         i = 1
+         loop j = 1 to nranges
+            ml = ri[j].SelIRange(line)
+            p = 1 - add
+            loop i = i while i <= cmax        -- find FROMs, from the left
+               p = ml.pos(from_str, p + add)
+               if p = 0 then leave
+--               pp = p + ri[j].StartChar() - 2
+               pp = p + ri[j].StartChar() - 1
+               if pl.wordpos(pp) = 0 then pl = pl pp
+               else i = i - 1
+            end
+         end
+         outl = line
+         chang = i > 1
+         loop i = i - 1 to 1 by -1         -- change FROMs to TOs, from the right
+            p = pl.word(i)
+            l = ''
+            if p < 2 then parse outl =(add1) r1
+--            else parse outl l +(p) . +(add) r1
+            else parse outl l =(p) . +(add) r1
+            outl = l || to_str || r1
+         end
+
+         if sec_out then do
+            if chang then output(outl)
+            else do
+               selectOutput(1)
+               output(outl)
+               selectOutput(0)
+            end
+         catch StageError
+         end
+         else output(outl)
+
+         readto()
+      catch StageError
+      end
+   end
+   rc = mrc()
+
+exit(rc*(rc<>12))

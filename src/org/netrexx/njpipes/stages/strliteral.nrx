@@ -1,0 +1,67 @@
+-- strliteral.nrx NJPipe Stage
+-- 98/ 6/12  DString.  New; from LITERAL.  JHennick
+/**  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program. */
+/** strliteral
+
+       +-LITERAL--+--------+--------------------------+
+       |          +-string-+                          |
+       |             +-PREFACE-+                      |
+   >>--+-STRLITERAL--+---------+--+-----------------+-+-------------------><
+                     +-APPEND--+  +-delimitedString-+
+
+*/
+
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class strliteral extends stage
+
+method run()
+
+   args = arg()
+   parse args.upper() w1 .
+
+   if w1 = '' then do
+      Emsg(11,'Error--' GetName() 'no argument')
+   end
+
+   pref = (w1 = 'PREFACE')
+   appe = (w1 = 'APPEND')
+
+   if pref | appe then parse args . args
+   else pref = 1
+
+   str = DString(args).String
+
+   do
+      if pref then output(str)
+      select
+         when outStreamNumber()=-99 then
+            Emsg(11,'Error - no output stream connected')
+         when inStreamNumber()=-99 then
+            exit(0)                         -- just exit
+         when appe then loop                -- append after stream
+            d = peekto()
+            output(d)
+            readto()
+         catch StageError
+            rc = rc()
+            if rc = 12 then do
+               output(str)
+            catch StageError
+               rc = rc()
+            end
+         end
+         otherwise
+            shortStreams()                  -- get out of the picture
+      end
+      catch StageError
+         rc = rc()
+      end
+
+   exit(rc*(rc<>12))
+

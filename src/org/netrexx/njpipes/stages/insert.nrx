@@ -1,0 +1,132 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** insert
+
+insert a string into a record.  Will be much more effecient than specs espically
+if the input is a Byte[]
+
+                              +-BEFORE-+
+ >>--INSERT--delimitedString--+--------+----->>
+                              +-AFTER--+
+
+
+*/
+-- 99/05/29  initial.  ejt
+
+package org.netrexx.njpipes.stages
+
+options binary
+
+import org.netrexx.njpipes.pipes.
+
+/* To use methods in pipes\utils.nrx  add 'uses utils' to the class statement */
+
+class insert extends stage uses java.lang.System
+
+/* objects shared between the ...setup and run methods */
+
+properties private
+
+before = boolean
+str    = rexx
+bstr   = byte[]
+bcls   = Class
+
+/* method to initialize a stage.  Only called once unless the arg() changes */
+
+method insert_setup() private
+
+   a = arg()
+
+   ds  = DString(a)
+   str = ds.String
+   a   = ds.Residue().upper()
+
+   select
+      when a='BEFORE' then
+         before = 1
+      when a='AFTER' then
+         before = 0
+      otherwise
+         Emsg(11,'Error - insert found invalid parm 'a)
+   end
+
+   bstr = str.toString().getBytes()
+   bcls = bstr.getClass()
+
+
+method run()
+
+   /* insert objects that need to be reset every invokation here */
+
+   rc  = 0
+
+   do -- to catch the terminating StageError
+
+      /* call ...setup only if required */
+
+      if doSetup() then
+         insert_setup()
+
+      /* setup code that must execute every time the stage object runs
+       *
+       * if there are setup problems then
+       *    signal StageError(11,'termplate1 had this error')
+       *
+       */
+
+      /* body of stage */
+
+      if before then
+         loop forever
+            o = peekto()
+            if bcls.isInstance(o) then
+               do
+                  b = byte[(byte[] o).length+bstr.length]
+                  arraycopy(bstr,0,b,0,bstr.length)
+                  arraycopy(o,0,b,bstr.length,(byte[] o).length)
+                  output(b)
+               end
+            else
+               do
+                  ro = rexx o
+                  output(str||ro)
+               end
+            readto()
+         catch ClassCastException
+            Emsg(11,'Error - Input not a rexx object')
+         end
+      else
+         loop forever
+            o = peekto()
+            if bcls.isInstance(o) then
+               do
+                  b = byte[(byte[] o).length+bstr.length]
+                  arraycopy(o,0,b,0,(byte[] o).length)
+                  arraycopy(bstr,0,b,(byte[] o).length,bstr.length)
+                  output(b)
+               end
+            else
+               do
+                  ro = rexx o
+                  output(ro||str)
+               end
+            readto()
+         catch ClassCastException
+            Emsg(11,'Error - Input not a rexx object')
+         end
+
+   catch StageError
+   end
+
+   rc = mrc()
+
+exit(rc*(rc<>12))
+

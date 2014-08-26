@@ -1,0 +1,651 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/* This filter will process files containing pipes and netrexx code.
+   It extracts the pipes and outputs each one as a single line on
+   stream 0.  The modified netrexx code is output on stream 1.  It
+   should be possible to change the generator to build java statements
+   if the program is written in java...  It now outputs java to stream 3.
+*/
+
+-- 00/07/04 override peekto() to eliminate trailing \r for IBM SDK1.3 linux. ejt
+-- 99/05/29 improve label handling (for capped spawn).  ejt
+-- 99/05/19 generate dummy netrexx for java classes.  ejt
+-- 99/05/19 fixed support for {n}, n=1,2...  unneeded code was generated. ejt
+-- 99/05/17 add support for java source.  ejt
+-- 99/05/11 make njpRC() use mrc instead of rc().  ejt
+-- 98/12/06 logic changes to allow passing hashtables.  ejt
+-- 98/08/28 use njpObject() to get the last pipe object.  ejt
+-- 98/08/28 use njpRC() to extract a return code.  ejt
+-- 98/08/25 handle multiple vars/args parms for a stage correctly.  ejt
+-- 98/08/01 generate call for poolable pipes instead of constructor.  ejt
+
+package org.netrexx.njpipes.pipes
+
+class filterNjp extends stage final
+
+method peekto() returns object Protect signals StageError
+
+   l = rexx super.peekto()
+   if l=null then
+      l = ' '
+   else do
+      l = l.translate(' ','\t')
+      l = l.strip('T','\r')
+   end
+   return l
+
+method run()
+
+   p  = rexx ''        -- pipes found in this stream
+   pp = 0              -- count of pipes found
+   pn = rexx           -- pipe object name
+   x  = rexx 0         -- pending in/outStream methods
+   xx = 0              -- count of pending methods
+
+   we = rexx ' '       -- flags for end of pipe determinations
+   be = rexx ' '
+
+   rc = int 0          -- return code
+   cl = boolean 0      -- class flag to control nrx generation
+   jv = boolean 0      -- class is in java format
+   kn = boolean 0
+
+
+/* main loop processing .njp files */
+
+   parse arg() root '.'
+
+   do
+
+      l = rexx peekto()
+      select
+         when l.left(2)='--' then do
+            kn = 1
+            jv = 0
+            selectOutput(1)
+         end
+         when l.left(2)='//' then do
+            kn = 1
+            jv = 1
+            selectOutput(3)
+         end
+         otherwise do
+            kn = 0
+            jv = 0
+            selectOutput(1)
+         end
+      end
+
+      loop label main forever
+
+/* extract the keyword, remove this. just in case... */
+
+         key = l.word(1)
+         if key.left(5)='this.' then
+            key = key.substr(6)
+
+         select
+
+/* remember that we are in a class to generate pipe calls */
+
+            when 'package'=key then do
+               if kn then
+                  cl = 1
+               else do
+                  say "Error - begin '"arg()"' with '--' for NetRexx, '//' for Java"
+                  signal StageError
+               end
+            end
+
+            when 'import'=key then do
+               if l.word(2).pos('*')>0 then       -- expect * in java import...
+                  do
+                     if kn & \jv then do
+                        say "Error - expected NetRexx source, '"arg()"' found import with '*'"
+                        signal StageError
+                     end
+                     jv = 1
+                     selectOutput(3)
+                  end
+               else
+                  do
+                     if kn & jv then do
+                        say "Error - expected Java source, '"arg()"' found import without '*'"
+                        signal StageError
+                     end
+                     jv = 0
+                     selectOutput(1)
+                  end
+               kn = 1
+               cl = 1
+               output(l)
+               readto()
+               l = rexx peekto()
+            end
+
+            when 'private public'.wordpos(key)>0 & l.subword(2,2).wordpos('class')>0 then do
+               if \jv & kn then do
+                  say "Error - expected NetRexx source, '"arg()"' begins with '--'"
+                  signal StageError
+               end
+               jv = 1
+               cl = 1
+
+               if l.pos('public')>0 then do
+                  selectOutput(4)
+                  parse l _mods 'class' _name _ext '{' .
+                  output('class '_name' '_ext' '_mods)
+               end
+
+               selectOutput(3)
+               output(l)
+               readto()
+               l = rexx peekto()
+
+            end
+
+            when 'class options'.wordpos(key)>0 then do
+               if jv & kn then do
+                  say "Error - expected Java source, '"arg()"' begins with '//'"
+                  signal StageError
+               end
+               jv = 0
+               cl = 1
+               selectOutput(1)
+               output(l)
+               readto()
+               l = rexx peekto()
+            end
+
+/* save the connectors for later */
+
+            when key.abbrev('inStream(') | key.abbrev('outStream(') then do
+               xx = xx+1
+               x[xx] = l
+               readto()
+               l = rexx peekto()
+            end
+
+/* insert code to extract a pipe's return code */
+
+            when l.pos('njpRC()')>0 then do
+               if \cl then do
+                  say 'Error - no class is active'
+                  readto()
+                  l = rexx peekto()
+                  iterate main
+               end
+               if pp=0 then do
+                  say 'Error - no pipe to extract RC from'
+                  readto()
+                  l = rexx peekto()
+                  iterate main
+               end
+
+               output(l.changestr('njpRC()',pn'.mrc()'))  -- java same
+               readto()
+               l = rexx peekto()
+
+            end
+
+/* insert code to extract a pipe's object */
+
+            when l.pos('njpObject()')>0 then do
+               if \cl then do
+                  say 'Error - no class is active'
+                  readto()
+                  l = rexx peekto()
+                  iterate main
+               end
+               if pp=0 then do
+                  say 'Error - no pipe object active'
+                  readto()
+                  l = rexx peekto()
+                  iterate main
+               end
+
+               output(l.changestr('njpObject()',pn))    -- java same
+               readto()
+               l = rexx peekto()
+
+            end
+
+
+/* process the three types of pipes */
+
+            when key.lower()='pipe' | key='callpipe' | key='addpipe' then do
+
+               if key='callpipe' & key='addpipe' & \cl then do
+                  say 'Error - 'key' is only valid in a class'
+                  readto()
+                  l = rexx peekto()
+                  iterate main
+               end
+
+               if l.left(5)='exit ' | l.pos(' exit ')>0 then
+                  say 'Warning - Possible netrexx exit in 'arg()' at 'l
+
+               if l.pos('(')>=l.pos(')') then do
+                  say 'Error - pipe name and parms must be on same line as 'key
+                  readto()
+                  l = rexx peekto()
+                  iterate main
+               end
+
+               parse l '(' name parms ')' l  -- extract the name and args
+               if name='' then do
+                  say 'Error - Pipe name missing for 'key
+                  readto()
+                  l = rexx peekto()
+                  iterate main
+               end
+               if cl then
+                  name = root'_'name
+               wp = key' ('name' 'parms')'
+
+               parse parms 'end' pep .      -- find the delimitors
+               if pep='' then
+                  pep = '?'
+                                                                  
+               parse parms 'sep' sep .
+               if sep='' then
+                  sep = '!'
+
+               parse parms 'cont' cont .
+               if cont='' then
+                  cont = ','
+
+               parse parms 'cache' cache .
+
+               parse l w ' --' .
+               w = w.strip('B')
+               loop while w=''              -- ensure we have data
+                  readto()
+                  l = rexx peekto()
+                  parse l w ' --' .
+                  w = w.strip('B')
+               end
+
+               pp = pp+1                    -- count this pipe
+
+               loop until we<>pep & we<>sep & we<>cont & be<>pep & be<>sep
+                  wp = wp' 'w.strip('T',cont)
+                  we = w.right(1)
+                  readto()
+                  l = rexx peekto()
+                  loop while l='' & (we=sep | we=pep | we=cont)
+                     readto()
+                     l = rexx peekto()
+                  end
+                  parse l w ' --' .
+                  w = w.strip('B')
+                  be = l.left(1)
+               catch StageError
+                  rc = rc()                 -- we will signal this again later
+               end
+
+               x = wp.countstr('*in')      -- mangle for unique names
+               loop i=1 to x
+                  parse wp wp '*in' s ':' rest
+                  if \s.datatype('W') & s<>'' then do
+                     say 'Error - Connector is *in's': is illegal'
+                     signal StageError
+                  end
+                  y = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.substr(i,1)
+                  wp = wp'*i_'y||s':'rest
+               end i
+
+               x = wp.countstr('*out')     -- mangle to unique names
+               loop i=1 to x
+                  parse wp wp '*out' s ':' rest
+                  if \s.datatype('W') & s<>'' then do
+                     say 'Error - Connector is *out's': is illegal'
+                     signal StageError
+                  end
+                  y = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.substr(i,1)
+                  wp = wp'*o_'y||s':'rest
+               end i
+
+               parse wp ')' body            -- do we have a pipe
+               if body = '' then do
+                  say 'Error - Body of 'wp' is empty'
+                  if rc<>0 then
+                     signal StageError
+                  iterate main
+               end
+
+               if cl then do
+
+                  if jv then
+                     output('//njp'pp' 'wp)        -- log the pipe
+                  else
+                     output('--njp'pp' 'wp)        -- log the pipe
+
+                  arg = rexx ''                 -- get context and
+                  aa = 0                        -- and arguement info
+                  context = rexx ''
+                  rest = body.translate(sep,pep)
+                  loop while rest<>''
+
+                     w1 = rest.word(1)
+                     if w1.right(1)=':' then                    -- labels
+                        parse rest . work (sep) rest
+                     else
+                        parse rest work (sep) rest
+                                                                -- bad label
+                     if w1.left(1)='*' then
+                        select
+                           when w1.left(2)='*:' then do
+                              say 'Error - *: connectors not implemented.  Use *in: or *out:'
+                              signal StageError
+                           end
+                           when w1.left(3)<>'*i_' & w1.left(3)<>'*o_' then do
+                              say 'Error - Connector 'w1' should start with *in or *out'
+                              signal StageError
+                           end
+                           when w1.right(1)<>':' then do
+                              say 'Error - Missing colon at 'w1
+                              signal StageError
+                           end
+                           when w1.left(3)='*i_'  & w1.substr(4,w1.length()-4).pos('.')>0 then do
+                              say 'Error - Connect 'w1' cannot contain a period'
+                              signal StageError
+                           end
+                           when w1.left(3)='*o_' & w1.substr(4,w1.length()-4).pos('.')>0 then do
+                              say 'Error - Connect 'w1' cannot contain a period'
+                              signal StageError
+                           end
+--                         when w1.left(3)='*in'  & \w1.substr(4,w1.length()-4).datatype('W') then
+--                            say 'Info - Connector 'w1' will connect to current input Stream'
+--                         when w1.left(3)='*out' & \w1.substr(4,w1.length()-4).datatype('W') then
+--                            say 'Info - Connector 'w1' will connect to current output Stream'
+                           otherwise
+                        end
+
+                     if work<>'' then do
+                        sa = work                      -- find the last stage
+                        loop while sa<>''
+                           parse sa stg args
+                           stgc = Class.forName(String 'org.netrexx.njpipes.stages.'stg)
+                           stgi = utils stgc.newInstance()
+                           sa = stgi.stageArg(args)
+                        end
+                        ra = stgi.rexxArg(args)           -- get its rexx args
+                        if ra<>'' then do
+                           if context='' then
+                              context = ra                -- add to context
+                           else
+                              context = context','ra
+                        end
+                     catch ClassNotFoundException
+                        nop
+                     catch InstantiationException
+                        nop
+                     catch IllegalAccessException
+                        nop
+                     catch NoSuchMethodError
+                        nop
+                     end
+                     -- establish a context
+                     parse work '{' a '}' work       -- for these vars...
+                     loop until work='' & a=''
+                        select
+                           when a\=='' & \a.datatype('W') then do
+                              aa = aa+1
+                              arg[aa] = a
+                           end
+                           when a\=='' & a.datatype('W') then
+                              say 'Warning - {'a'} will not work in a method, use a variable.'
+                           otherwise
+                        end
+                        parse work '{' a '}' work
+                     end
+
+                  end
+
+                  pn = 'p$njp'pp               -- create the pipe
+                  an = 'a$njp'pp
+                  if aa=0 then
+                     do
+                        if jv then
+                           output(rexx pn' = 'name'.get((java.lang.Object)"");')
+                        else
+                           output(rexx pn" = "name".get('')")
+                     end
+                  else
+                     do
+                        if jv then
+                           output(rexx an" = new java.util.Hashtable();")
+                        else
+                           output(rexx an" = Hashtable()")
+                        loop i=1 to aa
+                           if jv then
+                              output(rexx an".put((java.lang.Object)(netrexx.lang.Rexx.toString(new netrexx.lang.Rexx('"arg[i]"'))),(java.lang.Object)"arg[i]");")
+                           else
+                              output(rexx an".put(string '"arg[i]"',"arg[i]")")
+                        end
+                        if jv then
+                           output(rexx pn" = "name".get((java.lang.Object)"an");")
+                        else
+                           output(rexx pn" = "name".get("an")")
+                     end
+
+                  if cache<>'' then                             -- jit cache
+                     if jv then
+                        output(rexx pn".setJITCache((java.util.Hashtable)"cache");")
+                     else
+                        output(rexx pn".setJITCache("cache")")
+
+                  if context<>'' then                           -- var context
+                     if jv then
+                        output(rexx pn".setContext("context");")
+                     else
+                        output(rexx pn".setContext("context")")
+
+                  if key='pipe' then   -- start the pipe here
+                     do
+                        if jv then
+                           output(rexx pn".runpipe();")
+                        else
+                           output(rexx pn".runpipe()")
+                     end
+                  else
+                     do --
+                        output(rexx ' ')
+                        loop i=1 to xx
+                           parse x[i] work '(' s ',' w ')' rest
+                           parse w . '.' n
+                           if n='' then
+                              n = w
+                           if key='addpipe' then
+                              do
+                                if jv then
+                                    output(work'('s','pn'.'n',false);'rest)
+                                else
+                                    output(work'('s','pn'.'n',boolean 0);'rest)
+                              end
+                           else
+                              do
+                                if jv then
+                                    output(work'('s','pn'.'n',true);'rest)
+                                else
+                                    output(work'('s','pn'.'n',boolean 1);'rest)
+                              end
+                        end i
+                        xx = 0
+                                                -- build implied in/outStreams
+                        work = wp' 'pep
+                        parse work ')' sub (pep) work
+                        loop while sub<>''
+                           delay = ''
+
+                           in = sub.word(1)
+                           parse in '*i_'+3 f +1 s ':'
+                           if f<>'' then do
+                             if \s.datatype('W') then
+                                s = 'inStreamNumber()'
+                             parse in '*' in ':'
+                             if key='addpipe' then
+                                do
+                                   if jv then
+                                      output('inStream('s','pn'.'in',false);'rest)
+                                   else
+                                      output('inStream('s','pn'.'in',0);'rest)
+                                end
+                             else
+                                do
+                                   if jv then
+                                      output('inStream('s','pn'.'in',true);'rest)
+                                   else
+                                      output('inStream('s','pn'.'in',1);'rest)
+                                end
+                           end
+
+                           parse in '*o_' +3 f +1 s ':'
+                           if f<>'' then do
+                             if \s.datatype('W') then
+                                s = 'outStreamNumber()'
+                             parse in '*' in ':'
+                             if key='addpipe' then
+                                do
+                                   if jv then
+                                      delay ='outStream('s','pn'.'in',false);'rest
+                                   else
+                                      delay ='outStream('s','pn'.'in',0);'rest
+                                end
+                             else
+                                do
+                                   say 'Error - cannot connect 'in' to an input stream with 'key
+                                   signal StageError
+                                end
+                           end
+
+                           i = sub.lastpos(sep)
+                           if i=0 then do
+                              say 'Error - Pipe fragment 'sub' needs atleast one 'sep
+                              signal StageError
+                           end
+                           out = sub.substr(i+1).word(1)
+
+                           parse out '*i_' +3 f +1 s ':'
+                           if f<>'' then do
+                             if \s.datatype('W') then
+                                s = 'inStreamNumber()'
+                             parse out '*' out ':'
+                             if key='addpipe' then
+                                do
+                                   if jv then
+                                      output('inStream('s','pn'.'out',false);'rest)
+                                   else
+                                      output('inStream('s','pn'.'out',0);'rest)
+                                end
+                             else
+                                do
+                                   say 'Error - cannot connect 'out' to an output stream with 'key
+                                   signal StageError
+                                end
+                           end
+
+                           parse out '*o_' +3 f +1 s ':'
+                           if f<>'' then do
+                             if \s.datatype('W') then
+                                s = 'outStreamNumber()'
+                             parse out '*' out ':'
+                             if key='addpipe' then
+                                do
+                                   if jv then
+                                      output('outStream('s','pn'.'out',false);'rest)
+                                   else
+                                      output('outStream('s','pn'.'out',0);'rest)
+                                end
+                             else
+                                do
+                                   if jv then
+                                      output('outStream('s','pn'.'out',true);'rest)
+                                   else
+                                      output('outStream('s','pn'.'out',1);'rest)
+                                end
+                           end
+
+                           if delay<>'' then
+                              output(delay)
+
+                           parse work sub (pep) work
+                        end
+
+--                      output(rexx ' ')
+                        if jv then
+                           output(rexx key"("pn");")          -- call/addpipe here
+                        else
+                           output(rexx key"("pn")")           -- call/addpipe here
+                     end
+                  if jv then
+                     output('//njp'pp)
+                  else
+                     output('--njp'pp)
+
+               end
+                                               -- convert {} to arg calls
+               loop while wp.pos('{')>0
+                  parse wp work '{' a '}' rest
+                  if a='' then
+                     wp = work"arg()"rest
+                  else
+                     if a.words()=1 then
+                        wp = work"arg(string '"a"'}"rest
+                     else do
+                        say 'Error - A object name cannot contain spaces, found: 'a
+                        readto()
+                        l = rexx peekto()
+                        iterate main
+                     end
+               end
+
+--             say 'Found: 'wp
+               p[pp] = wp                      -- and remember pipe
+
+               if rc<>0 then
+                  signal StageError            -- process all the pipes
+
+            end
+
+/* on to the next statement */
+
+            otherwise
+               do
+                  if cl then
+                     output(l)
+                  readto()
+                  l = rexx peekto()
+               end
+         end
+      end
+   catch StageError
+      rc = rc()
+      if rc=12 then
+         do
+            selectOutput(0)
+            loop i=1 to pp
+               output(p[i])
+            end
+            if cl then do
+               selectOutput(2)
+               output(arg()'.nrx')
+               if jv then
+                  output(arg()'.java')
+            end
+         catch StageError
+            rc = rc()
+         end
+   end
+
+exit(rc*(rc<>12))
+
+

@@ -1,0 +1,172 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+package org.netrexx.njpipes.pipes
+
+options binary
+
+class _stage interface
+
+Obj = Object null
+
+-- method rc() returns int                          -- get the rc
+
+-- method rc(r=int)                                 -- set the rc
+
+method arg(a=rexx) returns rexx                     -- extract arg via index
+
+method arg(o=Object) returns Object                 -- returns an object
+
+method arg() returns rexx                           -- return arguement object
+
+method inStreamNumber() returns int
+-- return the current, zero based, input stream number
+
+method outStreamNumber() returns int
+-- return the current, zero based, output stream number
+
+method inStreamState() returns int
+-- input stream state
+-- 3 unconnected
+-- 2 severed
+-- 1 nodata available now
+-- 0 data available now
+
+method outStreamState() returns int
+-- output stream state
+-- 3 unconnected
+-- 2 servered
+-- 1 output waiting to complete (in multithreaded pipes only)
+-- 0 output will not block
+
+method maxInputStream() returns int
+-- maximum input stream number
+
+method maxOutputStream() returns int
+-- maximum output stream number
+
+method selectInput(stream=int) signals StageError
+-- select an input stream
+-- Three results are possible
+-- rc =  0 with a new input stream selected
+-- rc =  0 + StageError when selecting an unconnected or previously severed stream and no sever is pending
+-- rc =  4 + StageError when selecting an unconnected or previously severed stream and a sever pending
+-- rc = 12 + StageError when the stream was servered (you get this once, then rc=0 or 4)
+
+method selectOutput(stream=int) signals StageError
+-- select an output stream
+-- Three results are possible
+-- rc =  0 with a new input stream selected
+-- rc =  0 + StageError when selecting an unconnected or previously severed stream and no sever is pending
+-- rc =  4 + StageError when selecting an unconnected or previously severed stream and a sever pending
+-- rc = 12 + StageError when the stream was servered (you get this once, then rc=0 or 4)
+
+method selectAnyInput signals StageError, ThreadQ
+-- select an input stream with data, the selection order is not specified
+-- rc = 0  when a new input stream selected
+-- rc = 2  + StageError when eofReport('either') active and an input severs
+-- rc = 4  + StageError when eofReport('any') active and an output severs
+-- rc = 8  + StageError when eofReport('all') active and an all outputs sever
+-- rc = 12 + StageError when all input streams are severed or unconnected
+
+method shortStreams signals StageError, ThreadQ
+-- short the current streams
+-- rc = 4  + StageError when a stream is unconnected
+-- rc = 2  + StageError when eofReport('either') active and an input severs
+-- rc = 4  + StageError when eofReport('any') active and an output severs
+-- rc = 8  + StageError when eofReport('all') active and an all outputs sever
+-- rc = 12 + StageError when a stream was severed
+
+method output(d=Object) signals StageError, ThreadQ
+-- output object the the current stream
+-- rc = 4               when a stream is unconnected
+-- rc = 2  + StageError when eofReport('either') active and an input severs
+-- rc = 4  + StageError when eofReport('any') active and an output severs
+-- rc = 8  + StageError when eofReport('all') active and an all outputs sever
+-- rc = 12 + StageError when a stream is severed
+
+method readto() returns Object signals StageError, ThreadQ
+-- get the next object on the stream
+-- rc = 4  + StageError when a stream is unconnected
+-- rc = 2  + StageError when eofReport('either') active and an input severs
+-- rc = 4  + StageError when eofReport('any') active and an output severs
+-- rc = 8  + StageError when eofReport('all') active and an all outputs sever
+-- rc = 12 + StageError when a stream is severed
+
+method peekto() returns Object signals StageError, ThreadQ
+-- peek at the next object
+-- rc = 4  + StageError when a stream is unconnected
+-- rc = 2  + StageError when eofReport('either') active and an input severs
+-- rc = 4  + StageError when eofReport('any') active and an output severs
+-- rc = 8  + StageError when eofReport('all') active and an all outputs sever
+-- rc = 12 + StageError when a stream is severed
+
+method severInput() signals StageError
+-- sever current input stream unstacking a saved strean
+-- rc = 0               when a stacked stream is restored
+-- rc = 12 + StageError when the stream is servered
+
+method severOutput() signals StageError
+-- sever current output stream unstacking a saved stream
+-- rc = 12 + StageError when the stream is servered
+
+method suspend() signals ThreadQ
+-- lower the priority of this stage and issue a java.lang.Thread.yield()
+
+method exit(rc=int) signals ThreadQ
+-- sever all input and output streams and set rc
+
+-- method inStream(n=int,l=link,s=boolean) signals StageError
+-- If s stack input stream n and replace it with the connector's stream
+-- or create a stream and link it to the connector's stream
+-- this is normally a call generated by the compiler/preprocessor
+
+-- method outStream(n=int,l=link,s=boolean) signals StageError
+-- If stack output stream n and replace it with the connector's stream
+-- or create a stream and link it to the connector's stream
+-- this is normally a call generated by the compiler/preprocessor
+
+/* using the njp preprocessor for callpipe and addpipe will generate
+   code the can throw a StageError */
+
+-- method callpipe(p=pipes.pipe) returns int
+-- call a pipe from a stage.  Suspend the stage until the pipe completes
+-- this is normally a call generated by the compiler/preprocessor
+
+-- method addpipe(p=pipes.pipe)
+-- call a pipe from a stege.  Do no suspend the stage.
+-- this is normally a call generated by the compiler/preprocessor
+
+method eofReport(a=rexx) signals StageError
+--   use 'current' to detect only current streams severing
+--   use 'all'     to detect all output servered
+--   use 'any'     to detect any output server
+--   use 'either'  to detect any output or input server (ie. with selectAnyInput)
+--
+-- rc = 12 + StageError when there are no output streams
+
+method commit(n=int) returns int signals ThreadQ
+-- raise the pipes commit level to n
+-- return the current rc of the pipe
+
+method commit() returns int
+-- return the current rc of the pipe
+
+method nocommit()
+-- do not commit at first readto, peekto or output
+
+-- method getRexx(n=Rexx) returns Rexx
+-- get the rexx stem context for a stage called to operate on rexx stems
+
+-- method setRunaway(i=int)                         -- timeout interval
+
+-- method runaway() returns int                     -- return timeout interval
+
+-- method dump()                                    -- dump the pipe status
+

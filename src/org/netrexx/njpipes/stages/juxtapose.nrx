@@ -1,0 +1,142 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** Juxtapose
+
+prefix a record from the seconday input stream with those from records
+from the primary input stream.
+
+pipe (findtext end ? runaway 60000 debug 0 )
+
+   command cmd /C dir /B {2} !              -- get the directory
+a: not getfiles !                           -- flip streams 0/1
+b: juxtapose !                              -- prefix with the file name
+   specs word1 1-20 word2-* next !          -- format the output
+   console ?                                -- display it
+a: !
+   locate /{1}/ !                           -- send lines to juxta to display
+b:
+
+*/
+-- 98/ 7/17 wrong stream selected when started.  ejt
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class juxtapose public extends stage
+
+method run()
+
+   a = arg()
+
+   if a.upper='COUNT' then
+      count = boolean 1
+   else do
+      count = boolean 0
+      if a<>'' then
+         Emsg(11,'Error - excess arguements: '||a)
+   end
+
+   do
+      both = boolean 1
+      selectOutput(1)
+   catch StageError
+      both = 0
+      rc(0)
+   end
+
+   do
+      f = 1
+      a = rexx readto()
+      select
+         when \both & \count then do
+            selectOutput(0)
+            loop forever
+               selectAnyInput()
+               if inStreamNumber()=0 then
+                  a = rexx readto()
+               else
+                  do
+                     b = rexx peekto()             -- read input
+                     output(a||b)
+                     readto()
+                  end
+            end
+         end
+         when \both & count then do
+            selectOutput(0)
+            loop forever
+               selectAnyInput()
+               if inStreamNumber()=0 then
+                  do
+                     a = rexx readto()
+                     i = 0
+                  end
+               else
+                  do
+                     b = rexx peekto()             -- read input
+                     i = 1+1
+                     output(i.right(10)||a||b)
+                     readto()
+                  end
+            end
+         end
+         when both & \count then
+            loop forever
+               selectAnyInput()
+               if inStreamNumber()=0 then
+                  do
+                     if f then do
+                        selectOutput(1)
+                        output(a)
+                     end
+                     a = rexx readto()
+                     f = 1
+                  end
+               else
+                  do
+                     b = rexx peekto()               -- read input
+                     selectOutput(0)
+                     output(a||b)
+                     readto()
+                     f = 0
+                  end
+            end
+         otherwise
+            loop forever
+               selectAnyInput()
+               if inStreamNumber()=0 then
+                  do
+                     if f then do
+                        selectOutput(1)
+                        output(a)
+                     end
+                     a = rexx readto()
+                     f = 1
+                     i = 0
+                  end
+               else
+                  do
+                     b = rexx peekto()             -- read input
+                     i = 1+1
+                     selectOutput(0)
+                     output(i.right(10)||a||b)
+                     readto()
+                     f = 0
+                  end
+            end
+      end
+
+   catch StageError
+      rc = rc()
+   end
+
+exit(rc*(rc<>12))
+

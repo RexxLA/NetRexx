@@ -1,0 +1,215 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- pick.nrx NJPipe Stage
+-- 99/05/15  use Emsg.  ejt
+-- 99/05/09  use mrc() instead of rc().  ejt
+-- 98/07/30  use SelIRange.  ejt
+-- 98/07/11  initial release. EJT
+
+/** pick
+
+ >>--PICK--+---------+--+----------+--+-------------+--+-==--+--+-----------------+-->
+           +-ANYcase-+  +-PAD xorc-+  +-inputRanges-+  +-^==-+  +-inputRanges-----+
+                                                       +-<<--+  +-delimitedString-+
+                                                       +-<<=-+
+                                                       +->>--+
+                                                       +->>=-+
+
+  The performance of Pick can be enhanced by reordering the compares in the
+  comp method to put your compare first.
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class pick extends stage uses IRange binary
+
+cc = int
+
+anycase = boolean 0
+
+method run()
+
+   robj = rexx
+   w1   = rexx
+   args = rexx
+   pad  = rexx ' '
+   rc = int
+   i  = int
+   n1 = int
+   r1 = IRange[]
+   n2 = int
+   r2 = IRange[]
+   out0flag = boolean
+   out1flag = boolean
+
+   args = arg()
+
+   w = args.upper().wordpos('PAD')
+   if w>0 then do
+      pad = GetXorc(args.word(w+1))
+      args = args.delword(w,2)
+   end
+
+   parse args w1 rest
+   w1 = w1.upper()
+
+   anycase = rexx 'ANYCASE'.abbrev(w1, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1) > 0
+   if anycase then args = rest
+
+   r1 = GetIRanges(args)
+   n1 = r1[0].Number()
+   args = r1[0].Residue()
+
+   if n1=0 then
+      Emsg(11,'Error - Range expected but none found')
+
+   parse args comp args
+   cc = '== ^== << <<= >> >>='.wordpos(comp)
+   if cc=0 then
+      Emsg(11,'Error - compare operator expected found: 'comp)
+
+   r2 = GetIRanges(args)
+   n2 = r2[0].Number()
+   args = r2[0].Residue()
+   if n2=0 then
+      y = DString(args).String
+
+   out0flag = outStreamState()=0
+   do
+      out1flag = 1
+      selectOutput(1)
+   catch StageError
+      out1flag = 0
+   end
+
+   select
+      when out0flag & out1flag then
+         loop forever
+            aobj = peekto()
+            robj = Rexx aobj
+            j = 1
+            x = r1[j].SelIRange(robj,pad)
+            loop i=2 to n1
+               x = x||r1[i].SelIRange(robj,pad)
+               if r1[j].endcol()>=r1[i].startcol() then
+                  Emsg(8,'Error - Invalid range (end before start)')
+               j = i
+            end
+            if n2>0 then do
+               j = 1
+               y = r2[j].SelIRange(robj,pad)
+               loop i=2 to n2
+                  y = y||r2[i].SelIRange(robj,pad)
+                  if r2[j].endcol()>=r2[i].startcol() then
+                     Emsg(8,'Error - Invalid range (end before start)')
+                  j = i
+               end
+            end
+            if comp(x,y) then
+               do
+                  selectOutput(0)
+                  output(aobj)
+               end
+            else
+               do
+                  selectOutput(1)
+                  output(aobj)
+               end
+            readto()
+        end
+     when out1flag then do
+         selectOutput(1)
+         loop forever
+            aobj = peekto()
+            robj = Rexx aobj
+            j = 1
+            x = r1[j].SelIRange(robj,pad)
+            loop i=2 to n1
+               x = x||r1[i].SelIRange(robj,pad)
+               if r1[j].endcol()>=r1[i].startcol() then
+                  Emsg(8,'Error - Invalid range (end before start)')
+               j = i
+            end
+            if n2>0 then do
+               j = 1
+               y = r2[j].SelIRange(robj,pad)
+               loop i=2 to n2
+                  y = y||r2[i].SelIRange(robj,pad)
+                  if r2[j].endcol()>=r2[i].startcol() then
+                     Emsg(8,'Error - Invalid range (end before start)')
+                  j = i
+               end
+            end
+            if \comp(x,y) then
+               output(aobj)
+            readto()
+         end
+      end
+   otherwise
+      selectOutput(0)
+      loop forever
+         aobj = peekto()
+         robj = Rexx aobj
+         j = 1
+         x = r1[j].SelIRange(robj,pad)
+         loop i=2 to n1
+            x = x||r1[i].SelIRange(robj,pad)
+            if r1[j].endcol()>=r1[i].startcol() then
+               Emsg(8,'Error - Invalid range (end before start)')
+            j = i
+         end
+         if n2>0 then do
+            j = 1
+            y = r2[j].SelIRange(robj,pad)
+            loop i=2 to n2
+               y = y||r2[i].SelIRange(robj,pad)
+               if r2[j].endcol()>=r2[i].startcol() then
+                  Emsg(8,'Error - Invalid range (end before start)')
+               j = i
+            end
+         end
+         if comp(x,y) then
+            output(aobj)
+         readto()
+      end
+   catch StageError
+   end
+
+   rc = mrc()
+   exit(rc*(rc<>12))
+
+
+method comp(x=rexx,y=rexx) returns boolean
+
+   if anycase then
+      select
+         when cc=1 then return x.upper()==y.upper()
+         when cc=2 then return x.upper()\==y.upper()
+         when cc=3 then return x.upper()<<y.upper()
+         when cc=4 then return x.upper()<<=y.upper()
+         when cc=5 then return x.upper()>>y.upper()
+         when cc=6 then return x.upper()>>=y.upper()
+         otherwise
+            return 0
+      end
+   else
+      select
+         when cc=1 then return x==y
+         when cc=2 then return x\==y
+         when cc=3 then return x<<y
+         when cc=4 then return x<<=y
+         when cc=5 then return x>>y
+         when cc=6 then return x>>=y
+         otherwise
+            return 0
+      end

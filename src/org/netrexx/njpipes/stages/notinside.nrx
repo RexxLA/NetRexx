@@ -1,0 +1,193 @@
+-- between.nrx | inside.nrx | notinside.nrx | outside.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 99/05/09  use mrc() instead of rc().  ejt
+-- 98/06/22  aobj; binary; outside New; derived from BETWEEN.  JHennick
+
+/** notinside
+
+
+   >>-+-BETWEEN----+--+---------+--delimitedString--+-number----------+---------><
+      +-INSIDE-----+  +-ANYcase-+                   +-delimitedString-+
+      +-NOTINSIDE--+
+      +-OUTSIDE----+
+
+
+  FRLABLE Contributed by Chuck Moore.
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class notinside extends stage binary  -- notinside
+
+method run()
+
+   /* variable declarations */
+   _rc           = int      0
+   _Label_len    = int      0
+
+   args          = Rexx     ''
+   anycase       = boolean  0
+   w1            = Rexx     ''
+
+   /* get incoming arguments and associated parameters */
+
+   parse arg() args
+   parse args.upper() w1 .
+   anycase = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1)
+   if anycase then parse args . args
+
+   ds = DString(args)
+
+   Label = ds.String
+
+   toLabel = ds.Residue
+   if toLabel = '' then do
+      Emsg(11,'Error --' getName() 'No "toLabel"')
+   end
+
+   if toLabel.datatype('W') then do
+      number = toLabel - 1
+      if number < 1 then do
+         Emsg(11,'Error --' getName() 'number must be > 1')
+      end
+   end
+   else do
+      toLabel = DString(toLabel).String
+      number = 0
+      _toLabel_len = toLabel.length
+   end
+
+   if number > 0 then number = number + 1 -- inside  -- notinside
+
+   _Label_len = Label.length()               -- handy to have around for speed
+--q='';q=q;trace results -- nrt test line
+
+   select
+       when _Label_len > 0 & anycase then                   -- real label, ANYCASE
+            loop forever
+               aobj = peekto()          -- look at the next record
+               _record = Rexx aobj          -- look at the next record
+               if Label = _record.left(_Label_len) then
+                  do
+                     do
+                        output(aobj)   -- notinside
+                        /*selectOutput(0)  -- \(outside notinside) */
+                        selectOutput(1)   -- outside -- notinside
+                        /*output(aobj)   -- \(inside notinside) */
+                     catch StageError
+                        do
+                           eofReport('ANY')
+                        catch StageError
+                           leave
+                        end
+                     finally
+                        readto()
+                     end
+
+                     if number > 0 then loop for number
+                        output(readto())
+                     end
+                     else loop until toLabel = _record.left(_toLabel_len)
+--q=ask'111111111111111111111111111111' -- nrt test line
+                        aobj = peekto()
+                        _record = Rexx aobj
+                        selectOutput(0)   -- notinside
+                        /*if toLabel \= _record.left(_toLabel_len) then output(aobj) -- inside */
+                        if toLabel = _record.left(_toLabel_len) then output(aobj) -- notinside
+                        /*output(aobj) -- \(inside notinside) */
+                        readto()
+                     end
+
+                  catch StageError           -- errors (or end of datastream)
+                     leave
+                  end
+               else
+                  do
+                     /*selectOutput(1)  -- \(outside notinside) */
+                     selectOutput(0)  -- outside -- notinside
+                     output(aobj)
+                     readto()
+                  catch StageError
+                     do
+                        eofReport('ANY')
+                     catch StageError
+                        leave
+                     end
+                  end
+            catch StageError                 -- errors (or end of datastream)
+            end
+       when _Label_len <> 0 then                                    -- real label \anycase
+            loop forever
+--q=ask'000000000000000000000000000000' -- nrt test line
+               aobj = peekto()          -- look at the next record
+               _record = Rexx aobj          -- look at the next record
+               if Label == _record.left(_Label_len) then
+                  do
+                     do
+                        output(aobj)   -- notinside
+                        /*selectOutput(0)  -- \(outside notinside) */
+                        selectOutput(1)   -- outside -- notinside
+                        /*output(aobj)   -- \(inside notinside) */
+                     catch StageError
+                        do
+                           eofReport('ANY')
+                        catch StageError
+                           leave
+                        end
+                     finally
+                        readto()
+                     end
+
+                     if number > 0 then loop for number
+                        output(readto())
+                     end
+                     else loop until toLabel == _record.left(_toLabel_len)
+--q=ask'111111111111111111111111111111' -- nrt test line
+                        aobj = peekto()
+                        _record = Rexx aobj
+                        selectOutput(0)   -- notinside
+                        /*if toLabel \== _record.left(_toLabel_len) then output(aobj) -- inside */
+                        if toLabel == _record.left(_toLabel_len) then output(aobj) -- notinside
+                        /*output(aobj) -- \(inside notinside) */
+                        readto()
+                     end
+
+                  catch StageError           -- errors (or end of datastream)
+                     leave
+                  end
+               else
+                  do
+                     /*selectOutput(1)  -- \(outside notinside) */
+                     selectOutput(0)  -- outside -- notinside
+                     output(aobj)
+                     readto()
+                  catch StageError
+                     do
+                        eofReport('ANY')
+                     catch StageError
+                        leave
+                     end
+                  end
+            catch StageError                 -- errors (or end of datastream)
+            end
+       otherwise                     -- no real label
+            do
+               /*selectOutput(0) -- \(outside notinside) */
+               selectOutput(1)  -- outside -- notinside
+               shortStreams()
+
+            catch StageError                 -- errors (or end of datastream)
+            end
+   end
+
+   _rc = mrc()
+   if _rc = 4 then _rc = 12
+   exit(_rc * (_rc <> 12) )        -- sever streams and leave with Colishaw (tm) retcode

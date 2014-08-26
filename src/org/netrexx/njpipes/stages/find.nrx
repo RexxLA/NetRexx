@@ -1,0 +1,107 @@
+-- find.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 98/09/20 improved outstream logic.  ejt
+-- 98/08/28 use mrc method to get correct rc.  ejt
+-- 98/06/20 aobj; binary; Use "catch"; Case sensitivity; minor speedup. JHennick
+-- 98/07/16 handle case where there is no stream0.  EJT
+
+/** find
+
+
+   >>--+-FIND--+--------+----------------------+--------------------------><
+       |       +-string-+                      |
+       +-STRFIND--+---------+--delimitedString-+
+                  +-ANYcase-+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class find extends stage binary
+
+method run()
+
+   f_str = rexx arg()
+   len = rexx f_str.length()
+   robj = rexx
+   key = rexx
+
+   c = char
+   cc = int 1
+   rc = int
+   start = int 1
+   yes = boolean 1
+   s0 = boolean 1
+   s1 = boolean 1
+
+   if  f_str.verify('_ ', 'M') > 0 then do  -- with Magic chars
+      start = f_str.verify(' ')  -- jump leading spaces
+      loop forever
+         yes = 1
+         aobj = peekto()
+         robj = rexx aobj
+         key = robj.left(len)
+         loop cc = start to len while yes
+            c = f_str.substr(cc, 1)
+            if c = ' ' then iterate
+            if c = '_' then c = ' '
+            if c \== key.substr(cc, 1) then yes = 0
+         end
+         if yes then
+            do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end
+         else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      end
+   catch StageError
+   end
+   else                            -- no Magic chars
+   loop forever
+      aobj = peekto()
+      robj = rexx aobj
+      if robj.left(len) == f_str then
+         do
+            if s0 then do
+               selectOutput(0)
+               output(aobj)
+            catch StageError
+               selectOutput(1)
+               s0 = 0
+            end
+         end
+      else
+         if s1 then do
+            selectOutput(1)
+            output(aobj)
+         catch StageError
+            selectOutput(0)
+            s1 = 0
+         end
+      readto()
+   catch StageError
+   end
+
+   rc = mrc()
+   exit(rc*(rc<>12))
+

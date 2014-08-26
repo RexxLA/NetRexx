@@ -1,0 +1,65 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** dup
+
+Duplicate the input object.  If n is an asterix the initial input is output
+forever and is never consumed.  If n is zero more, the object is output and
+along with n coppies of it.  If n is -1 then dup acts like hole and just
+consumes its input.
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class dup extends stage
+
+method run()
+
+   n = arg()
+   do
+      select
+         when n='*' then do                -- infinite coppies here
+            l = peekto()
+            loop forever
+               output(l)
+            end
+         end
+         when \n.datatype('W') then
+            exit(14)
+         when n=-1 then                    -- just consume, no coppies
+            loop forever
+               l = readto()
+            end
+         when n=0 then                     -- just copy the stream
+            loop forever
+               l = peekto()
+               output(l)
+               readto()
+            end
+         when n>0 then                     -- pass thru and make n coppies
+            loop forever
+               l = peekto()
+               output(l)
+               loop for (int n)
+                  output(l)
+               end
+               readto()
+            end
+         otherwise
+            Emsg(11,'Error - unexpected arguement 'n)
+      end
+   catch StageError
+      rc = rc()
+   end
+
+exit(rc*(rc<>12))
+

@@ -1,0 +1,112 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+-- 99/05/26 remember to remove interrupted threads...  ejt
+-- 99/05/07 handles pipes/stages restarted on a new thread.  ejt
+-- 99/05/06 set stage.T before calling its run() method.  ejt
+-- 98/09/20 now catches unexpected exceptions from pipes/stages.  ejt
+-- 98/08/13 optimized vector usage.  ejt
+-- 98/07/31 threads pool for objects implementing the RunnablePool interface.  ejt
+
+package org.netrexx.njpipes.pipes
+
+options binary
+
+-- nodes define connections on specific streams between stages
+
+class ThreadPool extends Object implements Runnable
+
+properties static
+
+group  = ThreadGroup('njPipes')
+pool   = Vector(29)               -- initialy 29 slots
+linger = 30000                    -- allow a thread to linger for 30 seconds
+
+properties private
+
+T    = Thread
+
+properties volatile private
+
+data = RunnablePool     -- values passes between stages
+pri  = int
+run  = boolean
+
+-- Setup the node with no connections defined
+
+method ThreadPool(a=RunnablePool,p=int)
+   data = a
+   pri  = p
+   run  = 1
+   T = Thread(group,this)
+   T.start()
+
+method run()
+
+   loop protect this until data=null
+      if T.getPriority()<>pri then
+         T.setPriority(pri)
+      do
+         if T=null then
+            signal Exception
+         if T.getPriority()<>pri then
+            if org.netrexx.njpipes.pipes.stage>=data then    -- make sure stage.T is set early enough
+               (stage data).T = T        -- so going test will see the correct T
+            data.run()
+      catch q=ThreadQ
+--       say q.getMessage()
+--       q.printStackTrace()
+      catch e=Exception
+         e.printStackTrace()
+         if org.netrexx.njpipes.pipes.stage>=data then do
+            if (stage data).going & (stage data).T=T then
+               if (stage data).isPipe then
+                  (pipe data).kill()
+               else
+                  (stage data).p.kill()
+            signal e
+         end
+      end
+      data = null
+      pool.addElement(this)
+--    say this linger
+      wait(linger)
+      if data=null then
+         run = 0
+   catch InterruptedException
+      pool.removeElement(this)
+--    say 'Thread exiting via interrupt 'this
+   catch NoSuchElementException
+   catch e=Exception
+      pool.removeElement(this)
+      say 'Exiting due to uncaught Exception' e.getMessage()
+   end
+
+method startThread(a=RunnablePool,p=int java.lang.Thread.NORM_PRIORITY) returns Thread static
+   e = ThreadPool
+
+   loop protect pool until e.run
+      e = ThreadPool pool.lastElement()
+      pool.removeElementAt(pool.size()-1)
+      do protect e
+         if e.run then do
+            e.pri  = p
+            e.data = a
+            e.notify()
+         end
+      end
+   catch NoSuchElementException
+      e = Threadpool(a,p)
+   end
+   return e.T
+
+method stop() static
+
+   group.stop()
+   pool.removeAllElements()
+

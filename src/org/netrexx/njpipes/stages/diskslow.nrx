@@ -1,0 +1,126 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+package org.netrexx.njpipes.stages
+
+-- 99/05/29 use byte[] directly.  ejt
+-- 98/09/06 initial
+
+import org.netrexx.njpipes.pipes.
+
+class diskslow extends stage
+
+method run() public
+
+rc  = int 0
+blk = boolean 1
+
+bo = [byte 0]
+bc = Class
+
+    ls  = System.getProperty('line.separator')
+    lsl = ls.length()
+
+    a = arg()
+    if a.word(1).upper()='STREAM' then do
+       blk = 0
+       a = a.subword(2)
+    end
+
+    do
+       peekto()                                  -- do nothing if no input
+       do
+          out0 = boolean 1                       -- pass thru if connected
+          selectOutput(0)
+       catch StageError
+          out0 = 0
+       end
+       if blk then
+          do
+             out = FileWriter(String a)
+             loop forever
+                line = peekto()
+                if line<>null then do
+                   if String>=line then
+                      d = String line
+                   else
+                      d = line.toString()
+                   out.write(d,0,d.length())
+                end
+                out.write(ls,0,lsl)
+                out.flush()
+                if out0 then
+                   output(line)
+                readto()
+             catch StageError
+                signal StageError
+             catch ee=IOException
+                Emsg(13,'Error - 'ee.getMessage())
+             finally
+                do
+                   out.close()
+                catch ee=IOException
+                   Emsg(13,'Error - 'ee.getMessage())
+                end
+             end
+          end
+       else
+          do
+             bc = bo.getClass()
+             b = byte[]
+             bout = DataOutputStream(FileOutputStream(String a))
+             loop forever
+                line = peekto()
+                if line<>null then do
+                   select
+                      when bc.isInstance(line) then
+                         b = byte[] line
+                      when String>=line then
+                         b = (String line).getBytes()
+                      otherwise
+                         b = line.toString().getBytes()
+                   end
+                   bout.write(b,0,b.length)
+                   bout.flush()
+                end
+                if out0 then
+                   output(line)
+                readto()
+             catch StageError
+                signal StageError
+             catch ee=IOException
+                Emsg(13,'Error - 'ee.getMessage())
+             finally
+                do
+                   bout.close()
+                catch ee=IOException
+                   Emsg(13,'Error - 'ee.getMessage())
+                end
+             end
+          end
+    catch ee=IOException
+       Emsg(13,'Error - 'ee.getMessage())
+    catch StageError
+       rc = rc()
+    end
+
+exit(rc*(rc<>12))
+
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+if pInfo[9] then
+   do
+      pInfo[3]  = 'diskr'             -- call this stage instead
+      pInfo[11] = 'diskr'             -- might have a stageExit...
+      return 1
+   end
+else
+   return 0                           -- use diskslow
+

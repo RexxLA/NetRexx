@@ -1,0 +1,604 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 01/05/11 call info() only when killed so Emsg gets reported.  ejt
+-- 01/05/09 prevent nullpointer exception when super.T is null.  ejt
+-- 99/05/11 make kill pass back the current rc.  ejt
+-- 99/05/11 use mrc to save pipes rc.  ejt
+-- 98/09/21 limit data displayed by dump(). ejt
+-- 98/09/20 kill now public for threadpool.  ejt
+-- 98/09/08 renamed pipe's commit() method to commitAt()
+-- 98/09/03 interrupting a pipe kills the pipe.  ejt
+-- 98/09/03 multithreaded stages with external waits handled correctly.  ejt
+-- 98/09/03 one running stage cannot be deadlocked.  ejt
+-- 98/08/26 detect deadlocks from commit.  ejt
+-- 98/08/26 output setup error messages from stages, enchange dump().  ejt
+-- 98/08/26 any debug options cause threads to be named.  ejt
+-- 98/08/25 improved stall detection logic.  ejt
+-- 98/08/23 startThread no longer uses a name.  ejt
+-- 98/08/13 fixed an intermitant hang occuring when a callpipe finished very quickly.  ejt
+-- 98/08/13 optimized rc logic.  ejt
+-- 98/08/12 optimized runaway logic.  ejt
+-- 98/08/11 optimizations.  combined blocked/seq, remvoved active, added commitTo.  ejt
+-- 98/08/11 increment seq flag at start/end of call/addpipe.  ejt
+-- 98/08/11 intermitant stall in addt6 eliminated, callee instance var added.  ejt
+-- 98/08/08 called pipes were not notifing themselves when ending.  ejt
+-- 98/08/08 added stage waits (COMMIT & ANY) in call/addpipe logic.  ejt
+-- 98/08/03 wait for a call/add pipe to commit to parent's level.  ejt
+-- 98/08/03 all pipe instance objects now shared.  ejt
+-- 98/08/02 commit logic corrected.  ejt
+-- 98/08/01 handle poolable pipes.  ejt
+-- 98/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
+-- 98/07/23 fixed dump to use _findin and _findout to avoid a deadlock.  ejt
+
+/* Futures 98/11/30 ejt.
+
+Beans seem to be taking over the world.  A pipe should be a bean.  This would
+allow you to generate specialize pipe beans and easily use them in java code.
+It not necessary that this class be a bean just that classes subclassing this
+implement the necesary stuff to be beans.  Some support code probably needs to
+be added here or in the stage or utils classes.
+
+ */
+  
+package org.netrexx.njpipes.pipes
+
+options binary
+
+
+class pipe public extends stage uses ThreadPool, utils
+
+properties static
+
+JITCache = HashTable(29)
+maxWait  = int 700           -- 7 tenths of a second
+
+properties shared
+
+_context  = rexx             -- Rexx variable context for this pipe
+
+dumped    = int              -- have we dumped this?
+monitor   = pipe             -- monitor thread for this pipe
+svect     = Vector           -- list of stages in pipe and called pipes
+table     = HashTable
+callee    = stage            -- the stage that called the pipe
+
+properties volatile
+
+_active   = int
+
+
+-- internal pipe initializing routine
+
+method pipe()
+
+   pipe_reset()
+
+   super.isPipe = 1          -- we are a pipe
+
+   SetRunaway(maxWait)
+
+   svect  = Vector(20,80)
+
+   callee = null
+
+
+method pipe_reset()
+
+   _context = ''
+
+   dumped = 0
+
+   _active = 0
+
+   table  = HashTable(29)
+
+   super.p   = this    -- pipe this stage directly belongs too
+                       -- the pipe thread should be set to this
+   monitor   = this    -- who directly monitors this stage/pipe
+                       -- stages will point to this and the pipe
+                       -- to the pipe that starts it
+   super.top = this    -- the top pipe in the higharcy
+
+
+
+-- find the current runaway level of the pipe
+
+method runaway(s=int 0) returns int protect private
+
+   super._stall = s
+-- say svect.size()
+   loop i = 0 to svect.size()-1
+      work = stage svect.elementAt(i)
+      if work._stall>super._stall then
+            super._stall = work._stall
+   end
+   if monitor<>this then
+      monitor.runaway(super._stall)
+   return super._stall
+
+
+-- get/set the return code used by dump()
+
+method rc() returns int protect
+
+   loop i = 0 to svect.size()-1
+      work = stage svect.elementAt(i)
+      if \work.isPipe & \work.going /* & work.p=this */ then
+         if work._rc>super._rc then
+            super._rc = work._rc
+   end
+   return super._rc
+
+
+-- set variable context (called when a pipe is built)
+
+method setRexx(n=Rexx,v=Rexx)
+
+   _context[n] = v
+
+
+-- get variable context (called in a stage)
+
+method getRexx(n=Rexx) returns Rexx
+
+   return _context[n]
+
+
+-- find the current commit level of the pipe
+
+method commitAt() returns int protect
+
+   l = Integer.MAX_VALUE
+   loop i = 0 to svect.size()-1
+      work = stage svect.elementAt(i)
+--    say work.level level this work
+      if work.level<l & (stage this)<>work /* & work.p=this */ then
+         l = work.level
+   end
+   if l<>Integer.MAX_VALUE then
+      super.level=l
+   return super.level
+
+
+-- are we committed to level, also sets pipe commit...
+
+method commitTo(l=int) returns boolean protect
+
+   loop i = 0 to svect.size()-1
+      work = stage svect.elementAt(i)
+--    say work.level Level this work
+      if work.level<l & (stage this)<>work /* & work.p=this */ then
+         return 0
+   end
+   super.level=l
+   return 1
+
+
+-- set the JIT object cache hashtable
+
+method setJITCache(t=hashTable) returns pipe
+
+   JITCache = t
+   return this
+
+
+-- add a stage to a pipe's monitor list
+
+method addstage(s=org.netrexx.njpipes.pipes.stage) protect
+
+   svect.addElement(Object s)
+   s.p = this
+-- s.t = (stage this).t
+
+-- connect output stage/stream to input stage/stream
+
+method connect(f=stage,o=int,t=stage,i=int,sc=int 1) protect
+
+   work = pnode()                    -- record connect in a new pnode
+
+   work.ins  = f                    -- supplier
+   work.sin  = o                    -- stream number
+   work.outs = t                    -- reciever
+   work.sout = i                    -- stream number
+   work.holding = 0
+   work.peeked  = 0                 -- only for threaded stages
+
+   do protect f
+      work.nout = f.out                  -- link into stage lists
+      f.out = work
+      f._o = f._o+sc
+      if f.sout=-99 & o=0 then do        -- if its the default stream
+         f.sout = o
+         if (f.flag&org.netrexx.njpipes.pipes.utils.LEAVE_NULL)=0 then    -- set outs if autocommit off
+            f.outn = work
+      end
+   end
+
+   do protect t
+      work.nin = t.in                    -- record pnode in stages
+      t.in = work
+      if t.sin=-99 & i=0 then do         -- if its the defautl stream
+         t.sin = i
+         if (t.flag&org.netrexx.njpipes.pipes.utils.LEAVE_NULL)=0 then    -- set ins if autocommit off
+            t.inn = work
+      end
+   end
+
+
+method connect(ss=stage,n=int,l=link,sc=int 1) protect
+
+   connect(ss,n,l.stage(),l.stream(),sc) -- input owned by 'this' pipe
+
+
+-- replace input of a stage with link
+
+method connect(l=link,ss=stage,n=int,sc=int 1) protect
+
+   connect(l.stage(),l.stream(),ss,n,sc) -- output owned by 'this' pipe
+
+
+-- return number of unblocked stages and update pipe's flag
+
+method unblocked() private returns int protect
+
+   work = 0
+   super.flag = org.netrexx.njpipes.pipes.utils.WAITING
+   loop i = 0 to svect.size()-1
+      stg = stage svect.elementAt(i)
+      if stg.going then do
+        work = work + ( ((stg.flag&WAITING)=0) | (stg.extern>0) )
+         super.flag = super.flag + (stg.flag&org.netrexx.njpipes.pipes.utils.RUNNING)
+         if (stg.flag&org.netrexx.njpipes.pipes.utils.WAITING)=0 | stg.extern>0 then
+            super.flag = super.flag&org.netrexx.njpipes.pipes.utils.RUNNING
+      end
+      -- say ">>>" stg._name stg.going (rexx stg.flag).d2x() stg.extern work
+   end
+   return work
+
+
+-- Add stages in called pipe to main pipes stagelist and start called pipe
+
+method addpipe(p=org.netrexx.njpipes.pipes.pipe,s=org.netrexx.njpipes.pipes.stage (stage this)) protect public
+
+   if p<>this then
+      svect.addElement(Object p)
+
+   p.callee = s
+   p.monitor = this            -- override the owning pipe of this stage (pipe)
+   super.top = monitor.top
+
+   theClass = this.getClass()
+   if \JITCache.containsKey(Object theClass) then
+      JITCache.put(Object theClass, Object this)
+
+   p.level = -2                -- set current commit level checking stages
+
+   do protect p
+      s.flag = s.flag+INCREMENT
+--    say 'starting pipe 'p.getName()
+--    stg = Thread(p,p.getName())
+      p.going = 1
+      super.T = startThread(p,java.lang.Thread.NORM_PRIORITY)
+      if (super._debug&255)<>0 then
+         super.T.setName(super._name)
+--    stg.setPriority(java.lang.Thread.NORM_PRIORITY-1)
+      p.notifyAll()
+   end
+                                  -- do not talk to child until it commits
+   loop while p.level<super.level
+      s.flag = s.flag|WAIT_COMMIT
+      wait()
+      s.flag = s.flag&CLEAR_COMMIT
+   catch InterruptedException
+      say "int addpipe"
+   end
+
+method callpipe(p=org.netrexx.njpipes.pipes.pipe,s=org.netrexx.njpipes.pipes.stage (stage this)) public returns int signals ThreadQ
+
+   addpipe(p,s)
+   do protect p
+      loop until p._active=0
+         do
+--          say p p._active p.going
+            s.flag = s.flag|WAIT_ANY
+            if p.going then             -- incase it has finished
+               p.wait()
+            s.flag = s.flag&CLEAR_ANY
+            if p.level>s.level then
+               s.commit(p.level)
+         end
+      end
+--    p.going = 0                       -- go code will do this
+   catch InterruptedException
+--    say "Int callpipe"
+   end
+   return p._rc
+
+
+-- compiler generated code uses this
+
+method runpipe() protect public returns int signals ThreadQ
+ 
+   do
+      callpipe(this)
+   catch e=ThreadQ
+      info()
+      signal e
+   end
+   return this.rc
+
+
+
+-- set debug for this Pipe
+
+method setDebug(f=int) public
+
+   super._debug = f
+
+
+-- return null if string is null
+
+method ok(w=Object) private
+
+   do
+      return w.toString()
+   catch NullPointerException
+      return 'null'
+   end
+
+
+-- Monitor for main pipe watching for deadlocks and dumping debuging info
+
+method go()
+
+   killed   = boolean 0
+   old      = int
+   stall    = int
+   deadline = long
+
+   super.T = java.lang.Thread.currentThread()
+
+   if (super._debug&1)<>0 then
+      say 'Starting pipe 'super._name this
+
+   loop i = 0 to svect.size()-1       -- start the stages
+      s = stage svect.elementAt(i)
+      if \s.isPipe then do
+         s.p = this
+         s.top = monitor.top
+         s.go()
+      end
+   end
+
+-- runaway()
+
+-- newtime = Date().getTime()
+   newtime = java.lang.System.currentTimeMillis()
+   newstall = unblocked()
+   newseq = super.flag
+   loop protect this until (newseq=old & newstall=stall & newtime>=deadline) | _active=0
+--    say this this.getName() _active super.level
+      old = newseq
+      stall = -(newstall>0)
+      deadline = newtime+super._stall
+--    say this super._stall
+--    do protect super.T        -- fix jit buglet
+--    end
+      wait(super._stall)                                 -- every interval
+      newtime = Date().getTime()
+      newtime = java.lang.System.currentTimeMillis()
+      newstall = unblocked()
+      newseq = super.flag
+--    say '(newseq=old & newstall=stall & newtime>=deadline) | _active=0'
+--    say this this.getName() newseq old newstall stall newtime deadline _active
+   catch InterruptedException
+      killed = 1
+   end
+-- say 'P2'
+
+   do 
+      super.T.setPriority(java.lang.Thread.MAX_PRIORITY-1)
+   catch NullPointerException
+   end
+
+   if _active>0 then
+      do
+         if killed then
+            info()
+         else do
+            say 'Deadlocked in '(pipe super.p).getname()   -- tell us why...
+            super.rc(16)                                   -- report an rc
+            super.top.dump()                               -- dump the pipe(s)
+         end
+         kill()
+      end
+   else
+      if monitor<>this then do protect this
+         notifyAll()
+         do protect monitor        -- let pipe know callpipe stage is ending
+            callee.flag = callee.flag+INCREMENT
+            if super._rc>monitor._rc then
+               monitor._rc = super._rc        -- pass up return code
+            super._mrc = super._rc
+            super.going = 0
+            monitor.svect.removeElement(Object this)      -- remove from shash
+            if (super._debug&2)<>0 then
+               say 'Ending add/callpipe' super._name this super.flag super._rc
+            monitor.notifyAll()
+         end
+         return
+      end
+
+
+   if (super._debug&2)<>0 then
+      say 'Ending Pipe 'super._name this super.flag super._rc
+
+   do protect this
+      super._mrc = super._rc                  -- memory for njpRC
+      super.going = 0
+      notifyAll()
+   end
+
+
+method info() private
+                                              -- initialization errors
+  loop i = 0 to svect.size()-1
+      s = stage svect.elementAt(i)
+      if s._err<>null then
+         if s._err.rc>4 & s._err.rc<12 then
+            say s._name s._err.getMessage()' rc='s._err.rc()
+   end
+
+
+method dump()
+
+   dump(super.flag)
+
+
+method dump(d=int) private
+
+   if dumped=d then
+      return
+
+   dumped = d
+                                  -- up priority to avoid exceptions
+   do
+      o = super.T.getPriority()
+      super.T.setPriority(java.lang.Thread.MAX_PRIORITY)
+   catch NullPointerException
+   end
+
+   say
+   say 'Dumping 'getName()'  Stall 'super._stall'  Monitored by 'monitor.getname()
+   say
+   say ' Flag units digit:  1=wait out, 2=wait in, 4=wait any, 8=wait commit'
+   say '                 : 10=pending autocommit, 20=pending sever'
+   say
+
+   loop i = 0 to svect.size()-1
+
+      work = stage svect.elementAt(i)
+
+      if work.isPipe then
+         (pipe work).dump(d)
+      else do
+         if work._err=null then
+            say  ' 'work.getName()
+         else
+            say  ' 'work.getName()'  msg='work._err.getMessage()
+         if work.going then
+            say ' Running rc='work.rc()' commit='work.level -
+                'Flag='(Rexx work.flag).d2x' waits 'work.extern' args='work.arg()
+         else
+            say ' Stopped rc='work.rc()' commit='work.level -
+                'Flag='(Rexx work.flag).d2x' waits 'work.extern' args='work.arg()
+
+         loop j=-9 to work.maxInputStream()      -- input status
+            x = work._findin(j)
+            if x<>null then do
+               if work.inn==x then
+                  line = ' -> in '
+               else
+                  line = '    in '
+
+               do
+                  if (pipe x.ins.p).getname()=(pipe work.p).getname then
+                     name = x.ins.getname()
+                  else
+                     name = '('(pipe x.ins.p).getname()')'x.ins.getname()
+               catch NullPointerException
+                  name = 'NULL'
+               end
+
+               if x.holding then
+                  say line j name x.peeked ok(x.data).left(40)
+               else
+                  say line j name
+
+            catch NullPointerException
+            end
+         end
+                                            -- output status
+         loop j=-9 to work.maxOutputStream()
+            x = work._findout(j)
+            if x<>null then do
+               if work.outn==x then
+                  line = ' -> out'
+               else
+                  line = '    out'
+
+               do
+                  if (pipe x.outs.p).getname()=(pipe work.p).getname then
+                     name = x.outs.getname()
+                  else
+                     name = '('(pipe x.outs.p).getname()')'x.outs.getname()
+               catch NullPointerException
+                  name = 'NULL'
+               end
+
+               if x.holding then
+                  say line j name x.peeked ok(x.data).left(40)
+               else
+                  say line j name
+
+            catch NullPointerException
+            end
+         end
+
+         say
+      end
+
+   catch NoSuchElementException
+   end i
+
+   if monitor<>this then
+      monitor.dump(d)
+
+   say 'Dumped Pipe 'getName()' Flag '(rexx super.flag).d2x' rc='rc()
+   say
+
+   do
+      super.T.setPriority(o)
+   catch NullPointerException
+   end
+
+   return
+
+
+method kill()
+
+   loop i = 0 to svect.size()-1                   -- stop the stages
+      work = stage svect.elementAt(i)
+      do                                          -- for each stage
+        if \work.isPipe then do
+           work.p._active = work.p._active-work.going
+           if work._rc > work.p._rc then
+              work.p._rc = work._rc               -- pass up rc
+--         if (work.p.level<-1 & work._rc>0) | (work.p.level>-2 & work._rc>12) then
+--            say work._err.getMessage()
+           work.going = 0
+           (work.T).interrupt()
+        end
+      catch NullPointerException
+      end
+   end i
+   loop i = 0 to svect.size()-1                   -- and pipes
+      work = stage svect.elementAt(i)
+      do
+        if work.isPipe then
+        do protect work
+           work.notifyAll()
+        end
+        work._mrc = work._rc
+      catch NullPointerException
+      end
+   end i
+
+

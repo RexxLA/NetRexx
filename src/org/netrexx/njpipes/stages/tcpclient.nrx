@@ -1,0 +1,504 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** tcpclient
+
+Simple tcpclient implementation.  The options implemented are similiar to the
+cms definition.
+
+linger      - wait a bit before terminating the last read (units SECONDS)
+timeout     - wait this long before timing reads out (units MS)
+deblock     - If deblock is ommited a copy stage is used.
+group       - similiar to cms.  A delimited string containing a stage is
+              expected.  You can use a run of stages, but its is dangerous
+              since you to know the stage sep character being used...
+greeting    - expect a greeting message and discard it
+nodelay     - use the nodelay option
+keepalive   - enable keep alive socket option
+oneresponse - synchronize cmds/replys
+
+*/
+-- 01/05/07 change logic to prevent deadlocks with deblocking stages.  ejt
+-- 99/05/28 output byte[] since conversions to string can cause problems.  ejt
+-- 99/05/27 improved timeout logic, fixed rc and termination logic.  ejt
+-- 98/09/09 now terminated correctly second second time thru.  ejt
+-- 98/09/09 greetings now handled correctly second time thru.  ejt
+-- 98/09/07 use byte streams. ejt
+-- 98/09/06 use bufferedwriter.  ejt
+-- 98/08/30 optimized, in -2 shorted to out 0.  ejt
+-- 98/08/28 fixed a commit problem.  ejt
+-- 98/08/26 added oneresponse, deblock, group options.  ejt
+-- 98/08/23 optimized using doSetup() logic.  ejt
+-- 98/08/23 startThread no longer uses a name.  ejt
+-- 98/07/31 Support threadpool.  ejt
+-- 98/07/30 use StageError(13,... in stageExit.  ejt
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+options binary
+
+class tcpclient public extends stage
+
+properties public
+
+soc    = Socket
+sin    = BufferedInputStream
+sout   = BufferedOutputStream
+et     = tcpclient.ear
+
+properties shared volatile
+rc     = int
+
+properties private
+
+hostname  = rexx
+port      = int
+linger    = int
+timeout   = int
+greeting  = boolean
+nodelay   = boolean
+oneresp   = boolean
+keepalive = boolean
+
+properties private static
+
+bo = [byte 0]
+bc = Class
+
+method send(s=BufferedOutputStream,r=Object) private static signals IOException
+
+   select
+      when bc.isInstance(r) then do
+         s.write(byte[] r,0,(byte[] r).length)
+      end
+      when r<=String then do
+         d = (String r).getBytes()
+         s.write(d,0,d.length)
+      end
+      otherwise do
+         d = r.toString.getBytes()
+         s.write(d,0,d.length)
+      end
+   end
+   s.flush()
+
+method severCallback(type=boolean,stream=int) 
+
+   if type=1 & (stream=0 | stream=-1) then 
+      if et.on then
+         if counter(0)<>0 then
+            et.T.interrupt()
+         else if stream=0 then do protect et
+            selectOutput(-1)
+	    severOutput()
+            do protect this
+               notifyAll()
+            end
+         catch StageError
+         end
+
+
+method tcpclient_setup() signals ThreadQ
+
+   a = arg()
+
+   bc = bo.getClass()
+
+   hostname = a.word(1)
+   p        = a.word(2)
+
+   if hostname='' then
+      rc = 13
+   if p.datatype('W') then
+      port = int p
+   else
+      rc = 13
+
+   a = a.subword(3)
+
+   linger = 0
+   i = a.wordpos('linger')
+   if i>0 then do
+      linger = a.word(i+1)
+      a = a.delword(i,2)
+   end
+
+   timeout = 0
+   i = a.wordpos('timeout')
+   if i>0 then do
+      timeout = a.word(i+1)
+      a = a.delword(i,2)
+   end
+
+   i = a.wordpos('greeting')
+   if i=0 then
+      greeting = 0
+   else do
+      greeting = 1
+      a = a.delword(i,1)
+   end
+
+   i = a.wordpos('nodelay')
+   if i=0 then
+      nodelay = 0
+   else do
+      nodelay = 1
+      a = a.delword(i,1)
+   end
+
+   i = a.wordpos('oneresponse')
+   if i=0 then
+      oneresp = 0
+   else do
+      oneresp = 1
+      a = a.delword(i,1)
+   end
+
+   i = a.wordpos('keepalive')
+   if i=0 then
+      keepalive = 0
+   else do
+      keepalive = 1
+      a = a.delword(i,1)
+   end
+
+   if greeting & \oneresp then
+      rc=13
+
+   et = tcpclient.ear()                 -- create the ear object
+   et.on = 0
+
+   if rc>0 then
+      exit(rc)
+
+
+method run()
+
+   rc = 0
+
+   if doSetup() then
+      tcpclient_setup()
+
+   do
+--   trace results
+      commit(-1)
+
+      soc = Socket(String hostname, port)
+      soc.setSoTimeout(timeout)
+      soc.setTcpNoDelay(nodelay)
+      soc.setKeepAlive(keepalive)
+      if linger>0 then
+         soc.setSoLinger(boolean 1,linger)
+
+--- say 'cln' soc
+      sin   = BufferedInputStream(DataInputStream(soc.getInputStream()))
+      sout  = BufferedOutputStream(DataOutputStream(soc.getOutputStream()))
+
+      selectOutput(-1)                    -- output thru filter
+
+      if \greeting then do                -- if no greeting start things off
+          r = peekto()
+          send(sout,r)
+          readto()
+      end
+
+      et.go(this)                         -- start ear listening for resps
+
+      if oneresp then
+         loop forever                     -- get the command and send it
+            do 
+               selectInput(-2)
+            catch StageError
+               if rc()>4 then             -- stream zero servered 
+                  signal StageError
+               selectInput(-2)            
+            end
+            r = peekto()                  -- read from filter
+            do protect et
+               selectOutput(0)            -- pass it along protecting
+               output(r)                  -- when outstream is not 2
+               selectOutput(-1)
+               et.notifyAll()
+            end
+            readto()
+
+            do
+               selectInput(0)
+            catch StageError
+               rc = 12                    -- force rc=12 here...
+               signal StageError
+            end
+            c = peekto()                  -- request to send to server
+            if c=null then
+               signal StageError          -- cannot send nothing...
+
+            send(sout,c)
+
+            readto()                      -- consume request
+
+         end
+      else
+         loop forever                     -- get the command and send it
+
+            selectAnyInput()
+
+            select
+
+               when inStreamNumber()=0 then do
+
+                  r = peekto()
+                  send(sout,r)
+                  readto()
+
+               end
+
+               when inStreamNumber()=-2 then do
+
+                  do protect et
+                     selectOutput(0)      -- pass it along protecting
+                     shortStreams()
+                     selectOutput(-1)
+                     et.notifyAll()
+                  end
+
+               end
+
+               otherwise
+                  signal StageError(16,'Error - unexpected input stream selected')
+            end
+
+         end
+
+   catch StageError
+      if rc()>rc then
+         rc = rc()
+
+   catch IOException
+--    say e
+      rc = 15
+
+   finally
+      do protect this
+
+         if et.on then do
+            if oneresp then do                -- one request the eof on
+               if linger>0 then do            -- input implies close
+                  wait(linger*1000)
+               catch InterruptedException
+               end
+               if soc<>null then do
+	       	  soc.close()
+               catch IOException
+               end
+            end
+            else if et.on then
+               wait(timeout)               -- wait for response only this long
+            if counter(0)<>0 then
+               et.T.interrupt()
+         catch InterruptedException
+         end
+
+         if soc<>null then do
+            soc.close()
+         catch IOException
+         end
+
+	 if et.on then do protect et
+	       et.notifyAll()
+	 end   
+
+      end
+   end
+
+do
+   if rc<=4 then
+      rc = 12
+   selectOutput(1)
+   output(Rexx rc)
+catch StageError
+end
+
+do
+   et.T.join()
+catch InterruptedException
+end
+
+exit(rc*(rc<>12))
+
+/*
+ * pInfo    = name of pipe,
+ * pInfo[1] = stage number in pipe
+ * pInfo[2] = stage label, null if no label
+ * pInfo[3] = stage name
+ * pInfo[4] = stage arguements
+ * pInfo[5] = rest of pipe
+ * pInfo[6] = sep
+ * pInfo[7] = end
+ * pInfo[8] = not modifier active
+ * pInfo[9] = stage is a driver
+ * code     = ''
+ * code[0]  = 0
+ *
+ * When compilerExit returns with true, the compiler expects:
+ *
+ * pInfo[2] = stage label
+ * pInfo[3] = name of stage
+ * pInfo[4] = stage arguements
+ * pInfo[5] = rest of the pipe
+ * code[0]  = number of lines generated
+ * code[n]  = line n
+ *
+ */
+
+
+method stageArg(a=rexx) returns rexx
+
+g = a.wordpos('GROUP')
+if g>0 then
+   return DString(a.subword(g+1)).String()
+else
+   return ''
+
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+g = pInfo[4].upper().wordpos('DEBLOCK')
+if g=0 then
+   stg = 'copy'
+else do
+   d = pInfo[4].subword(g)
+   r = deblock().residue(d.subword(2))
+   if g>1 then
+      pInfo[4] = pInfo[4].subword(1,g-1)' 'r
+   else
+      pInfo[4] = r
+   if r='' then
+      stg = d
+   else
+      stg = d.left(d.pos(r)-1)
+end
+
+g = pInfo[4].upper().wordpos('GROUP')
+if g>0 then do
+   ds = DString(pInfo[4].subword(g+1))
+   if g>1 then
+      pInfo[4] = pInfo[4].subword(1,g-1)' 'ds.Residue()
+   else
+      pInfo[4] = ds.Residue()
+   stg = stg' 'pInfo[6]' 'ds.String()
+end
+
+if stg='' then
+   signal StageError(13,'Error - 'pInfo' - missing stage/pipe in 'pInfo[4])
+if pInfo[8] then
+   signal StageError(13,'Error - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
+
+if pInfo[2]='' then
+   pInfo[2] = '_ap_'pInfo[1]                                          -- add label
+
+-- a minus sign infront of a label switches to negitive input streams...
+-- The first time the label is used in data appended to the pipe is it for
+-- stream -1, the second is stream -2.
+
+pInfo[5] = pInfo[5]' -'pInfo[2]': 'pInfo[6]' 'stg' 'pInfo[6]' 'pInfo[2]': 'pInfo[7]     -- add to pipe
+
+return 1
+
+
+class tcpclient.ear private implements RunnablePool uses ThreadPool
+
+r  = tcpclient
+T  = Thread
+
+properties shared volatile
+on = boolean
+
+method go(rr=tcpclient)
+   
+   r = rr
+   T = startThread(this)
+
+method run()
+-- trace results
+   buf = byte[32768]
+
+   on = 1
+
+   loop label get forever                -- blocked (** may cause probs **)
+ 
+      do
+         z = r.counter(1)
+         c = r.sin.read(buf)             -- read resp until group is happy
+         z = r.counter(z)
+      catch InterruptedIOException       -- triggered by timeout option
+         z = r.counter(z)
+         do protect this
+            loop while r.outStreamState()=1   -- only one output at a time...
+               z = r.counter(1)               -- on _any_ stream
+               wait()
+               z = r.counter(z)
+            end
+            r.selectOutput(-1)                -- pass thru group pipe
+         end
+         if c=-1 then
+            iterate                           -- from a timeout
+      end
+
+      if c=-1 then                       -- eof
+         signal IOException('EOF')
+
+      d = byte[c]
+      java.lang.System.arraycopy(buf,0,d,0,c)
+
+      do protect this
+         loop while r.outStreamState()=1   -- only one output at a time...
+            z = r.counter(1)               -- on _any_ stream 
+            wait()
+            z = r.counter(z)
+         end
+         r.output(d)       -- pass thru group pipe
+      end
+
+   catch ie=InterruptedException
+-- say "I" z c
+      z = r.counter(z)
+      ee = StageError(12,'tcpclient.ear was Interrupted 'ie.getMessage())
+
+   catch oe=IOException
+-- say "O" z c 
+      z = r.counter(z)
+      ee = StageError(12,'tcpclient.ear got IOException 'oe.getMessage())
+
+   catch ThreadQ
+      ee = StageError(15,'tcpclient.ear got an ThreadQ')
+
+   catch ee=StageError
+
+   finally
+      do protect this
+         on = 0
+         if r.rc=0 then
+            r.rc = r.rc(ee)
+	 do
+	    loop while r.outStreamState()=1   -- only one output at a time...
+	       z = r.counter(1)               -- on _any_ stream
+	       wait()
+	       z = r.counter(z)
+	    catch InterruptedException   
+	    end
+            r.severOutput()
+         catch StageError
+         end
+      end
+
+   end
+
+

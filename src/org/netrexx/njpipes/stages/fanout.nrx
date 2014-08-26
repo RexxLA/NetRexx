@@ -1,0 +1,98 @@
+
+-- fanout.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 98/ 6/10 Up to CMS Documentation. JHennick
+
+
+/** fanout
+
+               +-STOP--ALLEOF-----+
+   >>--FANOUT--+------------------+---------------------------------------><
+               +-STOP--+-ANYEOF-+-+
+                       +-number-+
+
+*/
+
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class fanout extends stage
+
+method run()
+
+   minstm = rexx '-2'
+
+   arg = arg().upper()
+
+   parse arg a a2 .
+
+
+   if a = 'STOP' then do                                               -- STOP
+      if a2 = 'ANYEOF' then do                                            -- STOP ANYEOF
+         startstr = rexx maxOutputStream()
+      end
+      if a2.datatype('W') then do                                          -- STOP number
+         minstm = a2 - 1
+         if minstm < 0 then do
+            Emsg(11,'Error -' getName() 'option STOP number must be positive, not:' a2)
+         end
+      end
+      if \(a2 = 'ANYEOF' | a2 = 'ALLEOF' | minstm > -1) then do
+         Emsg(11,'Error -' getName() 'option' a a2 'is not recognized')
+      end
+   end
+
+   select
+      when a a2 = 'STOP ANYEOF' then loop while maxOutputStream() = startstr   -- STOP ANYEOF
+         line = peekto()
+         loop i=0 to maxOutputStream() while maxOutputStream() = startstr
+            do
+               selectOutput(i)
+               output(line)
+            catch StageError
+               rc = rc()
+            end
+         end i
+         readto()
+
+      catch StageError
+         rc = rc()
+      end
+      when a = 'STOP' & minstm > -1 then loop while maxOutputStream() > minstm   -- STOP number
+         line = peekto()
+         loop i=0 to maxOutputStream() while maxOutputStream() > minstm
+            do
+               selectOutput(i)
+               output(line)
+            catch StageError
+            end
+         end i
+         readto()
+         catch StageError
+            rc = rc()
+         end
+      otherwise                                                                -- STOP ALLEOF
+         loop forever
+            line = peekto()
+            loop i=0 to maxOutputStream()
+               do
+                  selectOutput(i)
+                  output(line)
+               catch StageError
+                  rc = rc()
+               end
+            end i
+            readto()
+
+         catch StageError
+            rc = rc()
+         end
+   end
+exit(rc*(rc<>12))

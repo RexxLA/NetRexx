@@ -1,0 +1,138 @@
+-- take.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 98/09/20 support secondary output streams.  ejt
+-- 98/06/12 Up to CMS Documentation. JHennick
+
+/** take
+
+
+             +-FIRST-+  +-1------+
+   >>--TAKE--+-------+--+--------+--+-------+-----------------------------><
+             +-LAST--+  +-number-+  +-BYTES-+
+                        +-*------+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.RingBuf
+import org.netrexx.njpipes.pipes.
+
+class take extends stage
+
+method run()
+
+   s1 = boolean 1
+
+   args = rexx arg().upper()
+
+   parse args type .
+
+   bytes = boolean (args.pos('BYTES') > 0)
+
+   first = boolean 0
+   n = rexx 1
+
+   select
+      when type = 'FIRST' then first = 1
+      when type = 'LAST' then nop
+      when type = '*' then n = 999999999
+      when type.datatype('W') then n = type
+      otherwise args = args '.'
+   end
+
+   parse args . n . 1 args
+
+   if n = '*' then n = 999999999
+   if \n.datatype('W') then n = 1
+
+select
+   when first & bytes then                                     -- FIRST BYTES
+      do
+         loop i = rexx 0 to n
+            line = rexx peekto()
+            i = i + line.length()
+            if i > n then line = line.left( n)
+            output(line)
+            readto()
+         catch StageError
+            rc = rc()
+         end
+      end
+   when first then                                             -- FIRST records
+      do
+         loop for n
+            aobj = peekto()
+            output(aobj)
+            readto()
+         catch StageError
+            rc = rc()
+         end
+         do 
+            selectoutput(1)
+            shortStreams()
+         catch StageError
+            if rc()=4 then
+               rc(12)
+         end
+      end
+   when bytes then                                            -- LAST BYTES
+         do
+            rbuf = RingBuf(n)
+            do
+               loop forever
+                  l = rexx peekto()
+                  rbuf.PutRingBuf(l)
+                  readto()
+               end
+            end
+         catch StageError
+            rc = rc()
+            output(rbuf.GetRingBuf())
+         end
+   otherwise                                                 -- LAST records
+      do
+         do
+           selectOutput(1)
+         catch StageError
+           s1 = 0
+         end
+         buf = Vector(n+1,n+1)
+         do
+            loop for n
+               buf.addElement(readto())
+            end
+            loop forever
+               buf.addElement(readto())
+               obj = buf.firstElement()
+               if s1 then do
+                  output(obj)
+               catch StageError
+                  s1 = 0
+               end
+               buf.removeElement(obj)
+            end
+         catch StageError
+            rc = rc()
+            if rc<>12 then
+                signal StageError
+         end
+         selectOutput(0)
+         loop for n while \buf.isEmpty()
+            aobj = buf.firstElement()
+            output(aobj)
+            buf.removeElement(aobj)
+         end
+      catch StageError
+         rc = mrc()
+      end
+   catch StageError
+      rc = mrc()
+   end
+exit(rc*(rc<>12))
+

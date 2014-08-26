@@ -1,0 +1,122 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/**
+
+An implementation for sortClass for rexx objects.  Part of the logic to generate
+sortClass stages is in sort's stageExit.
+
+*/
+
+-- 99/10/07 fix order of args.  ejt
+-- 98/07/23 no longer requires a constructor other than ().  ejt
+-- 98/07/20 exploit IRange.  ejt
+
+package org.netrexx.njpipes.stages
+import org.netrexx.njpipes.pipes.
+
+options binary
+
+class sortRexx extends stage implements sortClass uses IRange
+
+k    = rexx
+data = rexx
+
+method sortRexx(dd=rexx,kk=rexx)
+k    = kk
+data = dd
+
+method sortRexx()
+
+method table(s=int) returns sortrexx[]
+   return sortrexx[s]
+
+method run()
+
+   i = int
+
+   parse arg().upper() sz ad term .
+
+   a = table(sz)
+
+   if ad='' then
+      ad = 'A'
+   else do
+      if term='A' | term='D' then do
+         temp = ad
+         ad = term
+         term = temp
+      end
+   end
+
+   if ad<>'A' & ad<>'D' then
+      Emsg(11,'Error - Expected A or D and found: 'ad)
+
+   rc = setup(term)
+   if rc>0 then
+      Emsg(11,'Error - rc='rc' during sort setup')
+
+   max = -1
+   do
+      loop i=0 to a.length
+         t = rexx readto()
+         a[i] = sortRexx(t,key(t))
+      catch StageError
+         max = i-1
+         rc = rc()
+         if rc<>12 then
+            signal StageError
+      catch java.lang.ArrayIndexOutOfBoundsException
+         max = i-1
+         Emsg(11,'Error - Array for sort to small')
+      end
+
+      if max=-1 then              -- too many entries
+         Emsg(11,'Error - Array for sort to small')
+
+      s = qsort(a)
+      s.quicksort(0,max)
+
+   if ad='A' then
+      loop i=0 to max
+         output(a[i].data)
+      end i
+   else
+      loop i=max to 0 by -1
+         output(a[i].data)
+      end i
+
+   catch StageError
+      rc = rc()
+   end
+
+exit(rc*(rc<>12))
+
+method key(d=rexx) returns rexx
+   return d
+
+method setup(term=rexx) returns int
+   return 0
+
+method compLE(a=object) returns boolean
+   return (sortRexx a).k <<= this.k
+
+method compLT(a=object) returns boolean
+   return (sortRexx a).k << this.k
+
+method compGE(a=object) returns boolean
+   return (sortRexx a).k >>= this.k
+
+method compGT(a=object) returns boolean
+   return (sortRexx a).k >> this.k
+
+method get returns object
+   return this.data
+
+

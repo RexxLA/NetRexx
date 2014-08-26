@@ -1,0 +1,376 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 1998  Jeffrey Hennick 
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 98/07/23 added the unprotected methods _findin and _findout.  ejt
+
+package org.netrexx.njpipes.pipes
+
+options binary
+
+-- private utilites used by package to find pnodes in a stage
+
+class utils private extends Object
+
+properties constant
+
+WAIT_OUT     = int     1
+CLEAR_OUT    = int   (-2)
+WAIT_READ    = int     2
+CLEAR_READ   = int   (-3)
+WAIT_ANY     = int     4
+CLEAR_ANY    = int   (-5)
+WAIT_COMMIT  = int     8
+CLEAR_COMMIT = int   (-9)
+SEVER        = int    16
+CLEAR_SEVER  = int  (-17)
+AUTO_COMMIT  = int    32
+LEAVE_NULL   = int    48
+CLEAR_AUTO   = int  (-33)
+RUNNING      = int  (-16)
+WAITING      = int    15
+
+INCREMENT    = int  256
+
+properties shared
+
+in   = pnode              -- input stream pnodes
+out  = pnode              -- output stream pnodes
+
+
+-- build the basic object
+
+method utils()
+
+in  = null
+out = null
+
+
+-- find input strean by number
+
+method findin(stream=int) returns pnode protect shared
+curr = pnode
+prev = pnode
+
+do                                        -- move to front search
+   if in.sout<>stream then do
+      prev = in
+      curr = in.nin
+      loop forever
+         if curr.sout=stream then do
+            prev.nin = curr.nin
+            curr.nin = in
+            in = curr
+            leave
+         end
+         prev = curr
+         curr = curr.nin
+      end
+   end
+   return in
+catch NullPointerException
+   return null
+end
+
+
+-- find output stream by number
+
+method findout(stream=int) returns pnode protect shared
+curr = pnode
+prev = pnode
+
+do
+   if out.sin<>stream then do
+      prev = out
+      curr = out.nout
+      loop forever
+         if curr.sin=stream then do
+            prev.nout = curr.nout
+            curr.nout = out
+            out = curr
+            leave
+         end
+         prev = curr
+         curr = curr.nout
+      end
+   end
+   return out
+catch NullPointerException
+   return null
+end
+
+
+-- find input strean by number (unprotected, no move to front)
+
+method _findin(stream=int) returns pnode shared
+curr = pnode
+do                                        -- move to front search
+   if in.sout<>stream then do
+      curr = in.nin
+      loop forever
+         if curr.sout=stream then
+            return curr
+         curr = curr.nin
+      end
+   end
+   return in
+catch NullPointerException
+   return null
+end
+
+
+-- find output stream by number (unprotected, no move to front)
+
+method _findout(stream=int) returns pnode shared
+curr = pnode
+do
+   if out.sin<>stream then do
+      curr = out.nout
+      loop forever
+         if curr.sin=stream then
+            return curr
+         curr = curr.nout
+      end
+   end
+   return out
+catch NullPointerException
+   return null
+end
+
+
+/*
+ * This method is an exit called by the compiler.  With it you can change
+ * the unprocessed pipe definition, the definition of the current stage,
+ * and you can pass generated code back to the compiler.  To use it override
+ * it.  See stages\append, stages\prefix and stages\specs for examples of its
+ * use.
+ *
+ * stageExit is ONLY called for stages in the stage directory
+ *
+ * pInfo     = name of pipe,
+ * pInfo[1]  = stage number in pipe
+ * pInfo[2]  = stage label, null if no label
+ * pInfo[3]  = stage name
+ * pInfo[4]  = stage arguments
+ * pInfo[5]  = rest of pipe
+ * pInfo[6]  = sep
+ * pInfo[7]  = end
+ * pInfo[8]  = not modifier active
+ * pInfo[9]  = stage is a driver (no input streams)
+ * pInfo[10] = stage is a sink (no output streams)
+ * pInfo[12] = cont
+ *
+ * code      = ''
+ * code[0]   = 0
+ *
+ * When compilerExit returns with true, the compiler expects:
+ *
+ * pInfo[2]  = stage label
+ * pInfo[3]  = name of stage
+ * pInfo[4]  = stage arguments - note 'arg(_)' is magic and passes the pipe's
+ *             argument to the stage unchanged.  See the specs stage.
+ * pInfo[5]  = rest of the pipe
+ * pInfo[8]  = not modifier active.   See nfind, nlocate.
+ * pInfo[11] = IF you change the name of THIS stage to an existing stage, call
+ *             the stageExit in pInfo[11].  The current stage should not be
+ *             generating code and the new stage might.  See nfind, nlocate.
+ * code[0]   = number of lines generated for classes
+ * code[n]   = line n of generated code
+ *
+ */
+
+method stageExit(pInfo=rexx,code=rexx) returns boolean signals StageError
+
+   if pInfo='' then
+      signal StageError('Error - pipes must be named')   -- to avoid warning
+   return 0
+
+/**
+  * The compiler needs to know when the argument of a stage is a rexx object.
+  * The rexxArg() method returns the number of rexx object arguments.  See
+  * stem, stema, over and var.
+  *
+  */
+-- 98/07/15 definition changed. ejt
+
+method rexxArg(a=rexx) returns rexx
+   return ''
+
+
+/**
+  * The compiler needs to know when the argument of a stage is a stage(s).
+  * The stageArg() method returns the position where the stages start.  See
+  * prefix and append.
+  *
+  */
+-- 98/07/15 definition changed. ejt
+
+method stageArg(a=rexx) returns rexx
+   return ''
+
+
+/**
+  *
+  * Insert static shared methods after this comment please
+  *
+  **/
+
+
+-- create an intelligent class name for a stageExit
+-- 98/08/25  initial.  ejt
+
+method stageName(a=rexx,pid=rexx,n=rexx) returns rexx static
+   w = a.changestr(pid,'').changestr(n,'')
+   w = pid'_'w'_'n
+   w = w.changestr('__','_')
+   return w
+
+
+method GetXorc(xorc) returns rexx static
+--  GetXorc NJPipe Method
+-- 98/06/17 JHennick
+
+/** GetXorc(xorc)
+    Returns a Rexx character
+
+       A character specified as itself (a one-character word) or its
+       hexadecimal representation (a two-character word).  The blank is
+       represented by the keyword BLANK, which has the synonym SPACE, or with
+       its hex value, X'40'.  The default horizontal tabulate character (X'05')
+       is represented by the keyword TABULATE, which can be abbreviated down to
+       TAB.
+*/
+
+xl = xorc.length()
+
+select
+   when xl = 1 then s = xorc
+   when xl = 2 then s = xorc.x2c()
+   when xorc = 'BLANK' then s = ' '
+   when xorc = 'SPACE' then s = ' '
+   when 'TABULATE'.abbrev(xorc.upper,3) then s = '\t'
+   otherwise s = null
+end
+return s
+
+
+method GetXRange(xr) returns rexx signals StageError static
+--  GetXRange NJPipe Method
+-- 98/06/17 JHennick
+
+/** GetXRrange
+
+      returns Rexx string of characters in the xrange
+      signals Error:  BadXRange
+
+
+      xrange:
+                  +--+-xorc--------+-------------------------+
+                     +-xorc-xorc---+
+                     +-xorc.number-+
+
+*/
+
+r = GetXorc(xr)
+if r = null then do
+   parse xr x1 '-' x2
+
+   c = 1
+   if x2 \= '' then c = 0
+   else parse xr x1 '.' e
+
+   s = GetXorc(x1)
+   if s = null then signal StageError('BadXrange')
+
+   if c then do
+      e = s.c2d + e - 1
+      if e > 255 then e = e - 256
+      e = e.d2c
+   end
+   else do
+      e = GetXorc(x2)
+      if s = null then signal StageError('BadXrange')
+   end
+
+   if e > s then r = s.sequence(e)
+   else r = s.sequence('\xff') || '\0'.sequence(e)
+end
+
+return r -- GetXRange
+
+
+-- convert an object to rexx if possible
+-- 99/05/28  fix array logic tests.  eht
+-- 98/09/07  add byte[] logic.  eht
+-- 98/08/23  add toSting to otherwise logic.  ejt
+-- 98/08/13  initial.  ejt
+
+method object2rexx(a=object) returns rexx static signals StageError
+
+   select
+      when a=null then             -- encapsulated classes from
+         return Rexx('')           -- java.lang can be added
+      when a<=Rexx then
+         return (rexx a)
+      when [byte 0].getClass().isInstance(a) then
+         return Rexx(String(byte[] a,0,(byte[] a).length))
+      when [Char '0'].getClass().isInstance(a) then
+         return Rexx(char[] a)
+      when [String ' '].getClass().isInstance(a) then
+         return Rexx(string[] a)
+      when a<=String then
+         return Rexx(String a)
+      otherwise
+         return Rexx(a.toString())
+   catch NoSuchMethodError
+      signal StageError(8,'Error - cannot convert object to rexx')
+   end
+
+
+-- convert an object to a string if possible
+-- 99/05/28  fix array logic tests.  eht
+-- 99/05/25  added byte[].  ejt
+-- 98/08/13  initial.  ejt
+
+method object2string(a=object) returns String static signals StageError
+
+   select
+      when a<=String then            -- encapsulated classes from
+         return (String a)           -- java.lang can be added
+      when [byte 0].getClass().isInstance(a) then
+         return String(byte[] a,0,(byte[] a).length)
+      otherwise
+         return a.toString()
+   catch NoSuchMethodError
+      signal StageError(8,'Error - no toSting method, cannot convert object')
+   end
+
+
+method pos(h=byte[],n=byte[]) returns int static
+
+if h=null | n=null then
+   return -1
+
+if n.length>h.length then
+   return -1
+
+loop i=0 to h.length-n.length
+   if h[i]=n[0] then do
+      loop j=1 to n.length-1
+         k = i+j
+         if h[k]<>n[j] then
+            iterate i
+      end j
+      return i
+   end
+end i
+
+return -1
+
+

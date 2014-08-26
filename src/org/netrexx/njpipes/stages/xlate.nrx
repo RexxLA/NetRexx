@@ -1,0 +1,356 @@
+-- xlate.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 98/ 6/10 IRange.  Added inputrange processing, CMS documentation,  JHennick
+
+/** xlate
+
+                                                <---------------------+
+   >>--+-XLATE-----+--+----------------------+---+-------------------++---->
+       +-TRANSlate-+  +-inputRange-----------+   +-+ default-table +-+
+                      | <------------------+ |
+                      +---(--inputRange--)-+-+
+
+      <------------------+
+   >---+----------------++------------------------------------------------><
+       +-xrange--xrange-+
+
+   default-table:
+   +--+-UPper--------------------------+-----------------------------------+
+      +-LOWer--------------------------+
+      +-INput--------------------------+
+   {  +-OUTput-------------------------+  }
+   {  +-+-TO---+--+----------+--number-+  }
+   {    +-FROM-+  +-CODEPAGE-+            }
+   {                                      }
+   { Not yet in njPipes                   }
+
+  XLATE Contributed by Rene Jansen
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+-- xlate stage by rvjansen
+-- implemented:
+-- UPPER
+-- LOWER
+-- x y X Y (literal chars)
+-- ) 40 (hex chars)
+-- a-z = (range)
+-- 61-7a = (hex range)
+-- overriding of a range
+-- E2A (EBCDIC to ASCII)
+-- A2E (ASCII to EBCDIC)
+-- column input range
+
+-- not implemented:
+-- WS word separator
+-- translate table via input file
+
+class xlate extends stage uses IRange
+
+method run()
+
+toTable = '00'.x2c().sequence('FF'.x2c())
+ebctable = -
+'000'.x2c()||'001'.x2c()||'002'.x2c()||'003'.x2c()||'0DC'.x2c()||'009'.x2c()||'0C3'.x2c()||'07F'.x2c()||-
+'0CA'.x2c()||'0B2'.x2c()||'0D5'.x2c()||'00B'.x2c()||'00C'.x2c()||'00D'.x2c()||'00E'.x2c()||'00F'.x2c()||-
+'010'.x2c()||'011'.x2c()||'012'.x2c()||'013'.x2c()||'0DB'.x2c()||'0DA'.x2c()||'008'.x2c()||'0C1'.x2c()||-
+'018'.x2c()||'019'.x2c()||'0C8'.x2c()||'0F2'.x2c()||'01C'.x2c()||'01D'.x2c()||'01E'.x2c()||'01F'.x2c()||-
+'0C4'.x2c()||'0B3'.x2c()||'0C0'.x2c()||'0D9'.x2c()||'0BF'.x2c()||'00A'.x2c()||'017'.x2c()||'01B'.x2c()||-
+'0B4'.x2c()||'0C2'.x2c()||'0C5'.x2c()||'0B0'.x2c()||'0B1'.x2c()||'005'.x2c()||'006'.x2c()||'007'.x2c()||-
+'0CD'.x2c()||'0BA'.x2c()||'016'.x2c()||'0BC'.x2c()||'0BB'.x2c()||'0C9'.x2c()||'0CC'.x2c()||'004'.x2c()||-
+'0B9'.x2c()||'0CB'.x2c()||'0CE'.x2c()||'0DF'.x2c()||'014'.x2c()||'015'.x2c()||'0FE'.x2c()||'01A'.x2c()||-
+'020'.x2c()||'0FF'.x2c()||'083'.x2c()||'084'.x2c()||'085'.x2c()||'0A0'.x2c()||'0C6'.x2c()||'086'.x2c()||-
+'087'.x2c()||'0A4'.x2c()||'0BD'.x2c()||'02E'.x2c()||'03C'.x2c()||'028'.x2c()||'02B'.x2c()||'07C'.x2c()||-
+'026'.x2c()||'082'.x2c()||'088'.x2c()||'089'.x2c()||'08A'.x2c()||'0A1'.x2c()||'08C'.x2c()||'08B'.x2c()||-
+'08D'.x2c()||'0E1'.x2c()||'021'.x2c()||'024'.x2c()||'02A'.x2c()||'029'.x2c()||'03B'.x2c()||'0AA'.x2c()||-
+'02D'.x2c()||'02F'.x2c()||'0B6'.x2c()||'08E'.x2c()||'0B7'.x2c()||'0B5'.x2c()||'0C7'.x2c()||'08F'.x2c()||-
+'080'.x2c()||'0A5'.x2c()||'0DD'.x2c()||'02C'.x2c()||'025'.x2c()||'05F'.x2c()||'03E'.x2c()||'03F'.x2c()||-
+'09B'.x2c()||'090'.x2c()||'0D2'.x2c()||'0D3'.x2c()||'0D4'.x2c()||'0D6'.x2c()||'0D7'.x2c()||'0D8'.x2c()||-
+'0DE'.x2c()||'060'.x2c()||'03A'.x2c()||'023'.x2c()||'040'.x2c()||'027'.x2c()||'03D'.x2c()||'022'.x2c()||-
+'09D'.x2c()||'061'.x2c()||'062'.x2c()||'063'.x2c()||'064'.x2c()||'065'.x2c()||'066'.x2c()||'067'.x2c()||-
+'068'.x2c()||'069'.x2c()||'0AE'.x2c()||'0AF'.x2c()||'0D0'.x2c()||'0EC'.x2c()||'0E7'.x2c()||'0F1'.x2c()||-
+'0F8'.x2c()||'06A'.x2c()||'06B'.x2c()||'06C'.x2c()||'06D'.x2c()||'06E'.x2c()||'06F'.x2c()||'070'.x2c()||-
+'071'.x2c()||'072'.x2c()||'0A6'.x2c()||'0A7'.x2c()||'091'.x2c()||'0F7'.x2c()||'092'.x2c()||'0CF'.x2c()||-
+'0E6'.x2c()||'07E'.x2c()||'073'.x2c()||'074'.x2c()||'075'.x2c()||'076'.x2c()||'077'.x2c()||'078'.x2c()||-
+'079'.x2c()||'07A'.x2c()||'0AD'.x2c()||'0A8'.x2c()||'0D1'.x2c()||'0ED'.x2c()||'0E8'.x2c()||'0A9'.x2c()||-
+'05E'.x2c()||'09C'.x2c()||'0BE'.x2c()||'0FA'.x2c()||'0B8'.x2c()||'0F5'.x2c()||'0F4'.x2c()||'0AC'.x2c()||-
+'0AB'.x2c()||'0F3'.x2c()||'05B'.x2c()||'05D'.x2c()||'0EE'.x2c()||'0F9'.x2c()||'0EF'.x2c()||'09E'.x2c()||-
+'07B'.x2c()||'041'.x2c()||'042'.x2c()||'043'.x2c()||'044'.x2c()||'045'.x2c()||'046'.x2c()||'047'.x2c()||-
+'048'.x2c()||'049'.x2c()||'0F0'.x2c()||'093'.x2c()||'094'.x2c()||'095'.x2c()||'0A2'.x2c()||'0E4'.x2c()||-
+'07D'.x2c()||'04A'.x2c()||'04B'.x2c()||'04C'.x2c()||'04D'.x2c()||'04E'.x2c()||'04F'.x2c()||'050'.x2c()||-
+'051'.x2c()||'052'.x2c()||'0FB'.x2c()||'096'.x2c()||'081'.x2c()||'097'.x2c()||'0A3'.x2c()||'098'.x2c()||-
+'05C'.x2c()||'0F6'.x2c()||'053'.x2c()||'054'.x2c()||'055'.x2c()||'056'.x2c()||'057'.x2c()||'058'.x2c()||-
+'059'.x2c()||'05A'.x2c()||'0FD'.x2c()||'0E2'.x2c()||'099'.x2c()||'0E3'.x2c()||'0E0'.x2c()||'0E5'.x2c()||-
+'030'.x2c()||'031'.x2c()||'032'.x2c()||'033'.x2c()||'034'.x2c()||'035'.x2c()||'036'.x2c()||'037'.x2c()||-
+'038'.x2c()||'039'.x2c()||'0FC'.x2c()||'0EA'.x2c()||'09A'.x2c()||'0EB'.x2c()||'0E9'.x2c()||'09F'.x2c()
+
+asctable = -
+'000'.x2c()||'001'.x2c()||'002'.x2c()||'003'.x2c()||'037'.x2c()||'02D'.x2c()||'02E'.x2c()||'02F'.x2c()||-
+'016'.x2c()||'005'.x2c()||'025'.x2c()||'00B'.x2c()||'00C'.x2c()||'00D'.x2c()||'00E'.x2c()||'00F'.x2c()||-
+'010'.x2c()||'011'.x2c()||'012'.x2c()||'013'.x2c()||'03C'.x2c()||'03D'.x2c()||'032'.x2c()||'026'.x2c()||-
+'018'.x2c()||'019'.x2c()||'03F'.x2c()||'027'.x2c()||'01C'.x2c()||'01D'.x2c()||'01E'.x2c()||'01F'.x2c()||-
+'040'.x2c()||'05A'.x2c()||'07F'.x2c()||'07B'.x2c()||'05B'.x2c()||'06C'.x2c()||'050'.x2c()||'07D'.x2c()||-
+'04D'.x2c()||'05D'.x2c()||'05C'.x2c()||'04E'.x2c()||'06B'.x2c()||'060'.x2c()||'04B'.x2c()||'061'.x2c()||-
+'0F0'.x2c()||'0F1'.x2c()||'0F2'.x2c()||'0F3'.x2c()||'0F4'.x2c()||'0F5'.x2c()||'0F6'.x2c()||'0F7'.x2c()||-
+'0F8'.x2c()||'0F9'.x2c()||'07A'.x2c()||'05E'.x2c()||'04C'.x2c()||'07E'.x2c()||'06E'.x2c()||'06F'.x2c()||-
+'07C'.x2c()||'0C1'.x2c()||'0C2'.x2c()||'0C3'.x2c()||'0C4'.x2c()||'0C5'.x2c()||'0C6'.x2c()||'0C7'.x2c()||-
+'0C8'.x2c()||'0C9'.x2c()||'0D1'.x2c()||'0D2'.x2c()||'0D3'.x2c()||'0D4'.x2c()||'0D5'.x2c()||'0D6'.x2c()||-
+'0D7'.x2c()||'0D8'.x2c()||'0D9'.x2c()||'0E2'.x2c()||'0E3'.x2c()||'0E4'.x2c()||'0E5'.x2c()||'0E6'.x2c()||-
+'0E7'.x2c()||'0E8'.x2c()||'0E9'.x2c()||'0BA'.x2c()||'0E0'.x2c()||'0BB'.x2c()||'0B0'.x2c()||'06D'.x2c()||-
+'079'.x2c()||'081'.x2c()||'082'.x2c()||'083'.x2c()||'084'.x2c()||'085'.x2c()||'086'.x2c()||'087'.x2c()||-
+'088'.x2c()||'089'.x2c()||'091'.x2c()||'092'.x2c()||'093'.x2c()||'094'.x2c()||'095'.x2c()||'096'.x2c()||-
+'097'.x2c()||'098'.x2c()||'099'.x2c()||'0A2'.x2c()||'0A3'.x2c()||'0A4'.x2c()||'0A5'.x2c()||'0A6'.x2c()||-
+'0A7'.x2c()||'0A8'.x2c()||'0A9'.x2c()||'0C0'.x2c()||'04F'.x2c()||'0D0'.x2c()||'0A1'.x2c()||'007'.x2c()||-
+'068'.x2c()||'0DC'.x2c()||'051'.x2c()||'042'.x2c()||'043'.x2c()||'044'.x2c()||'047'.x2c()||'048'.x2c()||-
+'052'.x2c()||'053'.x2c()||'054'.x2c()||'057'.x2c()||'056'.x2c()||'058'.x2c()||'063'.x2c()||'067'.x2c()||-
+'071'.x2c()||'09C'.x2c()||'09E'.x2c()||'0CB'.x2c()||'0CC'.x2c()||'0CD'.x2c()||'0DB'.x2c()||'0DD'.x2c()||-
+'0DF'.x2c()||'0EC'.x2c()||'0FC'.x2c()||'070'.x2c()||'0B1'.x2c()||'080'.x2c()||'0BF'.x2c()||'0FF'.x2c()||-
+'045'.x2c()||'055'.x2c()||'0CE'.x2c()||'0DE'.x2c()||'049'.x2c()||'069'.x2c()||'09A'.x2c()||'09B'.x2c()||-
+'0AB'.x2c()||'0AF'.x2c()||'05F'.x2c()||'0B8'.x2c()||'0B7'.x2c()||'0AA'.x2c()||'08A'.x2c()||'08B'.x2c()||-
+'02B'.x2c()||'02C'.x2c()||'009'.x2c()||'021'.x2c()||'028'.x2c()||'065'.x2c()||'062'.x2c()||'064'.x2c()||-
+'0B4'.x2c()||'038'.x2c()||'031'.x2c()||'034'.x2c()||'033'.x2c()||'04A'.x2c()||'0B2'.x2c()||'024'.x2c()||-
+'022'.x2c()||'017'.x2c()||'029'.x2c()||'006'.x2c()||'020'.x2c()||'02A'.x2c()||'046'.x2c()||'066'.x2c()||-
+'01A'.x2c()||'035'.x2c()||'008'.x2c()||'039'.x2c()||'036'.x2c()||'030'.x2c()||'03A'.x2c()||'09F'.x2c()||-
+'08C'.x2c()||'0AC'.x2c()||'072'.x2c()||'073'.x2c()||'074'.x2c()||'00A'.x2c()||'075'.x2c()||'076'.x2c()||-
+'077'.x2c()||'023'.x2c()||'015'.x2c()||'014'.x2c()||'004'.x2c()||'06A'.x2c()||'078'.x2c()||'03B'.x2c()||-
+'0EE'.x2c()||'059'.x2c()||'0EB'.x2c()||'0ED'.x2c()||'0CF'.x2c()||'0EF'.x2c()||'0A0'.x2c()||'08E'.x2c()||-
+'0AE'.x2c()||'0FE'.x2c()||'0FB'.x2c()||'0FD'.x2c()||'08D'.x2c()||'0AD'.x2c()||'0BC'.x2c()||'0BE'.x2c()||-
+'0CA'.x2c()||'08F'.x2c()||'01B'.x2c()||'0B9'.x2c()||'0B6'.x2c()||'0B5'.x2c()||'0E1'.x2c()||'09D'.x2c()||-
+'090'.x2c()||'0BD'.x2c()||'0B3'.x2c()||'0DA'.x2c()||'0FA'.x2c()||'0EA'.x2c()||'03E'.x2c()||'041'.x2c()
+
+
+-- first select clause selects the options and does preprocessing of tables when needed
+
+   line = rexx
+
+   a = arg()
+
+   ri = GetIRanges(a)
+   input_ranges = ri[0].Number()
+
+   noir = boolean (input_ranges = 0)
+
+   option = ''
+
+  a = ri[0].Residue()
+  al = a.lower()
+
+  select
+   when al.words() = 0 then option = 'upper'
+   when al.wordpos('lower') then option = 'lower'
+   when al.wordpos('lowe') then option = 'lower'
+   when al.wordpos('low') then option = 'lower'
+   when al.wordpos('upper') then option = 'upper'
+   when al.wordpos('uppe') then option = 'upper'
+   when al.wordpos('upp') then option = 'upper'
+   when al.wordpos('up') then option = 'upper'
+   when al.wordpos('e2a') then
+     do
+     fromTable = asctable
+     option = 'xlate'
+     end
+   when a.wordpos('a2e') then
+     do
+     fromTable = ebctable
+     option = 'xlate'
+     end
+
+   when (option <> 'upper') & (option <> 'lower') & (a.words() //2 = 0)
+       then
+       do
+         option = 'xlate'
+         fromTable = concatenateEvensAndOdds(a,2) -- first the evens
+         toTable = concatenateEvensAndOdds(a,1) -- then the odds
+         if (toTable.pos('-') > 0) | (fromTable.pos('-') > 0) then
+         do
+           tables = processRanges(toTable, fromTable )
+           toTable = tables['a']
+           fromTable = tables['b']
+         end
+       end
+
+   otherwise
+      Emsg(11,"Error --" getName() "syntax error")
+   end
+
+   helpline = Rexx
+
+-- second select does the work as determined by first select clause
+   select
+      when option='upper' | a.words() = 0 then
+         if noir then
+   do
+      loop forever                                            -- no range  UPPER or none
+         line = rexx peekto()
+         output(line.upper())
+         readto()
+      end
+   catch StageError
+      rc = rc()
+   end
+         else
+   do
+      loop forever                                            -- range  UPPER or none
+         line = rexx peekto()
+         loop i = 1 to input_ranges
+            helpline = ri[i].SelIRange(line).upper()
+            line = ri[i].Prefix || helpline || ri[i].Residue
+         end
+         output(line)
+         readto()
+      end
+   catch StageError
+      rc = rc()
+   end
+
+      when option='lower' then
+         if noir then
+   do
+      loop forever                                         -- no range LOWER
+         line = rexx peekto()
+         output(line.lower())
+         readto()
+      end
+   catch StageError
+      rc = rc()
+   end
+         else
+   do
+      loop forever                                         -- range LOWER
+         line = rexx peekto()
+         loop i = 1 to input_ranges
+            helpline = ri[i].SelIRange(line).lower()
+            line = ri[i].Prefix || helpline || ri[i].Residue
+         end
+         readto()
+         output(line)
+      end
+   catch StageError
+      rc = rc()
+   end
+
+      when option='xlate' then
+         if noir then
+   do
+      loop forever                                                 -- no range XLATE
+         line = rexx peekto()
+         output(line.translate(fromTable,toTable))
+         readto()
+      end
+
+   catch StageError
+      rc = rc()
+   end
+      else
+   do
+      loop forever                                               -- range XLATE
+         line = rexx peekto()
+         loop i = 1 to input_ranges
+            helpline = ri[i].SelIRange(line).translate(fromTable,toTable)
+            line = ri[i].Prefix || helpline || ri[i].Residue
+         end
+         output(line)
+         readto()
+      end
+
+   catch StageError
+      rc = rc()
+   end
+
+   otherwise say "not implemented"
+
+   end
+
+exit(rc*(rc<>12))
+
+method concatenateEvensAndOdds(a=rexx, j)
+
+   outstr = ''
+   buf = ''
+   i=0
+   l = a.length()
+   loop i=j to l by 2
+     do
+     buf = a.word(i)
+     if (buf.length() = 2) & buf.datatype('X') then buf = buf.x2c() -- implements hex translation
+     outstr = outstr||buf
+     end
+   end
+   return outstr
+
+
+method processRanges(a=rexx, b=rexx)
+c = ''; d= ''; buf = ''
+
+wordcnt = a.words()
+loop i=1 until i=wordcnt
+ j = a.word(i).pos('-')
+ if  j > 0 then
+     do
+     if (j=2) then
+       do
+       a = a a.word(i).substr(4).strip()
+       wordcnt = wordcnt +1
+       buf  = a.left(1).sequence(a.substr(3,1)) -- it is an ordinary character range
+       end
+     if (j=3) then
+       do
+       a = a a.word(i).substr(6).strip()
+       wordcnt = wordcnt +1
+       buf = a.left(2).x2c().sequence(a.substr(4,2).x2c()) -- it is a hexadecimal range
+       end
+     if (b.word(i).pos('-') = 0) then b = b.word(i).left(1).copies(buf.length()-1)||b
+     end
+     else buf = a.word(i)
+     c = (c||buf).strip()
+end
+wordcnt = b.words()
+loop i=1 until i = wordcnt
+ j = b.word(i).pos('-')
+ if  j > 0 then
+     do
+     if (j=2) then
+       do
+       b = b b.word(i).substr(4).strip()
+       wordcnt = wordcnt +1
+       buf = b.left(1).sequence(b.substr(3,1)) -- it is an ordinary character range
+       end
+     if (j=3) then
+       do
+       b = b b.word(i).substr(6).strip()
+       wordcnt = wordcnt +1
+       buf = b.left(2).x2c().sequence(b.substr(4,2).x2c()) -- it is a hexadecimal range
+       end
+     end
+     else buf = b.word(i)
+    d = (d||buf).strip()
+end
+
+-- look if both tables are the same length
+-- when tocharrange is shorter than fromcharrange, the last part of fromcharrange is
+-- translated to the last character of tocharrange
+
+if (c.length() > d.length()) then d = d||d.right(1).copies(c.length()-d.length())
+
+-- when fromcharrange is shorter than tocharrange only the part of fromcharrange
+-- that tocharrange specifies is translated
+
+if (d.length() > c.length()) then d = d.substr(1,c.length())
+
+
+tables = "tables"
+tables['a'] = c.reverse() -- standard rexx xlate function uses leftmost duplicate first
+tables['b'] = d.reverse() -- so reverse to make overrides possible;
+
+return tables
+
+

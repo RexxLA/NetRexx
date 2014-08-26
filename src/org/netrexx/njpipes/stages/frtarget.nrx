@@ -1,0 +1,71 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 98/ 7/30 use StageError(13,... in stageExit.  ejt
+-- 98/ 7/24 initial.  ejt
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class frtarget extends stage
+
+method run()
+   Emsg(11,'Error - Should be overridden via a stageExit')
+
+method stageArg(a=rexx) returns rexx
+   return a
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+pid  = pInfo            -- pipe name
+name = pInfo[3]         -- stage name
+args = pInfo[4]         -- arguement
+
+parse args stg rest
+
+if stg='' then
+   signal StageError(13,'Error - 'pInfo' - fr/totarget expects a selection stage: 'pInfo[4])
+
+n = o[0]
+
+cname = stageName(pid'_'name,pid,pInfo[1])
+o[n+1] ='class 'cname' extends 'stg' private'
+o[n+2] ='_s_  = int 0'      -- output stream
+n = n+3
+
+o[n+1] ='method selectOutput(stream=int) protect signals StageError'
+o[n+2] ='   _s_ = stream'
+o[n+3] ='   super.selectOutput(_s_)'
+n = n+4
+
+o[n+1]='method output(d=object) signals StageError'
+o[n+2]='   if _s_=1 then'
+o[n+3]='      super.output(d)'
+o[n+4]='   else do'
+o[n+5]='      _s_ = 1'
+o[n+6]='      super.shortStreams()'
+o[n+7]='   end'
+n = n+8
+
+o[n+1]='method exit(r=int)'
+o[n+2]='   if r=4 then'
+o[n+3]='      super.exit(0)'
+o[n+4]='   else'
+o[n+5]='      super.exit(r)'
+n = n+6
+
+o[0] = n
+pInfo[3]  = cname                           -- call this stage instead
+pInfo[4]  = rest
+
+return 1
+
+
+

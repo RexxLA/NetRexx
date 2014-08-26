@@ -1,0 +1,83 @@
+options binary strictmethods
+package org.netrexx.njpipes.stages
+import org.netrexx.njpipes.pipes.
+
+
+class ptimer extends stage
+
+thistime  = long 0
+
+properties static
+
+gate      = Rexx 'gate'            -- an object that we can use to protect
+starttime = long 0                 -- common to all timer stages in a pipe
+lasttime  = long 0
+
+
+method setup()
+
+do protect gate                    -- must protect since serveral stages can
+   starttime = Date().getTime()    -- try to access at once
+   lasttime  = starttime
+end
+
+
+method ptimer()
+
+Super()
+setup()
+
+
+method reuse()
+
+setup()
+
+
+method run() public
+
+   work = long
+
+   do
+      peekto()
+      do protect gate
+         work = Date().getTime()
+         if arg()='R' then
+            starttime = work
+         else
+            if lasttime=starttime then
+               say getPipeName() GetName() work-starttime
+            else
+               say getPipeName() GetName() work-lasttime work-starttime
+         thistime = work
+         lasttime = work
+      end
+      do
+         nosout = boolean 0
+         selectOutput(0)
+      catch StageError
+         nosout = 1
+      end
+      loop forever
+         if nosout then
+            readto()
+         else do
+            output(peekto())
+            readto()
+         end
+      catch StageError
+         rc = rc()
+      end
+   catch StageError
+      rc = rc()
+   end
+   do protect gate
+      work = Date().getTime()
+      if thistime=starttime then
+         say getPipeName() GetName() work-thistime 'RC='rc*(rc<>12)
+      else
+         say getPipeName() GetName() work-thistime work-starttime 'RC='rc*(rc<>12)
+      lasttime = work
+   end
+
+exit(rc*(rc<>12))
+

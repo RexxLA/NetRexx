@@ -1,0 +1,140 @@
+-- strtolabel.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 98/ 6/12  DString.  New; from tolabel.  JHennick
+
+/** strtolabel
+
+       +-TOLABel--+--------+----------------------+
+       |          +-string-+                      |
+   >>--+-STRTOLABel--+---------+--delimitedString-+-----------------------><
+                     +-ANYcase-+
+
+  Purpose: read records up to a matching label (i.e. a string starting in column 1).
+           copy all preceding records to stream 0.
+           copy all following records (including the matched record) to stream 1
+             (if it exists).
+
+           a null argument causes all records to be shorted to output stream 1.
+
+**/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class strtolabel extends stage
+
+method run()
+
+   /* variable declarations */
+   _labelFound   = boolean  0
+   _rc           = int      0
+   _Label_len    = int      0
+   _output1      = boolean  1
+   _output0      = boolean  1
+   anyc          = boolean  0
+
+   /* get incoming arguments and associated parameters */
+
+   parse arg().upper() w1 .
+   anyc = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1)
+   if anyc then parse arg() . args
+   else args = arg()
+
+   Label = DString(args).String
+   if anyc then Label = Label.upper()
+
+   _Label_len = Label.length()                       -- handy to have around for speed
+
+
+   /* find out which streams we have available */
+   do                                                -- enable catch
+      selectOutput(1)
+
+      catch StageError
+      _output1 = 0
+   end
+
+   do                                                -- enable catch
+      selectOutput(0)
+
+      catch StageError
+      _output0 = 0
+   end
+
+
+   select
+       when \ _output0 & \ _output1 then
+            _rc = 13                                   -- no reason to continue without one or the other streams
+       when _Label_len <> 0 & anyc then
+            loop forever while \ _labelFound
+               _record = Rexx peekto()                 -- look at the next record
+                 if Label = _record.left(_Label_len).upper() then
+                    do
+                       _labelFound = 1
+                       if _output1 then
+                          do
+                            selectOutput(1)
+                            shortStreams()
+
+                            catch StageError           -- errors (or end of datastream)
+                          end
+                    end
+                 else
+                      do
+                         if _output0 then
+                            do
+                               selectOutput(0)
+                               output(_record)
+                            end
+                      end
+               if \ _labelFound then
+                  readto()
+
+               catch StageError                       -- errors (or end of datastream)
+               _rc = rc()
+            end
+       when _Label_len <> 0 then
+            loop forever while \ _labelFound
+               _record = Rexx peekto()                 -- look at the next record
+                 if Label = _record.left(_Label_len) then
+                    do
+                       _labelFound = 1
+                       if _output1 then
+                          do
+                            selectOutput(1)
+                            shortStreams()
+
+                            catch StageError           -- errors (or end of datastream)
+                          end
+                    end
+                 else
+                      do
+                         if _output0 then
+                            do
+                               selectOutput(0)
+                               output(_record)
+                            end
+                      end
+               if \ _labelFound then
+                  readto()
+
+               catch StageError                       -- errors (or end of datastream)
+               _rc = rc()
+            end
+       otherwise
+            do
+               selectOutput(1)
+               shortStreams()
+
+               catch StageError                      -- errors (or end of datastream)
+               _rc = rc()
+            end
+   end
+
+   exit(_rc * (_rc <> 12) )                          -- sever streams and leave with Colishaw (tm) retcode

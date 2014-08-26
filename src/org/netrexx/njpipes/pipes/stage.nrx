@@ -1,0 +1,1517 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 01/05/12 fix Emsg to iterrupt the stage too - we cannot let the stage run...  ejt
+-- 01/05/11 fix exit logic to commit to -1 and report init errors.  ejt
+-- 01/05/10 fix sever/autocommit logic so severs have priority.  ejt
+-- 01/05/09 added severCallback for carefull use in threaded stages.  ejt
+-- 01/05/07 fix counter() method logic so testing via counter(0) works.  ejt
+-- 99/12/22 fixed checkOut to show correct rc for eofReport EITHER.  ejt
+-- 99/12/21 selectInput and Output logic corrected (errors on W9x).  ejt
+-- 99/05/12 selectInput and Output logic enhanced (remember reportEOF).  ejt
+-- 99/05/09 REVERTED selectInput and Output no longer report rc=4, just 12.  ejt
+-- 99/05/07 fixed a problem setting T and going.  ejt
+-- 99/05/04 added reuse() method to override to reset static elements.  ejt
+-- 98/12/06 use a hashtable to pass args.  ejt
+-- 98/09/08 commit should have returned the pipes current return code.  ejt
+-- 98/09/03 fixed protect logic in selectAnyInput.  ejt
+-- 98/08/28 added the mrc methods and code as an alternate way to track the rc.  ejt
+-- 98/08/28 selectInput/output now raise a stageerror if reselecting a severed stream.  ejt
+-- 98/08/28 fix output to correctly protect its nullpointerexception routine.  ejt
+-- 98/08/27 exit nolonger does commit(-1).  ejt
+-- 98/08/27 support new stage error code, added Error method.  ejt
+-- 98/08/27 work stage vars for peekto/readto.  ejt
+-- 98/08/26 any debug options cause threads to be named.  ejt
+-- 98/08/26 removed dead code in severOutput.  ejt
+-- 98/08/26 added either option to eofReport (tested with selectanyinput).  ejt
+-- 98/08/25 selectAnyInput now see all severs (eofReport needs this).  ejt
+-- 98/08/25 eofReport state is not reset when stage is reused.  ejt
+-- 98/08/25 improved stall setting logic.  ejt
+-- 98/08/23 added dynamic arguement and doSetup() logic.  ejt
+-- 98/08/23 startThread no longer uses a name.  ejt
+-- 98/08/13 all interal peekto/readto/output force the class to stage.  ejt
+-- 98/08/13 optimized rc logic.  ejt
+-- 98/08/12 optimized runaway logic.  ejt
+-- 98/08/11 optimized code.  ejt
+-- 98/08/03 all stage instance objects now reused.  ejt
+-- 98/08/02 deadlock between readto/peekto and commit fixed.  ejt
+-- 98/08/02 commit logic fixed.  ejt
+-- 98/08/01 handle poolable stages.  ejt
+-- 98/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
+
+/* Futures 98/11/30 ejt.
+
+This class was originally implemented using java 1.02, where thread.interupt()
+did not work effectivily.  With the advent of java 1.1.x and above it is quite
+possible to implement pipes exploiting interupts.  I envision an implementation
+where wait/notify is used to move data and interupts are used to transfer
+control information (severs, etc).  This would lead to much more maintainable
+code - though I doubt that it would be any faster.  The major limitation in
+njPipes seems to be the context switch time.
+
+The only way I see to really speed up njPipes would be to implement several
+stage implementations.  One would work like the current class, the other
+would use method calls.  Not all stages could exploit the second type of
+stage.  A pipe would use stages of both types and would allocate threads only
+when necessary.  Note this implies that all data sources must be threaded
+stages. 
+
+I think that a pipe dispatcher could be used to allow stages, at least threaded
+ones, to keept the same syntax.  The dispatcher would know when to call methods
+and when to use notify or wait.  With a dispatcher the use of notifyAll would
+no longer be necessary.  This may lead to a marginal performance increase.
+
+ */
+
+package org.netrexx.njpipes.pipes
+options binary
+
+-- a stage implementation
+
+class stage public extends utils uses utils, ThreadPool implements _stage, RunnablePool
+
+properties shared volatile
+
+inn     = pnode            -- current input pnode
+outn    = pnode            -- current output pnode
+ev      = stage           -- pointer to this stage (set null for sever)
+
+properties public
+
+T     = Thread            -- the thread for this stage
+
+properties shared 
+
+p      = pipe             -- main pipe of this stage
+top    = pipe             -- top pipe in this pipeline
+
+isPipe   = boolean        -- can be viewed as a pipe too
+_debug   = int            -- debug level
+
+properties shared volatile
+
+going   = boolean         -- flag
+
+sin     = int             -- number of current input stream
+sout    = int             -- number of current output stream
+
+extern  = int             -- threads waiting on external events
+
+_o      = int             -- connected outputs
+_s      = int             -- severed outputs
+
+_rc     = int             -- internal return code
+_err    = StageError      -- StageError that terminated this stage
+level   = int             -- commit level
+
+flag    = int             -- counter
+
+properties shared
+
+_mrc     = int
+_arg     = Object         -- arguement when stage was started
+_last    = Object
+_doSetup = boolean
+_name    = String
+_stall   = int
+_pri     = int
+_eof     = int            -- EOFReport option
+_dyn     = boolean
+
+properties static shared
+
+MAX_WAIT = java.lang.Long.MAX_VALUE    -- wait() calls wait(Long)
+
+properties constant
+
+INCREMENT    = int  256
+
+-- Build an unconnected stage
+
+method stage() 
+
+   isPipe = 0             -- can be viewed as a pipe object
+
+   _pri     = java.lang.Thread.NORM_PRIORITY
+   _name    = null
+   _debug   = 0            -- debugging off
+   _stall   = 700
+   _arg     = null
+   _last    = null
+   _dyn     = 0
+   _doSetup = 1
+   _eof     = 16
+
+   stage_reset()
+
+method stage_reset() protect
+
+-- say 'Reset' this
+   super.in  = null
+   super.out = null
+
+   sin  = -99             -- no selected streams
+   sout = -99
+
+   inn  = null            -- start at a known state
+   outn = null
+   ev   = null
+
+   flag   = AUTO_COMMIT   -- start at zero
+   extern = 0             -- no external event waits
+   going  = 0             -- not going just yet
+   level  = -2            -- current commit level
+
+   _rc  = 0               -- start with zero
+
+   if \isPipe then
+     _mrc = 0             -- max rc of stage, previous rc for a pipe.
+
+   _o   = 0               -- connect outputs
+   _s   = 0               -- severed outputs
+
+   _err = null            -- reset error
+
+   reuse()
+
+
+method reuse()            -- override in stages to reset static stage elements
+   return
+
+
+-- Build an auguement from a Java command string
+
+method buildArg(a=String[]) returns rexx static
+
+   work = rexx(a)
+   work[0] = work.words()
+   loop i=1 to work[0]
+      work[i] = work.word(i)
+   end
+
+return work
+
+
+-- run method for runable
+
+method run() signals ThreadQ
+
+   say 'Error - run method not overridden by stage or pipe'
+   signal ThreadQ('run1')
+
+
+-- get variable context (called in a stage)
+
+method getRexx(n=Rexx) returns Rexx
+
+   return p.getRexx(n)
+
+
+-- Get the return code
+
+method rc() returns int
+
+   return _rc
+
+
+-- Get the max return code
+
+method mrc() returns int
+
+   return _mrc
+
+
+-- set the return code
+
+method rc(n=int)
+
+   _rc = n
+
+
+-- set the return code
+
+method rc(e=StageError) returns int
+
+   if e=null then
+      _rc=0
+   else do
+     _err = e
+     _rc = e.rc()
+   end
+   return _rc
+
+
+-- issue an error
+
+method Error(n=int,s=string) signals StageError
+
+   if (p._debug&64)<>0 then
+      say _name s' rc='n
+
+   _rc = n
+   if n>_mrc then
+      _mrc = n
+
+   signal StageError(n,s)
+
+
+method Emsg(n=int,s=string)
+
+   if (p._debug&64)<>0 then
+      say _name s' rc='n
+
+   _rc = n
+   if n>_mrc then
+      _mrc = n
+
+   _err = StageError(n,s)
+ 
+   p.T.Interrupt()   -- kill the pipe
+
+   Exit(n) 
+
+
+-- set Priority
+
+method setRelPriority(n=int)
+
+  _pri = _pri+n
+
+  if _pri<java.lang.Thread.MIN_PRIORITY then
+     _pri = java.lang.Thread.MIN_PRIORITY
+
+  if _pri>java.lang.Thread.MAX_PRIORITY then
+     _pri = java.lang.Thread.MAX_PRIORITY
+
+
+-- set the thread name
+
+method setName(n=String)
+
+   _name = n
+
+-- get the thread name
+
+
+method getName() returns String
+
+   return _name
+
+
+-- set stall time
+
+method setRunaway(i=int)
+
+   _stall = i
+   if going then do
+      if i>p._stall then do
+         p._stall = i
+         do protect p
+            p.notifyAll()
+         end
+      end
+   catch NullPointerException
+   end
+
+
+-- Get the arguement(s)
+
+method arg() returns Rexx
+
+   select
+      when _arg=null then
+         return ''
+      when Rexx>=_arg then
+         return Rexx _arg
+      when String>=_arg then
+         return Rexx(String _arg)
+   otherwise
+      return Rexx(_arg.toString())
+   end
+
+-- Get the arguement(s)
+
+method arg(o=Object) returns Object
+
+   if o=null then
+      return _arg
+
+   select
+      when netrexx.lang.Rexx>=_arg then do
+         _rexx = netrexx.lang.Rexx _arg
+         do
+            return _rexx[object2rexx(o)]
+         catch StageError
+            return _arg
+         end
+      end
+      when java.util.Dictionary>=_arg then
+         return (Dictionary _arg).get(o)
+      when java.util.Vector>=_arg then
+         return (Vector _arg).elementAt((integer o).intValue)
+      when java.lang.String[]>=_arg then do
+         _string = java.lang.String[] _arg
+         return _string[(integer o).intValue()]
+      end
+      otherwise
+         return _arg
+   end
+
+
+-- if it exists get value at arg[i]
+
+method arg(a=rexx) returns Rexx
+
+   if _arg=null then
+      return ''
+   else do
+      work = Rexx _arg
+      if work.exists(a) then
+         return work[a]
+      else
+         return ''
+   end
+
+
+-- Set the arguements(s)
+
+method setArg(a=Rexx,d=boolean 0)
+
+   if d then
+      _last = _arg
+   _arg  = a
+   _dyn  = d
+
+
+-- Set the arguements(s)
+
+method setArg(o=Object,d=boolean 0)
+
+   if d then
+      _last = _arg
+   _arg  = o
+   _dyn  = d
+
+
+-- Is the do we need to do a setup because of args?
+
+method doSetup() returns boolean
+
+   if _doSetup then do
+      _doSetup = 0
+      return 1
+   end
+
+   if _dyn then
+      return _last\==_arg
+
+   return 0
+
+
+-- increment external wait counter
+
+method counter(i=int 0) returns int protect
+   extern = extern+i
+   return -(extern>0)
+
+
+-- set eofReporting options
+
+method eofReport(a=rexx) signals StageError
+
+if going then
+   n = checkOut()
+else
+   n = 0
+
+a = a.upper()
+select
+   when a='CURRENT' then do
+      _eof = 16
+      if n=12 then
+         Error(11,'Error - no outputs for eofReport(current) to report on')
+   end
+   when a='ALL' then do
+      _eof = 8
+      if n=12 then
+         Error(11,'Error - no outputs for eofReport(all)to report on')
+   end
+   when a='ANY' then
+      _eof = 4
+   otherwise
+      Error(11,'Error - invalid parm for eofReport 'a)
+end
+
+
+-- return the return code of the pipe (so far)
+
+method commit() returns int
+
+   return p._rc
+
+
+-- set the commit level of this stage to n
+
+method commit(n=int) returns int signals ThreadQ
+
+   if (p._debug&16)<>0 then
+      if (flag&AUTO_COMMIT)<>0 then
+         say 'Autocommiting '_name p' to 'n
+      else
+         say 'Committing '_name p' to 'n
+
+   do protect p                             -- *********** is this ok????
+      level = n                             -- commit us
+      if \p.commitTo(n) then
+         do
+            loop until n<=p.level           -- wait for the pipe...
+               do
+                  flag = flag|WAIT_COMMIT
+                  p.wait()
+                  flag = flag&CLEAR_COMMIT
+               catch InterruptedException
+                  signal ThreadQ('commit1')
+               end
+--             say this p p.level
+            end
+            flag = flag+INCREMENT
+         end
+      else
+         do
+            flag = flag+INCREMENT
+--          say this p p.level p.p p.p.level
+            p.notifyAll()
+            if p.monitor<>p then do               -- tell everyone we have commited
+               p.monitor.commitAt()
+--             say p.p p.p.level
+               do protect p.monitor
+                  p.monitor.notifyAll()
+               end
+            end
+         end
+   end
+   nocommit()
+
+   if (p._debug&32)<>0 then
+      say 'Committed '_name p' to 'n
+
+   return p._rc
+
+
+-- do not commit to -1 at first peek, readto or output
+
+method nocommit() protect
+
+   if (flag&AUTO_COMMIT)<>0 then do
+      if (flag&SEVER)=0 then do
+         inn  = findin(sin)
+         outn = findout(sout)
+      end
+      flag = flag&CLEAR_AUTO
+   end
+
+
+-- start a stage selecting default input and output streams
+
+method go()  signals ThreadQ --  signals StageError
+
+-- say 'go' this flag sin (inn<>null) sout (outn<>null) p
+   do
+      selectInput(0)
+      selectOutput(0)
+   catch StageError   -- will never happen
+      Emsg(15,'internal error in go() - should not happen')
+   end
+
+-- say 'DEBUG' p._debug
+
+   do protect p
+      going = 1
+      p._active = p._active+going
+      T = startThread(this)
+      if (p._debug&255)<>0 then           -- comment this out for trace methods to work better
+         T.setName(_name)
+      p.notifyAll()
+      if (p._debug&4)<>0 then
+         say 'Starting' _name p
+      if (p._debug&128)<>0 then
+         say 'Arg '_name' = 'object2rexx(_arg)
+   catch StageError
+   end
+
+
+-- current input stream
+
+method inStreamNumber() returns int
+
+  return sin
+
+
+-- current output stream
+
+method outStreamNumber() returns int
+
+  return sout
+
+
+method inStreamState() returns int
+
+   select                         -- not used as yield costs
+      when sin=-99 then
+         return 3                 -- unconnected
+      when inn=null then do
+         if (flag&AUTO_COMMIT)<>0 then
+            return -1                    -- unused (autocommit)
+         work = findin(sin)
+         if work.ins=null then
+            return 2                     -- input severed
+         else
+            return 0                     -- output was severed (who cares here)
+      end
+      when inn.ins=null then
+         return 2                 -- severed
+      when inn.holding then
+         return 0                 -- readto/peekto will not block
+      otherwise
+         return 1
+   end
+
+
+method outStreamState() returns int
+
+   select
+      when sout=-99 then
+         return 3                 -- unconnected
+      when outn=null then
+         return -1                -- unused (autocommit)
+      when outn.outs=null then
+         return 2                 -- severed
+      when \outn.holding then
+         return 0                 -- output will not block
+      otherwise
+         return 1                 -- output waiting (Multi Threaded)
+   end
+
+
+-- max defined Input stream
+
+method maxInputStream() returns int
+
+      max = -99
+      curr = super.in
+      loop while curr<>null
+         if curr.sout>max then
+            max = curr.sout
+         curr = curr.nin
+      end
+      return max
+
+
+-- max defined Output stream
+
+method maxOutputStream() returns int
+
+      max = -99
+      curr = super.out
+      loop while curr<>null
+         if curr.sin>max then
+            max = curr.sin
+         curr = curr.nout
+      end
+      return max
+
+
+-- Check all output streams
+-- rc = 12 there are no outputs streams
+-- rc =  8 they are all severed
+-- rc =  4 some are severed
+-- rc =  0 all are OK
+
+method checkOut(r=int 0) private returns int
+
+   /* i = 0
+      s = 0
+      curr = super.out
+      loop while curr<>null
+         i = i+1
+         if curr.outs=null then
+            s = s+1
+         curr = curr.nout
+      end  */
+--    say 'checkOut' _name _o _s
+      if _o=0 then
+         return 12
+      if _o=_s then
+         return 8
+      if _s>0 then
+         return 4
+--    if (flag&SEVER)<>0 then  -- an input severed...
+--       return 2
+      return r
+
+
+-- select an input stream.
+-- A stage error will occur if the stream does not exist
+
+method selectInput(stream=int) protect signals org.netrexx.njpipes.pipes.StageError
+
+   do
+      if stream<>sin then
+         if sin=-99 then                 -- allow selection
+            do
+               inn = findin(stream)
+               sin = inn.sout
+               if (flag&LEAVE_NULL)<>0 then
+                  inn = null
+            end
+         else do
+            if inn=null then
+               inn = findin(sin)          -- position the stream
+            if inn.sout<>stream then do   -- ensure inn is not null too
+               inn = findin(stream)
+               sin = inn.sout                  -- generage exception if inn is null
+               if inn.ins=null then            -- has suppling stage severed?
+                  signal NullPointerException  -- severed
+            end
+            if (flag&LEAVE_NULL)<>0 then
+               inn = null
+         end
+      else do
+         if inn=null then
+            inn = _findin(sin)
+         if inn.ins=null then            -- generate exception if inn is null
+            signal NullPointerException  -- severed
+         if (flag&LEAVE_NULL)<>0 then
+            inn = null
+      end
+   catch NullPointerException
+      if going then do
+         if (flag&SEVER)=0 then
+            r = 0
+         else
+            r = 4
+         flag = flag&CLEAR_SEVER
+         select
+            when sin=stream then do
+               sin = -99
+               Error(12,'selectInput ('stream') selected stream severed')
+            end
+            when super.in=null then do
+               sin = -99
+               Error(r,'selectInput ('stream') no streams to select')
+            end
+            otherwise
+               sin = -99
+               Error(r,'selectInput ('stream') selecting an unconnected or severed stream')
+         end
+      end
+   end
+
+
+-- select an output stream
+-- A stage error will occur if the stream does not exist
+
+method selectOutput(stream=int) protect signals StageError
+
+   do
+      if stream<>sout then
+         if sout=-99 then
+            do
+               outn = findout(stream)
+               sout = outn.sin
+               if sout<>-99 & (flag&LEAVE_NULL)<>0 then
+                  outn = null
+            end
+         else do
+            if outn=null then
+               outn = findout(sout)
+            if outn.sin<>stream then do        -- ensure outn is not null
+               outn = findout(stream)
+               sout = outn.sin
+               if outn.outs=null then
+                  signal NullPointerException  -- severed
+            end
+            if (flag&LEAVE_NULL)<>0 then
+               outn = null
+         end
+      else do
+         if outn=null then
+            outn = _findout(sout)
+         if outn.outs=null then            -- generate exception if outn is null
+            signal NullPointerException    -- severed
+         if (flag&LEAVE_NULL)<>0 then
+            outn = null
+      end
+   catch NullPointerException
+      if going then do
+         if (flag&SEVER)=0 then
+            r = 0
+         else
+            r = 4
+         flag = flag&CLEAR_SEVER
+         select
+            when sout=stream then do
+               sout = -99
+               Error(12,'selectOutput ('stream') selected stream severed')
+            end
+            when super.out=null then do
+               sout = -99
+               Error(r,'selectOutput ('stream') no streams to select')
+            end
+            otherwise
+               sout = -99
+               Error(r,'selectOutput ('stream') selecting an unconnected or severed stream')
+         end
+      end
+   end
+
+
+-- select any input stream (the must reciently referenced stream with
+-- input is selected)
+
+method selectAnyInput signals StageError, ThreadQ
+curr = pnode
+prev = pnode
+
+do
+   loop protect this forever
+      if inn=null then
+         signal NullPointerException
+      if super.in.holding then do
+         inn = super.in
+         sin = inn.sout
+         if (flag&LEAVE_NULL)<>0 then
+            inn = null
+         return
+      end
+      prev = super.in
+      curr = super.in.nin
+      loop while curr<>null
+         if curr.holding then do
+            prev.nin = curr.nin
+            curr.nin = super.in
+            super.in = curr
+            inn = curr
+            sin = inn.sout
+            if (flag&LEAVE_NULL)<>0 then            -- for autocommit
+               inn = null
+            return
+         end
+         prev = curr
+         curr = curr.nin
+      end
+      do
+         flag = flag|WAIT_ANY
+         wait(MAX_WAIT)
+         flag = flag&CLEAR_ANY
+      catch InterruptedException
+         signal ThreadQ('selectanyinput1')
+      end
+   end
+
+catch NullPointerException
+
+   if super.in=null then
+      do
+         sin = -99
+         inn = null
+         flag = flag&CLEAR_SEVER
+         Error(12,'selectAnyInput no inputs to select')
+      end
+   else
+      if (flag&AUTO_COMMIT)<>0 & (flag&SEVER)=0 & sout<>-99 then
+         do
+            commit(-1)
+            (stage this).selectAnyInput()
+            return
+         end
+      else
+         do
+            r = checkOut(2)
+--          say 'selectAnyInput' T r
+            flag = flag&CLEAR_SEVER
+            if r<_eof then do
+               inn = pnode()
+               (stage this).selectAnyInput()
+               return
+            end
+            sin = -99
+            inn = null
+            Error(r,'selectAnyInput reports an eof')
+         end
+end
+
+
+-- short the current input and output, the pnode for the input stream is
+-- bypassed and the stages current streams are unlinked.  If the stream
+-- lists are empty a stageError is raised to end the stage.
+
+method shortStreams signals StageError, ThreadQ
+
+   if (flag&AUTO_COMMIT)<>0 & (flag&SEVER)=0 then
+      commit(-1)
+
+   do
+
+      (stage this).output((stage this).peekto())   -- pass data on to output
+
+-- At this point the inn has still has the holding flag set so the input
+-- stage is still waiting, the data has been consumed by the output stage.
+-- We now unlink the current input and output pnodes of this stage and make
+-- streams selectable again.  We also adjust the data on the input side of
+-- the outn.
+
+      do protect this
+
+         outn.sin = inn.sin                     -- adjust outpnode pointers
+         outn.ins = inn.ins                     -- copying from input pnode
+         outn.inl = inn.inl
+
+         findout(sout)                          -- unlink output pnode from this
+         super.out = super.out.nout
+
+         findin(sin)                            -- unlink input pnode from this
+         super.in = super.in.nin
+
+         do protect inn.ins
+
+-- change input stage's outn and notify triggering an invalidMonitorException
+-- and link the outn into its list of output pnodes
+
+            inn.ins.findout(inn.sin)            -- position this pnode
+            inn.ins.out = inn.ins.out.nout      -- unlink pnode
+
+            outn.nout = inn.ins.out             -- link outn into input stages
+            inn.ins.out = outn                  -- out list
+
+            inn.ins.outn = outn                 -- fix the outn
+
+         end
+
+         outn = null                            -- and allow selectOutput
+         sout = -99
+
+         inn  = null                            -- and allow selectInput
+         sin  = -99
+
+         notifyAll()                            -- let input see its done
+
+         if super.out=null & super.in=null then
+            Error(0,'shortSteams found no streams after shorting')                      -- if stage is finished
+
+      end
+
+   catch NullPointerException
+      flag = flag&CLEAR_SEVER
+      if sout=-99 then
+         Error(4,'shortStreams found an unconnected stream')
+      else
+         Error(12,'shortStreams found a severed stream')
+   end
+
+-- output data to output stream,  optimized for speed
+
+-- note no StageError is raised when outputing to an unconnected stream
+-- though a StageError will occur outputing to a severed stream.  After
+-- njPipes has processed the sever the severed stream is seen as unconnected.
+-- ie. you only see a sever once for a stream/connection pair.
+
+-- This method is not final so a Threaded stage output class can be created
+-- if needed.  Do do it properly each thread probably should have its
+-- own current input and output streams (maybe)...
+
+method output(d=Object) signals StageError, ThreadQ
+   do
+--x   say 'output 'this' 'd
+      do
+         do protect outn.outs
+            flag = flag+INCREMENT
+
+--          say outn.outs
+
+            outn.data = d
+            outn.holding = 1
+            outn.peeked  = 0
+
+            outn.outs.notifyAll()
+                                                -- let put complete
+            loop while outn.holding
+               flag = flag|WAIT_OUT
+               outn.outs.wait(MAX_WAIT)
+               flag = flag&CLEAR_OUT
+            catch InterruptedException
+               signal ThreadQ('output1')
+            end
+
+         end
+
+      catch IllegalMonitorStateException        -- caused by sipping pipes
+         loop label tracker forever             -- peekto & shortStreams too
+            do protect outn.outs                -- callpipe *in0: ! take 1 ...
+--             say outn.outs                    -- or
+               loop while outn.holding          -- if stage peep just peeks
+                  flag = flag|WAIT_OUT          -- peekto
+                  outn.outs.wait(MAX_WAIT)      -- callpipe *in0: ! peep ...
+                  flag = flag&CLEAR_OUT         -- readto
+               catch InterruptedException       -- will trigger the loop
+                  signal ThreadQ('output2')
+               end
+               leave tracker
+            catch IllegalMonitorStateException  -- caused by peeping pipes
+            end
+         end
+
+      end
+
+   catch NullPointerException
+
+      if sout=-99 then
+         _rc = 4                              -- just set rc=4 ????
+      else do
+         if (flag&AUTO_COMMIT)<>0 & (flag&SEVER)=0 then  -- cannot protect this yet
+            commit(-1)                        -- as commit protects p
+         else do label objseen protect this
+            outn = _findout(sout)             -- recover outn
+            if outn.outs=null then            -- this this stream?
+               signal NullPointerException
+            if _eof<=4 then do
+
+               if outn.peeked then            -- only if obj not peeked
+                  leave objseen
+               flag = flag&CLEAR_SEVER        -- clear pending sever
+               Error(checkOut(),'output reports an eof')
+            end
+         catch NullPointerException
+            flag = flag&CLEAR_SEVER           -- clear pending sever
+            sout = -99
+            Error(12,'output stream 'sout' severed')
+         end /* objseen */
+         (stage this).output(d)
+      end
+   end
+
+
+-- read data from input pnode, optimized for speed
+
+method readto() returns Object signals StageError, ThreadQ
+
+   do
+      do protect this                    -- deadlock prevention
+         flag = flag+INCREMENT
+         Loop while \inn.holding         -- input pnode free
+            flag = flag|WAIT_READ
+            wait(MAX_WAIT)
+            flag = flag&CLEAR_READ
+         catch InterruptedException
+            signal ThreadQ('readto')
+         end
+
+         l = inn.data                    -- get the data
+         inn.holding = 0
+
+--x      say 'readto 'this' 'l
+
+         notifyAll()
+
+         return l
+      end
+
+   catch NullPointerException
+
+      if (flag&AUTO_COMMIT)<>0 & (flag&SEVER)=0 & sin<>-99 then
+         do
+            commit(-1)
+            return (stage this).readto()
+         end
+      else
+         do protect this
+            if sin=-99 then
+               do
+                  r = 4
+                  m = 'readto stream unconnected'
+               end
+            else do
+               flag = flag&CLEAR_SEVER
+               inn = _findin(sin)
+               if inn.ins=null then
+                  signal NullPointerException
+               r = checkOut(2)
+--             say 'readto' T r
+               if r<_eof then
+                  return (stage this).readto()
+               notifyAll()
+               m = 'readto reports an eof'
+            catch NullPointerException
+               m = 'readto stream 'sin' severed'
+               sin = -99
+               r = 12
+            end
+            notifyAll()
+            Error(r,m)
+         end
+      signal ThreadQ('readto1')                 -- avoid a compiler error
+
+   end
+
+
+-- peek at input data...
+
+method peekto() returns Object signals StageError, ThreadQ
+
+   do
+      do protect this              -- deadlock prevention
+         Loop while \inn.holding
+            flag = flag|WAIT_READ
+            wait(MAX_WAIT)
+            flag = flag&CLEAR_READ
+         catch InterruptedException
+            signal ThreadQ('peekto')
+         end
+--x      say 'peekto 'this' 'inn.data
+         inn.peeked = 1
+         return inn.data
+      end
+
+   catch NullPointerException
+
+      if (flag&AUTO_COMMIT)<>0 & (flag&SEVER)=0 & sin<>-99 then
+         do
+            commit(-1)
+            return (stage this).peekto()
+         end
+      else
+         do protect this
+            if sin=-99 then
+               do
+                  r = 4
+                  m = 'peekto stream unconnected'
+               end
+            else do
+               flag = flag&CLEAR_SEVER
+               inn = _findin(sin)
+               if inn.ins=null then
+                  signal NullPointerException
+               r = checkOut(2)
+--             say 'peekto' T r
+               if r<_eof then
+                  return (stage this).peekto()
+               m = 'peekto reports an eof'
+            catch NullPointerException
+               m = 'peekto stream 'sin' severed'
+               sin = -99
+               r = 12
+            end
+            notifyAll()
+            Error(r,m)
+         end
+      signal ThreadQ('peekto1')                    -- avoid a compiler error
+
+   end
+
+
+-- let all the other stages go before we start again
+
+method suspend() signals ThreadQ
+
+   do
+      o = T.getPriority()
+      T.setPriority(java.lang.Thread.NORM_PRIORITY-1)
+      T.yield()                                          -- give others a chance...
+      T.setPriority(o)
+   catch NullPointerException
+      signal ThreadQ('suspend')
+   end
+
+return
+
+
+-- callback to be overridden by threaded stages needing to interrupt blocked threads
+
+method severCallback(type=boolean,stream=int) public
+   return
+
+-- sever an input stream passing EOD to output pnode
+-- The sever is indicated by seting inn.outs to null, this
+-- causes output to get an exception.  The inn.ins.inn is
+-- also set to null to trigger readto/peekto/selectanyinput
+-- for eofreport options.  We have to be carefull not to
+-- restore inn to easily so the sever is not missed...
+
+method severInput() signals StageError
+
+severed = int -99
+
+do protect this
+
+   if sin<>-99 then
+      inn = findin(sin)
+
+   do
+      flag = flag+INCREMENT
+
+      work = findin(sin)
+
+      if work=null then
+         Error(12,'severInput cannot find stream 'sin' to sever')
+
+      inn = null                       -- no ref from stage
+      work.outs = null                 -- no ref to pnode from stage
+      super.in = super.in.nin          -- unlink from current stage
+      if work.outl=null then
+         do                            -- if nothing is stacked..
+            inn = findin(sin)
+            if inn<>null then
+               do
+                  say 'ERROR - tomlins@cam.org - duplicate streams.  Two addpipes?'
+                  exit
+               end
+            else
+               do protect work.ins
+                  work.ins.flag = work.ins.flag|SEVER
+--                work.ins.inn = null
+                  do                         -- for eofReportAny()
+                     nn = work.ins.outn
+                     if nn=null then
+                        nn = _findout(work.ins.sout)
+                     if nn=null then
+                        n = stage null
+                     else do
+                        n = nn.outs
+                        work.ins._s =work.ins._s+1
+                     end
+                  end
+                  work.outs = null
+                  work.ins.outn = null
+		  severed = work.ins.sout
+                  work.ins.notifyAll()
+                  if n<>null & n<>this then do protect n
+                     n.notifyAll()
+                  end
+               end
+         catch NullPointerException
+         end
+      else
+         do
+            work.popOut()                 -- if we saved a stream restore it
+--          work.outs = work.outs
+            do protect work.outs
+               work.nin = work.outs.in    -- link this guy in
+               work.outs.in = work
+               if work.outs.sin=work.sout then do         -- this is active
+                  work.outs.sin = work.sout               -- and number
+                  if (work.outs.flag&LEAVE_NULL)<>0 then  -- respect autocommit
+                     work.outs.inn = work                 -- restore inn
+               end
+            end
+         end
+      notifyAll()                      -- waitup feeding outputs
+   catch NullPointerException
+   end
+
+end
+
+if severed<>-99 then
+   work.ins.severCallback(1,severed)
+
+
+-- a sever is signaled by seting the pnode (inn) pointer to null
+-- once the sever is processed by the reciever the sin or
+-- sout variable is set to -99 to allow selectinput/output
+
+method severOutput() signals StageError
+
+severed = int -99
+
+do protect this
+
+   if sout<>-99 then
+      outn = findout(sout)
+
+   do
+      flag = flag+INCREMENT
+
+      work = findout(sout)                 -- bring it to front
+
+      if work=null then
+         Error(12,'severOutput cannot find stream 'sout' to sever')
+
+      _s = _s+1                            -- maintain stage's sever count
+      super.out = super.out.nout           -- unlink from current stage
+      if work.inl<>null then
+         do
+--          say this.getName() work work.ins.getName() work.sin
+            work.popIn()                  -- restore the stages
+--          say work work.ins.getName() work.sin
+            do protect work.ins
+               work.nout = work.ins.out   -- link this guy in
+               work.ins.out = work
+               if work.ins.sout=work.sin then do
+                  work.ins.sout = work.sin        -- and number
+                  if (work.ins.flag&LEAVE_NULL)<>0 then
+                     work.ins.outn = work         -- restore inn
+               end
+               work.ins.notifyAll()
+            end
+         end
+      else                                -- we loop to get all of the stages
+         loop forever                     -- on the output side of the pnode
+            do protect work.outs          -- whose only supplier is severing
+               do
+--                if work.outs.sin=work.sout | (work.outs.flag&WAIT_ANY)<>0 then   -- if this is the input
+                  work.outs.inn = null       -- report the sever ensure its null
+                  work.outs.flag = work.outs.flag|SEVER
+               catch NullPointerException
+               end
+               work.ins = null               -- mark us as not there any more
+               work.outs.findin(work.sout)
+               work.outs.in = work.outs.in.nin            -- *** eofReportAny
+--             if work.outs.sin=work.sout then do         -- *** add support
+--                work1 = outn.outs.findin(outn.sout)
+--                if work1<>null then do               -- DOES THIS HAPPEN ?
+--                   say 'IT HAPPENS!!!'
+--                   work.outs.inn = work1
+--                   work.outs.flag = work.outs.flag&CLEAR_SEVER
+--                end
+--             end
+               severed = work.sout
+               work.outs.notifyAll()      -- trigger monitor exception in input
+            end
+            if work.outl<>null then
+               work.popOut()
+            else
+               leave
+         end
+      notifyAll()
+   catch NullPointerException
+   end
+
+end
+
+if severed<>-99 then 
+   work.outs.severCallback(0,severed)
+   
+
+-- exit a stage severing all output streams
+
+method exit(c=int) signals ThreadQ
+
+  if (p._debug&8)<>0 then
+      say 'Preparing to stop' _name p c p._active
+
+  loop while super.in<>null         -- sever inputs
+      do
+         inn = findin(super.in.sout)
+         sin = super.in.sout
+         severInput()
+      catch StageError
+      end
+   end
+
+   loop while super.out<>null       -- sever outputs
+      do
+         outn = findout(super.out.sin)
+         sout = super.out.sin
+         severOutput()
+      catch StageError
+      end
+   end
+
+   _rc = c
+  
+   do protect this          -- wakeup anyone waiting on us
+      commit(-1)
+      notifyAll()
+   end
+
+   do protect p             -- let pipe know stage is ending
+      if _rc>p._rc then do
+         p._rc = rc
+         p._err = _err 
+      end
+      p._active = p._active-going       -- just incase exit called twice
+      going = 0
+      if (p._debug&8)<>0 then
+         say 'Stopping' _name p c p._active
+      p.notifyAll()
+   end
+
+   signal ThreadQ                       -- make sure exit is always safe...
+
+
+
+-- replace output of stage with link
+
+method inStream(nn=int,l=link,s=boolean) protect signals StageError
+
+   if nn<0 then
+      Error(13,'inStream no stream selected')
+
+   n = findin(nn)                      -- does this stream exist?
+   if l.input() then
+      do                    -- *in: !
+/* */    f = l.stage                   -- track outputs for eofReport
+         do protect f
+            if f._findout(l.stream())=null then
+               f._o = f._o+1
+         end
+         if n=null then
+            p.connect(l,this,nn,0)     -- add it to this stage
+         else do
+            super.in = n.nin           -- unchain from 2
+            if s then
+               n.pushOut()             -- change the connection
+            work = l.stage()
+            n.sout = l.stream()
+            n.outs = work
+            do protect work
+               n.nin = work.in         -- link into stage lists
+               work.in = n
+            end
+         end
+      end
+   else                     -- ... ! *in:
+      do
+         if s then do                  -- this is a callpipe...
+            _rc = 11
+            say 'Error - '_name' impossible link'
+            signal StageError
+         end
+/* */    f = l.stage()                 -- track outputs for eofReport
+         do protect f
+            if f._findout(l.stream())=null then
+               f._o = f._o+1
+         end
+         if n<>null then do
+            super.in = n.nin
+            n.outs = null
+         end
+         p.connect(l,this,nn,0)        -- use a new pnode so buffered
+         if sin=nn then do
+            if (flag&LEAVE_NULL)<>0 then
+               inn = null
+            else
+               inn = findin(nn)        -- data will not be lost or
+         end
+--       in either case sent outn null to show sever...???
+      end
+   notifyAll()                         -- allow pending outputs to switch outs
+
+
+-- replace input of a stage with link
+
+method outStream(nn=int,l=link,s=boolean) protect signals StageError
+
+   if nn<0 then
+      Error(13,'outStream no stream selected')
+
+   n = findout(nn)                     -- does this stream exist?
+   if \l.input() then
+      do                      -- ... ! *out:
+         if n=null then
+            p.connect(this,nn,l)          -- add it to this stage
+         else do
+            super.out = n.nout            -- unlink from stage
+            if s then
+               n.pushIn()                    -- save pnode's connections
+            work = l.stage()
+            n.sin = l.stream()
+            n.ins = work
+            do protect work
+               n.nout = work.out
+               work.out = n
+            end
+         end
+      end
+   else                       -- *out: ! ...
+      do
+         if s then do             -- callpipe
+            say 'Error - '_name' impossible link'
+            _rc = 11
+            signal StageError
+         end
+/* */    if n=null then
+            p.connect(this,nn,l)       -- maintain _o correctly
+         else do
+            super.out = n.nout
+            n.ins = null
+            p.connect(this,nn,l,0)
+         end
+         if sout=nn then               -- is it safe to set this ??
+            outn = findout(nn)         -- ??
+         if n<>null then do
+            n.ins = null               -- mark pnode as severed
+            if n.outs<>null then
+--             do protect n.outs
+               do
+--                say 'WHO HAS?' n.outs
+                  if n.sout=n.outs.sin then do protect n.outs
+                     n.outs.flag = n.outs.flag|SEVER
+                     n.outs.inn = null
+                     n.outs.notifyAll()   -- notify about the sever
+                  end
+               end
+         end
+      end
+
+
+-- stage level callpipe
+
+method callpipe(apipe=org.netrexx.njpipes.pipes.pipe) returns int signals ThreadQ
+
+   return p.callpipe(org.netrexx.njpipes.pipes.pipe apipe,this)
+
+
+-- stage level addpipe
+
+method addpipe(apipe=org.netrexx.njpipes.pipes.pipe)
+
+   p.addpipe(org.netrexx.njpipes.pipes.pipe apipe,this)
+
+
+-- make it easier to dump
+
+method dump()
+
+   p.dump()
+
+
+method putLink(k=rexx,o=link)
+
+   p.table.put(Object k,Object o)
+
+method getLink(k=rexx) returns link public
+
+   return link p.table.get(Object k)
+
+
+method setDebug(l=int)
+
+   p._debug = l
+
+method getDebug() returns int
+
+   return p._debug
+
+
+method setJITCache(c=Hashtable) returns org.netrexx.njpipes.pipes.pipe
+
+   return p.setJITCache(c)
+
+method getJITCache() returns Hashtable
+
+   return p.JITCache
+
+method getPipeName()
+
+   return p.getName()
+
+method pipStop 
+
+   p.T.Interrupt()
+   exit(12)  

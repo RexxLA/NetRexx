@@ -1,0 +1,93 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** getfiles
+
+Expects a stream of fileids.  Output the contents of the files on stream 0, if
+stream 1 is connected, it coppies the fileids there.  Fileids will be coppied
+even if there is a problem with the file (ie rc=2).
+
+rc = 2  - When a fileid does not exist
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class getfiles extends stage
+
+method run() public
+
+    f1 = boolean 0                        -- find the state of out stream 1
+    do
+       selectOutput(1)
+       f1 = 1
+    catch StageError
+       rc(0)
+    end
+
+    f2 = boolean 0                        -- find the state of out stream 1
+    do
+       selectOutput(1)
+       f2 = 1
+    catch StageError
+       rc(0)
+    end
+
+    f0 = boolean 0
+    do
+       selectOutput(0)
+       f0 =1
+    catch StageError
+       rc(0)
+    end
+
+    loop forever
+       a = peekto()
+       do
+          if a<=String then
+             inFile = Filereader(String a)
+          else
+             inFile = Filereader(a.toString())
+          in = BufferedReader(inFile)
+          if f1 then do
+             selectOutput(1)             -- pass the filename
+             output(a)
+             selectOutput(0)
+          end
+          do
+             if f0 then
+                loop while in.ready()
+                   line = Rexx in.readLine()
+                   if line<>null then
+                      output(line)
+                catch IOException
+                   Emsg(8,'Error reading file: '||a)
+                end
+          finally
+             do
+                in.close()
+             catch IOException              -- exceptin closing file
+                Emsg(8,'Error closing file: '||a)
+             end
+          end
+       catch FileNotFoundException       -- allow missing files setting rc=2
+          if f2 then do
+             selectOutput(2)             -- pass the filename
+             output(a)
+             selectOutput(0)
+          end
+       end
+       readto()
+    catch StageError
+       rc = rc()
+    end
+
+exit(rc)

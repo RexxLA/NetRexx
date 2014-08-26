@@ -1,0 +1,176 @@
+-- strfind.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 99/05/09 use mrc() instead of rc().  ejt
+-- 98/06/20 aobj; binary; Use "catch"; Case sensitivity; minor speedup. JHennick
+-- 98/07/18 fixed to allow stream0 to be unconnected.  ejt
+
+/** strfind
+
+       +-FIND--+--------+----------------------+
+       |       +-string-+                      |
+   >>--+-STRFIND--+---------+--delimitedString-+--------------------------><
+                  +-ANYcase-+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class strfind extends stage binary
+
+method run()
+
+   args = rexx arg()
+
+   f_str = rexx arg()
+   len = rexx f_str.length()
+   robj = rexx
+   key = rexx
+
+   c = char
+   cc = int 1
+   rc = int
+   start = int 1
+   yes = boolean 1
+   s0  = boolean 1
+   s1  = boolean 1
+
+   parse args.upper a1 .
+
+   anycase = rexx 'ANYCASE'.abbrev(a1, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(a1) > 0
+
+   if anycase then parse args . args
+
+   f_str = rexx DString(args).String
+
+   if f_str == '' then do
+      Emsg(11,'Error -' getName() 'requires a delimited string to find')
+   end
+
+   len = rexx f_str.length()
+
+   if anycase then do                                                -- ANYCASE
+      if  f_str.verify('_ ', 'M') > 0 then do  -- with Magic chars
+         start = f_str.verify(' ')  -- jump leading spaces
+         loop while s0 | s1
+            yes = 1
+            aobj = peekto()
+            robj = rexx aobj
+            key = robj.left(len)
+            loop cc = start to len while yes
+               c = f_str.substr(cc, 1)
+               if c = ' ' then iterate
+               if c = '_' then c = ' '
+               if c \= key.substr(cc, 1) then yes = 0
+            end
+            if yes then
+               do
+                  if s0 then do
+                     selectOutput(0)
+                     output(aobj)
+                  catch StageError
+                     s0 = 0
+                  end
+               end
+            else
+               if s1 then do
+                  selectOutput(1)
+                  output(aobj)
+               catch StageError
+                  s1 = 0
+               end
+            readto()
+         end
+      catch StageError
+      end
+      else                            -- no Magic chars
+      loop while s0 | s1
+         aobj = peekto()
+         robj = rexx aobj
+         if robj.left(len) = f_str then
+            do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+               catch StageError
+                  s0 = 1
+               end
+            end
+         else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
+   end
+   else do                                                     -- NOT ANYCASE
+      if  f_str.verify('_ ', 'M') > 0 then do  -- with Magic chars
+         start = f_str.verify(' ')  -- jump leading spaces
+         loop while s0 | s1
+            yes = 1
+            aobj = peekto()
+            robj = rexx aobj
+            key = robj.left(len)
+            loop cc = start to len while yes
+               c = f_str.substr(cc, 1)
+               if c = ' ' then iterate
+               if c = '_' then c = ' '
+               if c \== key.substr(cc, 1) then yes = 0
+            end
+            if yes then
+               do
+                  if s0 then do
+                     selectOutput(0)
+                     output(aobj)
+                  catch StageError
+                     s0 = 1
+                  end
+               end
+            else
+               if s1 then do
+                  selectOutput(1)
+                  output(aobj)
+               catch StageError
+                  s1 = 0
+               end
+            readto()
+         end
+      catch StageError
+      end
+      else                            -- no Magic chars
+      loop while s0 | s1
+         aobj = peekto()
+         robj = rexx aobj
+         if robj.left(len) == f_str then
+            do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+               catch StageError
+                  s0 = 1
+               end
+            end
+         else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
+   end
+
+   rc = mrc()
+   exit(rc*(rc<>12))

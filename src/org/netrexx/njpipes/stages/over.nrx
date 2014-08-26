@@ -1,0 +1,81 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** over
+
+Extract all the indexs of a rexx variable.
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class over extends stage
+
+method rexxArg(a=rexx) returns rexx
+   return a.strip('B')
+
+method run() public
+
+   f = boolean 0             -- set flag if output 1 is connect AT START
+   do
+      selectOutput(1)
+      f = 1
+   catch StageError
+   end
+
+   do                        -- back to output 0
+      selectOutput(0)
+   catch StageError
+   end
+
+   a = getRexx(arg())
+
+   if f then
+      do                        -- output root on second stream if connected
+         selectOutput(1)
+         output(arg())
+         selectOutput(0)
+         loop i over a
+            output(a[i])
+         end
+
+         loop forever
+            a = Rexx peekto()
+            selectOutput(1)
+            output(a)
+            selectOutput(0)
+            loop i over a
+               output(a[i])
+            end
+            readto()
+         end
+      catch StageError
+         rc = rc()
+      end
+   else
+      do
+         loop i over a
+            output(a[i])
+         end
+
+         loop forever
+            a = Rexx peekto()
+            loop i over a
+               output(a[i])
+            end
+            readto()
+         end
+      catch StageError
+         rc = rc()
+      end
+
+   exit(rc*(rc<>12))
+

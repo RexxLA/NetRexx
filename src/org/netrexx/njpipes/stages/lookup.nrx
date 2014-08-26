@@ -1,0 +1,735 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- lookup.nrx NJPipe Stage
+-- 99/05/16  selectInput/Output can also generate rc=0, use rc()<=4 in tests.  ejt
+-- 99/05/09  use mrc() instead of rc().  ejt
+-- 98/09/20  better error reporting.  ejt
+-- 98/08/26  fixed, restructuring vars now reset.  ejt
+-- 98/08/23  restructured to use doSetup.  ejt
+-- 98/08/03  explicit commit(-1) stage can begin waiting on selectAnyInput.  ejt
+-- 98/07/30  use SelIRange.  EJT
+-- 98/07/07  basic lookup stage.  EJT
+-- 98/       exploit stageExit for speedups.  EJT
+
+/** lookup
+
+   in stream 0 are detail records
+   in stream 1 are master records
+   in stream 2 adds to masters
+   in stream 3 delete from masters
+
+   out stream 0 are matched records
+   out stream 1 are unmatched detail records
+   out stream 2 are unmatched or counted master records
+   out stream 3 deleted masters
+   out stream 4 duplicate masters
+   out stream 5 unmatched master deletes
+
+   lookup does not consider an unconnected output stream an error.  It
+   does proprogate EOFs from output streams.
+
+   To increase performance reorder the 'when type=' in method out so the
+   type you use is first in the list and recompile the stage.
+
+
+   >>--LOOKUP--+-------+--+---------+--+---------+--+--------+->
+               +-COUNT-+  +-ANYCASE-+  +-AUTOADD-+  +-BEFORE-+
+
+   >>-+---------+--+----------+--+-----------+--+------------+-------->
+      +-KEYONLY-+  +-SETCOUNT-+  +-INCREMENT-+  +-TRACKCOUNT-+
+
+   >>----------------------------+-------------------------+---------->
+                                 +-inputRange-+------------+
+                                              +-inputRange-+
+
+   >--+---------------------------+---------------------------><
+      +-DETAIL MASTER-------------+
+      +-DETAIL ALLMASTER PAIRWISE-+
+      +-DETAIL ALLMASTER----------+
+      +-DETAIL--------------------+
+      +-MASTER DETAIL-------------+
+      +-MASTER--------------------+
+      +-ALLMASTER DETAIL PAIRWISE-+
+      +-ALLMASTER DETAIL----------+
+      +-ALLMASTER-----------------+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class lookup extends stage uses IRange binary
+
+type = int
+
+k = rexx           -- keys
+c = rexx           -- counts
+m = rexx           -- masters
+
+mm = rexx          -- count of masters
+
+anycase  = boolean
+autoadd  = boolean
+before   = boolean
+count    = boolean
+keyonly  = boolean
+setcount = boolean
+inccount = boolean
+trkcount = boolean
+notall   = boolean
+out0stop = boolean
+out1flag = boolean
+out3flag = boolean
+out4flag = boolean
+out5flag = boolean
+
+args = rexx
+
+nd = int 0
+rd = IRange[]
+nm = int 0
+rm = IRange[]
+
+
+method lookup_setup() signals ThreadQ
+
+   args = arg()
+
+   k = 0         -- keys
+   c = 0         -- counts
+   m = ''        -- masters
+
+   mm = 0        -- count of masters
+
+   anycase  = 0
+   autoadd  = 0
+   before   = 0
+   count    = 0
+   keyonly  = 0
+   setcount = 0
+   inccount = 0
+   trkcount = 0
+   notall   = 1
+   out0stop = 0
+   out1flag = 1
+   out3flag = 1
+   out4flag = 1
+   out5flag = 1
+
+   args = arg()
+
+   w = args.upper().wordpos('COUNT')
+   if w>0 then do
+      count = 1
+      args = args.delword(w,1)
+   end
+
+   w = args.upper().wordpos('AUTOADD')
+   if w>0 then do
+      autoadd = 1
+      args = args.delword(w,1)
+   end
+
+   w = args.upper().wordpos('KEYONLY')
+   if w>0 then do
+      keyonly = 1
+      args = args.delword(w,1)
+   end
+
+   w = args.upper().wordpos('TRACKCOUNT')
+   if w>0 then do
+      trkcount = 1
+      args = args.delword(w,1)
+   end
+
+   w = args.upper().wordpos('SETCOUNT')
+   if w>0 then do
+      setcount = 1
+      args = args.delword(w,1)
+   end
+
+   w = args.upper().wordpos('INCREMENT')
+   if w>0 then do
+      inccount = 1
+      args = args.delword(w,1)
+   end
+
+   w = args.upper().wordpos('BEFORE')
+   if w>0 then do
+      if \autoadd then
+         Emsg(11,'Error - BEFORE requires AUTOADD option')
+      before = 1
+      args = args.delword(w,1)
+   end
+
+   parse args w1 rest
+   w1 = w1.upper()
+   anycase = rexx 'ANYCASE'.abbrev(w1, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1) > 0
+   if anycase then
+      args = rest
+
+   rd = GetIRanges(args)
+   nd = rd[0].Number()
+
+   if nd=0 then
+      nm = 0
+   else do
+      args = rd[0].Residue()
+      rm = GetIRanges(args)
+      nm = rm[0].Number()
+      if nm>0 then
+         args = rm[0].Residue()
+      else do
+         rm = rd
+         nm = nd
+      end
+   end
+
+   args = args.upper()
+
+   w = args.wordpos('ALLMASTER')
+   if w>0 then
+      notall = 0
+
+   select
+   when args='DETAIL MASTER' | args='' then   type = 1
+   when args='DETAIL ALLMASTER PAIRWISE' then type = 2
+   when args='DETAIL ALLMASTER' then          type = 8
+   when args='DETAIL' then                    type = 3
+   when args='MASTER DETAIL' then             type = 4
+   when args='MASTER' then                    type = 5
+   when args='ALLMASTER DETAIL PAIRWISE' then type = 6
+   when args='ALLMASTER DETAIL' then          type = 7
+   when args='ALLMASTER' then                 type = 9
+   otherwise
+      signal StageError(11,'Error unknown option(s): 'args)
+   end
+
+
+method run()
+
+   sobj = rexx
+
+   rc = 0
+
+   do
+      if doSetup() then
+         lookup_setup()
+
+      commit(-1)
+
+      selectInput(1)
+
+      select
+      when nm=0 & anycase & setcount then
+         loop forever
+            aobj = rexx readto()
+            parse aobj cc 11 aobj
+            addm(aobj.upper(),aobj,cc)
+         end
+      when nm=0 & setcount then
+         loop forever
+            aobj = rexx readto()
+            parse aobj cc 11 aobj
+            addm(aobj,aobj,cc)
+         end
+      when anycase & setcount then
+         loop forever
+            aobj = rexx readto()
+            parse aobj cc 11 aobj
+            addm(mkey(aobj).upper(),aobj,cc)
+         end
+      when setcount then
+         loop forever
+            aobj = rexx readto()
+            parse aobj cc 11 aobj
+            addm(mkey(aobj),aobj,cc)
+         end
+      when nm=0 & anycase then
+         loop forever
+            aobj = rexx readto()
+            addm(aobj.upper(),aobj,0)
+         end
+      when nm=0 then
+         loop forever
+            aobj = rexx readto()
+            addm(aobj,aobj,0)
+         end
+      when anycase then
+         loop forever
+            aobj = rexx readto()
+            addm(mkey(aobj).upper(),aobj,0)
+         end
+      otherwise
+         loop forever
+            aobj = rexx readto()
+            addm(mkey(aobj),aobj,0)
+         end
+      end
+
+   catch e=StageError
+      rc = rc(e)
+      if rc<=4 then
+         rc(0)
+      else
+         if rc<>12 then
+            exit(rc)
+   end
+
+-- loop i=1 to mm
+--   say 'master' m[i]
+-- end
+
+   do
+      select
+         when nd=0 & anycase & inccount then
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               parse aobj inc 11 aobj
+               select
+                  when inStreamNumber()=0 then
+                     out(aobj.upper(),aobj,inc)
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj).upper(),aobj,inc)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj).upper(),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+         when nd=0 & inccount then
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               parse aobj inc 11 aobj
+               select
+                  when inStreamNumber()=0 then
+                     out(aobj,aobj,inc)
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj),aobj,inc)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+         when anycase & inccount then
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               parse aobj inc 11 aobj
+               select
+                  when inStreamNumber()=0 then do
+                     j = 1
+                     sobj = rd[j].SelIRange(aobj)
+                     loop i=2 to nd
+                        sobj = sobj||rd[i].SelIRange(aobj)
+                        if rd[j].endcol()>=rd[i].startcol() then
+                           Emsg(11,'Error - overlaping ranges')
+                        j = i
+                     end
+                     out(sobj.upper(),aobj,inc)
+                  end
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj).upper(),aobj,inc)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj).upper(),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+         when inccount then
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               parse aobj inc 11 aobj
+               select
+                  when inStreamNumber()=0 then do
+                     j = 1
+                     sobj = rd[j].SelIRange(aobj)
+                     loop i=2 to nd
+                        sobj = sobj||rd[i].SelIRange(aobj)
+                        if rd[j].endcol()>=rd[i].startcol() then
+                           Emsg(11,'Error - overlaping ranges')
+                        j = i
+                     end
+                     out(sobj,aobj,inc)
+                  end
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj),aobj,inc)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+         when nd=0 & anycase then
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               select
+                  when inStreamNumber()=0 then
+                     out(aobj.upper(),aobj,1)
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj).upper(),aobj,0)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj).upper(),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+         when nd=0 then
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               select
+                  when inStreamNumber()=0 then
+                     out(aobj,aobj,1)
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj),aobj,0)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+         when anycase then
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               select
+                  when inStreamNumber()=0 then do
+                     j = 1
+                     sobj = rd[j].SelIRange(aobj)
+                     loop i=2 to nd
+                        sobj = sobj||rd[i].SelIRange(aobj)
+                        if rd[j].endcol()>=rd[i].startcol() then
+                           Emsg(11,'Error - overlaping ranges')
+                        j = i
+                     end
+                     out(sobj.upper(),aobj,1)
+                  end
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj).upper(),aobj,0)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj).upper(),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+         otherwise
+            loop forever
+               selectAnyInput()
+               aobj = rexx peekto()
+               select
+                  when inStreamNumber()=0 then do
+                     j = 1
+                     sobj = rd[j].SelIRange(aobj)
+                     loop i=2 to nd
+                        sobj = sobj||rd[i].SelIRange(aobj)
+                        if rd[j].endcol()>=rd[i].startcol() then
+                           Emsg(11,'Error - overlaping ranges')
+                        j = i
+                     end
+                     out(sobj,aobj,1)
+                  end
+                  when inStreamNumber()=2 then
+                     addm(mkey(aobj),aobj,0)
+                  when inStreamNumber()=3 then
+                     delm(mkey(aobj),aobj)
+                  otherwise
+                     Emsg(10,'Error - invalid stream selected')
+               end
+               readto()
+            end
+      end
+
+   catch StageError
+      if rc()=4 then rc(0)
+   end
+
+   do
+      selectOutput(2)
+      select
+         when count then
+            loop i = 1 to mm
+               if m[i]<>'' then
+                  output(c[i].right(10)||m[i])
+            end
+         when trkcount then
+            loop i = 1 to mm
+               if c[i]=0 & m[i]<>'' then
+                  output(c[i].right(10)||m[i])
+            end
+         otherwise
+            loop i = 1 to mm
+               if c[i]=0 & m[i]<>'' then
+                  output(m[i])
+            end
+      end
+   catch StageError
+      if rc()=4 then rc(0)
+   end
+
+   rc = mrc()
+   exit(rc*(rc<>12))
+
+
+method out(key=rexx,detail=rexx,inc=rexx) signals StageError, ThreadQ
+
+   keys = k[key,0]
+
+   if keys=0 & autoadd then do
+      mm = mm+1
+      k[key,0] = 1
+      k[key,1] = mm
+      m[mm] = detail
+      if before then
+         keys = 1
+      if inccount then
+         c[mm] = inc
+   end
+
+   select
+      when keys=0 then
+         if out1flag then do
+            selectOutput(1)
+            output(detail)
+         catch StageError
+            out1flag = 0
+            if rc()<=4 then
+               rc(0)
+            else
+               signal StageError
+         end
+      when out0stop then
+         nop
+      when type=1 then    -- d m
+         do
+            selectOutput(0)
+            output(detail)
+            j = k[key,1]
+            c[j] = c[j]+inc
+            if trkcount then
+               output(c[j].right(10)||m[j])
+            else
+               output(m[j])
+          end
+      when type=2 then    -- d a p
+         do
+            selectOutput(0)
+            loop i=1 to keys
+               output(detail)
+               j = k[key,i]
+               c[j] = c[j]+inc
+               if trkcount then
+                  output(c[j].right(10)||m[j])
+               else
+                  output(m[j])
+            end
+         end
+      when type=3 then    -- d
+         do
+            selectOutput(0)
+            output(detail)
+            j = k[key,1]
+            c[j] = c[j]+inc
+         end
+      when type=4 then    -- m d
+         do
+            selectOutput(0)
+            j = k[key,1]
+            c[j] = c[j]+inc
+            if trkcount then
+               output(c[j].right(10)||m[j])
+            else
+               output(m[j])
+            output(detail)
+         end
+      when type=5 then    -- m
+         do
+            selectOutput(0)
+            j = k[key,1]
+            c[j] = c[j]+inc
+            if trkcount then
+               output(c[j].right(10)||m[j])
+            else
+               output(m[j])
+         end
+      when type=6 then    --  a d p
+         do
+            selectOutput(0)
+            loop i=1 to keys
+               j = k[key,i]
+               c[j] = c[j]+inc
+               if trkcount then
+                  output(c[j].right(10)||m[j])
+               else
+                  output(m[j])
+               output(detail)
+            end
+         end
+      when type=7 then    --  a d
+         do
+            selectOutput(0)
+            loop i=1 to keys
+               j = k[key,i]
+               c[j] = c[j]+inc
+               if trkcount then
+                  output(c[j].right(10)||m[j])
+               else
+                  output(m[j])
+            end
+            output(detail)
+         end
+      when type=8 then    --  d a
+         do
+            selectOutput(0)
+            output(detail)
+            loop i=1 to keys
+               j = k[key,i]
+               c[j] = c[j]+inc
+               if trkcount then
+                  output(c[j].right(10)||m[j])
+               else
+                  output(m[j])
+            end
+         end
+      otherwise -- type 9 --  a
+         do
+            selectOutput(0)
+            loop i=1 to keys
+               j = k[key,i]
+               c[j] = c[j]+inc
+               if trkcount then
+                  output(c[j].right(10)||m[j])
+               else
+                  output(m[j])
+            end
+         end
+      catch StageError
+         out0stop = 1
+         if rc()<=4 then
+            rc(0)
+         else
+            signal StageError
+   end
+
+
+method mkey(o=rexx) returns rexx signals ThreadQ
+   j = rexx 1
+
+   if nm=0 then
+      return o
+   else do
+      key = rm[j].SelIRange(o)
+      loop i=2 to nm
+         key = key||rm[i].SelIRange(o)
+         if rm[j].endcol()>=rm[i].startcol() then
+            Emsg(11,'Error - overlaping ranges')
+         j = i
+      end
+      return key
+   end
+
+
+method addm(key=rexx,o=rexx,inc=rexx) signals StageError, ThreadQ
+
+   if k[key,0]>0 & notall then
+      do
+         if out4flag then do
+            selectOutput(4)
+            if keyonly then
+               output(key)
+            else
+               output(o)
+         catch StageError
+            out4flag = 0
+            if rc()<=4 then
+               rc(0)
+            else
+               signal StageError
+         end
+      end
+   else
+      do
+         k[key,0] = k[key,0]+1
+         mm = mm+1
+         k[key,k[key,0]] = mm
+         if keyonly then
+            m[mm] = key
+         else
+            m[mm] = o
+         c[mm] = inc
+      end
+
+
+method delm(key=rexx,o=rexx) signals StageError, ThreadQ
+
+   keys=k[key,0]
+   if keys=0 then
+      if out5flag then do
+         selectOutput(5)
+         if keyonly then
+            output(key)
+         else
+            output(o)
+      catch StageError
+         out5flag = 0
+         if rc()<=4 then
+            rc(0)
+         else
+            signal StageError
+      end
+   else
+      do
+
+         if out3flag then do
+            selectOutput(3)
+         catch StageError
+            out3flag = 0
+            if rc()<=4 then
+               rc(0)
+            else
+               signal StageError
+         end
+
+         loop i = keys to 1 by -1
+            j = k[key,i]
+            if out3flag then do
+               if trkcount | count then
+                  output(c[j].right(10)||m[j])
+               else
+                  output(m[j])
+            catch StageError
+               out3flag = 0
+               if rc()<=4 then
+                  rc(0)
+               else
+                  signal StageError
+            end
+            m[j] = null
+            c[j] = null
+            if j=mm then
+               mm = mm-1
+            k[key,i] = null
+         end i
+         k[key,0] = null
+      end
+

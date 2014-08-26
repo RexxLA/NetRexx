@@ -1,0 +1,245 @@
+-- count.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program. 
+ */
+-- 98/ 6/ 5 Up to full CMS documentation.  JHennick
+
+/** count
+
+
+              <--------------+
+   >>--COUNT--++-CHARACTErs-++--------------------------------------------><
+               +-WORDS------+
+               +-LINES------+
+               +-MINline----+
+               +-MAXline----+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class count extends stage
+
+method run()
+
+   a = arg().upper()
+
+   achars = boolean 0
+   awords = boolean 0
+   alines = boolean 0
+   amin   = boolean 0
+   amax   = boolean 0
+
+   alength = boolean 0
+
+   if a.pos('CHARS')    > 0 then achars = 1
+   if a.pos('BYTES')    > 0 then achars = 1
+   if a.pos('CHARACTE') > 0 then achars = 1
+   if a.pos('WORDS')    > 0 then awords = 1
+   if a.pos('LINES')    > 0 then alines = 1
+   if a.pos('RECORDS')  > 0 then alines = 1
+   if a.pos('MIN')      > 0 then amin   = 1
+   if a.pos('MAX')      > 0 then amax   = 1
+
+   if achars | amin | amax then alength = 1
+
+   aone = boolean (achars + awords + alines + amin + amax < 2)
+
+   chars = rexx    0
+   words = rexx    0
+   lines = rexx    0
+   min   = rexx    999999999
+   max   = rexx    0
+
+   f     = boolean 0             -- set flag if output 1 is connect AT START
+   do
+      selectOutput(1)
+      f = 1
+   catch StageError
+   end
+
+   do
+      selectOutput(0)
+   catch StageError
+   end
+
+   line = rexx ''
+   outl = rexx ''
+   ll   = rexx 0
+
+   if f then do
+      select
+         when aone & achars then        -- chars
+            loop forever
+               line = rexx peekto()
+               chars = chars + line.length()
+               output(line)
+               readto()
+            catch StageError
+               rc = rc()
+               outl = chars
+            end
+         when aone & awords then
+            loop forever                --words
+               line = rexx peekto()
+               words = words + line.words()
+               output(line)
+               readto()
+            catch StageError
+               rc = rc()
+               outl = words
+            end
+         when aone & alines then
+            loop forever               --lines
+               aobj = peekto()
+               lines = lines + 1
+               output(aobj)
+               readto()
+            catch StageError
+               rc = rc()
+               outl = lines
+            end
+         when aone & amin then
+            loop forever                --min
+               line = rexx peekto()
+               min = line.length().min(min)
+               output(line)
+               readto()
+            catch StageError
+               rc = rc()
+               outl = min
+            end
+         when aone & amax then
+            loop forever               --max
+               line = rexx peekto()
+               max = line.length().max(max)
+               output(line)
+               readto()
+            catch StageError
+               rc = rc()
+               outl = max
+            end
+         otherwise
+            loop forever        -- multiple
+              line = rexx peekto()
+              if alength then ll    = line.length()
+
+              if achars  then chars = chars + ll
+              if awords  then words = words + line.words()
+              if alines  then lines = lines + 1
+              if amin    then min   = ll.min(min)
+              if amax    then max   = ll.max(max)
+
+              output(line)
+              readto()
+            catch StageError
+               rc = rc()
+            end
+
+            if achars then outl = outl chars
+            if awords then outl = outl words
+            if alines then outl = outl lines
+            if amin   then outl = outl min
+            if amax   then outl = outl max
+      end
+
+      do
+         selectOutput(1)
+      catch StageError
+      end
+
+         output(outl.strip())
+
+      do
+         selectOutput(0)
+      catch StageError
+      end
+
+   catch StageError
+   end
+   else do    -- NOT f
+      select
+         when aone & achars then        -- chars
+            loop forever
+               line = rexx peekto()
+               chars = chars + line.length()
+               readto()
+            catch StageError
+               rc = rc()
+               outl = chars
+            end
+         when aone & awords then
+            loop forever                --words
+               line = rexx peekto()
+               words = words + line.words()
+               readto()
+            catch StageError
+               rc = rc()
+               outl = words
+            end
+         when aone & alines then
+            loop forever               --lines
+               line = rexx peekto()
+               lines = lines + 1
+               readto()
+            catch StageError
+               rc = rc()
+               outl = lines
+            end
+         when aone & amin then
+            loop forever                --min
+               line = rexx peekto()
+               min = line.length().min(min)
+               readto()
+            catch StageError
+               rc = rc()
+               outl = min
+            end
+         when aone & amax then
+            loop forever               --max
+               line = rexx peekto()
+               max = line.length().max(max)
+               readto()
+            catch StageError
+               rc = rc()
+               outl = max
+            end
+         otherwise loop forever        -- multiple
+           line = rexx peekto()
+           if alength then ll    = line.length()
+
+           if achars  then chars = chars + ll
+           if awords  then words = words + line.words()
+           if alines  then lines = lines + 1
+           if amin    then min   = ll.min(min)
+           if amax    then max   = ll.max(max)
+
+           readto()
+         catch StageError
+            rc = rc()
+         end
+
+         if achars then outl = outl chars
+         if awords then outl = outl words
+         if alines then outl = outl lines
+         if amin   then outl = outl min
+         if amax   then outl = outl max
+      end
+
+      selectOutput(0)
+
+      output(outl.strip())
+
+   catch StageError
+      rc = rc()
+   end
+
+
+exit(rc*(rc<>12))
+
+

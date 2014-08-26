@@ -1,0 +1,166 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** sort
+
+This sort routine is very basic.  It uses sortRexx class, which implements
+the sortClass interface.  To sort objects of classes other than Rexx requires
+that you implement another sortClass with a name begining with 'sort'.
+
+I implemented this class using an Java array for the objects to be sorted as
+opposed to a Rexx stem.  Using an array is about 50% faster.  I choose a quick/
+Bose Norman sort since I had the code, in Rexx, for it from a time before I
+had pipes on CMS!
+
+*/
+
+-- 99/10/07 fixed order of args.  ejt
+-- 99/05/19 reversed range and direction to match CMS.  ejt
+-- 98/07/30 use StageError(13,... in stageExit.  ejt
+-- 98/07/29 sortExit was not prefixing generated method with the pipe name. ejt
+-- 98/07/23 split into sort and qsort classes
+-- 98/07/20 exploit IRange.  ejt
+-- 98/07/17 fix alg. problems when long strings of the same key. EJT
+
+package org.netrexx.njpipes.stages
+
+options binary
+
+import org.netrexx.njpipes.pipes.
+
+class sort extends stage public uses IRange
+
+method run()
+   Emsg(11,'Error - Should be overridden via a stageExit')
+
+/*
+ * This method is an exit called by the compiler.  With it you can change
+ * the unprocessed pipe definition, the definition of the current stage,
+ * and you can pass generated code back to the compiler.  To use it override
+ * it.  See stages\append, stages\prefix and stages\specs for examples of its
+ * use.
+ *
+ * stageExit is ONLY called for stages in the stage directory
+ *
+ * pInfo     = name of pipe,
+ * pInfo[1]  = stage number in pipe
+ * pInfo[2]  = stage label, null if no label
+ * pInfo[3]  = stage name
+ * pInfo[4]  = stage arguements
+ * pInfo[5]  = rest of pipe
+ * pInfo[6]  = sep
+ * pInfo[7]  = end
+ * pInfo[8]  = not modifier active
+ * pInfo[9]  = stage is a driver (no input streams)
+ * pInfo[10] = stage is a sink (no output streams)
+ * code      = ''
+ * code[0]   = 0     code generated as an inner class
+ *
+ * When compilerExit returns with true, the compiler expects:
+ *
+ * pInfo[2]  = stage label
+ * pInfo[3]  = name of stage
+ * pInfo[4]  = stage arguements
+ * pInfo[5]  = rest of the pipe
+ * code[0]   = number of lines generated for inner class
+ * code[n]   = line n
+ *
+ */
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+parms = rexx ''
+stg   = pInfo[3]         -- stage name
+args  = pInfo[4]
+
+type = 'Rexx'
+if args.strip('L').left(1)='(' & args.pos(')')>1 then do
+   parse args '(' parms ')' args
+   if \parms.word(1).datatype('W') then
+      type = parms.word(1)
+end
+
+parse args ad range
+
+if ad='' then
+   ad = 'A'
+else do
+   if range.upper()='A' | range.upper()='D' then do
+      temp = ad
+      ad = range
+      range = temp
+   end
+end
+
+ad = ad.upper()
+
+if ad<>'' & ad<>'A' & ad<>'D' then
+   signal StageError(13,'Error - expected A or D, found: 'args)
+
+if range='' then
+   nr= -1
+else do
+   r = GetIRanges(range)
+   nr = r[0].number()
+end
+
+--  this select needs to be modified if other sort types are implemented
+
+n = o[0]
+select
+   when nr=0 then
+      signal StageError(13,'Error - 'pInfo' - expected a range, found :'args)
+   when nr=-1 then do
+      sr = 'sort'type'_'pInfo[1]
+      o[n+1] ='class 'pInfo'_'sr' extends sort'type' uses IRange private'
+      n = n+2
+   end
+-- when type='Xxxx' then     -- to suppress the warning...
+--    nop
+   when type='Rexx' then do
+      sr = pInfo'_sort'type'_'pInfo[1]
+      how = r[0].BuildIRangeExit('ir','d')
+      o[n+1] ='class 'pInfo'_'sr' extends sort'type' uses IRange private'
+      if how.left(3)='ir[' then
+         o[n+2] ='   ir = IRange[]'
+      o[n+4] ='method key(d=rexx) returns rexx'
+      o[n+5] ='   return 'how
+      if how.left(3)='ir[' then do
+         o[n+7] ='method setup(term=rexx) returns int'
+         o[n+8] ='   ir = GetIRanges(term)'
+         o[n+9] ='   return 0'
+      end
+      n = n+10
+   end
+   otherwise
+      say "Warning - sort"type" may require modifications to sort's stageExit method"
+end
+
+if parms='' then                                  -- we are modifying the method call
+   args  = '10000 'args                           -- used to create the sort stage
+else do
+   select
+      when parms.words()=1 & parms.datatype('W') then
+         args = parms' 'args
+      when parms.words()=1 & \parms.datatype('W') then
+         args = '10000 'args
+      when parms.words()=2 & \parms.word(1).datatype('W') & parms.word(2).datatype('W') then
+         args = parms.word(2)' 'args
+      otherwise
+         signal StageError(13,'Error - 'pInfo' - at 'stg' "'parms'" incorrect.  Use: {({class} {size})} {A|D} {target}')
+   end
+end
+
+o[0] = n
+pInfo[3] = pInfo'_'sr         -- use this stage call
+pInfo[4] = args               -- use these args instead
+
+return 1
+
+

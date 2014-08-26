@@ -1,0 +1,341 @@
+-- locate.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 99/05/09  use mrc() instead of rc().  ejt
+-- 98/09/20  handle case where out0 is unconnected and out1 is.  ejt
+-- 98/07/ 1  Null dstring handling. JHennick
+-- 98/06/20  aobj. JHennick
+
+/** locate
+
+
+
+   >>--LOCATE--+---------+--+-------------+--+-------+--------------------->
+               +-ANYcase-+  +-inputRanges-+  +-ANYof-+
+
+   >--+-----------------+-------------------------------------------------><
+      +-delimitedString-+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class locate extends stage uses IRange binary
+
+method run()
+
+   rc = int
+   robj  = rexx
+   w1 = rexx
+   args = rexx
+   anycase = boolean 0
+   anyof = boolean 0
+   i = int
+   nranges = int
+   ri = IRange[]
+
+   s0 = boolean 1
+   s1 = boolean 1
+
+   args = arg()
+
+   parse args w1 rest
+   w1 = w1.upper()
+
+   anycase = rexx 'ANYCASE'.abbrev(w1, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1) > 0
+
+   if anycase then args = rest
+
+   ri = GetIRanges(args)
+   nranges = ri[0].Number()
+   args = ri[0].Residue()
+
+   parse args w1 rest
+   w1 = w1.upper()
+   anyof = boolean  'ANYOF'.abbrev(w1, 3)
+   if anyof then args = rest
+
+   l_str = DString(args).String
+
+   select
+   when l_str == '' & nranges = 0 then           -- \range \/string/
+      loop label outer forever
+         aobj = peekto()
+         robj = Rexx aobj
+         if robj.length > 0 then do
+            if s0 then do
+               selectOutput(0)
+               output(aobj)
+            catch StageError
+               selectOutput(1)
+               s0 = 0
+            end
+         end; else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
+   when l_str == '' then                          -- range(s) \/string/
+      loop label outer forever
+         aobj = peekto()
+         robj = Rexx aobj
+         len = robj.length
+         loop i = 1 to nranges
+            ri[i].SelIRange(robj)
+            if ri[i].StartCol < len then do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end; else
+               if s1 then do
+                  selectOutput(1)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(0)
+                  s1 = 0
+               end
+         catch StageError
+            iterate outer
+         end
+         readto()
+      catch StageError
+      end
+   when nranges > 0 & anyof & anycase then do    -- ANYCASE range(s) ANYOF /string/
+      l_str = l_str.upper()
+      loop label outer forever
+         aobj = peekto()
+         robj = Rexx aobj
+         loop i = 1 to nranges
+            if ri[i].SelIRange(robj).upper.verify(l_str,'M') > 0 then do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end; else
+               if s1 then do
+                  selectOutput(1)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(0)
+                  s1 = 0
+               end
+         catch StageError
+            iterate outer
+         end
+         readto()
+      catch StageError
+      end
+   end
+   when nranges > 0 & anyof Then              -- \ANYCASE range(s) ANYOF /string/
+      loop label outer forever
+         aobj = peekto()
+         robj = Rexx aobj
+         loop i = 1 to nranges
+            if ri[i].SelIRange(robj).verify(l_str,'M') > 0 then do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end; else
+               if s1 then do
+                  selectOutput(1)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(0)
+                  s1 = 0
+               end
+         catch StageError
+            iterate outer
+         end
+         readto()
+      catch StageError
+      end
+   when nranges > 0 & anycase Then do            -- ANYCASE range(s) \ANYOF /string/
+      l_str = l_str.upper
+      loop label outer forever
+         aobj = peekto()
+         robj = Rexx aobj
+         loop i = 1 to nranges
+            if ri[i].SelIRange(robj).upper.pos(l_str) > 0 then do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end; else
+               if s1 then do
+                  selectOutput(1)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(0)
+                  s1 = 0
+               end
+         catch StageError
+         end
+         readto()
+      catch StageError
+      end
+   end
+   when nranges > 0 Then                      -- \ANYCASE range(s) \ANYOF /string/
+      loop label outer forever
+         aobj = peekto()
+         robj = Rexx aobj
+         loop i = 1 to nranges
+            if ri[i].SelIRange(robj).pos(l_str) > 0 then do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end; else
+               if s1 then do
+                  selectOutput(1)
+                  output(aobj)
+                  leave
+               catch StageError
+                  selectOutput(0)
+                  s1 = 0
+               end
+         catch StageError
+            iterate outer
+         end
+         readto()
+      catch StageError
+      end
+   when anycase & anyof then do                  -- ANYCASE \range(s) ANYOF /string/
+      l_str = l_str.upper()
+      loop forever
+         aobj = peekto()
+         robj = Rexx aobj
+         if robj.upper.verify(l_str,'M') > 0 then do
+            if s0 then do
+               selectOutput(0)
+               output(aobj)
+            catch StageError
+               selectOutput(1)
+               s0 = 0
+            end
+         end; else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
+   end
+   when anycase then do                          -- ANYCASE \range(s) \ANYOF /string/
+      l_str = l_str.upper()
+      loop forever
+         aobj = peekto()
+         robj = Rexx aobj
+         if robj.upper.pos(l_str) > 0 then do
+            if s0 then do
+               selectOutput(0)
+               output(aobj)
+            catch StageError
+               selectOutput(1)
+               s0 = 0
+            end
+         end; else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
+   end
+   when anyof then                            -- \ANYCASE \range(s) ANYOF /string/
+      loop forever
+         aobj = peekto()
+         robj = Rexx aobj
+         if robj.verify(l_str,'M') > 0 then do
+            if s0 then do
+               selectOutput(0)
+               output(aobj)
+            catch StageError
+               selectOutput(1)
+               s0 = 0
+            end
+         end; else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
+   otherwise                               -- \ANYCASE \range(s) \ANYOF /string/
+      loop forever
+         aobj = peekto()
+         robj = Rexx aobj
+         if robj.pos(l_str) > 0 then do
+            if s0 then do
+               selectOutput(0)
+               output(aobj)
+            catch StageError
+               selectOutput(1)
+               s0 = 0
+            end
+         end; else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
+
+   end
+
+   rc = mrc()
+   exit(rc*(rc<>12))
+

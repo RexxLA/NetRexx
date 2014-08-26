@@ -1,0 +1,111 @@
+-- DString.nrx NJPipe Class
+/*
+ *  Copyright (C) 1998-2011 Jeffrey Hennick
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** DString class
+
+    Delimited strings
+
+*/
+
+package org.netrexx.njpipes.pipes
+
+options binary
+
+
+class DString public extends Object
+-- 98/ 6/12  JHennick
+
+properties inheritable
+
+string = Rexx ''
+delim = Rexx ''
+residue = Rexx ''
+
+method String() returns Rexx
+return string
+
+method Residue() returns Rexx
+return residue
+
+method Delimiter returns Rexx
+return delim
+
+method DString(i = rexx '')
+-- 98/ 5/25 Xhh and Bbbbbbbbb to char rather than escape hex.  JHennick
+
+/** DString(delimitedString additional_string)
+
+ returns an object of type DString for the value of a "delimitedstring"
+ at the begining of the input
+
+ Methods on DString:
+   String    returns a Rexx string of the delimited string, without delimiters
+   Residue   returns a Rexx string of the input string with the delimited string,
+             and intermediated blanks, removed
+   Delimiter returns a Rexx string of the delimiter character
+
+A delimited character string is written between two occurrences of a
+delimiter character, as a hexadecimal literal, or as a binary literal.
+The delimiter cannot be blank and it must not occur within the string.
+Two adjacent delimiter characters represent the null string.  It is
+suggested that a special character be used as the delimiter, but this is
+not enforced.  However, it is advisable not to use alphanumeric
+characters, because a future release might add a keyword or a number as
+a valid option to a built-in program where only a delimited string is
+valid today.
+
+A hexadecimal literal is specified by a leading H or X followed by an
+even number of hexadecimal digits.  A binary literal is specified by a
+leading B followed by a string of 0 and 1; the number of binary digits
+must an integral multiple of eight.
+
+The keyword STRING can be used to specify that the delimited string
+contains a string that is terminated by delimiter characters.  This acts
+as a place-holder so that any nonblank character can be used as the
+delimiter character.  Note that this use of the keyword is in addition
+to a keyword that is recognised by a built-in program.  (Thus, "split
+string string xabcx")
+
+*/
+
+   w1 = rexx ''
+   c1 = rexx ''
+   rest = rexx ''
+   h = rexx ''
+
+   parse i.upper w1 .
+   parse w1 c1 2 rest
+
+   select
+      when w1 = 'STRING' then do
+         parse i . i
+         parse i.strip() delim 2 string (delim) residue
+      end
+      when (c1 = 'H' | c1 = 'X') & rest.datatype('X') & rest.length()//2 = 0 then do
+         parse i . residue
+         loop while rest \= ''
+            parse rest h 3 rest
+            string = string || h.x2c()
+         end
+      end
+      when c1 = 'B' & rest.datatype('B') & rest.length()//8 = 0 then do
+         parse i . residue
+         loop while rest \= ''
+            parse rest h 9 rest
+            string = string || h.b2x().x2c()
+         end
+      end
+      otherwise
+         parse i.strip() delim 2 string (delim) residue
+   end
+
+   residue = residue.strip('L')
+
+return     -- GetDelimStr

@@ -1,0 +1,93 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+-- 98/ 7/30 use StageError(13,... in stageExit.  ejt
+/** prefix
+
+Blocks its primary input and excutes stage supplied as an arguement.  The
+output from this stage are put to the primary output stream.  When its
+compete the primary input is shorted.
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class prefix extends stage
+
+method stageArg(a=rexx) returns rexx
+   return a
+
+method run()
+
+   do
+      selectinput(-1)
+      loop forever
+         line = peekto()
+         output(line)
+         readto()
+      end
+   catch StageError
+      rc = rc()
+      do
+         selectinput(0)
+         shortStreams()
+      catch StageError
+         rc = rc()
+      end
+   end
+
+
+exit(rc*(rc<>12))
+
+
+/*
+ * pInfo    = name of pipe,
+ * pInfo[1] = stage number in pipe
+ * pInfo[2] = stage label, null if no label
+ * pInfo[3] = stage name
+ * pInfo[4] = stage arguements
+ * pInfo[5] = rest of pipe
+ * pInfo[6] = sep
+ * pInfo[7] = end
+ * pInfo[8] = not modifier active
+ * pInfo[9] = stage is a driver
+ * code     = ''
+ * code[0]  = 0
+ *
+ * When compilerExit returns with true, the compiler expects:
+ *
+ * pInfo[2] = stage label
+ * pInfo[3] = name of stage
+ * pInfo[4] = stage arguements
+ * pInfo[5] = rest of the pipe
+ * code[0]  = number of lines generated
+ * code[n]  = line n
+ *
+ */
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
+
+if pInfo[4]='' then
+   signal StageError(13,'Error - 'pInfo' - missing stage/pipe after 'pInfo[3])
+if pInfo[8] then
+   signal StageError(13,'Error - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
+
+if pInfo[2]='' then
+   pInfo[2] = '_ap_'pInfo[1]
+
+-- a minus sign infront of a label switches to negitive input streams...
+
+pInfo[5] = pInfo[5]' 'pInfo[4]' 'pInfo[6]' -'pInfo[2]': 'pInfo[7]     -- add to pipe
+pInfo[2] = '_ap_'pInfo[1]                                             -- add label
+pInfo[4] = ''                                                         -- no args used
+
+return 1
+

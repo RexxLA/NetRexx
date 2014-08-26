@@ -1,0 +1,453 @@
+-- joincont.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 99/05/09  use mrc() instead of rc().  ejt
+-- 98/06/26 New. JHennick
+
+/** joincont
+
+
+                                       +-TRAILING----------+
+   >>--JOINCONT--+---------+--+-----+--+-------------------+--+-------+---->
+                 +-ANYCase-+  +-NOT-+  +-RANGE--inputRange-+  +-ANYof-+
+                                       +-LEADING-----------+
+
+   >--delimitedString--+------+--+-----------------+----------------------><
+                       +-KEEP-+  +-delimitedString-+
+
+
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class joincont extends stage uses IRange
+
+method run()
+do
+
+   args = rexx arg()
+                                                   -- ANYCASE
+   parse args key rest
+   key = key.upper
+
+   anycase = 'ANYCASE'.abbrev(key,4) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(key)
+   if anycase then do
+      args = rest
+      parse args key rest
+   end
+                                                   -- NOT
+   notkey = (key = 'NOT')
+   if notkey then do
+      args = rest
+      parse args key rest
+   end
+                                                   -- LEADING RANGE TRAILING
+   leading = boolean 0
+   range = boolean 0
+   trailing = boolean 0
+   select
+      when key = 'LEADING' then leading = 1
+      when key = 'RANGE' then do
+         range = 1
+         parse args . krange rest
+         keyrange = IRange Get1IRange(krange)
+      end
+      when key = 'TRAILING' then trailing = 1
+      otherwise
+         trailing = 1
+         rest = args
+   end
+                                                   -- ANYOF
+   parse rest key rest 1 args
+   key = key.upper
+
+   anyof = 'ANYOF'.abbrev(key,3)
+   if anyof then args = rest
+                                                   -- STRING
+   ds = DString(args)
+   ds1 = ds.String
+
+   args = ds.Residue
+                                                   -- KEEP
+   parse args key rest
+
+   keep = (key = 'KEEP')
+   if keep then args = rest
+                                                   -- STRING2
+   ds2 = DString(args).String
+
+
+   if range then keep = 1
+
+   if anyof then len = 1
+   else len = ds1.length
+
+
+   select
+      when trailing & anyof & notkey & keep then   -- trailing  not anyof keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k.verify(ds1) = 0 then do
+                  robj = robj.left(robj.length - len)
+                  leave
+               end
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when trailing & anyof & notkey then          -- trailing  not anyof \keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k.verify(ds1) = 0 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when trailing & anyof & keep then            -- trailing  \not anyof keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k.verify(ds1) > 0 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when trailing & anyof then                   -- trailing  \not anyof \keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k.verify(ds1) > 0 then leave
+               robj = robj.left(robj.length - len)
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when trailing & notkey & keep then           -- trailing not \anyof keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k = ds1 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when trailing & notkey then                  -- trailing not \anyof \keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k = ds1 then do
+                  robj = robj.left(robj.length - len)
+                  leave
+               end
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when trailing & keep then                    -- trailing  \not  \anyof keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k \= ds1 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when trailing then                           -- trailing  \not  \anyof \keep
+         loop
+            robj = Rexx peekto()
+            loop
+               k = robj.right(len)
+               if k \= ds1 then leave
+               robj = robj.left(robj.length - len)
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when leading & anyof & notkey & keep then do -- leading  not anyof keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k.verify(ds1) = 0 then leave
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when leading & anyof & notkey then do        -- leading  not anyof \keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k.verify(ds1) = 0 then do
+                  robj2 = robj2.substr(lenp)
+                  leave
+               end
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when leading & anyof & keep then do          -- leading  \not anyof keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k.verify(ds1) > 0 then leave
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when leading & anyof then do                 -- leading  \not anyof \keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k.verify(ds1) > 0 then leave
+               robj2 = robj2.substr(lenp)
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when leading & notkey & keep then do         -- leading not \anyof keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k = ds1 then leave
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when leading & notkey then do                -- leading not \anyof \keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k = ds1 then do
+                  robj2 = robj2.substr(lenp)
+                  leave
+               end
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when leading & keep then do                  -- leading \not \anyof keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k \= ds1 then leave
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when leading then do                         -- leading \not \anyof \keep
+         lenp = len + 1
+         robj = Rexx peekto()
+         readto()
+         loop
+            loop
+               robj2 = Rexx peekto()
+               k = robj2.left(len)
+               if k \= ds1 then leave
+               robj2 = robj2.substr(lenp)
+               robj = robj || ds2 || robj2
+               readto()
+            end
+            output(robj)
+            robj = robj2
+            readto()
+         catch StageError
+            output(robj)
+         end
+      end
+      when range & anyof & notkey then             -- range not anyof (keep)
+         loop
+            robj = Rexx peekto()
+            k = keyrange.SelIRange(robj)
+            loop
+               if k.verify(ds1) = 0 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+               k = keyrange.SelIRange(robj2)
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when range & anyof then                      -- range \not anyof (keep)
+         loop
+            robj = Rexx peekto()
+            k = keyrange.SelIRange(robj)
+            loop
+               if k.verify(ds1) > 0 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+               k = keyrange.SelIRange(robj2)
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when range & notkey then                     -- range not \anyof (keep)
+         loop
+            robj = Rexx peekto()
+            k = keyrange.SelIRange(robj)
+            loop
+               if k = ds1 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+               k = keyrange.SelIRange(robj2)
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      when range then                              -- range \not \anyof (keep)
+         loop
+            robj = Rexx peekto()
+            k = keyrange.SelIRange(robj)
+            loop
+               if k \= ds1 then leave
+               readto()
+               robj2 = Rexx peekto()
+               robj = robj || ds2 || robj2
+               k = keyrange.SelIRange(robj2)
+            catch StageError
+            end
+            output(robj)
+            readto()
+         catch StageError
+         end
+      otherwise rc(13)                             -- Unknown
+   end
+catch StageError
+end
+
+rc = mrc()
+if rc = 4 then rc = 0
+exit(rc*(rc<>12))
+

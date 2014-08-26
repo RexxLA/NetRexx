@@ -1,0 +1,117 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** tcplisten
+
+Simple tcplisten implementation.  You can only supply the port and a timeout
+value.  Its ignored unless tcplisten's output stream has been severed, in
+which case tcplisten terminates.
+
+If input stream 0 is connected, tcplisten does a peekto before calling the
+accept method.  The object is consumed after the output of the socket object
+returns.
+
+*/
+-- 98/10/01  add input stream support.
+-- 98/08/28  fixed a commit problem.  ejt
+
+package org.netrexx.njpipes.stages
+
+options binary
+
+import org.netrexx.njpipes.pipes.
+
+class tcplisten public extends stage
+
+s0 = boolean
+e  = IOException null
+
+method run()
+
+   a = arg()
+
+   p = a.word(1)
+
+   if p.datatype('W') then
+      port = int p
+   else do
+      Emsg(11,'Error - expected a port number, got 'p)
+   end
+
+   timeout = int 60000
+   i = a.wordpos('timeout')
+   if i>0 then do
+      timeout = int a.word(i+1)
+      a = a.delword(i,2)
+   end
+
+   backlog = int 10
+   i = a.wordpos('backlog')
+   if i>0 then do
+      backlog = int a.word(i+1)
+      a = a.delword(i,2)
+   end
+
+   do
+      s0 = 1
+      selectInput(0)
+   catch StageError
+      s0 = 0
+   end
+
+   do
+      commit(-1)
+
+      ear = ServerSocket(port,backlog)
+      ear.setSoTimeout(timeout)
+
+      loop forever
+         do
+            if s0 then
+               peekto()
+            z = counter(1)
+            soc = ear.accept()
+            z = counter(z)
+--          dump()
+            output(soc)
+            if s0 then
+               readto()
+         catch e=IOException
+--          say e
+            z = counter(z)
+            if InterruptedIOException>=e then
+               selectOutput(0)
+            else
+               signal e
+         end
+      end
+
+   catch StageError
+      rc = rc()
+
+   catch e=IOException
+
+   finally
+      if ear<>null then do
+         ear.close()
+      catch IOException
+      end
+
+      if e<>null then
+         Emsg(12,'Error - tcplisten gets: 'e.getMessage)
+
+   end
+
+do
+   selectOutput(1)
+   output(Rexx rc)
+catch StageError
+end
+
+exit(rc*(rc<>12))

@@ -1,0 +1,64 @@
+-- timestamp.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Rene V. Jansen
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+-- 98/06/24 timestamp stage conforming to GC28-1641 p 395. rvjansen
+-- 98/06/25 report 100th of a second, keep output class as rexx.  ejt
+/**
+timestamp--Prefix the Date and Time to Records
+
+timestamp  prefixes  each  record with a timestamp showing when the record was read by timestamp.
+
++------------------------------------------------------------------------+
+|                                                                        |
+|                +-8------+                                              |
+| >>--TIMEstamp--+--------+------------------------------------------->< |
+|                +-number-+                                              |
+|                                                                        |
++------------------------------------------------------------------------+
+Type:  Filter.
+
+
+Syntax Description:  The arguments are optional.  The default is 8.
+
+
+Operation:  A 16-character timestamp is developed whenever  a  record  has been  read.
+It consists of the year (including the century), the month, day, hour, minute, second,
+and hundredth  of  a  second.  Unlike CMS, the java interface reports hundredths of a
+second.  The  specified number of characters are taken from the right-hand side of this
+number and prefixed to the input record.
+*/
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.text.
+
+class timestamp extends stage
+
+method run()
+   length=arg()
+   if length = '' then length=8
+   if (length < 1) | (length > 16) then
+      say "Error --" getName() "syntax error"
+
+   loop forever
+      line = Rexx peekto()
+      output(prefixtimestamp(length,line))
+      readto()
+   catch StageError
+      rc = rc()
+   end
+ Exit(rc*(rc<>12))
+
+method prefixtimestamp(length=int, line=Rexx)
+  today = Date()
+  df = SimpleDateFormat("yyyyMMddHHmmssSSS")
+  longdate = rexx(df.format(today))
+  return longdate.substr(17-length,length) line
+
+
+

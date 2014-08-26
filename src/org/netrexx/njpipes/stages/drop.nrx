@@ -1,0 +1,183 @@
+-- drop.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Distributed under the GNU GENERAL PUBLIC LICENSE with NO WARRANTIES of ANY kind.
+ *  See CopyLeft.Txt for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ */
+
+-- 99/05/21  fix rc logic.  ejt
+-- 98/09/20  added secondary output for first and last.  ejt
+-- 98/06/10  Up to CMS Documentation.  JHennick
+
+/** drop
+
+            +-FIRST-+  +-1------+
+  >>--DROP--+-------+--+--------+--+-------+-----------------------------><
+            +-LAST--+  +-number-+  +-BYTES-+
+                       +-*------+
+*/
+
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class drop extends stage
+
+method run()
+
+   s0 = boolean 1
+   s1 = boolean 1
+
+   arg = rexx arg().upper
+   parse arg type n .
+
+   first = boolean 1
+   number = rexx 1
+   bytes = boolean 0
+
+   select
+      when type = '' then number = 1
+      when type = 'FIRST' then nop
+      when type = 'LAST' then first = 0
+      when type.datatype('W') then number = type
+      when type = '*' then nop
+      when type = 'BYTES' then bytes = 1
+      otherwise
+        Emsg(11,'Error-' GetName() 'unrecognized argument:' arg())
+   end
+
+   if number = 1 & n.datatype('W') then number = n
+
+   if arg.pos('BYTES') > 0 then bytes = 1
+
+   do
+      selectOutput(1)
+   catch StageError
+      s1 = 0
+   end
+
+   do
+      selectOutput(0)
+   catch StageError
+      s0 = 0
+   end
+
+   if \s0 & \s1 then
+      Emsg(11,'No output stages connected')
+
+   select
+      when type = '*' | n = '*' then do    -- drop all
+         if s1 then
+            do
+               selectOutput(1)
+               shortStreams()
+            end
+         else
+            loop forever
+               readto()
+            end
+      catch StageError
+         rc = rc()
+      end
+      when number = '0' then shortStreams()   -- drop none
+      when first & bytes then         -- first bytes
+         do
+            n = 0
+            loop forever
+               l = rexx peekto()
+               n = n + l.length()
+               if n >= number then do
+                  if n > number then output(l.substr(n - number))
+                  readto()
+                  leave
+               end
+               readto()
+            end
+            shortStreams()
+         catch StageError
+            rc = rc()
+         end
+      when first then        -- first lines
+         do
+            if s1 then
+               do
+                  selectOutput(1)
+                  loop for number
+                     obj = readto()
+                     if s1 then do
+                        output(obj)
+                     catch StageError
+                        s1 = 0
+                     end
+                  end
+               end
+            else
+               loop for number
+                  readto()
+               end
+            selectOutput(0)
+            shortStreams()
+         catch StageError
+            rc = rc()
+         end
+      when bytes then              -- last bytes
+         do
+            buf = org.netrexx.njpipes.pipes.RingBuf(n)
+            outl = ''
+            do
+               loop forever
+                  l = rexx peekto()
+                  outla = buf.DelayRingBuf(l)
+                  outl = outl || outla
+                  readto()
+               end
+            end
+         catch StageError
+            rc = rc()
+            if outl \== '' then output(outl)
+         end
+      otherwise                           -- last lines
+         do
+            vbuf = Vector(n+1,n+1)
+            do
+               loop for number
+                  vbuf.addElement(readto())
+               end
+               loop forever
+                  vbuf.addElement(readto())
+                  aobj = vbuf.firstElement()
+                  if s0 then
+                     output(aobj)
+                  vbuf.removeElement(aobj)
+               end
+            catch StageError
+               if s1 then do
+                  selectOutput(1)
+                  loop while \vbuf.isEmpty()
+                     aobj = vbuf.firstElement()
+                     if s1 then do
+                        output(aobj)
+                     catch StageError
+                        s1 = 0
+                     end
+                     vbuf.removeElement(aobj)
+                  end
+               end
+            end
+         catch StageError
+            rc = mrc()
+         end
+   catch StageError
+   end
+
+rc = mrc()
+
+exit(rc*(rc<>12))
+
+
+

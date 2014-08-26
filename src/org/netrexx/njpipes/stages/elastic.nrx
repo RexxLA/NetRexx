@@ -1,0 +1,108 @@
+/*
+ *  Copyright (C) 1997-2011 Ed Tomlinson
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** elastic
+
+read objects from the primary input stream as soon as they arive without
+delaying the stream.  Output when requested.  Note elastic always accepts
+new objects - even if its output is blocked pending a write.
+
+*/
+-- 99/05/27  adding to buffer was not thread safe...  ejt
+-- 98/ 8/28  fixed rc logic.  ejt
+-- 98/ 8/23  startThread no longer uses a name.  ejt
+-- 98/ 7/31  modified for RunnablePool.  ejt
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class elastic public extends stage
+
+buf = Vector
+c   = int
+
+method run()
+
+   buf = Vector(100,1000)
+   c = 0
+
+   do
+      o = elastic.writer()
+      o.go(this)
+
+      loop forever
+         obj = readto()               -- read input
+         do protect o
+            buf.addElement(obj)       -- add to queue
+            if o.ok then
+               o.notify()             -- let writer thread know
+            else
+               signal StageError
+         end
+      end
+
+   catch e=StageError
+     do protect o
+        if e.rc()>c then c=e.rc()
+     end
+   end
+
+   do protect o
+      if o.ok then do
+         o.ok = 0
+         o.notify()
+         o.wait()
+      catch InterruptedException
+      end
+   end
+
+exit(c*(c<>12))
+
+
+class elastic.writer private implements RunnablePool uses ThreadPool
+
+r  = elastic
+ok = boolean 1
+
+method go(rr=elastic)
+   r = rr
+   startThread(this)
+
+method run()
+
+   loop forever
+      do protect this
+         obj = r.buf.firstElement()
+         r.buf.removeElementAt(0)                   -- this costs!!!
+      catch java.util.NoSuchElementException
+         if \ok then
+            signal StageError
+         else do
+            wait()
+            iterate
+         catch InterruptedException
+         end
+      end
+      r.output(obj)
+   catch e=StageError
+      do protect this
+         if e.rc()>r.c then r.c = e.rc()
+      end
+   finally
+      do protect this
+         if \ok then
+            notify()
+         else
+            ok = 0
+      end
+   end
+
+
+
