@@ -4,7 +4,7 @@ TEX_SRC		:= $(wildcard *.tex)
 LATEX_EXE	:= xelatex -shell-esc
 RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
-DOCNAME         := "NetRexx $(RELEASE) Language Reference.pdf"
+DOCNAME         := "NetRexx $(RELEASE) Pipelines Reference.pdf"
 
 
 .SUFFIXES: .nrx .nry .njp .class .skel .xsl .java .pdf
