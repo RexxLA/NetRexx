@@ -70,7 +70,7 @@ no longer be necessary.  This may lead to a marginal performance increase.
  */
 
 package org.netrexx.njpipes.pipes
-options binary
+options binary nostrictargs nostrictcase
 
 -- a stage implementation
 
@@ -86,7 +86,7 @@ properties public
 
 T     = Thread            -- the thread for this stage
 
-properties shared 
+properties public 
 
 p      = pipe             -- main pipe of this stage
 top    = pipe             -- top pipe in this pipeline
@@ -94,7 +94,7 @@ top    = pipe             -- top pipe in this pipeline
 isPipe   = boolean        -- can be viewed as a pipe too
 _debug   = int            -- debug level
 
-properties shared volatile
+properties public volatile
 
 going   = boolean         -- flag
 
@@ -112,7 +112,7 @@ level   = int             -- commit level
 
 flag    = int             -- counter
 
-properties shared
+properties public
 
 _mrc     = int
 _arg     = Object         -- arguement when stage was started
@@ -185,11 +185,11 @@ method reuse()            -- override in stages to reset static stage elements
    return
 
 
--- Build an auguement from a Java command string
+-- Build an argument from a Java command string
 
-method buildArg(a=String[]) returns rexx static
+method buildArg(a=String[]) returns Rexx static
 
-   work = rexx(a)
+   work = Rexx(a)
    work[0] = work.words()
    loop i=1 to work[0]
       work[i] = work.word(i)
@@ -249,7 +249,7 @@ method rc(e=StageError) returns int
 
 -- issue an error
 
-method Error(n=int,s=string) signals StageError
+method Error(n=int,s=String) signals StageError
 
    if (p._debug&64)<>0 then
       say _name s' rc='n
@@ -261,7 +261,7 @@ method Error(n=int,s=string) signals StageError
    signal StageError(n,s)
 
 
-method Emsg(n=int,s=string)
+method Emsg(n=int,s=String) signals ThreadQ
 
    if (p._debug&64)<>0 then
       say _name s' rc='n
@@ -344,9 +344,9 @@ method arg(o=Object) returns Object
 
    select
       when netrexx.lang.Rexx>=_arg then do
-         _rexx = netrexx.lang.Rexx _arg
+         _Rexx = netrexx.lang.Rexx _arg
          do
-            return _rexx[object2rexx(o)]
+            return _Rexx[object2Rexx(o)]
          catch StageError
             return _arg
          end
@@ -366,7 +366,7 @@ method arg(o=Object) returns Object
 
 -- if it exists get value at arg[i]
 
-method arg(a=rexx) returns Rexx
+method arg(a=Rexx) returns Rexx
 
    if _arg=null then
       return ''
@@ -423,7 +423,7 @@ method counter(i=int 0) returns int protect
 
 -- set eofReporting options
 
-method eofReport(a=rexx) signals StageError
+method eofReport(a=Rexx) signals StageError
 
 if going then
    n = checkOut()
@@ -541,7 +541,7 @@ method go()  signals ThreadQ --  signals StageError
       if (p._debug&4)<>0 then
          say 'Starting' _name p
       if (p._debug&128)<>0 then
-         say 'Arg '_name' = 'object2rexx(_arg)
+         say 'Arg '_name' = 'object2Rexx(_arg)
    catch StageError
    end
 
@@ -1481,11 +1481,11 @@ method dump()
    p.dump()
 
 
-method putLink(k=rexx,o=link)
+method putLink(k=Rexx,o=link)
 
    p.table.put(Object k,Object o)
 
-method getLink(k=rexx) returns link public
+method getLink(k=Rexx) returns link public
 
    return link p.table.get(Object k)
 
@@ -1499,9 +1499,9 @@ method getDebug() returns int
    return p._debug
 
 
-method setJITCache(c=Hashtable) returns org.netrexx.njpipes.pipes.pipe
+method setJITCache(c=Hashtable) returns pipe
 
-   return p.setJITCache(c)
+  return p.setJITCache(c)
 
 method getJITCache() returns Hashtable
 
@@ -1511,7 +1511,7 @@ method getPipeName()
 
    return p.getName()
 
-method pipStop 
+method pipStop signals ThreadQ 
 
    p.T.Interrupt()
    exit(12)  
