@@ -7,7 +7,6 @@
  */
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.stages
-
 import org.netrexx.njpipes.pipes.
 import java.sql.
 import java.util.
@@ -91,48 +90,50 @@ do
   outputline = ''
   width = ''
   loop i=1 to cols
-     if meta.getColumnDisplaySize(int i) > meta.getColumnName(int i).length()
-         then width[i] = meta.getColumnDisplaySize(int i)
-     else width[i] = meta.getColumnName(int i).length()+2
-     columnline = meta.getColumnName(int i).toUppercase()
-     helpline = columnline
-     helpline = helpline.left(width[i], '-')
-     outputline = outputline||helpline
-     catch NullPointerException
+    if meta.getColumnDisplaySize(int i) > meta.getColumnName(int i).length()
+      then width[i] = meta.getColumnDisplaySize(int i)
+    else width[i] = meta.getColumnName(int i).length()+2
+    if width[i] > 9999 then width[i] = meta.getColumnName(int i).length()+2
+    columnline = meta.getColumnName(int i).toUppercase()
+    helpline = columnline
+    helpline = helpline.left(width[i], '-')
+    outputline = outputline||helpline
+  catch NullPointerException
   end
   do
-  output(outputline)
+    output(outputline)
   catch StageError
-  rc = rc()
+    rc = rc()
   end
--- get the data rows
+  -- get the data rows
   loop i=1 while rs.next()
-     outputline = ''
+    outputline = ''
     loop j=1 to cols
-       columnline = rs.getObject(int j).toString()
-       helpline = columnline
-       helpline = helpline.left(width[j])
-       outputline = outputline||helpline
-       catch NullPointerException
+      columnline = rs.getObject(int j).toString()
+      helpline = columnline
+      if columnline.length > width[j] then width[j] = columnline.length+2
+      helpline = helpline.left(width[j])
+      outputline = outputline||helpline
+    catch NullPointerException
     end
-     output(outputline)
+    output(outputline)
   catch StageError
-  rc = rc()
+    rc = rc()
   end
-
+  
   rs.close()
   stmt.close()
   jdbcCon.close()
-
+  
 catch e3 = SQLException
   say 'SQLException(s) caught !'
   loop while (e3 \= null)
-     say 'SQLState:' e3.getSQLState()
-     say 'Message: ' e3.getMessage()
-     say 'Vendor:  ' e3.getErrorCode()
-     say
-     e3 = e3.getNextException()
-   end
+    say 'SQLState:' e3.getSQLState()
+    say 'Message: ' e3.getMessage()
+    say 'Vendor:  ' e3.getErrorCode()
+    say
+    e3 = e3.getNextException()
+  end
 end
 
 
