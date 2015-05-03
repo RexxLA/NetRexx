@@ -53,6 +53,7 @@
 /* 2011.08.20 Update to allow compiling programs from memory strings - Kermit Kiser       */
 /* 2011.08.22 add option to supress rename of java files to .keep - Kermit Kiser       */
 /* 2012.07.31 mod for select of ecj compiler  *rvj*        */
+-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -62,7 +63,8 @@ class NetRexxC
   properties private constant
   logfilename='NetRexxC.log'
   
-  properties private
+  properties public
+--  properties private
   -- variables corresponding to our flags
   argarray=String[] null           -- arguments for -exec [iff not null]
   compile =boolean 1               -- compile if translation OK
@@ -91,6 +93,7 @@ class NetRexxC
 
   properties private static
   programstrings = String[]		--	allows programs to be passed in memory strings
+  classlist=java.util.List							--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
   
   /** get here when called from java.exe */
   method main(arg=String[]) static
@@ -107,8 +110,8 @@ class NetRexxC
      Arg2 is a String containing a program in memory,
      Arg3 is PrintWriter file (forces -savelog if specified)
    */
-  method main(arg=Rexx, programstring=String, logfile=PrintWriter null) constant returns int
-    return main(arg,[String programstring],logfile)
+  method main(arg=Rexx, programstring=String, logfile=PrintWriter null, classfiles=java.util.List null) constant returns int
+    return main(arg,[String programstring],logfile,classfiles)
     
   /** public call-from-Java entry,
      Arg1 is command argument string which has words which are flags or
@@ -117,9 +120,10 @@ class NetRexxC
      Arg2 is a array of Strings containing programs in memory (no more than the number of file names passed in Arg1),
      Arg3 is PrintWriter file (forces -savelog if specified)
    */
-  method main(arg=Rexx, programarray=String[], logfile=PrintWriter null) constant returns int
+  method main(arg=Rexx, programarray=String[], logfile=PrintWriter null, classfiles=java.util.List null) constant returns int
     
     programstrings=programarray	--	save array of program strings 
+    classlist=classfiles		-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
     return main(arg,logfile)
     
   /** public call-from-Java entry,
@@ -182,6 +186,8 @@ class NetRexxC
     translator=RxTranslator()                       -- construct translator
     
     parseline(arg)    -- collect initial flags and file specification
+    
+    translator.setkeeps(keep,keepasjava,classlist)			-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
     
     -- need to set java.class.path property and restore it later
     if classpath\=null then do

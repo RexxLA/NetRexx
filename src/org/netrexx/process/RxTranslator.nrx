@@ -39,6 +39,7 @@
 /* 2012.10.11 fix for missing package info if this class is loaded by some classloaders  -- no issue # --Kermit */
 /* 2013.01.15  switch the javac call to the documented entry point to fix issues #74, #95 and possible other problems  -- KK ----Kermit */
 /* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fixes bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
+-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -51,6 +52,7 @@
 package org.netrexx.process
 options binary decimal strictcase strictargs
 --import com.sun.tools.javac.Main   -- the javac compiler
+import javax.tools.		--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
 
 class RxTranslator
 
@@ -70,6 +72,9 @@ class RxTranslator
  properties shared            -- visible within the package
 
   /* Globals (shared by all programs in the package) */
+  keep    =boolean 0              -- keep the java file	-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  keepasjava = boolean 0      -- keep java output and do not rename it to .keep		-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  classlist=java.util.List			  --	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
   babels      =RxBabel[]      -- language-specific key classes
   classer     =RxClasser      -- class handler
   interpreter =RxInterpreter  -- evaluator
@@ -160,7 +165,14 @@ class RxTranslator
           'java.util', 'java.awt',  'java.applet']			*/
                     
   return
-
+  
+	-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+	
+	method setkeeps(k1,k2,cl=java.util.List)
+		keep=k1
+		keepasjava=k2
+		classlist=cl
+	
  /** -------------------------------------------------------------- */
  /* SETLANGUAGES -- set language-specific constants                */
  /* Arg1 is an array of prefixes of known ZzBabel classes          */
@@ -625,10 +637,16 @@ class RxTranslator
     args[1]='-classpath'                -- explicit classpath needed
     args[2]=classpath                   -- .. for Java 1.2 javac
     -- add the filenames
+    jfoarray=JavaFileObject[programs]		--		Java compiler API	-- KK -- 2015.05.02  
+    optarray=[String '-nowarn', '-classpath' , classpath]
     offset=args.length-programs
     loop f=0 for programs
       program=programlist[f]            -- current program
       args[f+offset]=program.streamer.outfilefull
+      parse program.programname firstname '.' .				--		Java compiler API	-- KK -- 2015.05.02  
+      jfoarray[f]=RxInMemoryJavaFileObject(firstname.toString(),program.streamer.byteoutstream.toString())	--		Java compiler API	-- KK -- 2015.05.02
+			catch cle=Exception	--		Java compiler API	-- KK -- 2015.05.02
+				say cle      		--		Java compiler API	-- KK -- 2015.05.02
       end f
     if maxverbose>3 then say('Compiling: '''Rexx(args)'''')
     else if haddiag then say '# Compiling:' Rexx(args)
@@ -657,13 +675,23 @@ class RxTranslator
 			if program.flag.diag then say '# compiling' program.programname 'using javac'
 			-- javacok=sun.tools.javac.Main(System.out, 'javac').compile(args)
 			do
+			javacompiler=ToolProvider.getSystemJavaCompiler()																		--		get Java compiler API	-- KK -- 2015.05.02  
+			if javacompiler==null then javacok=boolean 0																					--		flag compile failed
+				else do
+					fileManager = RxForwardingJavaFileManager(JavaFileManager javacompiler.getStandardFileManager(null, null, null))		--		make file manager to capture class files in memory
+					javacok=javacompiler.getTask(null,fileManager,null,Arrays.asList(optarray),null,Arrays.asList(jfoarray)).call().booleanValue()		--		run the Java compiler on the memory strings
+					end
+/*		
 			-- switch the javac call to the documented entry point to fix issues 74, 95 and possible other problems  -- 2013-01-15 -- KK --
 			-- this entry point has different return codes than the original undocumented entry point
 			javacclass=javaloader.loadClass('com.sun.tools.javac.Main')
 			compilemethod = javacclass.getMethod('compile', [Class args.getClass(), PrintWriter.class])
 			jok=Rexx(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString())
-			javacok=boolean (jok=="0")		--		convert RC to boolean flag per original use of return value
+*/
+--			javacok=boolean (jok=="0")		--		convert RC to boolean flag per original use of return value
+
 --			javacok=boolean Boolean(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString()).booleanValue()
+
 /*
 For the record, here are the javac exit codes:
     static final int
@@ -682,8 +710,8 @@ For the record, here are the javac exit codes:
 			compilemethod = javac.getClass().getMethod('compile', [Class args.getClass()])
 			javacok=boolean Boolean(compilemethod.invoke(javac,[Object args]).toString()).booleanValue()
 */
-			catch cle=Exception
-				say cle
+--			catch cle=Exception
+--				say cle
 			end
       end
       
@@ -691,13 +719,19 @@ For the record, here are the javac exit codes:
 			if program.flag.diag then say '# compiling' program.programname 'using eclipse batch compiler'
 		--	javacok=org.eclipse.jdt.core.compiler.batch.BatchCompiler.compile(args, PrintWriter(System.out), PrintWriter(System.err), null)
 			do
+					ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')
+					javacompiler=JavaCompiler ecjclass.newInstance()
+					fileManager = RxForwardingJavaFileManager(JavaFileManager javacompiler.getStandardFileManager(null, null, null))		--		make file manager to capture class files in memory
+					javacok=javacompiler.getTask(null,fileManager,null,Arrays.asList(optarray),null,Arrays.asList(jfoarray)).call().booleanValue()		--		run the Java compiler on the memory strings
+/*				
 			ecjclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.batch.BatchCompiler')
 			ecpclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.CompilationProgress')
 			compilemethod = ecjclass.getMethod('compile', [args.getClass(),PrintWriter.class,PrintWriter.class, ecpclass])
 			javacok=boolean Boolean(compilemethod.invoke(ecjclass,[Object args, PrintWriter(System.out), PrintWriter(System.err), null]).toString()).booleanValue()
 			-- note: ecj also returns boolean 1 (true) if successful compile!
-			catch cle=Exception
-				say cle
+*/				
+			catch cle=Exception
+				say cle
 			end
       end
       
@@ -708,11 +742,22 @@ For the record, here are the javac exit codes:
     if haddiag then say '# Compiled: ok='javacok
     badjavac=\javacok
 
+    if javacok then do 	--		Java compiler API	-- KK -- 2015.05.02
+        tba=RxByteArrayJavaClass			--		Java compiler API	-- KK -- 2015.05.02  
+        if classlist\==null then do
+			/* now build a special class loader for the class files in memory */
+			byteCodeMap = HashMap()
+			loop tba over fileManager.classFileObjects
+				byteCodeMap.put(tba.getName().substring(1), tba.getBytes())		--	why does first char of name have to be discarded? - URI trick
+				end
+			classlist.add(RxMapClassLoader(byteCodeMap))
+			end
+		end
     /* Fixup any .class files that javac made for each file */
     /* [If javac failed we assume no new .class files were generated.] */
     if javacok then loop f=0 for programs
       program=programlist[f]                 -- current program
-      fixer=RxFixup(program.source.getName())  -- make a fixer
+      fixer=RxFixup(program.source.getName(),'.',this)  -- make a fixer
       loop c=0 for program.classes.size()
         -- build the filename
         theclass=RxClass program.classes.elementAt(c)
@@ -728,7 +773,13 @@ For the record, here are the javac exit codes:
                                   else targetclass=localclass
         -- if program.flag.diag then say '# Fixing' actualclass-
         --    'to' targetclass '['program.flag.sourcedir']'
-        fixer.fixit(actualclass, targetclass)
+        loop tba over fileManager.classFileObjects		--		Java compiler API	-- KK -- 2015.05.02  
+--        	say tba.getName().substring(1)".class"
+--        	say actualclass targetclass localclass
+        	if tba.getName().substring(1)".class"=localclass then -
+        	fixer.fixit(actualclass, targetclass, tba.getBytes())
+        	end
+--        fixer.fixit(actualclass, targetclass)
         -- [we ignore errors]
         end c
       end f
@@ -743,7 +794,7 @@ For the record, here are the javac exit codes:
  /* --------------------------------------------------------------- */
  /* Arg1 is 1 to keep the java file after successful compilation    */
  /*           (normally it is erased if the compile was successful) */
- method dispose(keep=boolean, keepasjava=boolean 0)
+ method dispose(keep1=boolean, keepasjava1=boolean 0)
 
   loop f=0 for programlist.length
     program=programlist[f]                        -- current program
@@ -752,11 +803,11 @@ For the record, here are the javac exit codes:
 
     -- rename or erase the (.java) source file
     select
-      when keep & program.errorcount=0 then erase=boolean 0
+      when keep1 & program.errorcount=0 then erase=boolean 0
       when badjavac then erase=boolean 0
       otherwise erase=1
       end
-    program.streamer.disposeoutputfile(erase, keepasjava)
+    program.streamer.disposeoutputfile(erase, keepasjava1)
     end f
 
  /* --------------------------------------------------------------- */

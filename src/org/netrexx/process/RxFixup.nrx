@@ -17,6 +17,7 @@
 /* Change list (see RxLanguage for master change list)                */
 /* 1996.06.14 Initial                                                 */
 /* 1998.04.11 Fully parse class [inner classes move SourceFile]       */
+	--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -25,13 +26,16 @@ class RxFixup uses sun.tools.java.RuntimeConstants
  sourcename=Rexx              -- name of the source file
  data=byte[]                  -- class file data
  conoffset=int[]              -- constant index -> offset table
+ rxt=RxTranslator                 -- the usual  
 
  /** Construct a Fixer
     Arg1 is the name of the .nrx (source) file, including extension
             (with no path information)
     */
- method RxFixup(name=Rexx, dir=Rexx '.')
+ method RxFixup(name=Rexx, dir=Rexx '.',translator=RxTranslator null)
   sourcename=name
+  rxt=translator
+  data=null 			--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
 
  /** Fix a class file
     Arg1 is the fully qualified name of the .class file to fix
@@ -49,18 +53,23 @@ class RxFixup uses sun.tools.java.RuntimeConstants
           particularly dangerous as a recompilation will fix it.
 
     */
- method fixit(classname=String, outname=String classname) returns int
+ method fixit(classname=String, outname=String classname, ba=byte[] null) returns int			--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
+ 	 data=ba
+-- method fixit(classname=String, outname=String classname) returns int
   cfileob=File(classname)
   ofileob=File(outname)
   -- say '# fixing' classname outname sourcename
   do
     -- process the class file
+    if data=null then do			--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
     inhandle=FileInputStream(cfileob)
     size=inhandle.available()
     data=byte[size]
     inhandle.read(data, 0, size)
     inhandle.close()
     inhandle=null                       -- done with stream
+    end
+    else size=data.length
 
     if byte2char(data[0])\='\xCA' then return 0
     if byte2char(data[1])\='\xFE' then return 0
@@ -154,10 +163,13 @@ class RxFixup uses sun.tools.java.RuntimeConstants
     cfileob.delete()
 
     -- now write the output file [quite possibly to the same place]
+    if rxt.classlist=null then do			--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
     outhandle=FileOutputStream(ofileob)
     outhandle.write(data, 0, size)      -- [must rewrite the whole]
     outhandle.close()
     outhandle=null                      -- done with stream
+      end							--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+    else rxt.classlist.add(data)	--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
 
   catch IOException                     -- any failure caught here
     return 0

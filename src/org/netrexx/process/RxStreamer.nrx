@@ -37,8 +37,10 @@
 /* 2000.04.30 Move input file processing to RxFileReader              */
 /* 2005.01.14 Cosmetic lines were being written if comments=1         */
 /* 2011.08.22 skip rename of java to .keep if keepasjava requested - Kermit Kiser       */
+/* 2015.05.02 add jsr199 support per issue #90 -- KK		*/
 /* ------------------------------------------------------------------ */
 
+import javax.tools.		--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
 
@@ -56,6 +58,7 @@ class RxStreamer
   outfile    =Rexx ''    -- output file name (without path)
   outfilefull=Rexx ''    -- fully qualified output file name
   chunks     =0          -- count of chunks (m)
+  byteoutstream=ByteArrayOutputStream null		--		add jsr199 support 2015.05.02 KK
 
  properties private
 
@@ -116,7 +119,9 @@ class RxStreamer
       if outfile.right(5)\=='.java' then
 	signal RxQuit(rxt, null, 'output.extension.not.java', outfile)
       outfilefull=inpath||outfile                   -- will be in source directory
+--      if ToolProvider.getSystemJavaCompiler()==null then -
       outfileob=File(outfilefull)                   -- handle
+--      else javainmemory=StringBuilder(4096)
     end -- if program
     xrffileob = this.createCrossrefFile(xrfname)
     return
@@ -302,8 +307,11 @@ class RxStreamer
   if outhandle=null then                -- first call
     do                                  -- open the file
       if outfileob=null then return     -- file invalidated
+      if rxt.keep, rxt.keepasjava then -   					--		add jsr199 support 2015.05.02 KK      
       outstream=FileOutputStream(outfileob)
-      outhandle=OutputStreamWriter(outstream)
+      byteoutstream=ByteArrayOutputStream(5000)		--		add jsr199 support 2015.05.02 KK
+      outhandle=OutputStreamWriter(byteoutstream)	--		add jsr199 support 2015.05.02 KK
+--      outhandle=OutputStreamWriter(outstream)
     catch e=IOException
       outfileob=null                    -- no longer valid
       signal RxQuit(rxt, null, 'error.opening.file', outfile, e.getMessage())
@@ -518,6 +526,10 @@ class RxStreamer
     signal RxQuit(rxt, null, 'error.writing.file', outfile, e.getMessage())
     end c
   do; outhandle.close(); catch IOException; end     -- close [ignore error]
+  	
+  if rxt.keep, rxt.keepasjava then -   					--		add jsr199 support 2015.05.02 KK
+  do;byteoutstream.writeTo(outstream); catch IOException; end 		--		add jsr199 support 2015.05.02 KK
+  	
   outhandle=null    -- no longer open
   chunklist=null    -- used all chunks
   return
