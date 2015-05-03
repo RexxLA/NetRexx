@@ -1,6 +1,11 @@
+NRX_COMPILE_COMMAND = java -Dnrx.compiler=ecj org.netrexx.process.NetRexxC
+NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -utf8
+
 TARGET		:= pg
 PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
+NRX_SRC		:= $(wildcard *.nrx)
+NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
 LATEX_EXE	:= xelatex -shell-esc
 RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
@@ -9,7 +14,10 @@ DOCNAME         := "NetRexx $(RELEASE) Programming Guide.pdf"
 
 .SUFFIXES: .nrx .nry .njp .class .skel .xsl .java .pdf
 
-all:	$(PDFTARGET)
+.nrx.class:
+	$(NRX_COMPILE_COMMAND) $< $(NRX_COMPILE_FLAGS)
+
+all:	$(NRX_OBJS) $(PDFTARGET)
 
 $(TARGET).pdf: $(TEX_SRC)
 	$(MAKE) -k $(TARGET).bbl
