@@ -16,8 +16,7 @@ JAVA_OBJS	:= $(JAVA_SRC:.java=.class)
 #
 # target all compiles the netrexx and java code
 #
-all::	DiagInterface.class $(NRX_OBJS) $(JAVA_OBJS)
-	java -Dnrx.compiler=ecj $(CLASSPATH) zAllTests
+all::	  DiagAbstract.class DiagNop.class DiagArrays.class DiagBean.class DiagComment.class DiagConcat.class DiagContinue.class DiagExpression.class DiagInterface.class DiagForward.class CompileFromStringTest.class CollectionSupport.class VersionTest.class testDatatypeS.class zAllTests.class
 
 test::
 	java $(CLASSPATH) zAllTests
