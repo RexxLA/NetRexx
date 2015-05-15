@@ -41,6 +41,7 @@
 /* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fixes bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
 -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
 -- 2015.05.05 add cmd line options "-javac" and "ecj" - overrides nrx.compiler but nrx.compiler can now include java options after compiler pref - KK
+-- 2015.05.14 restrict build info to special request via environment var (nrx.devopt="-buildinfo") -- KK -- Kermit
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -996,11 +997,14 @@ For the record, here are the javac exit codes:
 
   /* Banner-time [had to wait for flags to be processed] */
   if superflag.verbose>0 then if superflag.logo then do
-    if this.getClass().getPackage()\=null then 
-      vv=this.getClass().getPackage().getImplementationVersion()
+    if this.getClass().getPackage()\=null then vv=this.getClass().getPackage().getImplementationVersion()
     else vv=''
     if vv=null then vv='' 		/* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fix bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
-    banner=babels[0].getName() 'portable processor' babels[0].getVersion() vv
+   	devopts=System.getenv('nrx.devopt');if devopts=null then devopt= Rexx "";else devopt=Rexx(devopts)
+   	devopt=Rexx(System.getProperty("nrx.devopt",devopt.toString()))   	
+    if devopt.pos('-buildinfo')=="0" then vv = ""    	
+    banner=babels[0].getName() 'portable processor' babels[0].getFullVersion() vv
+--    banner=babels[0].getName() 'portable processor' babels[0].getVersion() vv
     if superflag.verbose<=3 then say(banner)
     else say(banner ' ['RxProcessor.procdate']')
     say(RxProcessor.copyright)

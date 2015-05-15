@@ -39,15 +39,29 @@ set binpath=%~dp0
 set libpath=%binpath:\bin=\lib%NetRexxF.jar
 if exist %libpath% (set nrcpath="%CLASSPATH%;.;%libpath%") else (goto compset)
 :setcomp
-if defined netrexx_java goto compset
+if defined netrexx_java goto potluck
   set netrexx_java=-Dnrx.compiler=ecj
+  goto potluck
 :compset
+set nrcpath=%CLASSPATH%;.
+if not "%nrcpath:NetRexxC.jar=%"=="%nrcpath%" goto potluck
+set binpath=%~dp0
+set libpath=%binpath:\bin=\lib%NetRexxC.jar
+if exist %libpath% (set nrcpath="%CLASSPATH%;.;%libpath%")
+:potluck
 set netrexxc.bat_run=no
 if not '%1'=='-run' goto compile
   set netrexxc.bat_run=yes
   shift
 :compile
-echo java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
+if not -%1-==-- goto maywanthelp
+echo "nrc --help" lists options
+goto quit
+:maywanthelp
+if not "%1"=="--help" goto docompile
+shift
+:docompile
+rem echo java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
 java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
 if errorlevel 2 goto quit
 if %netrexxc.bat_run%==no goto quit

@@ -54,6 +54,7 @@
 /* 2011.08.22 add option to supress rename of java files to .keep - Kermit Kiser       */
 /* 2012.07.31 mod for select of ecj compiler  *rvj*        */
 -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+-- 2015.05.14 restrict build info to special request via environment var (nrx.devopt="-buildinfo") -- KK -- Kermit
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -369,12 +370,14 @@ class NetRexxC
 	method findjavacompiler returns Rexx
 		do
 --		say Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()
-		dir=Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()
-		if dir.substring(0,1)==File.separator then dir=File(dir).getParent()
+		dir=Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()		--		Get NetRexxC location
+		if dir.substring(0,1)==File.separator then dir=File(dir).getParent()		--		*nix is not winblows!
 			else dir=File(dir.substring(1)).getParent()
---		say "dir="dir
 		candidate=checkdirforcompiler(dir)
-		if candidate\=="nope"then return candidate		
+		if candidate\=="nope"then return candidate	
+		dir=File(dir).getParent()		--	up one from NetRexxC loc
+		candidate=checkdirforcompiler(dir)
+		if candidate\=="nope"then return candidate			
 		dir=System.getProperty("user.dir")		--		current directory
 		candidate=checkdirforcompiler(dir)
 		if candidate\=="nope"then return candidate
@@ -523,9 +526,13 @@ return
   /** USAGE -- display usage hints */
   method usage returns int private
     if usageone then do
-      vv=this.getClass().getPackage().getImplementationVersion()
-      if vv<>null then say 'NetRexx portable processor' NrVersion().getVersion() vv
-      else say 'NetRexx portable processor' NrVersion().getVersion()
+    if this.getClass().getPackage()\=null then vv=this.getClass().getPackage().getImplementationVersion()
+    else vv=''
+    if vv=null then vv='' 		/* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fix bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
+   	devopts=System.getenv('nrx.devopt');if devopts=null then devopt= Rexx "";else devopt=Rexx(devopts)
+   	devopt=Rexx(System.getProperty("nrx.devopt",devopt.toString()))
+    if devopt.pos('-buildinfo')=="0" then vv = ""    	    	
+      say 'NetRexx portable processor' NrVersion().getFullVersion() vv
       say NrVersion().getCopyright()'\n'
       say 'Arguments are: in_file_specification... [-option]...\n'
     end
