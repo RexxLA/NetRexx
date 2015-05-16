@@ -52,19 +52,30 @@ if exist %libpath% (set nrcpath="%CLASSPATH%;.;%libpath%")
 set netrexxc.bat_run=no
 if not '%1'=='-run' goto compile
   set netrexxc.bat_run=yes
+  set netrexxc.runner=%2
   shift
 :compile
 if not -%1-==-- goto maywanthelp
-echo "nrc --help" lists options
+echo "nrc -help" lists options
 goto quit
 :maywanthelp
-if not "%1"=="--help" goto docompile
+rem if not "%1"=="--help" goto docompile
+rem shift
+set nrcopts=
+:argactionstart
+if -%1-==-- goto argactionend
+set nrcopts=%nrcopts% %1
 shift
+goto argactionstart
+:argactionend
 :docompile
 rem echo java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
-java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %1 %2 %3 %4 %5 %6 %7 %8 %9
+echo java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %nrcopts%
+java -cp %nrcpath% %netrexx_java% org.netrexx.process.NetRexxC %nrcopts%
 if errorlevel 2 goto quit
 if %netrexxc.bat_run%==no goto quit
-echo Running %1...
-IF EXIST %1.class (java -cp %nrcpath% %1) ELSE echo -run error: class file not found - do not add .nrx to name
+echo Running %netrexxc.runner% ...
+rem echo Running %1...
+IF EXIST %netrexxc.runner%.class (java -cp %nrcpath% %netrexxc.runner%) ELSE echo -run error: class file not found - do not add .nrx to name
+rem IF EXIST %1.class (java -cp %nrcpath% %1) ELSE echo -run error: class file not found - do not add .nrx to name
 :quit

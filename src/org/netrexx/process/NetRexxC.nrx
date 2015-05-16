@@ -54,7 +54,8 @@
 /* 2011.08.22 add option to supress rename of java files to .keep - Kermit Kiser       */
 /* 2012.07.31 mod for select of ecj compiler  *rvj*        */
 -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
--- 2015.05.14 restrict build info to special request via environment var (nrx.devopt="-buildinfo") -- KK -- Kermit
+-- 2015.05.15 reformat build info -- KK -- Kermit
+-- 2015.05.15 only display options list on specific -help request -- KK --
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -80,6 +81,7 @@ class NetRexxC
   keepasjava	   = boolean 0               -- keep java output and do not rename it to .keep
   javac		   = boolean 0               -- prefer javac compiler if available
   ecj		   = boolean 0               -- prefer ecj compiler if available
+  helpreq = boolean 0				 -- explicit help request? 2015-05-15 -KK- 
   -- next two are set by parseline
   files		   = Vector(10)              -- collects file specifications
   flags		   = Vector(10)              -- collects translator flags
@@ -442,6 +444,9 @@ class NetRexxC
       else /* a flag */ do
       arglow=argword.substr(2).lower()    -- drop '-' and lowercase
       select
+        when arglow=='help' then do
+	  helpreq=1
+	end      	
         when arglow=='nocompile' then do
 	  compile=0
 	  keep=1
@@ -537,6 +542,7 @@ return
       say NrVersion().getCopyright()'\n'
       say 'Arguments are: in_file_specification... [-option]...\n'
     end
+    if \helpreq then do; say 'Use "-help" to show all options'; return 0;end			--	2015.05.15 -- KK --
     say 'In brief, NetRexxC-specific options are:\n'
     say '  -arg words     -- interpret; remaining words are arguments'
     say '  -classpath     -- specify a classpath'
