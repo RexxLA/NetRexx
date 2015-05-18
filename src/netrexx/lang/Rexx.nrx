@@ -908,11 +908,11 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
   	  bl=bil.toint()
   	  if bl=0 then return "0"
   	  if bl<0 then bl=this.intlength()+1
-  	  if bl>this.intlength() then first="0"
-  	  	  else first=this.right(bl).left(1)
-  	  newb=this.right(bl,first)
+  	  if bl>this.intlength() then firstd="0"
+  	  	  else firstd=this.right(bl).left(1)
+  	  newb=this.right(bl,firstd)
   	  if bl//4\=0 then ble=bl+4-bl//4;else ble=bl
-  	  return newb.right(ble,first).b2x().x2d(ble%4)
+  	  return newb.right(ble,firstd).b2x().x2d(ble%4)
 
   /** B2x binary to hexadecimal conversion.  */
   method b2x returns Rexx
@@ -2281,18 +2281,18 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
 --		implement StructuredList interface -- 2013-01-20:		
 -----------------------------------------------------------------------------------------------------			
 method islist returns Rexx
-	if \this.exists("elements"),\this.exists("rules") then return 0
+	if \this.exists("sl-elements"),\this.exists("sl-rules") then return 0
 	return 1
 	
 method elementcount returns Rexx
 	if \this.islist() then signal Error("cannot count elements in a non-list")
 	l=Rexx this
-	return Rexx l["elements"] 
+	return Rexx l["sl-elements"] 
 	
 method index(o=Rexx,s=Rexx(1)) returns Rexx
 	if \this.islist() then signal Error("cannot locate elements in a non-list")
 	l=Rexx this
-	loop i=s.toint() to l["elements"].toint()
+	loop i=s.toint() to l["sl-elements"].toint()
 		if l[i]==o then return Rexx(i)
 		end
 	return Rexx 0
@@ -2301,7 +2301,7 @@ method getelement(index=Rexx) returns Rexx
 	if \this.islist() then signal Error("cannot get element from a non-list")
 	dex=index.toint()
 	l=Rexx this
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	if le=0,dex<1,dex>le then signal IndexOutOfBoundsException(index)
 	return Rexx l[index]
 	
@@ -2309,7 +2309,7 @@ method insertelement(index=Rexx, element=Rexx ) returns Rexx
 	if element=null then signal NullPointerException("structured list add element") 
 	l=this
 	if \this.islist() then signal Error("cannot add element to a non-list")
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	dex=index.toint()
 	if dex<1, dex>le+1 then 	signal IndexOutOfBoundsException(index)
 	newelement=Rexx Rexx(element).copyIndexed(element)
@@ -2320,7 +2320,7 @@ method insertelement(index=Rexx, element=Rexx ) returns Rexx
 		metamap(l,i)
 		newelement=temp
 		end
-	l["elements"]=Rexx(le+1)
+	l["sl-elements"]=Rexx(le+1)
 	recon=Rexx.reconstructlist(l)
 	return Rexx Rexx(recon).copyIndexed(l) 
 	
@@ -2328,7 +2328,7 @@ method replaceanelement(index=Rexx, element=Rexx ) returns Rexx
 	if \this.islist() then signal Error("cannot replace element in a non-list")
 	dex=index.toint()
 	l=this
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	if le=0,dex<1,dex>le then signal IndexOutOfBoundsException(index)
 	metamap(l,0,dex)		--	remove meta-data for old element
 	l[dex]=Rexx(element)			--	replace old element with new element
@@ -2340,7 +2340,7 @@ method deleteanelement(index=Rexx) returns Rexx
 	if \this.islist() then signal Error("cannot remove element from a non-list")
 	dex=index.toint()
 	l=this
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	if le=0,dex<1,dex>le then signal IndexOutOfBoundsException(index)
 	metamap(l,0,dex)
 	loop i=dex while i<le
@@ -2349,63 +2349,63 @@ method deleteanelement(index=Rexx) returns Rexx
 		end
 	metamap(l,0,le)
 	l[le]=null
-	l["elements"]=Rexx(le-1)
+	l["sl-elements"]=Rexx(le-1)
 	recon=Rexx.reconstructlist(l)
 	return Rexx Rexx(recon).copyIndexed(l)
 	
 method sublist(fromIndex=Rexx,toIndex=Rexx "end") returns Rexx
 	if \this.islist() then signal Error("cannot sublist a non-list")
 	l=this
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	if toIndex=="end" then toIndex=le
 	if fromIndex.toint()<0 then fromIndex=le+1+fromIndex.toint()
 	if toIndex.toint()<0 then toIndex=le+1+toIndex.toint()
 	if fromIndex.toint()<1,toIndex.toint()>le,fromIndex.toint()>toIndex.toint() then
 		signal IndexOutOfBoundsException(fromIndex toIndex)
 	newlist=Rexx()
-	newlist["rules"]=l["rules"]	--	copy rules
+	newlist["sl-rules"]=l["sl-rules"]	--	copy rules
 	lc=int 0
 	loop i=fromIndex.toint() while i<=toIndex.toint()
 		lc=lc+1
 		newlist[lc]=l[i]
 		end
-	newlist["elements"]=Rexx(i-fromIndex.toint())
+	newlist["sl-elements"]=Rexx(i-fromIndex.toint())
 	recon=Rexx.reconstructlist(newlist)
 	return Rexx Rexx(recon).copyIndexed(newlist) 
   
 method join(addlist=StructuredList) returns Rexx
 	input2=Rexx addlist
-	say 'input2["elements"]='input2["elements"]
-  if \this.exists("elements") then do
-			work=Rexx(this);work["elements"]=Rexx(String "1");work[1]=this
-			if input2.exists("rules") then work["rules"]=Rexx input2["rules"]
+	say 'input2["sl-elements"]='input2["sl-elements"]
+  if \this.exists("sl-elements") then do
+			work=Rexx(this);work["sl-elements"]=Rexx(String "1");work[1]=this
+			if input2.exists("sl-rules") then work["sl-rules"]=Rexx input2["sl-rules"]
 			return work.join(StructuredList input2)
 			end
-  if \input2.exists("elements") then do
-			work=Rexx(input2);work["elements"]=Rexx(String "1");work[1]=Rexx(input2)
+  if \input2.exists("sl-elements") then do
+			work=Rexx(input2);work["sl-elements"]=Rexx(String "1");work[1]=Rexx(input2)
 			say 'work='work
-			say 'work["elements"]='work["elements"]
+			say 'work["sl-elements"]='work["sl-elements"]
 			say 'work[1]='work[1]
 			return this.join(StructuredList work)
 			end
   i1=this
-  i1cnt=i1["elements"].toint()
-  i1sep=i1["rules","delimiters","separator",1].toString()
+  i1cnt=i1["sl-elements"].toint()
+  i1sep=i1["sl-rules","delimiters","separator",1].toString()
   out=Rexx()
-  out["rules"]=i1["rules"]
+  out["sl-rules"]=i1["sl-rules"]
   outstr=Rexx ""
   loop i=1 for i1cnt
   	out[i]=Rexx i1[i]
   	if i=1 then outstr=i1[i].toString()
 			else outstr=outstr||i1sep||i1[i]
   	end
-  	c=input2["elements"].toint()
+  	c=input2["sl-elements"].toint()
   loop i=1 for c
   	out[i1cnt+i]=Rexx Rexx(input2[i]).copyIndexed(input2[i])
   	outstr=outstr||i1sep||input2[i]
   	end
   	
-  out["elements"]=Rexx(i1["elements"].toint()+input2["elements"].toint())
+  out["sl-elements"]=Rexx(i1["sl-elements"].toint()+input2["sl-elements"].toint())
   outstr=reconstructlist(out)
   ret=Rexx Rexx(outstr).copyIndexed(out)
   return ret
@@ -2432,17 +2432,20 @@ method flatlist
 		
 	return out 
 	
+method first returns Rexx
+	return head()
+	
 method head returns Rexx
 	e=this
-	if e.exists("elements") then
-		if e["elements"].toint()>0 then 
+	if e.exists("sl-elements") then
+		if e["sl-elements"].toint()>0 then 
 			return Rexx Rexx(e[1]).copyIndexed(e[1])
 	return e
 	
 method append(element=Rexx ) returns Rexx
 	if \this.islist() then signal Error("cannot add element to a non-list")
 	l=this
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	return insertelement(le+1,element)
 	
 method count(o=Rexx) returns Rexx
@@ -2468,7 +2471,7 @@ method minval returns Rexx
 			end
 		return m
 		end
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	if le=0 then return m
 	m=l[1]
 	ii=int
@@ -2489,7 +2492,7 @@ method maxval returns Rexx
 			end
 		return m
 		end
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	if le=0 then return m
 	m=l[1]
 	j=int
@@ -2509,7 +2512,7 @@ method sum returns Rexx
 			end
 		return Rexx(m)
 		end
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	if le=0 then return Rexx(m)
 	loop j=1 while j<=le
 		m=m+l[j].toint()
@@ -2519,7 +2522,7 @@ method sum returns Rexx
 method reverselist  returns Rexx
 	if \this.islist() then signal Error("cannot reverse a non-list")
 	l=Rexx(this).copyindexed(this)
-	le=l["elements"].toint()
+	le=l["sl-elements"].toint()
 	li=le
 	loop i=1 while i<li
 		temp=l[i]
@@ -2533,19 +2536,22 @@ method reverselist  returns Rexx
 	recon=Rexx.reconstructlist(l)
 	return Rexx Rexx(recon).copyIndexed(l) 	
   
+method rest returns Rexx
+	return tail()
+	
 method tail returns Rexx
-  if \this.exists("elements") then return this
+  if \this.exists("sl-elements") then return this
   item=this
-  items=item["elements"].toint()
+  items=item["sl-elements"].toint()
   if items<2 then return Rexx()    --   or should it be an empty string?
   if items=2 then 
-    if item[2].exists("elements") then do
+    if item[2].exists("sl-elements") then do
     			ret=Rexx Rexx(Rexx item[2]).copyIndexed(Rexx item[2])	 -- we have a single sublist so return it, else we build a sublist of remaining elements
     			return ret -- we have a single sublist so return it, else we build a sublist of remaining elements
     			end
   output=Rexx(this)
-  output["elements"]=Rexx(Rexx items-1)
-  output["rules"]=item["rules"]
+  output["sl-elements"]=Rexx(Rexx items-1)
+  output["sl-rules"]=item["sl-rules"]
   loop i=2 to items
     output[i-1]=Rexx item[i]
     end
@@ -2555,13 +2561,16 @@ method tail returns Rexx
 method getJavaList returns java.util.List
 	return Rexx.RexxList(StructuredList this)
 
+method dumplist()
+	dumplist(this)
+	
 method dumplist(data=Rexx,key="",offset="",link="") static
     say offset key "-->" data
-    say offset key link "element name="data["elementname"]
-    say offset key link "element value="data["elementvalue"]
-  if data.exists("elements") then do
-    say offset "elements="data["elements"]
-    loop i=1 to data["elements"]
+    say offset key link "  element name="data["sl-elementname"]
+    say offset key link "  element value="data["sl-elementvalue"]
+  if data.exists("sl-elements") then do
+    say offset "elements="data["sl-elements"]
+    loop i=1 to data["sl-elements"]
         dumplist(data[i],i,offset "--*","==>")
         end
     end
@@ -2576,8 +2585,8 @@ method dumpvar(r=Rexx,offset="") static
 -- beginning of internal structured list processing methods
 ---------------------------------------------------------------------------------------------------------------------------------------------
 method reconstructlist(input=Rexx,ruleset=Rexx "") static
-	if ruleset=="" then if input.exists("rules") then rules=input["rules"];else nop
-		else if \ruleset.exists("elements") then 		--		ruleset is not a list structure
+	if ruleset=="" then if input.exists("sl-rules") then rules=input["sl-rules"];else nop
+		else if \ruleset.exists("sl-elements") then 		--		ruleset is not a list structure
 			rules=getrules(ruleset)		--	translate rules to a list structure
 				else rules=ruleset
   flags=getflags(rules)
@@ -2588,14 +2597,14 @@ method reconstructlist(input=Rexx,ruleset=Rexx "") static
   if rules["delimiters"].exists("end") then endlist=rules["delimiters","end",1];else endlist=""
   if rules["delimiters"].exists("escape") then escape=rules["delimiters","escape",1];else escape=""
   	
-  if input.exists("elementname") then		--	do we have an elementname? if so capture in segment1
-  	if rules["delimiters"].exists(input["elementname"]) then return input		--	a delimiter
-  		else segment1=input["elementname"]
+  if input.exists("sl-elementname") then		--	do we have an elementname? if so capture in segment1
+  	if rules["delimiters"].exists(input["sl-elementname"]) then return input		--	a delimiter
+  		else segment1=input["sl-elementname"]
   else segment1=""
   if input.exists("namesep") then tnamesep=input["namesep"];else tnamesep=""
 	
-  if \input.exists("elements") then do label notalist	--	we have an element that is not a list
-  	output=Rexx(input["elementvalue"])	--	snap input so we can modify if needed
+  if \input.exists("sl-elements") then do label notalist	--	we have an element that is not a list
+  	output=Rexx(input["sl-elementvalue"])	--	snap input so we can modify if needed
   	--  	output=Rexx(input)	--	snap input so we can modify if needed
   	if escape=="" then return segment1||tnamesep||output		--	no escape char ==> don't do escape handler code
 --  	if escape=="" then return segment1||namesep||output		--	no escape char ==> don't do escape handler code
@@ -2605,7 +2614,7 @@ method reconstructlist(input=Rexx,ruleset=Rexx "") static
 			else output=output.changestr(rules["delimiters","escape",1],rules["delimiters","escape",1]||rules["delimiters","escape",1])		--	or double any escape characters
 		escapeit="yes"
 		end
-  	loop i=1 to rules["delimiters","elements"].toint()
+  	loop i=1 to rules["delimiters","sl-elements"].toint()
   		if output.pos(rules["delimiters",i,1])\==0 then do		--	element contains a delimiter
   			if rules["delimiters","escape",1]\==rules["delimiters",i,1] then
                if flags.substr(5,1).toint()=1 then output=output.changestr(rules["delimiters",i,1],rules["delimiters","escape",1]||rules["delimiters",i,1])		--	make escape character preceed delimiter
@@ -2621,10 +2630,10 @@ method reconstructlist(input=Rexx,ruleset=Rexx "") static
     if segment1\==input then segment1=segment1||tnamesep
                     
   segment=Rexx ""  
-  if input.exists("elements") then do
+  if input.exists("sl-elements") then do
   	if flags.substr(7,1)=="1" then sep=""
     if flags.substr(7,1)=="0" then segment=startlist
-    loop i=1 to input["elements"]
+    loop i=1 to input["sl-elements"]
       newseg=reconstructlist(input[i],rules)
       cd=delimiterinfo(newseg,rules)
       if cd=="",cd.length()\==newseg.length() then segment=segment||newseg||sep
@@ -2638,31 +2647,31 @@ method reconstructlist(input=Rexx,ruleset=Rexx "") static
 	    
 method getrules(ruleset=Rexx "default") static
 	if ruleset=="default" then do		--	create a bootstrap ruleset used to generate other rulesets
-		lstart=Rexx "(" ; lstart[1]="(" ; lstart["elements"]=1 
-		lend=Rexx ")" ; lend[1]=")" ;  lend["elements"]=1
-		lsep=Rexx " " ; lsep[1]=" " ;  lsep["elements"]=1
-		lescape=Rexx '"' ; lescape[1]='"' ;  lescape["elements"]=1
+		lstart=Rexx "(" ; lstart[1]="(" ; lstart["sl-elements"]=1 
+		lend=Rexx ")" ; lend[1]=")" ;  lend["sl-elements"]=1
+		lsep=Rexx " " ; lsep[1]=" " ;  lsep["sl-elements"]=1
+		lescape=Rexx '"' ; lescape[1]='"' ;  lescape["sl-elements"]=1
 		delims=lstart||lend||lsep||lescape
-		delims[1]=lstart;delims["start"]=lstart;delims[1,"elementname"]="start"
-		delims[2]=lend;delims["end"]=lend;delims[2,"elementname"]="end"
-		delims[3]=lsep;delims["separator"]=lsep;delims[3,"elementname"]="separator"
-		delims[4]=lescape;delims["escape"]=lescape;delims[4,"elementname"]="escape"
-		delims["elements"]=4
+		delims[1]=lstart;delims["start"]=lstart;delims[1,"sl-elementname"]="start"
+		delims[2]=lend;delims["end"]=lend;delims[2,"sl-elementname"]="end"
+		delims[3]=lsep;delims["separator"]=lsep;delims[3,"sl-elementname"]="separator"
+		delims[4]=lescape;delims["escape"]=lescape;delims[4,"sl-elementname"]="escape"
+		delims["sl-elements"]=4
 		rules=Rexx "Ruleset"
 		rules[1]=delims
 		rules["delimiters"]=delims
-		rules[1,"elementname"]="delimiters"
-		rules["elements"]=1
+		rules[1,"sl-elementname"]="delimiters"
+		rules["sl-elements"]=1
 		return rules
 		end
 	builtin=Rexx ""
 	builtin["WORDLIST"]='delimiters(separator(" ") escape("""")) options(escape-is-quoted-string)'
 	builtin["CSV"]='delimiters(separator(,) escape("""")) options(escape-is-quoted-string)'
-	builtin["DSV"]='delimiters(separator(;) escape(\\)) options("escape is single character")'
-	builtin["TSV"]='delimiters(separator("\t") escape(\\)) options("escape is single character")'
-	builtin["XML"]='delimiters(start("<") end(">") separator(" ") meta("/") nameseparator("=")) options("attribute names are explicit")'
-	builtin["JSON"]='delimiters(start("{") end("}") start("[") end("]") escape(\\) separator(",") nameseparator(":")) options("attribute names are explicit" "escape is single character" "Strip leading and trailing whitespace")'
-	builtin["PYTHON"]='delimiters(start("{") end("}") start("[") end("]") start("(") end(")") escape("''") escape("""") separator(",") nameseparator(":")) options("attribute names are explicit" escape-is-quoted-string "Strip leading and trailing whitespace")'
+	builtin["DSV"]='delimiters(separator(;) escape(\\)) options("single character escape")'
+	builtin["TSV"]='delimiters(separator("\t") escape(\\)) options("single character escape")'
+	builtin["XML"]='delimiters(start("<") end(">") separator(" ") meta("/") nameseparator("=")) options("explicit attribute names")'
+	builtin["JSON"]='delimiters(start("{") end("}") start("[") end("]") escape(\\) separator(",") nameseparator(":")) options("explicit attribute names" "single character escape" "remove enclosing quotes" "Strip leading and trailing whitespace")'
+	builtin["PYTHON"]='delimiters(start("{") end("}") start("[") end("]") start("(") end(")") escape("''") escape("""") separator(",") nameseparator(":")) options("explicit attribute names" "escape is quoted string" "Strip leading and trailing whitespace")'
 	if builtin.exists(ruleset.toString()) then rulelist=Rexx(builtin[ruleset]).buildlist()
 										 else do
 										 	 key1=ruleset.substr(1,ruleset.pos("(").toint()-1)
@@ -2670,19 +2679,19 @@ method getrules(ruleset=Rexx "default") static
 										 	  signal Error("invalid ruleset")
 										     rulelist=Rexx(ruleset).buildlist()
 										 	 end		
-	loop i=1 to rulelist["elements"].toint()  		--	need canonical name maps for later references
-		if "delimiters".abbrev(rulelist[i,"elementname"].lower(),1) then do
-			if rulelist[i,"elementname"]\=="delimiters" then rulelist["delimiters"]=rulelist[i] 
-			loop j=1 to rulelist[i,"elements"].toint()
-				if "start".abbrev(rulelist[i,j,"elementname"].lower(),2) then if rulelist[i,j,"elementname"]\=="start" then rulelist["delimiters","start"]=rulelist[i,j] 				
-				if "end".abbrev(rulelist[i,j,"elementname"].lower(),2) then if rulelist[i,j,"elementname"]\=="end" then rulelist["delimiters","end"]=rulelist[i,j] 				
-				if "separator".abbrev(rulelist[i,j,"elementname"].lower(),2) then if rulelist[i,j,"elementname"]\=="separator" then rulelist["delimiters","separator"]=rulelist[i,j] 				
-				if "escape".abbrev(rulelist[i,j,"elementname"].lower(),2) then if rulelist[i,j,"elementname"]\=="escape" then rulelist["delimiters","escape"]=rulelist[i,j] 				
-				if "nameseparator".abbrev(rulelist[i,j,"elementname"].lower(),1) then if rulelist[i,j,"elementname"]\=="nameseparator" then rulelist["delimiters","nameseparator"]=rulelist[i,j]
+	loop i=1 to rulelist["sl-elements"].toint()  		--	need canonical name maps for later references
+		if "delimiters".abbrev(rulelist[i,"sl-elementname"].lower(),1) then do
+			if rulelist[i,"sl-elementname"]\=="delimiters" then rulelist["delimiters"]=rulelist[i] 
+			loop j=1 to rulelist[i,"sl-elements"].toint()
+				if "start".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="start" then rulelist["delimiters","start"]=rulelist[i,j] 				
+				if "end".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="end" then rulelist["delimiters","end"]=rulelist[i,j] 				
+				if "separator".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="separator" then rulelist["delimiters","separator"]=rulelist[i,j] 				
+				if "escape".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="escape" then rulelist["delimiters","escape"]=rulelist[i,j] 				
+				if "nameseparator".abbrev(rulelist[i,j,"sl-elementname"].lower(),1) then if rulelist[i,j,"sl-elementname"]\=="nameseparator" then rulelist["delimiters","nameseparator"]=rulelist[i,j]
 				end
 			end
-		if "options".abbrev(rulelist[i,"elementname"].lower(),1) then do
-			if rulelist[i,"elementname"]\=="options" then rulelist["options"]=rulelist[i] 
+		if "options".abbrev(rulelist[i,"sl-elementname"].lower(),1) then do
+			if rulelist[i,"sl-elementname"]\=="options" then rulelist["options"]=rulelist[i] 
 			end			
 		end
 	return rulelist
@@ -2692,13 +2701,13 @@ method getdelims(ruleset=Rexx) static
 	if \ruleset.exists("delimiters") then return delims
 	deli=ruleset["delimiters"]
 	delims=""
-	loop d=1 to deli["elements"]
+	loop d=1 to deli["sl-elements"]
 		select
- 			when "start".abbrev(deli[d,"elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "end".abbrev(deli[d,"elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "separator".abbrev(deli[d,"elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "escape".abbrev(deli[d,"elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "nameseparator".abbrev(deli[d,"elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+ 			when "start".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+			when "end".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+			when "separator".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+			when "escape".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+			when "nameseparator".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
 			otherwise 
 				delims=delims||deli[d,1].left(1)
 			end
@@ -2709,20 +2718,20 @@ method delimiterinfo(in=Rexx,rules=Rexx) static
 		remains=in.length().toint()		--	how much of string left to work with
     	deli=rules['delimiters']
     	rd=Rexx ""
-    	loop d=1 to deli["elements"]
+    	loop d=1 to deli["sl-elements"]
     		cd=deli[d]		--	next delim
     		cdl=cd[1].length().toint() 		--	delim length
     		if cdl<=remains then -- can it fit on the line?
     			if in.left(cdl)==cd[1]	then --	delimiter match?
-					do;rd=cd[1] ; rd["elementname"]=cd["elementname"];leave; end 	--	save delim type
+					do;rd=cd[1] ; rd["sl-elementname"]=cd["sl-elementname"];leave; end 	--	save delim type
     		end
 		return rd
 	
 method getflags(ruleset=Rexx) static
-	flags=Rexx "00000000"
+	flags=Rexx "000000000"
 	if \ruleset.exists("options") then return flags
 	opts=ruleset["options"]
-	loop o=1 to opts["elements"]
+	loop o=1 to opts["sl-elements"]
 		select
 			when "separators follow sublists".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 1)
 			when "sublists are separators".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 1)
@@ -2740,69 +2749,74 @@ method getflags(ruleset=Rexx) static
 			when "tokens are delimiters".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 7)
 			when "keep leading and trailing whitespace".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 8)
 			when "strip leading and trailing whitespace".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 8)
+			when "enclosing quotes are data".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 9)
+			when "remove enclosing quotes".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 9)			
 			otherwise nop
 			end
 		end 
 	return flags
-
+/* 
+																											buildlist method to parse most list formats:
+*/
 method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 
 	start=startloc.toint()
-	if \ruleset.exists("elements") then 		--		ruleset is not a list structure
-		rules=getrules(ruleset)		--	translate rules to a list structure
+	if \ruleset.exists("sl-elements") then 		--		ruleset is not a list structure:
+		rules=getrules(ruleset)					--	translate rules to a list structure
 	else rules=ruleset
 	delims=getdelims(rules)
 	inflags=getflags(rules)
-  flags=inflags.left(8).changestr(" ","0")
-  if flags.substr(4,1).toint()=0 then in1=Rexx(this.translate(" ","\t\n\r\f\x0b"))
+  flags=inflags.left(9).changestr(" ","0")
+  if flags.substr(4,1).toint()=0 then in1=Rexx(this.translate(" ","\t\n\r\f\x0b"))					--			0 = whitespace is translated to blank (TAB,FF,LF,CR,VT)
     else in1=Rexx(Rexx this)
-  in=Rexx in1
-  in["count"]=start-1 --  in order to work recursively, we will need to count how many characters are consumed at each step
-  in["rules"]=Rexx(rules).copyindexed(rules)
+  in=Rexx in1																													--			var "in" contains the string to be parsed into a list format 
+  in["sl-count"]=start-1 --  in order to work recursively, we will need to count how many characters are consumed at each step
+  in["sl-rules"]=Rexx(rules).copyindexed(rules)
   segment=Rexx("")    --  may have to capture token segments
   quotemode=Rexx "" --  may need a scan mode when using quoted escape option
   elementname=Rexx("")  --  may need to explicitly separate names and values
   namesep=Rexx("")  --  may need to explicitly separate names and values
              
-  startno=1
+  startno=1			--	element number?
   if start>1 then		--		we are handling a sublist
              if flags.substr(7,1).toint()=1 then do -- delimiters are separate elements
 				cd=delimiterinfo(in,rules)		--	get info about the current delimiter (if no name, false alarm)
-				cdn=cd["elementname"].lower()
+				cdn=cd["sl-elementname"].lower()
 				in[startno]=Rexx(cd)  --  capture token
-				in[startno,"elementname"]=cdn
-				in[in[startno,"elementname"]]=in[startno]		--	create a map entry from the element name to the element value
+				in[startno,"sl-elementname"]=cdn
+				in[in[startno,"sl-elementname"]]=in[startno]		--	create a map entry from the element name to the element value
 				startno=2
             	end
-            	
+            				--		-------------------------------------------------------------------------------------------------------------------------------------		begin loop to parse input data
   loop label scanloop itemno=startno while start<=in.length().toint()   --    need to loop in case multiple items
     deloc=in.substr(start).verify(delims,"match").toint()   --  locate next delimiter
     in[itemno]=Rexx("")
     
-    if deloc=0 then do --did not find a delimiter
+    if deloc=0 then do																																		 					--did not find a delimiter = done with list parse, capture it
     	if flags.substr(8,1).toint()=1 then capture=Rexx((segment||in.substr(start)).strip()) 	--	strip white?
     		else capture=Rexx(segment||in.substr(start))
        if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
        in[itemno]=Rexx(elementname||namesep||capture)
-       in[itemno,"elementvalue"]=Rexx(capture)
-       in[itemno,"elementname"]=elementname
+       in[itemno,"sl-elementvalue"]=Rexx(capture)
+       in[itemno,"sl-elementname"]=elementname
        in[itemno,"namesep"]=namesep       --  save any explicit name separator
-       metamap(in,itemno)
-       in["count"]=in["count"].toint()+in.substr(start).length().toint()
+       checkextraquotes(in,itemno,flags);metamap(in,itemno)
+       in["sl-count"]=in["sl-count"].toint()+in.substr(start).length().toint()
        leave scanloop
        end
       
-    else do label checkdelimiter 	--found a possible delimiter
+    else do label checkdelimiter 																																			--found a possible delimiter
     	cd=delimiterinfo(in.substr(start+deloc-1),rules)		--	get info about the current delimiter (if no name, false alarm)
-    	cdn=cd["elementname"].lower()
+    	cdn=cd["sl-elementname"].lower()
     	cdl=cd.length().toint()
     	if cdn=="" then itemno=itemno-1		--		no name ==> skip apparent delimiter
     	else		--	delimiter is real = handle it
      		
-      select label handledelimiter		--	a delimiter processing function
+      select label handledelimiter																																			--	select a delimiter processing function
       	
-        when "escape".abbrev(cdn,2) then do label escape   --    found an escape char
-            if flags.substr(5,1).toint()=0 then do  label quoted  --  we are using quoted string escape mode
+        when "escape".abbrev(cdn,2) then do label escape  																							--    found an escape char
+        
+            if flags.substr(5,1).toint()=0 then do  label quoted  												--  we are using quoted string escape mode
               if quotemode=="" then  do -- need to start quoted escape mode
                 quotemode=cd
                 end
@@ -2815,21 +2829,21 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
               			else quotemode=""    --    drop quoted mode                
               		else quotemode=""    --    drop quoted mode                
               		end
-              in["count"]=in["count"].toint()+deloc+cdl-1
+              in["sl-count"]=in["sl-count"].toint()+deloc+cdl-1
               if flags.substr(3,1).toint()=1 then    --  no translate requested for escape sequence ==> capture it
 								segment=Rexx(segment||in.substr(start,deloc+cdl-1))     --  capture token segment
 							else segment=Rexx(segment||in.substr(start,deloc-1))     --  capture token segment minus quote
               end quoted
               
-            if flags.substr(5,1).toint()=1 then do label notquoted   --  we are not using quoted string escape mode
+            if flags.substr(5,1).toint()=1 then do label notquoted   											--  we are not using quoted string escape mode
               if flags.substr(3,1).toint()=1 then do    --  no translate requested for escape sequence ==> capture it
                 deloc=deloc+cdl 
-                in["count"]=in["count"].toint()+deloc
+                in["sl-count"]=in["sl-count"].toint()+deloc
                 segment=Rexx(segment||in.substr(start,deloc))     --  capture token segment
                 end
               else do   --  customer has requested translation for escape sequences ==> squeeze escape out of string
                 segment=Rexx(segment||in.substr(start,deloc-1)||in.substr(start+deloc+cdl-1,1)) --  capture token segment
-                in["count"]=in["count"].toint()+deloc+cdl-1
+                in["sl-count"]=in["sl-count"].toint()+deloc+cdl-1
                 newin=in.substr(1,start+deloc-2)||in.substr(start+deloc+cdl-1)
                 in=Rexx(newin).copyIndexed(in)
                 end
@@ -2838,66 +2852,66 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
             itemno=itemno-1 --  cancel item increment also
             end escape
             
-        when quotemode\=="" then do 	--	in quotemode ignore non escape delimiters
+        when quotemode\=="" then do 																																--	in quotemode ignore non escape delimiters
               segment=Rexx(segment||in.substr(start,deloc+cdl-1))     --  capture token segment       
-              in["count"]=in["count"].toint()+deloc+cdl-1
+              in["sl-count"]=in["sl-count"].toint()+deloc+cdl-1
               itemno=itemno-1 --  cancel item increment also
             end
             
-        when "start".abbrev(cdn,2) then do label sublist   --    found a sublist - handle it recursively
+        when "start".abbrev(cdn,2) then do label sublist   																										--    found a sublist - handle it recursively
         	
-            if flags.substr(6,1).toint()=1 then do -- name tags are explicit
-              if segment\=="",deloc>1 then do  --  pending data must be a separate token
+            if flags.substr(6,1).toint()=1 then do label explicit														-- name tags are explicit
+              if segment\=="" then do  --  pending data must be a separate token
+--              if segment\=="",deloc>1 then do  --  pending data must be a separate token
               	if flags.substr(8,1).toint()=1 then capture=Rexx((segment||in.substr(start,deloc-1)).strip())
               		else capture=Rexx(segment||in.substr(start,deloc-1))
                  if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
                  in[itemno]=Rexx(elementname||namesep||capture)
-                 in[itemno,"elementvalue"]=Rexx(capture)
-                 in[itemno,"elementname"]=elementname
+                 in[itemno,"sl-elementvalue"]=Rexx(capture)
+                 in[itemno,"sl-elementname"]=elementname
                  in[itemno,"namesep"]=namesep       --  save any explicit name separator
-                 metamap(in,itemno)
+                 checkextraquotes(in,itemno,flags);metamap(in,itemno)
                  elementname=Rexx("")  --  clear name buffer
                  namesep=Rexx("")  --  clear namesep buffer
                  segment=Rexx("")    --  clear used segment
-                 in["count"]=in["count"].toint()+deloc-1
+                 in["sl-count"]=in["sl-count"].toint()+deloc-1
                  itemno=itemno+1   --  move to next element
                  start=start+deloc-1
                  deloc=1
                  end
-              end
+              end explicit
               
-            sublist=Rexx(in.substr(start+deloc-1)).buildlist(rules,cdl+1)
+            sublist=Rexx(in.substr(start+deloc-1)).buildlist(rules,cdl+1)																										--	call recursive sublist processing
             if elementname=="" then elementname=Rexx(segment||in.substr(start,deloc-1)) --   no attribute name found==>use prefix
             if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
             in[itemno]=Rexx(elementname||namesep||sublist).copyIndexed(sublist)
-            in[itemno,"elementvalue"]=sublist
-            in[itemno,"elementname"]=elementname
+            in[itemno,"sl-elementvalue"]=sublist
+            in[itemno,"sl-elementname"]=elementname
             in[itemno,"namesep"]=namesep       --  save any explicit name separator
-            metamap(in,itemno)
+            checkextraquotes(in,itemno,flags);metamap(in,itemno)
             elementname=Rexx("")  --  clear name buffer
             namesep=Rexx("")  --  clear namesep buffer
             segment=Rexx("")    --  clear segment buffer
-            deloc=deloc+in[itemno,"count"].toint()-1	--	point past sublist
-            in["count"]=in["count"].toint()+deloc
-            
+            deloc=deloc+in[itemno,"sl-count"].toint()-1	--	point past sublist
+            in["sl-count"]=in["sl-count"].toint()+deloc
             ----------------------------------------------------------  special processing for stuff following a sublist  --------------------------------------------
             if start+deloc<=in.length().toint() then do  label aftersublist --  syntax rules allow for a second delimiter after a sublist
             	
-              if flags.left(1).toint()=0 then do label separatorrequired 	-- 0 = separators follow sublists
+              if flags.left(1).toint()=0 then do label separatorrequired 																			-- 0 = separators follow sublists
                 secdel=in.substr(start+deloc).verify(delims,"match").toint()
                 if secdel=0 then leave scanloop -- ignore extra junk before end of line unless valid list separator
                 cd=delimiterinfo(in.substr(start+deloc+secdel-1),rules)		--	get info about the current delimiter (if no name, false alarm)
-                cdn=cd["elementname"].lower()
+                cdn=cd["sl-elementname"].lower()
                 cdl=cd.length().toint()
                 	
-                in["count"]=in["count"].toint()+secdel+cdl-1
+                in["sl-count"]=in["sl-count"].toint()+secdel+cdl-1
                 
                 if "end".abbrev(cdn,2) then do
 							 
-                 if flags.substr(7,1).toint()=1 then do -- delimiters are separate elements
+                 if flags.substr(7,1).toint()=1 then do 																									-- delimiters are separate elements
 					in[itemno]=Rexx(cd)  --  capture token
-					in[itemno,"elementname"]=cdn
-					in[in[itemno,"elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
+					in[itemno,"sl-elementname"]=cdn
+					in[in[itemno,"sl-elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
 					itemno=itemno+1
 					end
 						
@@ -2905,52 +2919,52 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
                 	end
                 deloc=deloc+secdel+cdl-1		--	point scan to next valid data
                 	
-                if "separator".abbrev(cdn,2) then   --  found a separator? 	                	
+                if "separator".abbrev(cdn,2) then   																										--  found a separator? 	                	
                   if flags.substr(2,1).toint()=0 then do  --  adjacent separators collapse to one
                     secdel=in.substr(start+deloc).verify(cd,"nomatch")
                     if secdel=0 then leave scanloop	-- nothing but separators left = ignore them
                     deloc=deloc+secdel-1		--	point to next non separator
-                    in["count"]=in["count"].toint()+secdel-1
+                    in["sl-count"]=in["sl-count"].toint()+secdel-1
                     cd=delimiterinfo(in.substr(start+deloc),rules)		--	get info about the current delimiter (if no name, false alarm)
-                    cdn=cd["elementname"].lower()
-                    	if "end".abbrev(cd["elementname"].lower(),2) then do
+                    cdn=cd["sl-elementname"].lower()
+                    	if "end".abbrev(cd["sl-elementname"].lower(),2) then do
                     		
-                    		if flags.substr(7,1).toint()=1 then do -- delimiters are separate elements
+                    		if flags.substr(7,1).toint()=1 then do 																						-- delimiters are separate elements
 								in[itemno]=Rexx(cd)  --  capture token
-								in[itemno,"elementname"]=cdn
-								in[in[itemno,"elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
+								in[itemno,"sl-elementname"]=cdn
+								in[in[itemno,"sl-elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
 								itemno=itemno+1
 								end
                     		
-                    		in["count"]=in["count"].toint()+cd.length().toint()		--	absorb list ender
+                    		in["sl-count"]=in["sl-count"].toint()+cd.length().toint()		--	absorb list ender
                     		leave scanloop  --  list can be terminated by list ender with no more tokens -- is it a list ender?
                     		end
                     end
                     
                 end separatorrequired
                 
-              else do label noseparatorneeded		 --    1 = separators do not follow sublists
+              else do label noseparatorneeded																										 --    1 = separators do not follow sublists
               	
               	nd=delimiterinfo(in.substr(start+deloc+cdl-1),rules)		--	get info about the current delimiter (if no name, false alarm)
-              	ndn=nd["elementname"].lower()
+              	ndn=nd["sl-elementname"].lower()
               	ndl=nd.length().toint()
               	
                 if "separator".abbrev(ndn,2) then do    --    separator following list end can be ignored (considered as part of list ender)
                   deloc=deloc+nd.length().toint()
-                  in["count"]=in["count"].toint()+ndl
+                  in["sl-count"]=in["sl-count"].toint()+ndl
                   end
                   
-                else if "end".abbrev(cdn,2) then do --  end list delimiter?
+                else if "end".abbrev(cdn,2) then do 		--  end list delimiter?
                   deloc=deloc+ndl	--	skip end list delim and kill loop
-                  in["count"]=in["count"].toint()+ndl
+                  in["sl-count"]=in["sl-count"].toint()+ndl
              	
                   	sd=delimiterinfo(in.substr(start+deloc+cdl-1),rules)		--	get info about the current delimiter (if no name, false alarm)
-                  	sdn=sd["elementname"].lower()
+                  	sdn=sd["sl-elementname"].lower()
                   	sdl=sd.length().toint()                  
                   
                   if "separator".abbrev(sdn,2) then do    --    separator following list end can be ignored
                     deloc=deloc+sdl
-                    in["count"]=in["count"].toint()+sdl
+                    in["sl-count"]=in["sl-count"].toint()+sdl
                     end
                     
                   leave scanloop  --  list can be terminated by list ender with no more tokens
@@ -2962,87 +2976,87 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
               end aftersublist
               ---------------------------------------------------------- end special processing for stuff following a sublist  --------------------------------------------
               
-            end sublist	--	processing	
+            end sublist																																		--  finished with sublist	processing	
             
-        when "nameseparator".abbrev(cdn,1) then do label nameseparator   -- found a name delimiter
-          if flags.substr(6,1).toint()=1 then do -- name tags are explicit
+        when "nameseparator".abbrev(cdn,1) then do label nameseparator   																				-- found a name delimiter
+          if flags.substr(6,1).toint()=1 then do																 -- name tags are explicit
             elementname=Rexx(segment||in.substr(start,deloc-1))	 --  capture token
             namesep=Rexx(cd)
             segment=Rexx("")   --  clear segment
             deloc=deloc+cdl-1		--	skip name sep
             end
           else segment=Rexx(segment||in.substr(start,deloc+cdl-1))      --  non explicit name tags = capture token segment        
-          in["count"]=in["count"].toint()+deloc+cdl-1
+          in["sl-count"]=in["sl-count"].toint()+deloc+cdl-1
           itemno=itemno-1 --  cancel item increment also -- still working on same list element
           end nameseparator
           
-        when "separator".abbrev(cdn,2) then do label endofitem  -- found a separator
+        when "separator".abbrev(cdn,2) then do label endofitem  																								-- found a normal separator
 				  if flags.substr(8,1).toint()=1 then capture=Rexx((segment||in.substr(start,deloc-1)).strip())
 							else capture=Rexx(segment||in.substr(start,deloc-1))
                   if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
                   in[itemno]=Rexx(elementname||namesep||capture)  --  capture segment
-                  in[itemno,"elementvalue"]=Rexx(capture)
-                  in[itemno,"elementname"]=elementname                  						
+                  in[itemno,"sl-elementvalue"]=Rexx(capture)
+                  in[itemno,"sl-elementname"]=elementname                  						
                   in[itemno,"namesep"]=namesep       --  save any explicit name separator
-                  metamap(in,itemno)
+                  checkextraquotes(in,itemno,flags);metamap(in,itemno)
                   elementname=Rexx("")  --  clear name buffer
                   namesep=Rexx("")  --  clear namesep buffer
                   segment=Rexx("")    --  clear segment buffer
              
-                  if flags.substr(7,1).toint()=1 then do -- delimiters are separate elements
+                  if flags.substr(7,1).toint()=1 then do 																	-- delimiters are separate elements
 							itemno=itemno+1
 							in[itemno]=Rexx(cd)  --  capture token
-							in[itemno,"elementname"]=cdn
-							in[in[itemno,"elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
+							in[itemno,"sl-elementname"]=cdn
+							in[in[itemno,"sl-elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
 							end
                  
-                  if flags.substr(2,1).toint()=0  then do --  found separator -- and adjacent separators collapse to one
+                  if flags.substr(2,1).toint()=0  then do 								--  found separator -- and adjacent separators collapse to one
                     secdel=in.substr(start+deloc).verify(cd,"nomatch")		--	look for end of separators
                     if secdel=0 then leave scanloop	-- nothing but separators left = ignore them
                     deloc=deloc+secdel-1
                     end
-            in["count"]=in["count"].toint()+deloc+cdl-1
+            in["sl-count"]=in["sl-count"].toint()+deloc+cdl-1
         
         	end
         	
-        when "end".abbrev(cdn,2) then do label endofitem  -- found a list end delimiter
+        when "end".abbrev(cdn,2) then do label endofitem  																									-- found a list end delimiter
 
             if flags.substr(8,1).toint()=1 then capture=Rexx((segment||in.substr(start,deloc-1)).strip())
 							else capture=Rexx(segment||in.substr(start,deloc-1))
         	in[itemno]=Rexx(elementname||namesep||capture)  --  capture segment
-        	in[itemno,"elementvalue"]=Rexx(capture)
+        	in[itemno,"sl-elementvalue"]=Rexx(capture)
         	if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
-        	in[itemno,"elementname"]=elementname
+        	in[itemno,"sl-elementname"]=elementname
         	in[itemno,"namesep"]=namesep       --  save any explicit name separator
-        	metamap(in,itemno)
+        	checkextraquotes(in,itemno,flags);metamap(in,itemno)
         	elementname=Rexx("")  --  clear name buffer
         	namesep=Rexx("")  --  clear namesep buffer
         	segment=Rexx("")   --  clear segment buffer
 									
-            in["count"]=in["count"].toint()+deloc+cdl-1
+            in["sl-count"]=in["sl-count"].toint()+deloc+cdl-1
             
-            if flags.substr(7,1).toint()=1 then do -- delimiters are separate elements
+            if flags.substr(7,1).toint()=1 then do 																-- delimiters are separate elements
             	itemno=itemno+1
 				in[itemno]=Rexx(cd)  --  capture token
-				in[itemno,"elementname"]=cdn
-				in[in[itemno,"elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
+				in[itemno,"sl-elementname"]=cdn
+				in[in[itemno,"sl-elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
             	end
 
-            leave scanloop  --  found end of list indicator
+            leave scanloop  																																				--  found end of list indicator = exit scan loop
             end endofitem
             
-        otherwise do label unknown				--	unknown delimiter = record as an element
+        otherwise do label unknown																																			--	unknown delimiter = record as an element
         	
 				if segment\=="" then do 	--	we have an uncaptured element 
 					
 						if flags.substr(8,1).toint()=1 then segment=Rexx(segment.strip())
  
 						in[itemno]=Rexx(elementname||namesep||segment)  --  capture segment
-						in[itemno,"elementvalue"]=Rexx(segment)	--	capture value
+						in[itemno,"sl-elementvalue"]=Rexx(segment)	--	capture value
 						if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
-						in[itemno,"elementname"]=elementname
+						in[itemno,"sl-elementname"]=elementname
 						in[itemno,"namesep"]=namesep       --  save any explicit name separator
-						metamap(in,itemno)
+						checkextraquotes(in,itemno,flags);metamap(in,itemno)
 						itemno=itemno+1		--	make a new element
 						elementname=Rexx("")  --  clear name buffer
 						namesep=Rexx("")  --  clear namesep buffer
@@ -3050,9 +3064,9 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 						end        	
         	
         	in[itemno]=Rexx(cd)  --  capture token
-        	in[itemno,"elementname"]=cdn
-        	in[in[itemno,"elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
-        	in["count"]=in["count"].toint()+deloc+cdl-1
+        	in[itemno,"sl-elementname"]=cdn
+        	in[in[itemno,"sl-elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
+        	in["sl-count"]=in["sl-count"].toint()+deloc+cdl-1
 
         	end unknown
         
@@ -3060,25 +3074,38 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 		
       end checkdelimiter
       
-    start=start+deloc+cdl-1   --    get next area to scan
+    start=start+deloc+cdl-1  																																		 --    get next area to scan
     if start>in.length().toint() then do	--	scan is done
     	if segment\=="" then do 	--	we have an uncaptured element 
     		if flags.substr(8,1).toint()=1 then segment=Rexx(segment.strip())
     		itemno=itemno+1		--	this is a new element
         	in[itemno]=Rexx(elementname||namesep||segment)  --  capture segment
-        	in[itemno,"elementvalue"]=Rexx(segment)	--	capture value
+        	in[itemno,"sl-elementvalue"]=Rexx(segment)	--	capture value
         	if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
-        	in[itemno,"elementname"]=elementname
+        	in[itemno,"sl-elementname"]=elementname
         	in[itemno,"namesep"]=namesep       --  save any explicit name separator
-        	metamap(in,itemno)
+        	checkextraquotes(in,itemno,flags);metamap(in,itemno)
         	end
     	leave scanloop  --  don't increment items count if done
     	end
-    end scanloop
+ 
+    end scanloop																																					--	continue scanning
+    	
+    in["sl-elements"]=Rexx(itemno)
+    out=Rexx Rexx(in.left(in["sl-count"])).copyIndexed(in)
+    return out																																							--	all done = return parsed list or sublist to buildlist caller
     
-    in["elements"]=Rexx(itemno)
-    out=Rexx Rexx(in.left(in["count"])).copyIndexed(in)
-    return out
+    method checkextraquotes(in=Rexx, itemno=Rexx, flags=Rexx)		--		handle special remove enclosing quote rule for JSON format
+			if flags.substr(9,1).toint()=1 then do
+				il=in[itemno,"sl-elementname"].length()
+				if il.toint()>2 then
+				if in[itemno,"sl-elementname"].substr(1,1)=='"' then		--		name starts with quote?
+					if in[itemno,"sl-elementname"].substr(il,1)=='"' then in[itemno,"sl-elementname"]=in[itemno,"sl-elementname"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
+				il=in[itemno,"sl-elementvalue"].length()
+				if il.toint()>2 then
+				if in[itemno,"sl-elementvalue"].substr(1,1)=='"' then		--		value starts with quote?
+					if in[itemno,"sl-elementvalue"].substr(il,1)=='"' then in[itemno,"sl-elementvalue"]=in[itemno,"sl-elementvalue"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
+				end
 ---------------------------------------------------------------------------------------
 --		metamap maintains meta-data for structured list elements
 ---------------------------------------------------------------------------------------
@@ -3089,13 +3116,13 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 		if old\=0 then do
 			e=l[old]
 			if e.datatype(w) then e=Rexx("#"e)
-			en=l[old,"elementname"]
+			en=l[old,"sl-elementname"]
 			if en.datatype(w) then en=Rexx("#"en)
-			ev=l[old,"elementvalue"]
+			ev=l[old,"sl-elementvalue"]
 			if ev.datatype(w) then ev=Rexx("#"ev)
 			if en\=="" then do
 				l[en,"chain",old]=null
-					if l[en,"chain"].isindexed() then l[en]=Rexx Rexx(l[l[en,"chain"].minval(),"elementvalue"]).copyindexed(l[en])
+					if l[en,"chain"].isindexed() then l[en]=Rexx Rexx(l[l[en,"chain"].minval(),"sl-elementvalue"]).copyindexed(l[en])
 											else l[en]=null
 				end
 			if ev\==e then do
@@ -3111,9 +3138,9 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 		if new\=0 then do
 			e=l[new]
 			if e.datatype(w) then e=Rexx("#"e)
-			en=l[new,"elementname"]
+			en=l[new,"sl-elementname"]
 			if en.datatype(w) then en=Rexx("#"en)
-			ev=l[new,"elementvalue"]
+			ev=l[new,"sl-elementvalue"]
 			if ev.datatype(w) then ev=Rexx("#"ev)
 			if \l.exists(e) then l[e]=Rexx(newloc)
 				l[e,"chain",new]=Rexx(newloc)
@@ -3129,7 +3156,7 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 				if \l.exists(en) then l[en]=ev
 					l[en,"chain",new]=Rexx(newloc)
 					mi=l[en,"chain"].minval()
-					if l[en]\==l[mi,"elementvalue"] then l[en]=Rexx Rexx(l[mi,"elementvalue"]).copyindexed(l[en])
+					if l[en]\==l[mi,"sl-elementvalue"] then l[en]=Rexx Rexx(l[mi,"sl-elementvalue"]).copyindexed(l[en])
 					end
 			end
 
