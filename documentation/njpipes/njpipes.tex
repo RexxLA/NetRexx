@@ -22,18 +22,25 @@
 \mainmatter
 \chapter{Introduction}
 A Pipeline, or Hartmann Pipeline\footnote{\url{http://en.wikipedia.org/wiki/Hartmann_pipeline}}, is a concept that extends and improves pipes as they are known from Unix and other operating systems. The name pipe indicates an interprocess communication mechanism, as well as the programming paradigm it has introduced. Compared to Unix pipes, Hartmann Pipelines offer multiple input- and output streams, more complex pipe topologies, and a lot more.\\
-Pipelines were first implemented on VM/CMS, one of IBM's mainframe operating systems. This version was later ported to TSO to run under MVS and has been part of several product configurations. Pipelines are widely used by VM users, in a symbiotic relationship with REXX, the interpreted language that also has its origins on this platform.
-njPipes is the implementation of Pipelines for the Java Virtual
-machine. It is written in NetRexx and pipes and stages can be defined using this
+
+Pipelines were first implemented on VM/CMS, one of IBM's mainframe
+operating systems. This version was later ported to TSO to run under
+MVS and has been part of several product configurations. Pipelines are
+widely used by VM users, in a symbiotic relationship with REXX, the
+interpreted language that also has its origins on this platform.
+
+Pipes for NetRexx is the implementation of Pipelines for the Java Virtual
+machine.\footnote{And indeed, it can also be used from programs written
+  in the Java Language.} It is written in NetRexx and pipes and stages can be defined using this
 language. The resulting code can run on every platform that has a JVM
-(Java Virtual Machine). This portable version of Pipelines was started
-by Ed Tomlinson in 1997 under the name of njpipes, when NetRexx was
+(Java Virtual Machine) installed. This portable version of Pipelines was started
+by Ed Tomlinson in 1997 under the name of \emph{njPipes}, when NetRexx was
 still very new, and was open sourced in 2011, soon after the NetRexx
-translator itself. It was integrated into the NetRexx translator in
+translator itself. The included stages have always been open source. It was integrated into the NetRexx translator in
 2014 and first released with version 3.04.
 
 \chapter{The Pipeline Concept}
-\section{What do we mean with pipeline?}
+\section{What is a pipeline?}
 The \emph{pipeline} terminology is a metaphore derived from
 plumbing. Fitting two or more pipe segments together yield a
 pipeline. Water flows in one direction through the pipeline.
@@ -105,11 +112,9 @@ included in the \nr{} distribution to specify a pipeline and to compile
 \nr{} source that contains pipelines. Pipelines can be specified on
 the command line or in a file, but will always be compiled to a .class
 file for execution in the JVM.
-\begin{shaded}
-\begin{verbatim}
-pipe "(hello) literal "hello world" ! console"
-\end{verbatim}
-\end{shaded}
+\begin{lstlisting}[label=hellopipes,caption=Hello World]
+pipe '(hello) literal "hello world" ! console'
+\end{lstlisting}
 This specifies a pipeline consisting of a source stage
 \texttt{literal} that puts a string (``hello world'') into the pipeline, and
 a \texttt{console} sink, that puts the string on the screen. The pipe
@@ -124,21 +129,18 @@ java hello
 Now we
 have shown the obligatory example, we can make it more interesting by
 adding a \texttt{reverse} stage in between:
-\begin{shaded}
-\begin{verbatim}
-pipe "(hello) literal "hello world" ! reverse ! console"
-\end{verbatim}
-\end{shaded}
+\begin{lstlisting}[label=hellopipes2,caption=Hello World2]
+pipe '(hello) literal "hello world" ! reverse ! console'
+\end{lstlisting}
 When this is executed, it dutifully types ``dlrow olleh''.
 
 If we replace the string after \texttt{literal} with \texttt{arg()},
 we then can start the \texttt{hello} pipeline with a an argument to
 reverse:
-\begin{shaded}
-\begin{verbatim}
+
+\begin{lstlisting}[label=hellopipes3,caption=Hello World3]
 pipe "(hello) literal arg() ! reverse ! console"
-\end{verbatim}
-\end{shaded}
+\end{lstlisting}
  and we run it with:
 \begin{verbatim}
 java hello a man a plan a canal panama
@@ -150,13 +152,31 @@ amanap lanac a nalp a nam a
 which goes to show that without ignoring space no palindrome is very
 convincing - which we can remedy with a change to the pipeline: use the
 \texttt{change} stage to take out the spaces:
-\begin{shaded}
-\begin{verbatim}
+\begin{lstlisting}[label=hellopipes4,caption=Hello World4]
 pipe "(hello) literal arg() ! change /" "// ! console"
-\end{verbatim}
-\end{shaded}
+\end{lstlisting}
 
 \chapter{Device Drivers}
+
+A device driver reads from a device (for instance a file on disk, on
+the network, or from the shell) or writes to a device; in some cases
+it can both read from and write to the device. An example of a device
+driver is \keyword{disk} which reads and writes files. You can use it
+on the left-hand side of the pipeline as an input device and on the
+right-hand side of the pipeline as an output device.
+
+
+A pipeline can take data from one input device and write it to another
+device. Within the pipeline, data can be modified in may ways.
+The simplest process for the pipeline is to copy data from a device on
+the input side to a device on the output side. 
+
+Using any input driver with any output driver, Pipelines for NetRexx moves data directly from the input device to the output device. The pipeline implementation uses one program for each device and connects them together.
+The inherent characteristic of the pipeline is that any program can be connected to any other one because each obtains data and sends data through a device independent standard interface.
+
+The pipeline usually processes one record (or line) at a time. The pipeline reads a record from the input, processes it and sends it to the output. It continues until all records from the input have been processed.
+
+
 \chapter{Filters}
 \chapter{Record Selection}
 
@@ -164,8 +184,7 @@ pipe "(hello) literal arg() ! change /" "// ! console"
 \chapter{NetRexx Pipelines Implementation}
 \nr{} Pipelines enables us to follow the usage model of CMS Pipelines
 closely; in fact, the documentation for the mainframe product can be
-used for most stages. In a later chapter, the stages that are
-delivered with \nr{} Pipelines are documented in a delta-approach, listing the differences with the mainframe product, if any.
+used for most stages.
 
 \section{Installation and verification}
 To run \nr{} Pipelines a running \nr{} installation is needed.  To write your own pipes or stages you need compilers for both Java and NetRexx. 
@@ -176,20 +195,18 @@ the \emph{NetRexx Quickstart Guide}.
 To test the installation, we can run a pipeline from the command line.
 Running a pipeline from the command line
  To run a pipeline from the commandline, type:
-\begin{shaded}
-\begin{verbatim}
-pipe "(test) literal arg() ! dup 999 ! count words ! console"
-\end{verbatim}
-\end{shaded}
+\begin{lstlisting}[label=countwords,caption=Count Words]
+pipe (test) 'literal arg() ! dup 999 ! count words ! console'
+\end{lstlisting}
+
 The first time you use the pipe command in a new directory it will
 create a default pipes.cnf file for you. When the \texttt{pipe}
 command is not on your path, you can also use:
-\begin{shaded}
-\begin{verbatim}
-java org.netrexx.njpipes.pipes.compiler "(test) literal arg() ! dup
-999 ! count words ! console"
-\end{verbatim}
-\end{shaded}
+
+\begin{lstlisting}[label=testdup,caption=Test Dup]
+java org.netrexx.njpipes.pipes.compiler (test) 'literal arg() ! dup 999 ! count words ! console'
+\end{lstlisting}
+
 You should see a message that the pipe compiler is processing your pipe and soon after that messages from the NetRexx compiler as it processes the pipe.
 To run the pipe type:
 \begin{verbatim}
