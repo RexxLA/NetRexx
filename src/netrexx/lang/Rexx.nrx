@@ -2307,12 +2307,16 @@ method getelement(index=Rexx) returns Rexx
 	
 method insertelement(index=Rexx, element=Rexx ) returns Rexx
 	if element=null then signal NullPointerException("structured list add element") 
-	l=this
+--	l=this
 	if \this.islist() then signal Error("cannot add element to a non-list")
+	l=Rexx(this).copyindexed(this)		--	clone the list		
 	le=l["sl-elements"].toint()
 	dex=index.toint()
 	if dex<1, dex>le+1 then 	signal IndexOutOfBoundsException(index)
-	newelement=Rexx Rexx(element).copyIndexed(element)
+	if element.islist() then listelement=element			--	insure element in list format
+		else listelement=element.buildlist(l['sl-rules']).head()		
+--	newelement=Rexx Rexx(element).copyIndexed(element)
+	newelement=Rexx(listelement).copyIndexed(listelement)
 	loop i=dex while i<=le+1
 		temp=l[i]
 		metamap(l,0,i)
@@ -2326,15 +2330,19 @@ method insertelement(index=Rexx, element=Rexx ) returns Rexx
 	
 method replaceanelement(index=Rexx, element=Rexx ) returns Rexx	
 	if \this.islist() then signal Error("cannot replace element in a non-list")
+	if \index.datatype('Whole number') then signal Error("index is not a valid number")
 	dex=index.toint()
-	l=this
-	le=l["sl-elements"].toint()
+	lt=this
+	le=lt["sl-elements"].toint()
 	if le=0,dex<1,dex>le then signal IndexOutOfBoundsException(index)
+	l=Rexx(this).copyindexed(this)		--	clone the list
+	if element.islist() then listelement=element			--	insure element in list format
+		else listelement=element.buildlist(l['sl-rules']).head()
 	metamap(l,0,dex)		--	remove meta-data for old element
-	l[dex]=Rexx(element)			--	replace old element with new element
+	l[dex]=listelement			--	replace old element with new element
 	metamap(l,dex)		--	add meta-data for new element
 	recon=Rexx.reconstructlist(l)		--	rebuild encoded list string
-	return Rexx Rexx(recon).copyIndexed(l)		--	return updated list
+	return Rexx(recon).copyIndexed(l)		--	return updated list
 	
 method deleteanelement(index=Rexx) returns Rexx
 	if \this.islist() then signal Error("cannot remove element from a non-list")
@@ -2368,6 +2376,7 @@ method sublist(fromIndex=Rexx,toIndex=Rexx "end") returns Rexx
 	loop i=fromIndex.toint() while i<=toIndex.toint()
 		lc=lc+1
 		newlist[lc]=l[i]
+		metamap(newlist,lc)		--	add meta-data for new element		
 		end
 	newlist["sl-elements"]=Rexx(i-fromIndex.toint())
 	recon=Rexx.reconstructlist(newlist)
@@ -2375,7 +2384,7 @@ method sublist(fromIndex=Rexx,toIndex=Rexx "end") returns Rexx
   
 method join(addlist=StructuredList) returns Rexx
 	input2=Rexx addlist
-	say 'input2["sl-elements"]='input2["sl-elements"]
+--	say 'input2["sl-elements"]='input2["sl-elements"]
   if \this.exists("sl-elements") then do
 			work=Rexx(this);work["sl-elements"]=Rexx(String "1");work[1]=this
 			if input2.exists("sl-rules") then work["sl-rules"]=Rexx input2["sl-rules"]
@@ -2383,9 +2392,9 @@ method join(addlist=StructuredList) returns Rexx
 			end
   if \input2.exists("sl-elements") then do
 			work=Rexx(input2);work["sl-elements"]=Rexx(String "1");work[1]=Rexx(input2)
-			say 'work='work
-			say 'work["sl-elements"]='work["sl-elements"]
-			say 'work[1]='work[1]
+--			say 'work='work
+--			say 'work["sl-elements"]='work["sl-elements"]
+--			say 'work[1]='work[1]
 			return this.join(StructuredList work)
 			end
   i1=this
@@ -2544,16 +2553,19 @@ method tail returns Rexx
   item=this
   items=item["sl-elements"].toint()
   if items<2 then return Rexx()    --   or should it be an empty string?
+/*  not good to have different behavior for list length 2  	
   if items=2 then 
     if item[2].exists("sl-elements") then do
     			ret=Rexx Rexx(Rexx item[2]).copyIndexed(Rexx item[2])	 -- we have a single sublist so return it, else we build a sublist of remaining elements
     			return ret -- we have a single sublist so return it, else we build a sublist of remaining elements
     			end
+*/    			
   output=Rexx(this)
   output["sl-elements"]=Rexx(Rexx items-1)
   output["sl-rules"]=item["sl-rules"]
   loop i=2 to items
     output[i-1]=Rexx item[i]
+    metamap(output,i-1)
     end
   outstr=reconstructlist(output)
   return Rexx Rexx(outstr).copyIndexed(output)
@@ -2575,6 +2587,9 @@ method dumplist(data=Rexx,key="",offset="",link="") static
         end
     end
     
+method dumpvar()
+	dumpvar(this)
+	
 method dumpvar(r=Rexx,offset="") static
 	say offset r
 	loop x over r
@@ -2584,7 +2599,7 @@ method dumpvar(r=Rexx,offset="") static
 ---------------------------------------------------------------------------------------------------------------------------------------------
 -- beginning of internal structured list processing methods
 ---------------------------------------------------------------------------------------------------------------------------------------------
-method reconstructlist(input=Rexx,ruleset=Rexx "") static
+method reconstructlist(input=Rexx,ruleset=Rexx "",sublist=Rexx 0) static
 	if ruleset=="" then if input.exists("sl-rules") then rules=input["sl-rules"];else nop
 		else if \ruleset.exists("sl-elements") then 		--		ruleset is not a list structure
 			rules=getrules(ruleset)		--	translate rules to a list structure
@@ -2599,15 +2614,19 @@ method reconstructlist(input=Rexx,ruleset=Rexx "") static
   	
   if input.exists("sl-elementname") then		--	do we have an elementname? if so capture in segment1
   	if rules["delimiters"].exists(input["sl-elementname"]) then return input		--	a delimiter
-  		else segment1=input["sl-elementname"]
+  		else do
+  			segment1=input["sl-elementname"]
+  			if input["sl-elementname"].exists("sl-wrapper") then segment1=input["sl-elementname","sl-wrapper"]||segment1||input["sl-elementname","sl-wrapper"]
+  			end
   else segment1=""
   if input.exists("namesep") then tnamesep=input["namesep"];else tnamesep=""
 	
-  if \input.exists("sl-elements") then do label notalist	--	we have an element that is not a list
+  	---------------------------------------------------------------------------------------	we have an element that is not a list
+  if \input.exists("sl-elements") then do label notalist	
+
   	output=Rexx(input["sl-elementvalue"])	--	snap input so we can modify if needed
-  	--  	output=Rexx(input)	--	snap input so we can modify if needed
+	if input["sl-elementvalue"].exists("sl-wrapper") then output=input["sl-elementvalue","sl-wrapper"]||output||input["sl-elementvalue","sl-wrapper"]  	
   	if escape=="" then return segment1||tnamesep||output		--	no escape char ==> don't do escape handler code
---  	if escape=="" then return segment1||namesep||output		--	no escape char ==> don't do escape handler code
   	escapeit="no"
   	if output.pos(rules["delimiters","escape",1]).toint()\=0 then do		--	element contains an escape character?
 		if flags.substr(5,1).toint()=1 then output=output.changestr(rules["delimiters","escape",1],rules["delimiters","escape",1]||rules["delimiters","escape",1])		--	make escape character preceed escape
@@ -2625,23 +2644,28 @@ method reconstructlist(input=Rexx,ruleset=Rexx "") static
     return segment1||tnamesep||output
     end notalist
     
-  -- element is a list
+  ---------------------------------------------------------------------------------------------       this element is a list
   if segment1\=="" then 
-    if segment1\==input then segment1=segment1||tnamesep
+    if segment1\==input then segment1=segment1||tnamesep							--		save any name and its separator
+    	
+  if input.exists("sl-start") then startlist=input["sl-start"]			--		use any original sublist delimiter (for JSON "array" support)
+  if input.exists("sl-end") then endlist=input["sl-end"]			--		use any original sublist delimiter (for JSON "array" support)
                     
   segment=Rexx ""  
   if input.exists("sl-elements") then do
   	if flags.substr(7,1)=="1" then sep=""
-    if flags.substr(7,1)=="0" then segment=startlist
-    loop i=1 to input["sl-elements"]
-      newseg=reconstructlist(input[i],rules)
+  	if sublist then
+			if flags.substr(7,1)=="0" then segment=startlist
+    loop i=1 to input["sl-elements"]																		--		recursively capture any list elements
+      newseg=reconstructlist(input[i],rules,1)
       cd=delimiterinfo(newseg,rules)
       if cd=="",cd.length()\==newseg.length() then segment=segment||newseg||sep
       			else segment=segment||newseg
       end
     if segment.length().toint()>sep.length().toint() then
 			if segment.right(sep.length())==sep then segment=segment.substr(1,segment.length().toint()-sep.length().toint())
-    if flags.substr(7,1)=="0" then segment=segment||endlist
+	if sublist then
+			if flags.substr(7,1)=="0" then segment=segment||endlist
     end
   return segment1||segment
 	    
@@ -2882,6 +2906,7 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
               end explicit
               
             sublist=Rexx(in.substr(start+deloc-1)).buildlist(rules,cdl+1)																										--	call recursive sublist processing
+            sublist["sl-start"]=cd		--		capture start delimiter (for JSON "arrays")
             if elementname=="" then elementname=Rexx(segment||in.substr(start,deloc-1)) --   no attribute name found==>use prefix
             if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
             in[itemno]=Rexx(elementname||namesep||sublist).copyIndexed(sublist)
@@ -2914,7 +2939,7 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 					in[in[itemno,"sl-elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
 					itemno=itemno+1
 					end
-						
+					in["sl-end"]=cd		--		capture sublist end token (for JSON "arrays")						
                 	leave scanloop  --  list can be terminated by list ender with no more tokens -- is it a list ender?
                 	end
                 deloc=deloc+secdel+cdl-1		--	point scan to next valid data
@@ -2937,6 +2962,7 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 								end
                     		
                     		in["sl-count"]=in["sl-count"].toint()+cd.length().toint()		--	absorb list ender
+							in["sl-end"]=cd		--		capture sublist end token (for JSON "arrays")
                     		leave scanloop  --  list can be terminated by list ender with no more tokens -- is it a list ender?
                     		end
                     end
@@ -3028,7 +3054,7 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
         	if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
         	in[itemno,"sl-elementname"]=elementname
         	in[itemno,"namesep"]=namesep       --  save any explicit name separator
-        	checkextraquotes(in,itemno,flags);metamap(in,itemno)
+        	checkextraquotes(in,itemno,flags);metamap(in,itemno)		--		JSON support!
         	elementname=Rexx("")  --  clear name buffer
         	namesep=Rexx("")  --  clear namesep buffer
         	segment=Rexx("")   --  clear segment buffer
@@ -3042,6 +3068,7 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 				in[in[itemno,"sl-elementname"]]=in[itemno]		--	create a map entry from the element name to the element value
             	end
 
+            in["sl-end"]=cd		--		capture sublist end token (for JSON "arrays")
             leave scanloop  																																				--  found end of list indicator = exit scan loop
             end endofitem
             
@@ -3094,18 +3121,27 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
     in["sl-elements"]=Rexx(itemno)
     out=Rexx Rexx(in.left(in["sl-count"])).copyIndexed(in)
     return out																																							--	all done = return parsed list or sublist to buildlist caller
-    
-    method checkextraquotes(in=Rexx, itemno=Rexx, flags=Rexx)		--		handle special remove enclosing quote rule for JSON format
+ 
+---------------------------------------------------------------------------------------
+
+    method checkextraquotes(in=Rexx, itemno=Rexx, flags=Rexx)														--		handle special remove enclosing quote rule for JSON format
 			if flags.substr(9,1).toint()=1 then do
 				il=in[itemno,"sl-elementname"].length()
 				if il.toint()>2 then
-				if in[itemno,"sl-elementname"].substr(1,1)=='"' then		--		name starts with quote?
-					if in[itemno,"sl-elementname"].substr(il,1)=='"' then in[itemno,"sl-elementname"]=in[itemno,"sl-elementname"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
+				  if in[itemno,"sl-elementname"].substr(1,1)=='"' then		--		name starts with quote?
+					if in[itemno,"sl-elementname"].substr(il,1)=='"' then do	--	ends with?
+						in[itemno,"sl-elementname"]=in[itemno,"sl-elementname"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
+						in[itemno,"sl-elementname","sl-wrapper"]='"'	--		save wrapping quote for later
+						end
 				il=in[itemno,"sl-elementvalue"].length()
 				if il.toint()>2 then
 				if in[itemno,"sl-elementvalue"].substr(1,1)=='"' then		--		value starts with quote?
-					if in[itemno,"sl-elementvalue"].substr(il,1)=='"' then in[itemno,"sl-elementvalue"]=in[itemno,"sl-elementvalue"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
-				end
+					if in[itemno,"sl-elementvalue"].substr(il,1)=='"' then do
+						in[itemno,"sl-elementvalue"]=in[itemno,"sl-elementvalue"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
+						in[itemno,"sl-elementvalue","sl-wrapper"]='"'	--		save wrapping quote for later
+						end
+				end
+
 ---------------------------------------------------------------------------------------
 --		metamap maintains meta-data for structured list elements
 ---------------------------------------------------------------------------------------
@@ -3113,34 +3149,37 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
 		new=newloc.toint();old=oldloc.toint()
 		w="w"
 		l=Rexx list
-		if old\=0 then do
+		if old\=0 then do			--		remove old element meta-data
 			e=l[old]
 			if e.datatype(w) then e=Rexx("#"e)
 			en=l[old,"sl-elementname"]
-			if en.datatype(w) then en=Rexx("#"en)
+			if en.datatype(w) then en=Rexx("#"en)
 			ev=l[old,"sl-elementvalue"]
 			if ev.datatype(w) then ev=Rexx("#"ev)
 			if en\=="" then do
 				l[en,"chain",old]=null
+				  if l[en].exists("chain") then		--		intermediate indexes may not really "exist" in Rexx objects
 					if l[en,"chain"].isindexed() then l[en]=Rexx Rexx(l[l[en,"chain"].minval(),"sl-elementvalue"]).copyindexed(l[en])
 											else l[en]=null
 				end
 			if ev\==e then do
 				l[ev,"chain",old]=null
-				if l[ev,"chain"].isindexed() then l[ev]=Rexx Rexx(l[ev,"chain"].minval()).copyindexed(l[ev])
+				if l[ev].exists("chain") then		--		intermediate indexes may not really "exist" in Rexx objects
+					if l[ev,"chain"].isindexed() then l[ev]=Rexx Rexx(l[ev,"chain"].minval()).copyindexed(l[ev])
 											else l[ev]=null
 				end
 			l[e,"chain",old]=null
-			if l[e,"chain"].isindexed() then l[e]=Rexx Rexx(l[e,"chain"].minval()).copyindexed(l[e])
+			if l[e].exists("chain") then		--		intermediate indexes may not really "exist" in Rexx objects
+				if l[e,"chain"].isindexed() then l[e]=Rexx Rexx(l[e,"chain"].minval()).copyindexed(l[e])
 										else l[e]=null
 			end
 					
-		if new\=0 then do
+		if new\=0 then do			--		add new element meta-data
 			e=l[new]
 			if e.datatype(w) then e=Rexx("#"e)
 			en=l[new,"sl-elementname"]
-			if en.datatype(w) then en=Rexx("#"en)
-			ev=l[new,"sl-elementvalue"]
+			if en.datatype(w) then en=Rexx("#"en)
+			ev=l[new,"sl-elementvalue"]
 			if ev.datatype(w) then ev=Rexx("#"ev)
 			if \l.exists(e) then l[e]=Rexx(newloc)
 				l[e,"chain",new]=Rexx(newloc)
