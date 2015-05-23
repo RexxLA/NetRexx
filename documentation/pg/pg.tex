@@ -882,14 +882,52 @@ Addison-Wesley Professional; 1994}, some owe their existence
 to complications in the C++ language and are not readily reproducible
 in a Java Patterns or Ruby Patterns book. The same goes for NetRexx-
 in this chapter we would like to present a number of Java patterns
-usable in NetRexx, and a number of patterns that are unique to NetRexx.
-\section{Events}\label{events}
+usable in NetRexx, and a number of patterns that are unique to
+NetRexx.
 
-\section{Recursive Parse}
-This is a pattern unique to Rexx, by virtue of \Rexx{} having the Parse
-statement. It also works in NetRexx.
+\section{Singleton}\label{singleton}
+Sometimes we only want one instance of a class, and we want every user
+of the class to refer to that same instance. In this case, we need to
+adapt the class construction mechanism to make sure this
+happens. There are different ways to implement this, one way is shown
+below.
+\begin{lstlisting}[label=singleton1,caption=Singleton]
+class TheGatherer
 
-\section{Observer}
+  properties static
+  instance     = TheGatherer
+
+  method getInstance() returns TheGatherer static protect
+    if TheGatherer.instance <> null then
+      do
+	return TheGatherer.instance
+      end
+    else
+      do
+	TheGatherer.instance = TheGatherer()
+	return TheGatherer.instance
+      end
+    
+  /**
+   * private constructor enforces singleton
+   */
+  method TheGatherer() private signals ClassNotFoundException
+\end{lstlisting}
+The way that has been chosen here is to make the constructor private,
+so no other class can use it. We need an alternative method to make the first
+and only instance of this class, and this is the \code{getInstance()}
+method. This checks if a static property \code{instance} is null, in
+which case the private constructor is run and its return value put in
+\code{instance}. Every subsequent call to \code{getInstance()} sees
+the value of the static variable instance being not null, and returns
+that value, which now refers to the single instance. There are several
+ways to enhance this method, but this is a simple way and it fits the
+bill. For added security, override the methods for class
+serialization.
+
+There is a common naming pattern for Singletons, which is the prepend
+the name of the class with \emph{The}, as in the above example.
+\section{Observable and Events}\label{events}
 The observer pattern can also be referred to as \emph{Callback}, and
 the Java Event class delivers support for it. It is very usable if
 some result needs to be available for a set of callers, where the set
@@ -921,6 +959,105 @@ output lines from a subprocess - in the version that puts the output
 in an ArrayList needs to wait for the subprocess to end, but the event
 driven version can monitor a long running process and analyze output
 lines whenever they are received.
+
+\section{Recursive Parse}
+This is a pattern unique to Rexx, by virtue of \Rexx{} having the Parse
+statement. It also works in NetRexx.
+
+\section{More Observer/Observable}
+
+Java has special support for the Observer/Observable pattern in the
+form of the \emph{Observer} class and the \emph{Observable} interface.
+In the following snippet one can see the Observer class in working.
+
+The class is the same \emph{singleton} as shown above, and starts several threads which need
+to be observed.
+\begin{lstlisting}[label=obs,caption=Observer]
+class TheGatherer implements Observer 
+\end{lstlisting}
+
+The Observable threads need to implement the \emph{Observable}
+interface, and to be able to be started as a thread, \emph{Runnable}.
+This is how we start it; its definition follows.
+
+\begin{lstlisting}[label=obs2,caption=Observable: starting Observable Threads]
+  method TheGatherer() private signals ClassNotFoundException
+    logger_.info( "TheGatherer: start")
+    t1 = TransactionStatusMonitor(Rexx 10000)
+    t1.addObserver(this)
+    Thread(t1).start()
+    logger_.info( "TheGatherer: started thread TransactionStatusMonitor")
+\end{lstlisting}
+
+We instantiate the Observable class  as \code{t1}, and add the instance of
+our Observer class, TheGatherer, to it as Observer. After we have done
+this, we start it by instantiating a Thread object with it and calling
+the start method, which, by virtue of it implementing the
+\emph{Runnable} interface, starts its \textbf{run} method.
+
+Note that the TransactionStatusMonitor extends a class called
+\code{Monitor}, which in turn, implements the \code{Observable}
+interface. The reason for this is, we run several monitoring threads,
+and they all behave in the same way.
+\begin{lstlisting}[label=obs4,caption=The Monitor Superclass]
+import java.util.Observable
+class Monitor extends Observable
+
+  properties public
+  logger_ = Logger.getLogger(Monitor.class.getName())
+  sleeptime
+
+  properties static
+  da	  = TheDataAccess null
+  
+  method Monitor()
+    this.da  = TheDataAccess.getInstance()
+\end{lstlisting}
+
+\begin{lstlisting}[label=obs3,caption=an Observable Thread]
+class TransactionStatusMonitor implements Runnable extends Monitor
+  
+  method TransactionStatusMonitor(s) signals ClassNotFoundException
+    this.sleeptime = s
+    
+  method run()
+    do
+      loop forever
+	pi		  = this.da.idealq1()
+	if pi.getID().length() < 5 then
+	  do
+	    nop
+	  end
+	else do
+	  pi.setIdType('ideal')
+	  ibidp		  = this.da.getIBPostIDStatuses(pi)
+	  setChanged()
+	  notifyObservers(ibidp.getStatusDelta())
+	end
+	
+	Thread.currentThread().sleep(this.sleeptime) -- sleep for sleeptime seconds
+      end
+    catch InterruptedException
+      parse source s
+      say "thread interrupted:"  s
+    end
+
+\end{lstlisting}
+In lines 17 an 18 the magic happens: the \code{setChanged()} method
+sets the status of this instance as updated, and the
+\code{notifyObservers()} method calls for all the registered
+\emph{Observers} their \code{update()} methods; this has the following
+signature:
+
+\begin{lstlisting}[label=obs4,caption=the update() method]
+  method update(o=Observable,obj=Object) protect
+    cl = o.getClass().getName()
+\end{lstlisting}
+The \code{update()} method receives an \keyword{Object}. The
+\code{.getClass.getName} call is for illustrative purposes and can be
+used to decide how to treat the received update object.
+
+
 
 \chapter{Incorporating Class Libraries}
 \section{A Word About Java Generics}
