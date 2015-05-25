@@ -19,6 +19,10 @@ DOCNAME         := "NetRexx $(RELEASE) Programming Guide.pdf"
 
 all:	$(NRX_OBJS) $(PDFTARGET)
 
+copy:
+	cp ../../../examples/jsr223/ListScriptingEngines.nrx .
+
+
 $(TARGET).pdf: $(TEX_SRC)
 	$(MAKE) -k $(TARGET).bbl
 	$(LATEX_EXE) $(TARGET).tex
