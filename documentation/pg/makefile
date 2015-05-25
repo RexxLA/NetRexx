@@ -11,16 +11,18 @@ RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
 DOCNAME         := "NetRexx $(RELEASE) Programming Guide.pdf"
 
-
 .SUFFIXES: .nrx .nry .njp .class .skel .xsl .java .pdf
 
 .nrx.class:
 	$(NRX_COMPILE_COMMAND) $< $(NRX_COMPILE_FLAGS)
 
-all:	$(NRX_OBJS) $(PDFTARGET)
+all:	copy $(NRX_OBJS) $(PDFTARGET)
 
-copy:
+.PHONY copy:
 	cp ../../../examples/jsr223/ListScriptingEngines.nrx .
+	cp ../../../examples/jsr223/ScriptDemo2.nrx .
+	cp ../../../examples/jsr223/ScriptDemo3.nrx .
+	cp ../../../examples/jsr223/RunAppleScript.nrx .
 
 
 $(TARGET).pdf: $(TEX_SRC)
