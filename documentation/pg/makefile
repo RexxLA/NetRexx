@@ -23,6 +23,8 @@ all:	copy $(NRX_OBJS) $(PDFTARGET)
 	cp ../../../examples/jsr223/ScriptDemo2.nrx .
 	cp ../../../examples/jsr223/ScriptDemo3.nrx .
 	cp ../../../examples/jsr223/RunAppleScript.nrx .
+	cp ../../../examples/jsr223/antscript.xml .
+	cp ../../../examples/jsr223/JSONDemo.nrx .	
 
 
 $(TARGET).pdf: $(TEX_SRC)

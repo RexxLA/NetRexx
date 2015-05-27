@@ -96,13 +96,30 @@ is called \code{returnobject}. This program illustrates its use:
 java ScriptDemo3
 \END
 
- 
-\section{Interpreted execution of \nr{} scripts from NetRexx}
- 
-\section{Interpreted execution of \nr{} scripts from Java}
- 
-\section{Calling other scripting languages from \nr{} programs}
- 
+ \section{Interpreted execution of \nr{} scripts from jrunscript}
+ Another way of calling any NetRexx program, for interpretation, is to use the standard jrunscript executable that is included in Java 1.6 and beyond. For example, in the examples/rosettacode directory, one could specify:
+\begin{verbatim}
+jrunscript -l netrexx -cp $CLASSPATH -f RCSortingHeapsort.nrx
+\end{verbatim}
+The -l option instructs the jrunscript handler to choose NetRexx as
+its standard scripting language. For NetRexx to be eligible as a
+scripting language, NetRexxC.jar must be on the jrunscript classpath,
+which is a separate classpath from the standard one. In this setup,
+even \nr{} programs with a filename that is not valid as a classname,
+can be executed as an interpreted script.
+
+\section{Using JavaScript from \nr{} programs}
+JavaScript support is built in from Java 1.6 onwards, and using it
+does not require placing another library on the classpath.
+Using JavaScript from \nr{} can have benefits, for example when using types native
+to JavaScript, like the JSON data interchange format.
+\lstinputlisting[label=rcjsr223,caption=Run JavaScript]{../../../examples/jsr223/JSONDemo.nrx}
+
+which yields the following result:
+\bash[stdout]
+java JSONDemo
+\END
+
 \section{Using AppleScript on MacOSX}
 On MacOSX you can run an AppleScript using \nr{}. 
 \lstinputlisting[label=rcjsr223,caption=Run AppleScript]{../../../examples/jsr223/RunAppleScript.nrx}
@@ -114,8 +131,56 @@ On MacOSX you can run an AppleScript using \nr{}.
  object in order to return the result upon evaluation. 
  
 \section{Execution of \nr{} scripts from ANT tasks}
- 
+The jsr223 engine enables us to execute NetRexx scripts from the
+ant\footnote{\url{http://ant.apache.org}} building tool using the
+\code{<script>} tag. This was already possible using the BSF library,
+where \nr{} was one of the originally supported languages,
+but has become more straightforward with jsr223 scripting.
+\lstinputlisting[label=anr223,caption=Run a \nr{} script in Ant]{../../../examples/jsr223/antscript.xml}
+
+Note that properties can be set in other parts of the ant xml file and
+used in the ant script.
+This script yields the following output:
+\bash[stdout]
+ant -f antscript.xml
+\END
+
+The task may use the BSF scripting manager or the JSR 223 manager that
+is included in JDK6 and higher. This is controlled by the manager
+attribute. The JSR 223 scripting manager is indicated by "javax", as
+shown on line 7.
+
+All items (tasks, targets, etc) of the running project are accessible from the script, using either their name or id attributes (as long as their names are considered valid Java identifiers, that is). This is controlled by the "setbeans" attribute of the task. The name "project" is a pre-defined reference to the Project, which can be used instead of the project name. The name "self" is a pre-defined reference to the actual <script>-Task instance.
+From these objects you have access to the Ant Java API.
+
+A classpath for execution of the script can be set using the
+\code{classpath} attribute. A script contained in a separate file can
+be executed using the \code{src} attribute.
 \section{Integration of NetRexx scripting in applications}
+Several applications offer a facility to script functionality using
+the javax.scripting interface, akin to the way applications use the
+RexxSAA interface for this purpose. 
  
 \section{Interfacing between ooRexx and \nr{} using BSF4ooRexx}
 BSF is a system for language interaction that originated in a research project at IBM, and predates JSR223 (and certainly its implementation in Java 6) for a number of years. BSF 2.x has its own interface, while modern BSF versions are an implementation of the JSR223 interfaces. BSF4ooRexx enables a bidirectional interface between ooRexx and Java, and enables one to use the large class library support for Java in ooRexx programs, but likewise the execution of ooRexx code from Java (including \nr{}) programs. BSF4ooRexx contains some special support for JVM programs written in \nr{}.
+
+\section{General jsr-223 Implementation Notes}
+This section describes some notes pertaining to specific jsr223 for
+\nr{} design and implementation decisions.
+
+\begin{itemize}
+\item All engine scope bindings are passed to the script as variables - note that binding names containing periods have the periods changed to underscores to be legal variable names.
+\item The NetRexx script engine is reused unless the script returned via an "exit" statement and the bindings are persistent which means that scripts will see the bindings (Objects) created by previous scripts
+\item Arguments are passed both as the normal \code{arg} string and as the array binding \code{javax.script.argv} i.e. script variable \code{javax\_script\_argv}.
+\item Scripts are executed via the NetRexxA API for interpreting a program from a string so they are not written to files.
+\item The current version of the engine has no other optimization and only support for bare minimum JSR223 features (No compilable, invokeable, preparse or caching or user profiles or console, etc.).
+\item When running as an Ant Script task, properties whose names
+  contain periods are not passed to the bindings and must be accessed
+  via project.getProperty('some.name') The workaround is to define a local Ant property as a global first and the scriptengine will overlay the global value with the local value in the bindings map
+\item When running as an Ant Script task, properties can be set via
+  project.setProperty('some.name', 'some value')
+\item Script parms can be passed in an "arg" binding. Parse flags can be passed with a "netrexxflags" binding or in Ant with the usual "ant.netrexx.verbose", etc properties.
+\item Ant scripts can use the nested classpath facility - It is automatically added to the classpath that NetRexx scans. Likewise any path segments from a thread context URLclassloader are added.
+\item The engine will run programs (ie that have a main class) as well as scripts but bindings cannot then be auto added to the program namespace so
+programs have to load bindings like this: \code{NetRexxScriptEngine.getObject("objectname")}
+\end{itemize}
