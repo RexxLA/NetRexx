@@ -3,7 +3,7 @@ The \nr{} translator is now functionally complete, though work continues on usab
 Please note that the presence of an item in this section is not a commitment to remove a restriction in some future update; \nr{} enhancements are dependent on on-going research, your feedback, and available resources. You should treat this list as a “wish-list” (and please send in your wishes, preferable as an RFE on the \url{http://kenai.com/projects/netrexx} website). 
 \section{General restrictions}
 \begin{enumerate}
-\item The translator requires that Java 1.1.2 or later be installed. To use the interpreter functions, at least Java 1.2 (Java 2) is required. Note that Java 6 is the current version, so the chance that you will be impacted by this is minimal. 
+\item The translator requires that Java  \minimalJVMversion{} or later be installed. Note that Java 8 is the current version, so the chance that you will be impacted by this is minimal. 
 \item Certain forward references (in particular, references to methods later in a program from the argument list of an earlier method) are not handled by the translator. For these, try reordering the methods.
 \end{enumerate}
 \section{Compiler restrictions }
@@ -18,13 +18,10 @@ Externally-visible names (property, method, and class names) cannot be Java rese
 \item The results of expressions consisting of the single term “null” are not traced. 
 \item When a minor (inner) class is explicitly imported, its parent class or classes must 
 also be explicitly imported, or javac will report that the class cannot be found. 
-\item If you have a loop construct with a large number (perhaps hundreds) of instructions inside it, running the compiled class may fail with an illegal target of jump or branch verification error (or, under Java 1.1, simply terminate execution after one iteration of the loop). This is due to a bug in javac one workaround is to move some of the code out of the loop, perhaps into a private method. 
-(The following problem may occur in larger methods, with Java 1.1.2; it seems to have been fixed in later versions of Java): \nr{}C does not restrict the number of local variables used or generated. However, the 1.1.2 javac compiler fails with unrelated error messages (such as statement unreachable or variable may be uninitialized) if asked to handle more than 63 local variables. 
 \end{enumerate}
 \section{Interpreter restrictions} 
 Interpreting Java-based programs is complex, and is constrained by various security issues and the architecture of the Java Virtual Machine. As a result, the following restrictions apply; these will not affect most uses of the interpreter. 
 \begin{enumerate}
-\item For interpretation to proceed, when any of –exec, –arg, or –noarg is specified, you must be running a Java 2 JVM (Java Virtual Machine). That is, the command “java –version” should report a version of 1.2 or later. Parsing and compilation, however, only require Java 1.1.2. 
 \item Certain “built-in” Java classes\footnote{notably java.lang.Object, java.lang.String, and java.lang.Throwable} are constrained by the JVM in that they are assumed to be pre-loaded. An attempt to interpret them is allowed, but will cause the later loading of any other classes to fail with a class cast exception. 
 Interpreted classes have a stub which is loaded by a private class loader. This means that they will usually not be visible to external (non-interpreted) classes which attempt to find them explicitly using reflection, Class.forName(), etc. Instead, these calls may find compiled versions of the classes from the classpath. Therefore, to find the “live” classes being interpreted, use the \nr{}A interpreter API interface (described below). 
 \item An interpreter cannot completely emulate the actions taken by the Java Virtual Machine as it closes down. Therefore, special rules are followed to determine when an application is assumed to have ended when interpreting (that is, when any of –exec, –arg, or –noarg is specified): 

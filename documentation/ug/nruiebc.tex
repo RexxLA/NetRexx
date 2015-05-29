@@ -8,17 +8,14 @@
 \index{installation,EBCDIC systems}
 
 \subsubsection{Prerequisites for z/OS}
-Realistically, to use \nr{} on z/OS you must have access to an OMVS
+To use \nr{} on z/OS you must have access to an OMVS
 prompt (z/OS Unix Systems Services\footnote{IBM Manuals SA22-7801-12 ``Unix System
   Services User's Guide''
-  and  SA22-7802-12 ``Unix System Services Reference''}  shell for 3270 terminals), have
-access using ssh or telnet, and Java must be installed. While this
-access used to be scarce, more and more installations have this as a
-standard. Of course, if you are systems programming staff you can
-arrange for most of this yourself, and if you are not, you need to
-befriend the staff that can.
+  and  SA22-7802-12 ``Unix System Services Reference''}  shell for
+3270 terminals), or have access using ssh or telnet; Java must be
+installed.
 
-Access to the OMVS command is regulated through a security profile, so your userid
+Access to the OMVS command can be regulated through a security profile, so your userid
 must be in the right RACF, ACF2 or TOP SECRET class. You will need a home
 directory specified in this OMVS class, and this directory needs to be
 mounted, preferably as a permanent mount.
@@ -28,17 +25,7 @@ runtime available. Test this with the command
 \begin{verbatim}
 java -version
 \end{verbatim}
-Any version of Java will do, although newer is better. Generally,
-versions from 1.4 to 1.7 are found on mainframes nowadays. If the
-command is not found, don't despair; it might be installed but it may
-be not found on the \$PATH variable. This can be arranged for in the
-\texttt{.profile} file in your home direcory. This variable works
-just as in other versions of Unix\footnote{z/OS is officially a
-  version of Unix, this in addition to everything that it already was}, see
-page \pageref{install_classpath}. If Java is not installed, it is time
-someone did it; there are SMP/E and non-SMP/E installers (using a
-shell script) available -
-the latter comes in handy for a quick install.
+Java \minimalJVMversion{}, or more recent, is needed for \nr{}\splice{java org.netrexx.process.NrVersion}.
 
 \subsubsection{Uploading the \nr{} translator jar}
 
@@ -53,14 +40,17 @@ page as required.
 The simplest way to do this is to first install the package on a
 workstation, following the instructions above, then copy or FTP the
 files you need to the mainframe.  The files need to be placed in an
-HFS to be used by OMVS; FTP can directly places the files in an HFS
+HFS to be used by OMVS; FTP and sftp can directly place the files in
+an HFS or ZFS
 home directory, while IND\$FILE can place them into a traditional data
 set.
 
 Specifically:
 \begin{itemize}
 \item The NetRexxC.jar file should be copied as-is, that is, use
-FTP or other file transfer with the BINARY option.  The CLASSPATH should
+FTP or other file transfer with the BINARY option.  Note that
+\code{sftp} defaults to binary, while \code{scp} to z/OS translates
+ASCII to EBCDIC and is not usable for this purpose. The CLASSPATH should
 be set to include this NetRexxC.jar file. When using IND\$FILE as a
 file transfer mechanism to a traditional MVS data set, make sure it is
 allocated as a load library with \texttt{lrecl 0} and a large
@@ -127,7 +117,7 @@ case, just issue \texttt{touch NetRexxC.jar} in that directory, the
 copy command will overwrite that empty file.
 
 Be sure to add the \texttt{-Xquickstart} option to the java command in
-the nrc binary file in your path:
+the nrc binary file in your path, or add it as an alias.
 \begin{verbatim}
 java -Xquickstart org.netrexx.process.NetRexxC $*
 \end{verbatim}
@@ -141,17 +131,14 @@ like we do on other versions of Unix. \nr{} programs can access HFS (and
 ZFS) files the same way it does on Windows and Unix, and also network
 programming with TCP/IP works in the same way from OMVS.
 
-For a description how \nr can be used in a traditional MVS
+For a description how \nr{} can be used in a traditional MVS
 workload environment, with batch JCL and using VSAM and sequential
 data sets and PDS directories, you are referred to the \emph{\nr{}
   Programming Guide)}.
 \subsubsection{A note on character sets}
 z/OS USS is an EBCDIC Unix version, do note that the \texttt{-utf8}
 option does only work when your source file actually is encoded in
-utf8. When \nr{} 3.03 switched to \texttt{-utf8} as the default character
-set, \nr{} compiles stopped working; for this reason, this version is
-not recommended for use with z/OS. This behavior has been fixed in
-subsequent versions.
+utf8.
 \subsection{z/Linux}
 Installing on z/Linux is straightforward. Make sure the NetRexxC.jar
 is copied untranslated to the z/Linux file system using ftp, scp or
