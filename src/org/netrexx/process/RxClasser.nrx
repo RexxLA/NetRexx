@@ -63,6 +63,7 @@
 /* 2012.10.17 missing null check in unimplemented method causing null ptr errors  --KK  (no issue opened - non released code)  */
 /* deleted standard classpath additions for MacOSX and z/OS - cannot depend on these anymore */
 -- 2015.05.24 -- KK -- fix for issue #115 = can't subclass ConcurrentHashMap in Java 8
+-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -198,13 +199,14 @@ class RxClasser
    path=path||psep||lib'classes.zip'
 -- path=path||psep||home||fsep'..'fsep'lib'fsep'tools.jar'  -- 1.2b3K
 
-   path=path||psep||lib'classes.zip'
+--   path=path||psep||lib'classes.zip'				--		duplicate? 	-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
    -- add standard location for MacOSX so it does not need to be put on classpath anymore
    -- path=path||psep||'/System/Library/Frameworks/JavaVM.framework/Classes/classes.jar'
    --    -- add standard location for java6 on zLinux so it does not need to be put on classpath anymore
    -- path=path||psep||'/opt/ibm/java-s390x-60/lib/tools.jar:/opt/ibm/java-s390x-60/jre/lib/s390x/default/jclSC160/vm.jar'
 
    -- all jars in lib..
+/*-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan   
    libpath=lib
    dir=File(libpath)                         -- check the path
    if dir.isDirectory() then do label libdir   -- directory exists
@@ -216,9 +218,17 @@ class RxClasser
        if rxt.superflag.diag then say '# lib:' name
        end i
      end libdir
+*/-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan  
+	path=path||psep||System.getProperty("sun.boot.class.path", "")		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+	path=Rexx(path).strip('t',psep).toString()											-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
 
+-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan :
+	extensions=System.getProperty("java.ext.dirs")		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+	loop label extscan while extensions\==''				-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+		parse extensions extpath (psep) extensions		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+		extpath=extpath||fsep											-- 2015.06.03 -- KK -- seems to need the trailing file separator below
    -- now add the extensions
-   extpath=lib'ext'fsep
+--   extpath=lib'ext'fsep					-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
    dir=File(extpath)                         -- check the path
    if dir.isDirectory() then do label extdir   -- directory exists
      entries=dir.list()                        -- could be null <sigh>
@@ -229,6 +239,7 @@ class RxClasser
        if rxt.superflag.diag then say '# ext:' name
        end i
      end extdir
+     end extscan 		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
 
    /* now split into segments and test for zipfiles */
    classpaths=0

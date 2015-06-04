@@ -36,7 +36,6 @@
   <property name="ant.netrexxc.source"                         value="1.6"/>
   <property name="ant.netrexxc.target"                         value="1.6"/>
 
-
   <!-- =================================================================== -->
   <!-- Project properties                                                  -->
   <!-- =================================================================== -->
@@ -84,7 +83,7 @@
   <target name="prepare">
   
     <property name="ant.netrexxc.javacompiler" value="ecj -source ${ant.netrexxc.source} -target ${ant.netrexxc.target}"/>  
-      
+    
     <mkdir dir="${build}"/>
     <mkdir dir="${build.lib}"/>
     <mkdir dir="${build.classes}"/>
@@ -183,7 +182,9 @@
     	</javac>    	
     	
     <buildnrc srcDir="${sources}/${compilerDir}" destDir="${build.classes}/${compilerDir}" classpath="${build.classpath}"
-	      includes="*.nrx" excludes="NetRexxS.nrx,NetRexxInterpreter.nrx,Nrx.nrx"  java="yes" compile="no"  />
+	      includes="*.nrx" excludes="NetRexxS.nrx,NetRexxInterpreter.nrx,Nrx.nrx
+	      NrVersion.nrx RxChunk.nrx RxConvert.nrx  RxProcessor.nrx RxSource.nrx RxToken.nrx
+			RxSignalPend.nrx RxType.nrx RxMessageOutput.nrx RxMessage.nrx"  java="yes" compile="no"  />
       
     <javac srcdir="${build.classes}/${compilerDir}" destdir="${build.classes}"  listfiles="yes"
     	classpath="${build.classpath}" source="${ant.netrexxc.source}" target="${ant.netrexxc.target}" >
@@ -335,7 +336,7 @@
       <manifest>
 	<attribute name="Implementation-Vendor" value="Rexx Language Association"/>
 	<attribute name="Implementation-Title" value="NetRexx Runtime Library"/>
-	<attribute name="Implementation-Version" value="${ant.project.name} ${version}, ${build.id.string}"/>
+	<attribute name="Implementation-Version" value="${ant.project.name} ${version} ${mod}, ${build.id.string}"/>
 	<attribute name="Implementation-Build" value="${build.id.string}"/>
       </manifest>
     </jar>
@@ -437,12 +438,12 @@
   <target name="withjavadocs" depends="init,compile, jars, tests, apidocs" description="build distribution and javadocs with test"/>
 
   <target name="setecj"  description="set compiler to ecj">
-  	<property name="ant.netrexxc.javacompiler" value="javac -source 1.6 -target 1.6"/>
+  	<property name="ant.netrexxc.javacompiler" value="ecj -source ${ant.netrexxc.source} -target ${ant.netrexxc.target}"/>
   	<property name="build.compiler" value="org.eclipse.jdt.core.JDTCompilerAdapter"/>
   </target>  
 
   <target name="setjavac"  description="set compiler to javac">
-  	<property name="ant.netrexxc.javacompiler" value="javac -source 1.6 -target 1.6"/>
+  	<property name="ant.netrexxc.javacompiler" value="javac -source ${ant.netrexxc.source} -target ${ant.netrexxc.target}"/>
   </target>    
   
   <target name="default" depends="withecj" description="build and test distribution"/>
@@ -481,12 +482,20 @@
 	<mkdir  dir="${package}/tools"/>
 	<mkdir  dir="${package}/tools/emacs"/>
 	<mkdir  dir="${package}/tools/ant-task"/>
+	<mkdir  dir="${package}/tools/vim"/>
+	<mkdir  dir="${package}/tools/nano"/>
 	<copy file="lib/ant-netrexx.jar" todir="${package}/tools/ant-task"/>
-	<copy file="tools/emacs-mode/netrexx-mode.el" todir="${package}/tools/emacs"/>
+	<copy file="tools/emacs-mode/netrexx-mode.el"
+	      todir="${package}/tools/emacs"/>
+	<copy file="tools/vim/netrexx-vim.zip"
+	      todir="${package}/tools/vim"/>
+	<copy todir="${package}/tools/nano">
+	  <fileset dir="tools/nano" includes="*.*"/>
+	</copy>
 	<copy todir="${package}/examples">
-		<fileset dir="${examples}" />
-	 </copy>
-   <jar jarfile="${PACKAGE_NAME}" compress="yes" filesonly="true">
+	  <fileset dir="${examples}" />
+	</copy>
+	<jar jarfile="${PACKAGE_NAME}" compress="yes" filesonly="true">
       <fileset dir="${package}"/>
 			 <manifest>
 			  <attribute name="Implementation-Vendor" value="Rexx Language Association"/>
@@ -519,7 +528,7 @@
           <contains value="mod ="/>
         </linecontains>
       </filterchain>      
-    </loadproperties>    
+    </loadproperties>
     <property file="build.number"/>
     <property name="build.id.string"
 	      value="build ${build.number}-${DSTAMP}-${TSTAMP}"/>
