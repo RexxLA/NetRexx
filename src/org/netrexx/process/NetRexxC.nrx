@@ -56,6 +56,7 @@
 -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
 -- 2015.05.15 reformat build info -- KK -- Kermit
 -- 2015.05.15 only display options list on specific -help request -- KK --
+-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -203,6 +204,15 @@ class NetRexxC
       currentProperties.put("java.class.path", classpath)
     end
     
+    javacompiler=ToolProvider.getSystemJavaCompiler()
+	javaloader=this.getClass().getClassLoader()
+	if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
+	do
+	ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')			---			no ecj compiler found?
+	catch e=Exception
+		ecjclass=null
+	end
+/*	
 	if null==ToolProvider.getSystemJavaCompiler() then			---			no javac compiler found
 		do
 		javaloader=this.getClass().getClassLoader()
@@ -213,9 +223,18 @@ class NetRexxC
 				ecjclass=null
 			end
 			if ecjclass=null then
+*/
+    compilerChoice = Rexx(System.getProperty("nrx.compiler","javac"))
+    parse compilerChoice compilerChoice javaoptions
+    if compilerChoice\=="javac" & compilerChoice\=="ecj" then compilerChoice="javac"
+    if javac then compilerChoice="javac"
+    if ecj then compilerChoice="ecj"
+
+	if (compilerChoice=="javac" & javacompiler=null) | (compilerChoice=="ecj" & ecjclass=null) then
 			do
 			lookforit=findjavacompiler()			--		lets look very agressively for a java compiler and add to classpath if needed
-			if lookforit=="notfound" then say "no java compiler was found"
+			if lookforit=="notfound" then 
+					if javacompiler=null & ecjclass=null then 	say "no java compiler was found" ; else nop
 					else do 		--		found a possible compiler
 						say "Found possible java compiler="lookforit
 						 currentThreadClassLoader = Thread.currentThread().getContextClassLoader()
@@ -228,7 +247,7 @@ class NetRexxC
 							say e
 					end
 			end
-		end
+--		end
     			
     langs=[Rexx 'Nr']                               -- languages supported
     
@@ -302,8 +321,8 @@ class NetRexxC
         c10=tenth(ctime)
         tot=t10.OpAdd(null, e10).OpAdd(null, c10)
         wid=tot.length()
-	compilerChoice = Rexx(System.getProperty("nrx.compiler","javac")).word(1)
-	if ecj then compilerChoice="ecj"
+--	compilerChoice = Rexx(System.getProperty("nrx.compiler","javac")).word(1)
+--	if ecj then compilerChoice="ecj"
 --	compilerChoice = Rexx(System.getProperty("nrx.compiler","javac"))
         say                           'Translate time:' t10.right(wid)'s'
         if exec & etime>0    then say 'Interpret time:' e10.right(wid)'s'
@@ -362,15 +381,40 @@ class NetRexxC
       nextpath=nextpath.strip("b",'"')
       if nextpath=="." then cpr2=cpr2||ps||nextpath
       else do
-  	nextpathcheck=File(nextpath)
-  	if nextpathcheck.exists() then cpr2=cpr2||ps||nextpath
-  	else say "Warning: classpath entry does not exist and has been dropped:" nextpath
-      end
+			nextpathcheck=File(nextpath)
+			if nextpathcheck.exists() then cpr2=cpr2||ps||nextpath
+			else do				-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
+				if "\\* /*".pos(nextpath.right(2))>>0 | "\\** /**".pos(nextpath.right(3))>>0  then cpr2=cpr2||ps||wildcard(nextpath)	-- 2015.06.05 fix issue #127  -- KK --
+					else say "Warning: classpath entry does not exist and has been dropped:" nextpath
+				end					-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
+			end
     end
     classpath=cpr2.strip("b",ps).toString()
+    	
+  method wildcard(dirstring, passback=Rexx "") returns Rexx				-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
+  	ps=File.pathSeparator; fs=File.separator
+  	recursive=(dirstring.right(2)=="**")
+  	basename=dirstring.changestr("/**","").changestr("\\**","").changestr("/*","").changestr("\\*","")
+  	basedir=File(basename)
+  	contentlist=basedir.list()
+  	loop i=0 for contentlist.length
+  		if ".jar .JAR".pos(Rexx(contentlist[i]).right(4))>>0 then passback=passback||ps||basename||fs||contentlist[i]
+  		if \recursive then iterate
+  		possibledir=File(basename||fs||contentlist[i])
+  		if possibledir.isDirectory() then passback=passback||ps||wildcard(basename||fs||contentlist[i]||fs"**")
+  		end
+  	return passback.strip("b",ps)
+  		
     
 	method findjavacompiler returns Rexx
 		do
+		ps=File.pathSeparator; fs=File.separator
+		testpath=classpath			--		first check verified classpath in case customer added one or wildcarded one in that Java does not know about  --  2015.06.05 -- KK --
+		loop while testpath\==""
+			parse testpath testfile (ps) testpath
+			fname=testfile.substr(testfile.lastpos(fs).toint()+1) 
+			if "tools.jar NetRexxF.jar".pos(fname)>>0 | (fname.left(3)=="ecj" & fname.right(4)==".jar") then return testfile
+			end
 --		say Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()
 		dir=Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()		--		Get NetRexxC location
 		if dir.substring(0,1)==File.separator then dir=File(dir).getParent()		--		*nix is not winblows!
