@@ -1,4 +1,6 @@
-NRX_COMPILE_COMMAND = java -Dnrx.compiler=ecj org.netrexx.process.NetRexxC
+CP=../trunk/build/lib/NetRexxF.jar
+
+NRX_COMPILE_COMMAND = java -Dnrx.compiler=ecj -cp $(CP) org.netrexx.process.NetRexxC
 NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -utf8
 
 TARGET		:= njpipes
