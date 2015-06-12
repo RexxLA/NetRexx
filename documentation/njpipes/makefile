@@ -7,7 +7,7 @@ PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
 NRX_SRC		:= $(wildcard *.nrx)
 NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
-LATEX_EXE	:= xelatex -shell-esc
+LATEX_EXE	:= /usr/texbin/xelatex -shell-esc
 RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
 DOCNAME         := "NetRexx $(RELEASE) Pipelines Reference.pdf"
