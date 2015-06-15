@@ -1,4 +1,5 @@
 CLASSPATH=.:../../build/lib/NetRexxF.jar
+PATH=$PATH:/usr/texbin
 NRX_COMPILE_COMMAND = java -cp $(CLASSPATH) org.netrexx.process.NetRexxC
 NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -utf8
 
