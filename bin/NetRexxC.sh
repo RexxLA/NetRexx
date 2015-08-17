@@ -14,7 +14,7 @@
 #
 #     NetRexxC -keep -format -comments hello
 #
-#  Invoke with no parameters for a full list of flags.
+#  Invoke with -help for a full list of flags.
 #
 #  To run the class after compilation, specify -run as the
 #  first word of the command arguments and the name of the

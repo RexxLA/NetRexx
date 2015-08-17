@@ -13,7 +13,7 @@
 @REM :
 @REM :    NetRexxC -keep -format -comments hello
 @REM :
-@REM : Invoke with no parameters for a full list of flags.
+@REM : Invoke with -help for a full list of flags.
 @REM :
 @REM : To run the class after compilation, specify -run as the
 @REM : first word of the command arguments and the name of the
