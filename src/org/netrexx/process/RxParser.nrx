@@ -294,9 +294,18 @@ class RxParser uses RxCode
       iterate mainloop
       end
 
+    /* process an annotation at class scope */
+    if rxt.pass2 then do
+      if tok.type=RxToken.AT then do
+	rxt.program.streamer.out(tok.value)
+	leave mainloop
+      end
+    end
+  
     /* --- Here only for pass1 and pass2 --- */
-    if tok.type\=RxToken.SYM then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
+    if tok.type\=RxToken.SYM then if tok.type\=RxToken.AT then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
 
+    
     if willexec then do                 -- add clause to class chain
       if lastclause=null then cursor.curclass.classclauses=cursor.curclause
                          else lastclause.next=cursor.curclause
@@ -405,7 +414,7 @@ class RxParser uses RxCode
         if willexec then do -- this clause is not part of prologue after all
           if cursor.curclause.last\=null then cursor.curclause.last.next=null
                                          else cursor.curclass.classclauses=null
-          end
+        end
         return 1
         end
       /* The next group are for better error messages */
@@ -461,8 +470,8 @@ class RxParser uses RxCode
        if Rexx(tok.value).OpEq(null,'class') then return 1 -- [caseless compare]
       iterate mainloop
       end
-
-    /* In pass 1 we ignore everything except:
+    
+      /* In pass 1 we ignore everything except:
          CLASS EXIT METHOD NUMERIC RETURN TRACE
        clauses */
     if rxt.pass1 then do label pass1
@@ -529,6 +538,8 @@ class RxParser uses RxCode
 
     /* --- Pass 2 -- real processing to be done on a clause --- */
     /* Handle the 'enders' -- CLASS or METHOD -- up front */
+
+ 
     if t=RxToken.SYM then do label endercheck
       if t2\=RxToken.SP then
        if t2\=RxToken.STR then
@@ -697,12 +708,13 @@ class RxParser uses RxCode
       end
 
     /* expecting a keyword instruction */
-    if t\=RxToken.SYM then
+    if t\=RxToken.SYM then if t\=RxToken.AT then
       signal RxError(rxt, tok, 'keyword.expected')
-    if t2\=RxToken.SP then
-     if t2\=RxToken.END then
-     if t2\=RxToken.STR then
-     if t2\=RxToken.OP  then
+      if t2\=RxToken.SP then
+	if t2\=RxToken.END then
+	  if t2\=RxToken.STR then
+	    if t2\=RxToken.OP  then
+	      if t2\=RxToken.AT then
       signal RxQuit(rxt, tok2, 'not.allowed.after.keyword')
 
     item=RxClauseParser                 -- built item
@@ -766,8 +778,11 @@ class RxParser uses RxCode
         when iskey(tok.value,'TRACE')      then do
           tracer.traceclause(cursor.curclause)
           item=cursor.curclause.lookaside          -- it was constructed in pass1
-          end
-
+        end
+	when tok.type=RxToken.AT then do
+	  cursor.curmethod.setAnnotation(tok.value)
+	end
+	
         /* The remainder are constructed for better error messages */
         when iskey(tok.value,'PROPERTIES') then NrProperties(rxt)
         when iskey(tok.value,'OPTIONS')    then NrOptions(rxt)
@@ -788,11 +803,12 @@ class RxParser uses RxCode
 
     /* Clause was constructed (parsed) OK.  Now action it. */
 
-    if item<=RxClauseParser then do
-      cursor.curclause.lookaside=item
-      item.scan(rxt.pass)
-      if rxt.program.flag.java then item.generate()
-      end
+	if tok.type\=RxToken.AT then 
+	  if item<=RxClauseParser then do
+	    cursor.curclause.lookaside=item
+	    item.scan(rxt.pass)
+	    if rxt.program.flag.java then item.generate()
+	  end
 
     catch RxError
       -- simply move to next clause if a recoverable error seen
@@ -958,11 +974,11 @@ class RxParser uses RxCode
  /* REACHCHECK -- check clause is reachable */
  method reachcheck
   /* Assure that (at current/new level) the clause can be reached */
-  if thislevel.terminal then do
-    thislevel.terminal=0         -- one error (here) only please
-    RxError(rxt, cursor.curclause.tokens[0], 'clause.unreachable')
-    end
-  return
+  -- if thislevel.terminal then do
+  --   thislevel.terminal=0         -- one error (here) only please
+  --   RxError(rxt, cursor.curclause.tokens[0], 'clause.unreachable')
+  --   end
+  -- return
 
  /* STATECHECK -- handle control structure state machines
     Arg1 is the next 'real' clause.  It may be null if it is not a

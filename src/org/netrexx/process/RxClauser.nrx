@@ -65,6 +65,7 @@ class RxClauser
   TBD =char '\x10'       -- to be determined
   BAD =char '\x1f'       -- bad character
 
+
   /* States while collecting numbers */
   IPART=byte 0           -- integer     part
   DPART=byte 1           -- decimal     part (after '.')
@@ -84,17 +85,19 @@ class RxClauser
         ||'ABCDEFGHIJKLMNOPQRSTUVWXYZ'-
         ||'_$'-                              -- special symbol characters
         ||'1234567890'-
-        ||'+-/*\\%&|=<>'-                    -- '\\' here is '\'
+        ||'+-/*\\%&|=<>@'-                    -- '\\' here is '\'
         ||'.()[]"'';,'-
-        ||'\t\f')
+	||'\t\f')
+  
   outrans=char[]-
          ('ssssssssssssssssssssssssss'-      -- 's' is non-digit symbol
         ||'ssssssssssssssssssssssssss'-
         ||'ss'-
         ||'nnnnnnnnnn'-                      -- 'n' is digit
-        ||'ooooooooooo'-                     -- 'o' is operator
+        ||'oooooooooooo'-                     -- 'o' is operator
         ||'.()[]"'';,'-                      -- specials are themselves
         ||'  ')                              -- whitespace
+
         /* # used for break */
 
  properties shared
@@ -400,7 +403,8 @@ class RxClauser
       leave collect; end
 
     /* determine character type */
-    cchar=line[pos-1]
+      cchar=line[pos-1]
+
     select
       when cchar=' ' then /* blank */ do     -- special-case, for speed
         hadblank=pos; pos=pos+1; iterate; end
@@ -408,18 +412,24 @@ class RxClauser
       when Character.isJavaIdentifierStart(cchar) then ctype='s' -- symbol start NETREXX-6 rvj 20130710
       -- when cchar='\u20ac'            then ctype='s'         -- the euro (is a true JavaIdentifierStart now)
       when Character.isDigit(cchar) & -                     -- number start?
-           Character.digit(cchar, 10)>=0 then ctype='n'     -- base 10?
+        Character.digit(cchar, 10)>=0 then ctype='n'     -- base 10?
       otherwise ctype=BAD
       end
 
     tok=RxToken(TBD, lineno, pos, 1, null)   -- token so far
     pos=pos+1
-
+    
     if ctype='o' then do label opchar   -- operator character
       if pos>linelen then c2=BAD; else c2=line[pos-1]
       if cchar='-' then if c2='-' then /* line comment start */ do
         nextpos=linelen+1
         tok.type=RxToken.SP
+        leave collect; end
+
+	if cchar='@' then /* annotation start */ do
+        nextpos=linelen+1
+        tok.type=RxToken.AT
+	tok.value = line 
         leave collect; end
 
       if cchar='/' then if c2='*' then /* nest comment start */ do
