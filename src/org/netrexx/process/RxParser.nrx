@@ -36,6 +36,7 @@
 /* 2000.02.11 Prologue TRACE/NUMERIC defer scan as well as generate   */
 /* 2000.02.18 Provide a parsing cursor object, always updated         */
 /* 2013.07.12 Issue warning for unqualified properties statement      */
+/* 2016.01.01 support for NETREXX-122 (annotations)                   */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -62,7 +63,8 @@ class RxParser uses RxCode
   clauser   =RxClauser        -- our provider
   tracer    =RxTracer         -- our tracer
   clausenum =int              -- current clause number
-
+  classAnnotation = Rexx ''
+  
   -- The next two are lookaside for the default RxClass and RxMethod
   -- objects (which have no associated clauses to be tucked away in).
   defclass  =RxClauseParser   -- lookaside for default class
@@ -122,7 +124,7 @@ class RxParser uses RxCode
     ass=boolean 0                                 -- assigny
     if tok2.type=RxToken.OP then if tok2.value[0]='=' then ass=1
 
-    if tok.type=RxToken.SYM then select label sym -- symbol
+    if tok.type=RxToken.SYM | tok.type=RxToken.AT then select label sym -- symbol
       when ass then nop                           -- not a keyword
       when tok2.type=RxToken.LPAR then nop        -- not a keyword
       when tok2.type=RxToken.LBRK then nop        -- not a keyword
@@ -161,6 +163,11 @@ class RxParser uses RxCode
           rxt.program.pendnumeric.addElement(cursor.curclause)
           end
         iterate; end
+      when tok.type=RxToken.AT then do
+	if rxt.pass1 then do
+	  this.classAnnotation = this.classAnnotation tok.value
+	end
+      iterate; end
       when iskey(tok.value,'CLASS') then do
         if level>=1 then cursor.curclass.endclass() -- end previous class
         if rxt.pass0 then do
@@ -817,7 +824,11 @@ class RxParser uses RxCode
   /* UnR */
 
  /* DEFERREDCLASS -- handle any pending TRACE or NUMERIC instructions */
- method deferredClass private
+  method deferredClass private
+
+    /* first add class (program) level annotations */
+    cursor.curclass.setAnnotation(this.classAnnotation)
+    
   -- These have been deferred from the prologue so they can be scanned
   -- and generate code in the right place.  Note that they can reappear
   -- for the default class, as well as explicit ones.
