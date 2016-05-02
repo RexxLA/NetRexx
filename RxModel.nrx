@@ -1,0 +1,862 @@
+/*
+ * Copyright (c) 2016 Jason Monroe Martin <agrellum@gmail.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/* BUILD INSTRUCTIONS LISTED BELOW LINE 690 */
+
+package org.netrexx.process
+
+/**
+ * RxModel
+ *
+ * Generates model of a NetRexx program from RxClauser clauses.
+ *
+ * Cleans code written in different styles
+ *
+ * Indents for good code folding in your favorite editor
+ *
+ * Can strip code for inspection
+ *
+ * Models are chosen using command line arguments
+ *
+ * -model1 is a clean, indented source without comments
+ * -model2 is a clean, indented source with merged comments
+ * -model3 is a clean, indented source with fake braces as comments
+ *
+ * Caveats:
+ *
+ * Clauses can still contain '--', '++' and possibly others.
+ *   You must manually fix compiler errors. (infrequent)
+ *
+ * Can produce long lines. (arrays, then if's, else if's and merged comments)
+ */
+
+class RxModel
+
+
+  properties private constant
+    WS=Rexx "\x20" -- used as indentation character and for white space
+    IW=2 -- indentation width
+    NL=Rexx(System.getProperty("line.separator")) -- line separator
+    /* keyword patterns ordered by frequency for speed */
+    /* changes here will break select block in method mark */
+    MOLD=[Rexx "then ","then","then;","if ","if+","if-","if\\","end ",-
+        "end","end;","do ","do","do;","method ","when ","when","when+",-
+        "when-","when\\","else ","else","else;","loop ","loop","loop;",-
+        "catch ","class ","properties ","properties;","select ","select",-
+        "select;","otherwise ","otherwise","otherwise;","import ",-
+        "package ","options ","finally","finally;"]
+
+  properties private
+    bcnt=0 -- count keywords that begin a block
+    ecnt=0 -- count keywords that end a block
+    cpkg=0 -- program has package statement
+    ccls=0 -- program has class statement
+    cmtd=0 -- program has method statement
+    kind=Rexx -- stores keywords
+    kdx=1 -- index # of a keyword in kind
+    note=Rexx -- stores comments
+    program=RxProgram -- the program
+
+
+  /**
+   * Constructor
+   */
+
+  method RxModel(prog=RxProgram)
+    program=prog
+
+
+  /**
+   * Adds keywords and comments to Rexx indexed strings
+   */
+
+  method add(clause=Rexx,comment=Rexx)
+    if kind==null then do
+      bcnt=0
+      ecnt=0
+      cpkg=0
+      ccls=0
+      cmtd=0
+      kind="kind"
+      kdx=1
+      note="note"
+    end
+    /* send clause to identifier */
+    mark(clause.lower())
+    /* clean and store comments */
+    if comment\=null then note[kdx]=scrub(comment.changestr("\x09",WS))
+    kdx=kdx+1
+
+
+  /**
+   * Identify passed clause
+   */
+
+  method mark(clause=Rexx)
+    found=0
+    if clause=" ;" then kind[kdx]=" ;"
+    else if clause=WS then kind[kdx]=WS
+    else do
+      /* test clause against each pattern; bail on match */
+      loop pattern=0 for MOLD.length
+        /* get pattern end character */
+        tail=MOLD[pattern].substr(MOLD[pattern].length())
+        /* strip keyword of trailing space or prefix character */
+        if tail==WS,tail=="+",tail=="-",tail=="\\" then do
+          if clause.substr(1,MOLD[pattern].length())==MOLD[pattern] then do
+            found=1
+            leave
+          end
+        end
+        else if clause==MOLD[pattern] then do
+          found=1
+          leave
+        end
+      end
+      /* record identified keyword */
+      if found==1 then do
+        select label record case pattern
+          when 0,1,2 then do
+            kind[kdx]="then"
+            leave record
+          end
+          when 3,4,5,6 then do
+            kind[kdx]="if"
+            leave record
+          end
+          when 7,8,9 then do
+            kind[kdx]="end"
+            kind[kdx,"B"]="}"
+            ecnt=ecnt+1
+            leave record
+          end
+          when 10,11,12 then do
+            kind[kdx]="do"
+            kind[kdx,"B"]="{"
+            bcnt=bcnt+1
+            leave record
+          end
+          when 13 then do
+            kind[kdx]="method"
+            kind[kdx,"B"]="{"
+            cmtd=1
+            leave record
+          end
+          when 14,15,16,17,18 then do
+            kind[kdx]="when"
+            leave record
+          end
+          when 19,20,21 then do
+            kind[kdx]="else"
+            leave record
+          end
+          when 22,23,24 then do
+            kind[kdx]="loop"
+            kind[kdx,"B"]="{"
+            bcnt=bcnt+1
+            leave record
+          end
+          when 25 then do
+            kind[kdx]="catch"
+            leave record
+          end
+          when 26 then do
+            kind[kdx]="class"
+            kind[kdx,"B"]="{"
+            ccls=1
+            leave record
+          end
+          when 27,28 then do
+            kind[kdx]="properties"
+            leave record
+          end
+          when 29,30,31 then do
+            kind[kdx]="select"
+            kind[kdx,"B"]="{"
+            bcnt=bcnt+1
+            leave record
+          end
+          when 32,33,34 then do
+            kind[kdx]="otherwise"
+            leave record
+          end
+          when 35 then do
+            kind[kdx]="import"
+            leave record
+          end
+          when 36 then do
+            kind[kdx]="package"
+            kind[kdx,"B"]="{"
+            cpkg=1
+            leave record
+          end
+          when 37 then do
+            kind[kdx]="options"
+            leave record
+          end
+          when 38,39 then do
+            kind[kdx]="finally"
+            leave record
+          end
+          otherwise
+          nop
+        end record
+      end
+      else kind[kdx]="code"
+    end
+
+
+  /**
+   * Remove leading/trailing spaces and tabs
+   */
+
+  method scrub(data)
+    clean=data.strip().strip("B","\t")
+    return clean
+
+
+  /**
+   * Combines the comments of merged lines
+   */
+
+  method unite(index,count)
+    joined=Rexx ""
+    loop while count>0
+      if note.exists(index) then do
+        joined=joined||WS||note[index]
+      end
+      index=index+1
+      count=count-1
+    end
+    /* prevent comment lost in future processing */
+    if joined\==""&joined.substr(2,2)\=="--" then do
+      joined=WS||"--"||joined
+    end
+    return joined
+
+
+  /**
+   * Process and indent all lines
+   */
+
+  method process
+    /* move kdx pointer back to match actual number of lines */
+    kdx=kdx-1
+    /* check for good code */
+    if bcnt==ecnt then do
+      /* variables for where are we, hold data, indent spacing */
+      in_impt=0 -- inside import
+      in_clas=0 -- inside class
+      no_prop=1 -- no properties statement
+      in_prop=0 -- inside properties
+      in_meth=0 -- inside method
+      nm_meth=0 -- count method
+      mv_over=0 -- move over
+      on_hold=0 -- line on hold
+      by_pass=0 -- special case needed for " ;"
+      cm_nest=0 -- comment nest depth
+      is_nest="" -- store nest lines
+      /* produce model */
+      loop index=1 to kdx
+        /* set indent to zero until after first class or method */
+        if kind[index]="options",kind[index]="package",-
+            kind[index]="import",kind[index]="class" then do
+          /* if extra classes found, finish closing braces */
+          if program.flag.model=3 then do
+            if in_meth=1 then do
+              if in_clas=1 then do
+                program.streamer.model(WS.copies(1*IW)||"  --}")
+              end
+              else program.streamer.model("  --}")
+            end
+            if in_clas=1 then program.streamer.model("--}")
+          end
+          /* reset variables */
+          in_clas=0
+          no_prop=1
+          in_prop=0
+          in_meth=0
+          nm_meth=0
+          mv_over=0
+        end
+        /* add empty line before these keywords */
+        if kind[index]="package",kind[index]="options",kind[index]="class",-
+            kind[index]="properties" then do
+          program.streamer.model("")
+        end
+        /* add empty line before first 'import' only */
+        if kind[index]="import"&in_impt=0 then do
+          program.streamer.model("")
+          in_impt=1
+        end
+        /* add empty line after class, if no properties keyword found yet */
+        if kind[index-1]="class"&no_prop=1 then program.streamer.model("")
+        /* found 'class' keyword */
+        if kind[index-1]="class" then in_clas=1
+        /* check for no 'properties' keyword yet */
+        if in_clas=1 then do
+          if in_prop=0&in_meth=0 then do
+            no_prop=1
+            mv_over=2
+          end
+        end
+        /* we now have a 'properties' keyword */
+        if kind[index]="properties" then do
+          in_prop=1
+          no_prop=0
+          mv_over=1
+        end
+        /* set indent after 'properties' keyword */
+        if kind[index-1]="properties" then mv_over=mv_over+1
+        /* we now have a method keyword */
+        if kind[index]="method" then do
+          in_meth=1
+          in_prop=0
+          no_prop=0
+          if in_clas=1 then mv_over=1
+          else mv_over=0
+          nm_meth=nm_meth+1
+          if program.flag.model=3 then do
+            if nm_meth=1 then program.streamer.model("")
+            if nm_meth=2 then do
+              if in_clas=1 then do
+                program.streamer.model(WS.copies(1*IW)||"  --}")
+                if kind[index-1]="method" then do
+                  mv_over=mv_over-1
+                end
+              end
+              else do
+                program.streamer.model("  --}")
+                if kind[index-1]="method" then do
+                  mv_over=mv_over-1
+                end
+              end
+              nm_meth=nm_meth-1
+            end
+          end
+          else do
+            program.streamer.model("")
+            if kind[index-1]="method" then do
+              mv_over=mv_over-1
+            end
+          end
+        end
+        /* set indent after 'method' keyword */
+        if kind[index-1]="method" then mv_over=mv_over+1
+        /* add to indent after block keywords */
+        if kind[index-1]="do",kind[index-1]="loop",-
+            kind[index-1]="select" then do
+          mv_over=mv_over+1
+        end
+        /* move these keywords back to match their block */
+        if kind[index]="catch",kind[index]="finally" then do
+          mv_over=mv_over-1
+        end
+        /* add back the indent we removed, after they passed */
+        if kind[index-1]="catch",kind[index-1]="finally" then do
+          mv_over=mv_over+1
+        end
+        /* add a hold for these keywords to combine code lines */
+        if kind[index]="if",kind[index]="then",kind[index]="else",-
+            kind[index]="when" then do
+          on_hold=on_hold+1
+        end
+        /* move this keyword back to match its block */
+        if kind[index]="end" then mv_over=mv_over-1
+        /* calculate indentation */
+        indent=WS.copies(mv_over*IW)
+        /* build and clean current line */
+        if kind[index]\=WS then do
+          workline=scrub(Rexx program.clauser.clause(index))
+        end
+        else workline=WS
+        /* output lines that are not on hold */
+        if on_hold=0 then do
+          /* add comments to current line if model 2 */
+          if program.flag.model=2 then do
+            if note.exists(index) then do
+              if kind[index]=WS then workline=note[index]
+              else workline=workline||WS||note[index]
+            end
+          end
+          /* special handling for 'catch' and 'finally' keywords */
+          if kind[index]="catch",kind[index]="finally" then do
+            program.streamer.model(indent||WS||workline)
+          end
+          /* all simple lines */
+          else do
+            if program.flag.model=1 then do
+              /* skips user added spaces or comments */
+              if kind[index]\=WS then do
+                program.streamer.model(indent||workline)
+              end
+            end
+            /* comment handling */
+            if program.flag.model=2 then do
+              if kind[index]=WS then do
+                /* set start for loop */
+                start=index
+                /* look ahead for non WS */
+                loop while kind[start]=WS
+                  start=start+1
+                end
+                /* match comment to 'method' or 'class' */
+                if kind[start]="method" then do
+                  if index>1 then do
+                    if kind[index-1]\=WS then program.streamer.model("")
+                  end
+                  /* change indentation to match method level */
+                  if in_clas=1 then redent=WS.copies(1*IW)
+                  else redent=""
+                end
+                else if kind[start]="class" then do
+                  if index>1 then do
+                    if kind[index-1]\=WS then program.streamer.model("")
+                  end
+                  /* change indentation to match class level */
+                  redent=""
+                end
+                /* leave current indentation for all others */
+                else redent=indent
+                /* line comment */
+                if workline.substr(1,2)=="--" then do
+                  program.streamer.model(redent||workline)
+                end
+                else do
+                  /* block comment used as javadoc */
+                  if workline.substr(1,3)=="/**" then do
+                    if in_clas=1 then program.streamer.model("")
+                    if workline.length()>5 then do
+                      /* split comment on each new line */
+                      loop while workline\==""
+                        parse workline line (NL) workline
+                        part=scrub(line)
+                        if part="/**" then nop
+                        else if part="*/" then part=WS||"*/"
+                        else if part="" then part=WS||"*"
+                        else do
+                          if part.substr(1,3)=="/**" then do
+                            if in_clas=1 then do
+                              program.streamer.model(redent||"/**")
+                            end
+                            else program.streamer.model(redent||"/**")
+                            part=scrub(part.substr(4))
+                            if part.right(2)\=="*/" then do
+                              if part.substr(1,1)=="*" then do
+                                part=WS||part
+                              end
+                              else part=WS||"*"||WS||part
+                            end
+                            else do
+                              head=part
+                              part=WS||"*/"
+                              head=scrub(head.substr(1,head.length()-2))
+                              if head\=="" then do
+                                if head.substr(1,1)=="*" then do
+                                  head=WS||head
+                                end
+                                else head=WS||"*"||WS||head
+                                if in_clas=1 then do
+                                  program.streamer.model(redent||head)
+                                end
+                                else program.streamer.model(redent||head)
+                              end
+                            end
+                          end
+                          else do
+                            if part.right(2)\=="*/" then do
+                              if part.substr(1,1)=="*" then do
+                                part=WS||part
+                              end
+                              else part=WS||"*"||WS||part
+                            end
+                            else do
+                              head=part
+                              part=WS||"*/"
+                              head=scrub(head.substr(1,head.length()-2))
+                              if head\=="" then do
+                                if head.substr(1,1)=="*" then do
+                                  head=WS||head
+                                end
+                                else head=WS||"*"||WS||head
+                                if in_clas=1 then do
+                                  program.streamer.model(redent||head)
+                                end
+                                else program.streamer.model(redent||head)
+                              end
+                            end
+                          end
+                        end
+                        if in_clas=1 then program.streamer.model(redent||part)
+                        else program.streamer.model(redent||part)
+                      end
+                    end
+                    /* was empty javadoc - replace with empty line */
+                    else program.streamer.model("")
+                  end
+                  /* block comment - indent first line but no re-format */
+                  else program.streamer.model(redent||workline)
+                end
+              end
+              else if workline\=WS then do
+                program.streamer.model(indent||workline)
+              end
+            end
+            if program.flag.model=3 then do
+              /* adds brace if keyword has one */
+              if kind[index].exists("B") then do
+                workline=workline||" --"||kind[index,"B"]
+              end
+              /* skips user added spaces or comments */
+              if workline\=WS then do
+                program.streamer.model(indent||workline)
+              end
+            end
+          end
+        end
+        /* process complex lines on hold */
+        if on_hold>0 then do
+          /* get the line we passed on */
+          lastline=scrub(Rexx program.clauser.clause(index-1))
+          /* special handling for clause ' ;' */
+          if kind[index]=" ;" then do
+            if program.flag.model\=2 then do
+              program.streamer.model(indent||lastline)
+              program.streamer.model(indent||workline)
+            end
+            if program.flag.model=2 then do
+              program.streamer.model(indent||lastline||unite(index-1,1))
+              program.streamer.model(indent||workline||unite(index,1))
+            end
+            on_hold=0
+            by_pass=1
+          end
+          /* finish special handling for clause ' ;' */
+          if on_hold=1&by_pass=1 then do
+            if kind[index-1]="then" then do
+              if program.flag.model=1 then do
+                program.streamer.model(indent||WS||lastline||WS||workline)
+              end
+              if program.flag.model=2 then do
+                program.streamer.model(indent||WS||lastline||WS||workline||-
+                    unite(index-1,2))
+              end
+              if program.flag.model=3 then do
+                if kind[index].exists("B") then do
+                  workline=workline||" --"||kind[index,"B"]
+                end
+                program.streamer.model(indent||WS||lastline||WS||workline)
+              end
+              on_hold=0
+              by_pass=0
+            end
+          end
+          /* build then if nests */
+          if kind[index]="then"&kind[index+1]="if" then do
+            is_nest=is_nest||lastline||WS||workline||WS
+            if program.flag.model=2 then cm_nest=cm_nest+2
+          end
+          /* build else if nests */
+          else do
+            if kind[index]="else"&kind[index+1]="if" then do
+              is_nest=is_nest||workline||WS
+              if program.flag.model=2 then cm_nest=cm_nest+1
+            end
+            else do
+              /* get second line back - nest related operation */
+              if index>2 then do
+                hindline=scrub(Rexx program.clauser.clause(index-2))
+              end
+              else hindline=""
+              /* check if we can move on */
+              if kind[index-2]="if"|kind[index-2]="when" then do
+                if kind[index-1]="then"&kind[index]\="if" then do
+                  if is_nest\="" then do
+                    if program.flag.model=1 then do
+                      program.streamer.model(indent||is_nest||hindline||WS||-
+                          lastline||WS||workline)
+                    end
+                    if program.flag.model=2 then do
+                      program.streamer.model(indent||is_nest||hindline||WS||-
+                          lastline||WS||workline||-
+                          unite(index-(cm_nest+2),cm_nest+3))
+                    end
+                    if program.flag.model=3 then do
+                      if kind[index].exists("B") then do
+                        workline=workline||" --"||kind[index,"B"]
+                      end
+                      program.streamer.model(indent||is_nest||hindline||WS||-
+                          lastline||WS||workline)
+                    end
+                    on_hold=0
+                    by_pass=0
+                    cm_nest=0
+                    is_nest=""
+                  end
+                  else do
+                    if program.flag.model=1 then do
+                      program.streamer.model(indent||hindline||WS||-
+                          lastline||WS||workline)
+                    end
+                    if program.flag.model=2 then do
+                      program.streamer.model(indent||hindline||WS||-
+                          lastline||WS||workline||unite(index-2,3))
+                    end
+                    if program.flag.model=3 then do
+                      if kind[index].exists("B") then do
+                        workline=workline||" --"||kind[index,"B"]
+                      end
+                      program.streamer.model(indent||hindline||WS||-
+                          lastline||WS||workline)
+                    end
+                    on_hold=0
+                    by_pass=0
+                  end
+                end
+              end
+              if kind[index-1]="else"&kind[index]\="if" then do
+                if is_nest\="" then do
+                  if program.flag.model=1 then do
+                    program.streamer.model(indent||is_nest||lastline||-
+                        WS||workline)
+                  end
+                  if program.flag.model=2 then do
+                    program.streamer.model(indent||is_nest||lastline||WS||-
+                        workline||unite(index-(cm_nest+1),cm_nest+2))
+                  end
+                  if program.flag.model=3 then do
+                    if kind[index].exists("B") then do
+                      workline=workline||" --"||kind[index,"B"]
+                    end
+                    program.streamer.model(indent||is_nest||lastline||-
+                        WS||workline)
+                  end
+                  on_hold=0
+                  by_pass=0
+                  cm_nest=0
+                  is_nest=""
+                end
+                else do
+                  if program.flag.model=1 then do
+                    program.streamer.model(indent||lastline||WS||workline)
+                  end
+                  if program.flag.model=2 then do
+                    program.streamer.model(indent||lastline||WS||workline||-
+                        unite(index-1,2))
+                  end
+                  if program.flag.model=3 then do
+                    if program.flag.model=3&kind[index].exists("B") then do
+                      workline=workline||" --"||kind[index,"B"]
+                    end
+                    program.streamer.model(indent||lastline||WS||workline)
+                  end
+                  on_hold=0
+                  by_pass=0
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+    else do
+      program.streamer.model("BEGINS<>ENDS: Fix Source Code")
+    end
+    /* add empty line to end of program for models 1 and 2 */
+    if program.flag.model\=3 then program.streamer.model("")
+    /* add needed braces to end of program for model 3 */
+    if program.flag.model=3 then do
+      if cmtd=1&in_meth=1 then do
+        if in_clas=1 then do
+          program.streamer.model(WS.copies(1*IW)||"  --}")
+        end
+        else program.streamer.model("  --}")
+      end
+      if ccls=1&in_clas=1 then program.streamer.model("--}")
+      if cpkg=1 then program.streamer.model("--}")
+    end
+    /* reset for next program */
+    kind=null
+    note=null
+
+/* add this file to trunk/src/org/netrexx/process */
+/* and make the file changes below minus the ==> whichfilename.nrx <== lines */
+--==> RxClauser.nrx <==
+--463a
+--            else if rxt.program.flag.model=2 then cmt=cmt||c1
+--.
+--460a
+--              if rxt.program.flag.model=2 then cmt=cmt||c1||c2
+--.
+--457a
+--            else if rxt.program.flag.model=2 then cmt=cmt||c1
+--.
+--453a
+--              if rxt.program.flag.model=2 then cmt=cmt||c1||c2
+--.
+--450c
+--          if c1\='*' then if c1\='/' then do -- no state change
+--            if rxt.program.flag.model=2 then cmt=cmt||c1
+--            iterate
+--          end
+--.
+--440a
+--            if rxt.program.flag.model=2 then do
+--               if pos>linelen then cmt=cmt||Rexx(System.getProperty('line.separator'))
+--               else cmt=cmt||line[pos-1]||Rexx(System.getProperty('line.separator'))
+--            end
+--.
+--437a
+--        if rxt.program.flag.model=2 then cmt='/*'
+--.
+--428c
+--        leave collect; end; end;
+--.
+--425a
+--        if rxt.program.flag.model=2 then do
+--          cmt='--'
+--          loop x=pos to (linelen-1)
+--            cmt=cmt||line[x]
+--          end
+--          nextpos=linelen+1
+--          tok.type=RxToken.SP
+--          leave collect;
+--          end
+--        else do
+--.
+--339a
+--  if rxt.program.flag.model>0 then do
+--    rxt.program.model.add(clause.toString(),cmt)
+--    cmt=null
+--    end
+--.
+--50a
+--  cmt=Rexx null          -- collects comments for RxModel
+--.
+--
+--==> RxFlag.nrx <==
+--238a
+--    say '  -model[n]      -- model input file [0-3] none, stripped, compacted, braced'
+--.
+--182a
+--    if model>0     then acc=acc 'Model'
+--    else if nose then acc=acc 'NoModel'
+--.
+--128a
+--      when opt=='MODEL'        then model       =new*1
+--      when opt=='MODEL0'       then model       =0
+--      when opt=='MODEL1'       then model       =new*1
+--      when opt=='MODEL2'       then model       =new*2
+--      when opt=='MODEL3'       then model       =new*3
+--.
+--89a
+--    model=orig.model
+--.
+--54a
+--  model       =int     0      -- model input file [0-3]
+--.
+--
+--==> RxProgram.nrx <==
+--29a
+--  model       =RxModel        -- stripped, compacted or braced program
+--.
+--
+--==> RxStreamer.nrx <==
+--622a
+--    end
+--  if modhandle\=null then do
+--    modhandle.close();
+--    catch IOException              -- [ignore error]
+--    finally modhandle=null
+--.
+--610a
+--/* MODEL -- write a line to the model file
+--    Arg1 is string to write as a line
+--    */
+--  method model(line=Rexx)
+--    if modhandle=null then                     -- first call
+--      do
+--        do -- open the file
+--    modstream=FileOutputStream(modfileob)
+--  catch NullPointerException
+--    RxWarn(rxt, null, 'conflicting.model.options', outfile)
+--    modfileob=this.createModelFile(null)
+--    modstream=FileOutputStream(modfileob)
+--  end
+--  modhandle=OutputStreamWriter(modstream)
+--      catch e=IOException
+--  signal RxQuit(rxt, null, 'error.opening.file', modfile, e.getMessage())
+--      end
+--    else line=linesep||line                   -- subsequent calls
+--    do
+--      chars=line.toCharArray()
+--      modhandle.write(chars, 0, chars.length)
+--    catch e=IOException
+--      signal RxQuit(rxt, null, 'error.writing.file', modfile, e.getMessage())
+--    end
+--
+--  /* [File is closed by closefiles] */
+--
+--.
+--146a
+--
+--  method createModelFile(modname=Rexx) returns File
+--    /* Create model file name and file if needed */
+--    if program.flag.model>0 then do
+--      inname=Rexx program.source.getName()              -- get the real name
+--      inpath=program.source.getPath()                   -- .. and path
+--      if inpath=null then inpath=''                   -- so can concatenate
+--      /* Find the name stub for the program */
+--      lastdot=inname.lastpos('.').toint()
+--      if lastdot=0 then instub=inname
+--      else instub=inname.left(lastdot-1)
+--
+--      if modname==null then modfile=instub'.mod' -- default model file
+--      else modfile=modname
+--      if modfile.pos('.').toint()=0 then modfile=modfile'.mod'  -- be kind
+--      modfileob=File(inpath||modfile)
+--    end
+--    return modfileob
+--.
+--127a
+--    modfileob = this.createModelFile(modname)
+--.
+--103,104c
+--  method openfiles(outname=Rexx, xrfname=Rexx, modname=Rexx)
+--    if \program.flag.java then do
+--      if \program.flag.crossref then do
+--        if program.flag.model<1 then return
+--      end
+--    end
+--.
+--78a
+--  -- outpout .model file things
+--  modfile  =Rexx ''                -- model file name (generated)
+--  modfileob=File                   -- model file fileob
+--  modhandle=OutputStreamWriter     -- model file handle, non-null if open
+--
+--.
+--
+--==> RxTranslator.nrx <==
+--454a
+--      if program.flag.model>0 then program.model.process()
+--.
+--349c
+--    program.streamer.openfiles(null, null, null)
+--    if program.flag.model>0 then do
+--        program.model=RxModel(program)    -- make a model
+--    end
+--.
