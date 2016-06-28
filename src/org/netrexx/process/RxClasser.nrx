@@ -1843,36 +1843,37 @@ class RxClasser
  method registerlocalclass(pack=String, shortname=String,-
                            fullname=String, tok=RxToken)-
                            returns RxClassInfo
-   if rxt.superflag.diag then say '# registerlocalclass '''pack''' '''fullname''''
-   -- invalidate old matching .class file images loaded from imports, etc.
-   classpool.invalidatenonlocal(pack, fullname)
-   
-   -- check we don't have an explicit import for the short name
-   dupinfo=findanyclass(rxt.program.parser.cursor, shortname, tok)
-   -- [defer test until after reserved/duplicate tests]
-   
-   -- register name, short name lookup from anywhere is OK
-   info=classpool.register(pack, fullname, null, null, 1, null, 0)
-   info.loaded=1                                   -- no load required
-   localclasses.addElement(info)
-   info.classid=localclasses.size()                  -- ID is offset+1
-   
-   if rxt.pass0 then do
-     if javakey(info.shortname) then               -- maybe a warning, later
-       signal RxQuit(rxt, tok, 'name.is.reserved', info.shortname)
-       if info.local then do                         -- already registered
-	 if pack=='' then classname=fullname
-         else classname=pack'.'fullname
-	 if info.implied then signal RxQuit(rxt, tok, 'class.is.implied', classname)
-	 signal RxQuit(rxt, tok, 'class.name.duplicate', classname)
-       end
-       if dupinfo\=null then if dupinfo.explicit then
-	 signal RxQuit(rxt, tok, 'class.name.explicit', dupinfo.type.classname)
-	 if tok=null then info.implied=1
-	 info.local=1
-   end
-   return info
-   
+
+  if rxt.superflag.diag then say '# registerlocalclass '''pack''' '''fullname''''
+  -- invalidate old matching .class file images loaded from imports, etc.
+  classpool.invalidatenonlocal(pack, fullname)
+
+  -- check we don't have an explicit import for the short name
+  dupinfo=findanyclass(rxt.program.parser.cursor, shortname, tok)
+  -- [defer test until after reserved/duplicate tests]
+
+  -- register name, short name lookup from anywhere is OK
+  info=classpool.register(pack, fullname, null, null, 1, null, 0)
+  info.loaded=1                                   -- no load required
+  localclasses.addElement(info)
+  info.classid=localclasses.size()                  -- ID is offset+1
+
+  if rxt.pass0 then do
+    if javakey(info.shortname) then               -- maybe a warning, later
+      signal RxQuit(rxt, tok, 'name.is.reserved', info.shortname)
+    if info.local then do                         -- already registered
+      if pack=='' then classname=fullname
+                  else classname=pack'.'fullname
+      if info.implied then signal RxQuit(rxt, tok, 'class.is.implied', classname)
+      signal RxQuit(rxt, tok, 'class.name.duplicate', classname)
+      end
+    if dupinfo\=null then if dupinfo.explicit then
+      signal RxQuit(rxt, tok, 'class.name.explicit', dupinfo.type.classname)
+    if tok=null then info.implied=1
+    info.local=1
+    end
+  return info
+
  /** WARNDEP -- warn of a deprecated field or class during parsing
     Arg1 is token at which to warn
     Arg2 is the deprecated field or classinfo
