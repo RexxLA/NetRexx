@@ -21,12 +21,12 @@ DOCNAME         := "NetRexx $(RELEASE) Programming Guide.pdf"
 all:	copy $(NRX_OBJS) $(PDFTARGET)
 
 .PHONY copy:
-	cp ../../../examples/jsr223/ListScriptingEngines.nrx .
-	cp ../../../examples/jsr223/ScriptDemo2.nrx .
-	cp ../../../examples/jsr223/ScriptDemo3.nrx .
-	cp ../../../examples/jsr223/RunAppleScript.nrx .
-	cp ../../../examples/jsr223/antscript.xml .
-	cp ../../../examples/jsr223/JSONDemo.nrx .	
+	cp ../../examples/jsr223/ListScriptingEngines.nrx .
+	cp ../../examples/jsr223/ScriptDemo2.nrx .
+	cp ../../examples/jsr223/ScriptDemo3.nrx .
+	cp ../../examples/jsr223/RunAppleScript.nrx .
+	cp ../../examples/jsr223/antscript.xml .
+	cp ../../examples/jsr223/JSONDemo.nrx .	
 
 
 $(TARGET).pdf: $(TEX_SRC)
