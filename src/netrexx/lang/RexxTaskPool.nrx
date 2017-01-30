@@ -1,13 +1,13 @@
 /* IBM Materials Licensed under International Components for Unicode  */
-/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
-/* NetRexx                                                        */
+/* Licence version 1.8.1 (ICU Licence)                                */
+/* NetRexx                                                            */
 /* Copyright (c) 2015- RexxLA                                         */
 /* ------------------------------------------------------------------ */
-/* netrexx.lang.RexxTaskPool                                                  */
+/* netrexx.lang.RexxTaskPool                                          */
 /* ------------------------------------------------------------------ */
 -- This module adds a simple parallel processing API to NetRexx
 /* ------------------------------------------------------------------ */
-/* 2015.05.04 Initial version in NetRexx       -- Kermit Kiser  --  KK                         */
+/* 2015.05.04 Initial version in NetRexx -- Kermit Kiser  --  KK      */
 package netrexx.lang
 options strictargs strictcase   noformat
 
@@ -47,124 +47,124 @@ RexxTaskPool().start(Test(4)).start(Test(5)).start(TestMain("6"),"6").waitforall
 */
 
 Class RexxTaskPool implements Executor,Runnable
-
-	properties static
-		poolmap=HashMap
+  
+  properties static
+  poolmap=HashMap
+  
+  properties public
+  poolnumber=int
+  poolsize=int
+  threadpool=ThreadPoolExecutor
+  
+  properties private
+  poolno=Rexx
+  
+  poolsiz3=Rexx		
+  
 		
-	properties public
-		poolnumber=int
-		poolsize=int
-		threadpool=ThreadPoolExecutor
-		
-	properties private
-		poolno=Rexx
-
-		poolsiz3=Rexx		
-
-		
-		realtask=Object
-		saveparms=String
-		
-	properties constant
-		sa0=String[0]
-		ca1=[Class sa0.getClass()]
-
-	method RexxTaskPool()  signals Exception
-		this(Runtime.getRuntime().availableProcessors())
-
-	method RexxTaskPool(psize=int,pno=int -1) signals Exception
-		if psize=0 then signal Exception('RexxTaskPool - pool of zero threads not allowed.')
-		poolsize=psize
-		if pno=-1 then poolnumber=0
-			else poolnumber=pno
-		poolno=poolnumber
-		poolsiz3=poolsize
-		
-		if poolmap=null then poolmap=HashMap()
-		if \poolmap.containsKey(poolno) then 
-		   poolmap.put(poolno,HashMap()) 		--		nested map of threadpools by size
-		if \(HashMap poolmap.get(poolno)).containsKey(poolsiz3) then 
-		    (HashMap poolmap.get(poolno)).put(poolsiz3,ThreadPoolExecutor(poolsize,poolsize,1,TimeUnit.HOURS,LinkedBlockingQueue()))		--	build initial threadpool
-		threadpool=ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)
-
-	method start(to=Object,parms=String null) returns RexxTaskPool  signals ClassNotFoundException,SecurityException
-		if to<=Runnable then startrunnable(Runnable to)
-			else startmain(to,parms)
-		return this
-		
-	method execute(to=Object,parms=String null) returns RexxTaskPool  signals ClassNotFoundException,SecurityException
-		return start(to,parms)
-								
-	method execute(to=Runnable)
-		startrunnable(to)
-		
-	method startrunnable(to=Runnable)
-		(ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)).execute(to)
-		
-	method startmain(to=Object,parms=String) signals ClassNotFoundException,SecurityException
-		if to<=String then to=Class.forName(String to)
-		if to<=Class then do
-			mainmethod = (Class to).getMethod('main',ca1)
-			catch e=Exception
-				say e
-			end
-		else -			
-		do
-			mainmethod = to.getClass().getMethod('main',ca1)
-			catch e=Exception
-				say e
-			end
-		if mainmethod = null then return
-		(ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)).execute(RexxTaskPool(to,parms))	--	add task to queue
-
-	method waituntildone
-		pool=ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)
-		loop forever
-			if pool.getQueue().size()+pool.getActiveCount() = 0 then return		--	all tasks done?
-			Thread.sleep(100) 		-- wait .1 seconds
-			catch e=Exception
-				say e
-			end
-
-	method waitforallpools
-		loop label busy forever
-			loop pnum over poolmap.keySet()
-				pools=HashMap poolmap.get(pnum)
-				loop psize over pools.keySet()
-					if (ThreadPoolExecutor pools.get(psize)).getQueue().size()+(ThreadPoolExecutor pools.get(psize)).getActiveCount() \= 0 then 		--	all tasks done?
-						do
-							Thread.sleep(100) 		-- wait .1 seconds
-							 iterate busy
-							 end
-					end
-				end
-			return
-			catch e=Exception
-				say e
-			end
-			
-	method RexxTaskPool(rt=Object,parms=String)
-
-		realtask=rt
-		saveparms=parms
-		
-	method run
-		if saveparms\=null then sa=saveparms.split(' ')
-			else sa=sa0
-		oa1=Object[1]
-		oa1[0]=sa
-		if realtask<=Class then do
-			mainmethod = (Class realtask).getMethod('main',ca1)
-			mainmethod.setAccessible(1)
-			mainmethod.invoke(null,oa1)
-			catch e=Exception
-				say e
-			end
-		else -
-		do
-			mainmethod = realtask.getClass().getMethod('main',ca1)
-			mainmethod.setAccessible(1)
-			mainmethod.invoke(null,oa1)
-		catch e=Exception
-			say e
-		end
+  realtask=Object
+  saveparms=String
+  
+  properties constant
+  sa0=String[0]
+  ca1=[Class sa0.getClass()]
+  
+  method RexxTaskPool()  signals Exception
+    this(Runtime.getRuntime().availableProcessors())
+    
+  method RexxTaskPool(psize=int,pno=int -1) signals Exception
+    if psize=0 then signal Exception('RexxTaskPool - pool of zero threads not allowed.')
+    poolsize=psize
+    if pno=-1 then poolnumber=0
+    else poolnumber=pno
+    poolno=poolnumber
+    poolsiz3=poolsize
+    
+    if poolmap=null then poolmap=HashMap()
+    if \poolmap.containsKey(poolno) then 
+      poolmap.put(poolno,HashMap()) 		--		nested map of threadpools by size
+      if \(HashMap poolmap.get(poolno)).containsKey(poolsiz3) then 
+	(HashMap poolmap.get(poolno)).put(poolsiz3,ThreadPoolExecutor(poolsize,poolsize,1,TimeUnit.HOURS,LinkedBlockingQueue()))		--	build initial threadpool
+	threadpool=ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)
+	
+  method start(to=Object,parms=String null) returns RexxTaskPool  signals ClassNotFoundException,SecurityException
+    if to<=Runnable then startrunnable(Runnable to)
+    else startmain(to,parms)
+    return this
+    
+  method execute(to=Object,parms=String null) returns RexxTaskPool  signals ClassNotFoundException,SecurityException
+    return start(to,parms)
+    
+  method execute(to=Runnable)
+    startrunnable(to)
+    
+  method startrunnable(to=Runnable)
+    (ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)).execute(to)
+    
+  method startmain(to=Object,parms=String) signals ClassNotFoundException,SecurityException
+    if to<=String then to=Class.forName(String to)
+    if to<=Class then do
+      mainmethod = (Class to).getMethod('main',ca1)
+    catch e=Exception
+      say e
+    end
+    else -			
+      do
+	mainmethod = to.getClass().getMethod('main',ca1)
+      catch e=Exception
+	say e
+      end
+    if mainmethod = null then return
+    (ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)).execute(RexxTaskPool(to,parms))	--	add task to queue
+    
+  method waituntildone
+    pool=ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)
+    loop forever
+      if pool.getQueue().size()+pool.getActiveCount() = 0 then return		--	all tasks done?
+      Thread.sleep(100) 		-- wait .1 seconds
+    catch e=Exception
+      say e
+    end
+    
+  method waitforallpools
+    loop label busy forever
+      loop pnum over poolmap.keySet()
+	pools=HashMap poolmap.get(pnum)
+	loop psize over pools.keySet()
+	  if (ThreadPoolExecutor pools.get(psize)).getQueue().size()+(ThreadPoolExecutor pools.get(psize)).getActiveCount() \= 0 then 		--	all tasks done?
+	    do
+	      Thread.sleep(100) 		-- wait .1 seconds
+	      iterate busy
+	    end
+	end
+      end
+      return
+    catch e=Exception
+      say e
+    end
+    
+  method RexxTaskPool(rt=Object,parms=String)
+    realtask=rt
+    saveparms=parms
+    
+  method run
+    if saveparms\=null then sa=saveparms.split(' ')
+    else sa=sa0
+    oa1=Object[1]
+    oa1[0]=sa
+    if realtask<=Class then do
+      mainmethod = (Class realtask).getMethod('main',ca1)
+      mainmethod.setAccessible(1)
+      mainmethod.invoke(null,oa1)
+    catch e=Exception
+      say e
+    end
+    else -
+      do
+	mainmethod = realtask.getClass().getMethod('main',ca1)
+	mainmethod.setAccessible(1)
+	mainmethod.invoke(null,oa1)
+      catch e=Exception
+	say e
+      end
+    
