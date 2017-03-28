@@ -47,7 +47,7 @@ package2:
 	ecj -warn:none -source 1.5 -target 1.5 -cp $(CLASSPATH):lib/NetRexxC.jar build/classes/org/netrexx/process/*.java
 	java -jar ant/ant-launcher.jar package
 	mkdir -p scratch/META-INF
-	cd scratch;unzip -o ../ant/ecj-4.4RC1.jar
+	cd scratch;unzip -o ../ant/ecj-4.6.3.jar
 	cd scratch;unzip -o ../build/lib/NetRexxC.jar
 	cp minimalmanifest scratch/
 	cd scratch;jar cmf minimalmanifest NetRexxF.jar *
