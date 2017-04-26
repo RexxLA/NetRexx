@@ -4,6 +4,7 @@
 all:
 	java -jar ant/ant-launcher.jar compile
 	java -jar ant/ant-launcher.jar jars
+	cp build/lib/NetRexxF.jar ~/lib
 
 .PHONY: jars
 jars:

@@ -36,6 +36,7 @@
 /* 2000.02.11 Prologue TRACE/NUMERIC defer scan as well as generate   */
 /* 2000.02.18 Provide a parsing cursor object, always updated         */
 /* 2013.07.12 Issue warning for unqualified properties statement      */
+/* 2016.01.01 support for NETREXX-122 (annotations)                   */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -62,7 +63,8 @@ class RxParser uses RxCode
   clauser   =RxClauser        -- our provider
   tracer    =RxTracer         -- our tracer
   clausenum =int              -- current clause number
-
+  classAnnotation = Rexx ''
+  
   -- The next two are lookaside for the default RxClass and RxMethod
   -- objects (which have no associated clauses to be tucked away in).
   defclass  =RxClauseParser   -- lookaside for default class
@@ -122,7 +124,8 @@ class RxParser uses RxCode
     ass=boolean 0                                 -- assigny
     if tok2.type=RxToken.OP then if tok2.value[0]='=' then ass=1
 
-    if tok.type=RxToken.SYM then select label sym -- symbol
+
+    if tok.type=RxToken.SYM | tok.type=RxToken.AT then select label sym -- symbol
       when ass then nop                           -- not a keyword
       when tok2.type=RxToken.LPAR then nop        -- not a keyword
       when tok2.type=RxToken.LBRK then nop        -- not a keyword
@@ -161,6 +164,12 @@ class RxParser uses RxCode
           rxt.program.pendnumeric.addElement(cursor.curclause)
           end
         iterate; end
+      when tok.type=RxToken.AT then do
+      	if rxt.pass1 then do
+      	  this.classAnnotation = this.classAnnotation tok.value
+	  cursor.curclause.lookaside=NrAnnotate(rxt)
+      	end
+      iterate; end
       when iskey(tok.value,'CLASS') then do
         if level>=1 then cursor.curclass.endclass() -- end previous class
         if rxt.pass0 then do
@@ -294,9 +303,19 @@ class RxParser uses RxCode
       iterate mainloop
       end
 
-    /* --- Here only for pass1 and pass2 --- */
-    if tok.type\=RxToken.SYM then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
+    /* process an annotation at class scope */
+    if rxt.pass2 then do
+      if tok.type=RxToken.AT then do
+	rxt.program.streamer.out(tok.value)
+	iterate mainloop
+      end
+    end
 
+    /* --- Here only for pass1 and pass2 --- */
+   if tok.type\=RxToken.SYM then if tok.type\=RxToken.AT then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
+ 
+
+    
     if willexec then do                 -- add clause to class chain
       if lastclause=null then cursor.curclass.classclauses=cursor.curclause
                          else lastclause.next=cursor.curclause
@@ -405,7 +424,7 @@ class RxParser uses RxCode
         if willexec then do -- this clause is not part of prologue after all
           if cursor.curclause.last\=null then cursor.curclause.last.next=null
                                          else cursor.curclass.classclauses=null
-          end
+        end
         return 1
         end
       /* The next group are for better error messages */
@@ -461,8 +480,8 @@ class RxParser uses RxCode
        if Rexx(tok.value).OpEq(null,'class') then return 1 -- [caseless compare]
       iterate mainloop
       end
-
-    /* In pass 1 we ignore everything except:
+    
+      /* In pass 1 we ignore everything except:
          CLASS EXIT METHOD NUMERIC RETURN TRACE
        clauses */
     if rxt.pass1 then do label pass1
@@ -529,6 +548,8 @@ class RxParser uses RxCode
 
     /* --- Pass 2 -- real processing to be done on a clause --- */
     /* Handle the 'enders' -- CLASS or METHOD -- up front */
+
+ 
     if t=RxToken.SYM then do label endercheck
       if t2\=RxToken.SP then
        if t2\=RxToken.STR then
@@ -697,12 +718,13 @@ class RxParser uses RxCode
       end
 
     /* expecting a keyword instruction */
-    if t\=RxToken.SYM then
+    if t\=RxToken.SYM then if t\=RxToken.AT then
       signal RxError(rxt, tok, 'keyword.expected')
-    if t2\=RxToken.SP then
-     if t2\=RxToken.END then
-     if t2\=RxToken.STR then
-     if t2\=RxToken.OP  then
+      if t2\=RxToken.SP then
+	if t2\=RxToken.END then
+	  if t2\=RxToken.STR then
+	    if t2\=RxToken.OP  then
+	      if t2\=RxToken.AT then
       signal RxQuit(rxt, tok2, 'not.allowed.after.keyword')
 
     item=RxClauseParser                 -- built item
@@ -765,9 +787,13 @@ class RxParser uses RxCode
           item=NrNumeric(rxt); end
         when iskey(tok.value,'TRACE')      then do
           tracer.traceclause(cursor.curclause)
-          item=cursor.curclause.lookaside          -- it was constructed in pass1
-          end
-
+	  item=cursor.curclause.lookaside          --it was constructed in the past
+        end
+	when tok.type=RxToken.AT then do
+	  item=NrAnnotate(rxt)
+	  cursor.curmethod.setAnnotation(tok.value)
+	end
+	
         /* The remainder are constructed for better error messages */
         when iskey(tok.value,'PROPERTIES') then NrProperties(rxt)
         when iskey(tok.value,'OPTIONS')    then NrOptions(rxt)
@@ -788,11 +814,12 @@ class RxParser uses RxCode
 
     /* Clause was constructed (parsed) OK.  Now action it. */
 
-    if item<=RxClauseParser then do
-      cursor.curclause.lookaside=item
-      item.scan(rxt.pass)
-      if rxt.program.flag.java then item.generate()
-      end
+--	if tok.type\=RxToken.AT then 
+	if item<=RxClauseParser then do
+	  cursor.curclause.lookaside=item
+	  item.scan(rxt.pass)
+	  if rxt.program.flag.java then item.generate()
+	end
 
     catch RxError
       -- simply move to next clause if a recoverable error seen
@@ -802,7 +829,8 @@ class RxParser uses RxCode
   /* UnR */
 
  /* DEFERREDCLASS -- handle any pending TRACE or NUMERIC instructions */
- method deferredClass private
+  method deferredClass private
+
   -- These have been deferred from the prologue so they can be scanned
   -- and generate code in the right place.  Note that they can reappear
   -- for the default class, as well as explicit ones.
