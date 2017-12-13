@@ -44,4 +44,14 @@ clean:
 	rm -f *.class
 	rm -f *.crossref
 	rm -f *.aux
+	rm -f *.idx
+	rm -f *.ilg
+	rm -f *.ind
+	rm -f *.lof
+	rm -f *.log
+	rm -f *.lot
+	rm -f *.out
+	rm -f *.rai
+	rm -f *.rao
+	rm -f *.toc
 	rm -f *~
