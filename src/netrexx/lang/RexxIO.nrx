@@ -17,8 +17,9 @@
 /* 1997.06.28 Upgrade for 1.1 NLS                                     */
 /* 1998.08.30 Use PrintWriter for output                              */
 /* 2018.02.22 RVJ add method to set outputstream                      */
+/* 2018.03.12 RVJ add methods to push and pop outputstreams           */
 /* ------------------------------------------------------------------ */
-
+import java.util
 package netrexx.lang
 options binary strictargs nodecimal noformat
 
@@ -30,12 +31,16 @@ class RexxIO implements Serializable
 
   /* ----- Constants ----- */
   properties private static
-    StdIn =BufferedReader(InputStreamReader(System.in))
-    StdOut=PrintWriter(System.out)
-
+  StdIn =BufferedReader(InputStreamReader(System.in))
+  -- StdOut=PrintWriter(System.out)
+  StdOut=ConcurrentLinkedDeque()
+  
   properties private constant unused
   serialVersionUID=long 2781762092115528702
-
+  
+  method initDeque() constant
+    StdOut.push(PrintWriter(System.out))
+    
   /** Function to return a line read from the standard input stream.
      If the stream is closed or otherwise unavailable, null is returned.
    */
@@ -95,21 +100,35 @@ class RexxIO implements Serializable
   method Say(b=boolean) static returns boolean; return Say(Rexx(b))
 
   method Say(aline=char[]) static returns boolean
-    if aline=null then StdOut.println()      -- just new line
-     else do                                 -- have some data
-      select
-        when aline.length=0 then StdOut.println()
-        when aline[aline.length-1]\=='\-' then StdOut.println(aline)
-        otherwise                            -- rarer continuation case
-          bline=char[aline.length-1]
-          System.arraycopy(aline, 0, bline, 0, bline.length)
-          StdOut.print(bline)
-        end
-      end
-    StdOut.flush()  -- could be a real user out there
+      if StdOut.size() == 0 then StdOut.push(PrintWriter(System.out))
+      i = StdOut.iterator()
+      loop while i.hasNext()
+	out=PrintWriter i.next()
+	if aline=null then out.println()      -- just new line
+	else do                                 -- have some data
+	  select
+            when aline.length=0 then out.println()
+            when aline[aline.length-1]\=='\-' then out.println(aline)
+            otherwise                            -- rarer continuation case
+              bline=char[aline.length-1]
+              System.arraycopy(aline, 0, bline, 0, bline.length)
+              out.print(bline)
+          end
+	end
+	out.flush()  -- could be a real user out there
+      end -- loop while i
     return 0
 
   method setOutputStream(out=OutputStream) static
-    StdOut.flush()
-    StdOut = PrintWriter(out)
+      StdOut.clear()
+      StdOut.push(PrintWriter(out))
 
+  method pushOutputStream(out=OutputStream) static
+      StdOut.push(PrintWriter(out))
+
+  method popOutputStream() static
+    do
+      StdOut.pop()
+    catch java.util.NoSuchElementException
+      StdOut.push(PrintWriter(System.out))
+    end
