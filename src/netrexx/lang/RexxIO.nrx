@@ -26,7 +26,7 @@ options binary strictargs nodecimal noformat
 /**
    This defines the I/O utility class for NetRexx.
  */
-
+    
 class RexxIO implements Serializable
 
   /* ----- Constants ----- */
@@ -34,6 +34,7 @@ class RexxIO implements Serializable
   StdIn =BufferedReader(InputStreamReader(System.in))
   -- StdOut=PrintWriter(System.out)
   StdOut=ConcurrentLinkedDeque()
+  fileIn = BufferedReader
   
   properties private constant unused
   serialVersionUID=long 2781762092115528702
@@ -132,3 +133,21 @@ class RexxIO implements Serializable
     catch java.util.NoSuchElementException
       StdOut.push(PrintWriter(System.out))
     end
+
+  method File(nm) returns RexxIO
+    do
+      fileIn = BufferedReader(FileReader(nm))
+    catch IOException
+      return null
+    end
+    return this
+
+  method forEachline(c=LineHandler)
+    do
+      loop forever
+	line = Rexx fileIn.readLine()
+	if line = null then leave
+	c.handle(line)
+      end
+    catch IOException
+    end -- do
