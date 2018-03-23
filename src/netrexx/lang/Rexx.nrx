@@ -85,7 +85,7 @@
 /* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */     
 /* ------------------------------------------------------------------ */
 package netrexx.lang
-options binary nodecimal strictargs strictcase   noformat
+options binary nodecimal strictargs strictcase noformat
 
 /**
    This defines the primary string class for NetRexx.
@@ -1297,6 +1297,28 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
     if this.ind=NotaNum then signal NumberFormatException(chars)
     return Rexx(this.ind)
 
+  /** soundex returns the normalized soundex value of the string */
+  method soundex() returns Rexx
+    in = this.upper()
+    old_alphabet= 'AEIOUYHWBFPVCGJKQSXZDTLMNR'
+    new_alphabet= '@@@@@@**111122222222334556'
+    word=Rexx('')
+    loop i=1 for intlength()
+      tmp_=in.substr(i, 1)
+      if tmp_.datatype('M')  then word=word||tmp_
+    end
+    value=word.strip().left(1)
+    word=word.translate(new_alphabet, old_alphabet)
+    prev=value.translate(new_alphabet, old_alphabet)
+    loop j=2  to word.length()
+      q=word.substr(j, 1)
+      if q\==prev & q.datatype('W')  then do
+	value=value || q;  prev=q
+      end
+      else if q=='@'  then prev=q
+    end
+    return value.left(4,0)
+    
   /** Space returns evenly-spaced string  */
   method space(n=Rexx 1, pad=Rexx ' ') returns Rexx
     gap     =n.intcheck(0, MaxArg)
