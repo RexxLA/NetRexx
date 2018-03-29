@@ -236,25 +236,28 @@ class RxClasser
     path=Rexx(path).strip('t',psep).toString()											-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
     
     -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan :
-    extensions=System.getProperty("java.ext.dirs")		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-    loop label extscan while extensions\==''				-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-      parse extensions extpath (psep) extensions		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-      extpath=extpath||fsep											-- 2015.06.03 -- KK -- seems to need the trailing file separator below
+    extensions=System.getProperty("java.ext.dirs")
+    if extensions <> null then
+      do
+	-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+	loop label extscan while extensions\==''				-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+	  parse extensions extpath (psep) extensions		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+	  extpath=extpath||fsep											-- 2015.06.03 -- KK -- seems to need the trailing file separator below
 														-- now add the extensions
 														--   extpath=lib'ext'fsep					-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-      dir=File(extpath)                         -- check the path
-      if dir.isDirectory() then
-	do label extdir   -- directory exists
-	  entries=dir.list()                        -- could be null <sigh>
-	  if entries\=null then loop i=0 for entries.length
-	  name=entries[i]
-	  if \name.endsWith('.jar') then iterate i  -- not a jar file
-	  path=path||psep||extpath||name
-	  if rxt.superflag.diag then say '# ext:' name
-	end i
-    end extdir
-end extscan 		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-
+	  dir=File(extpath)                         -- check the path
+	  if dir.isDirectory() then
+	    do label extdir   -- directory exists
+	      entries=dir.list()                        -- could be null <sigh>
+	      if entries\=null then loop i=0 for entries.length
+	      name=entries[i]
+	      if \name.endsWith('.jar') then iterate i  -- not a jar file
+	      path=path||psep||extpath||name
+	      if rxt.superflag.diag then say '# ext:' name
+	    end i
+	end extdir
+      end extscan 		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+end
 /* now split into segments and test for zipfiles */
 classpaths=0
 classpath=Rexx ''                              -- build shorter
