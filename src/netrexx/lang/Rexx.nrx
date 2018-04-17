@@ -525,15 +525,28 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
 
   /** Return a hashcode for the value.
       */
+  -- method hashCode returns int
+  --   if chars=null then chars=layout()
+  --   if chars.length<14 then over=(chars.length+1)%2
+  --                      else over=7
+  --   /* Hash the first and last OVER characters */
+  --   hash=0
+  --   loop i=0 to over-1
+  --     hash=hash*7+int(chars[i])*2+int(chars[chars.length-i-1])
+  --     end i
+  --   return hash
   method hashCode returns int
     if chars=null then chars=layout()
-    if chars.length<14 then over=(chars.length+1)%2
-                       else over=7
-    /* Hash the first and last OVER characters */
-    hash=0
-    loop i=0 to over-1
-      hash=hash*7+int(chars[i])*2+int(chars[chars.length-i-1])
-      end i
+    if chars.length=0 then hash=0
+    else do
+        sb=StringBuffer(chars.length)
+        j=chars.length-1
+        loop i=0 to j
+            sb.append(chars[i])
+        end i
+        tmp=sb.toString()
+        hash=tmp.hashCode()
+    end
     return hash
 
   /** The '=' operator, Java-style.  */
