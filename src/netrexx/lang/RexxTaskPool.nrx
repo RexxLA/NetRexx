@@ -11,10 +11,14 @@
 /* 18.04.17 package protect field poolmap and ca1      (Jason Martin) */
 /* 18.04.17 add to caught exceptions - waitforallpools (Jason Martin) */
 /* 18.04.17 make poolmap volatile                      (Jason Martin) */
+/* 18.04.18 change more properties and run Privileged  (Jason Martin) */
 package netrexx.lang
-options strictargs strictcase   noformat
+options strictargs strictcase noformat
 
-/* 
+import java.security.AccessController
+import java.security.PrivilegedAction
+
+/*
 sample usage doc:
 
 rtp=RexxTaskPool(size,number)
@@ -41,7 +45,7 @@ rtp.waituntildone
 rtp.waitforallpools
 --- Blocks until all threads in all task pools are complete
 
-examples: 
+examples:
 
 RexxTaskPool(3,1).start(Test(7)).start(Test(8)).start("TestMain","9").start("enviroscan")
 RexxTaskPool(9).start(Test(1)).start(Test(2)).start(TestMain("3"),"3").start(enviroscan.class)
@@ -53,24 +57,20 @@ Class RexxTaskPool implements Executor,Runnable
 
 	properties shared volatile
 		poolmap=HashMap null
-		
+
 	properties public
 		poolnumber=int
 		poolsize=int
 		threadpool=ThreadPoolExecutor
-		
-	properties private
+
+	properties shared
 		poolno=Rexx
-
-		poolsiz3=Rexx		
-
-		
+		poolsiz3=Rexx
 		realtask=Object
 		saveparms=String
-		
-	properties constant
-		sa0=String[0]
+
 	properties shared constant
+		sa0=String[0]
 		ca1=[Class sa0.getClass()]
 
 	method RexxTaskPool()  signals Exception
@@ -83,28 +83,28 @@ Class RexxTaskPool implements Executor,Runnable
 			else poolnumber=pno
 		poolno=poolnumber
 		poolsiz3=poolsize
-		
+
 		if poolmap=null then poolmap=HashMap()
-		if \poolmap.containsKey(poolno) then 
-		   poolmap.put(poolno,HashMap()) 		--		nested map of threadpools by size
-		if \(HashMap poolmap.get(poolno)).containsKey(poolsiz3) then 
-		    (HashMap poolmap.get(poolno)).put(poolsiz3,ThreadPoolExecutor(poolsize,poolsize,1,TimeUnit.HOURS,LinkedBlockingQueue()))		--	build initial threadpool
+		if \poolmap.containsKey(poolno) then
+			poolmap.put(poolno,HashMap()) 		--		nested map of threadpools by size
+		if \(HashMap poolmap.get(poolno)).containsKey(poolsiz3) then
+			(HashMap poolmap.get(poolno)).put(poolsiz3,ThreadPoolExecutor(poolsize,poolsize,1,TimeUnit.HOURS,LinkedBlockingQueue()))		--	build initial threadpool
 		threadpool=ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)
 
 	method start(to=Object,parms=String null) returns RexxTaskPool  signals ClassNotFoundException,SecurityException
 		if to<=Runnable then startrunnable(Runnable to)
 			else startmain(to,parms)
 		return this
-		
+
 	method execute(to=Object,parms=String null) returns RexxTaskPool  signals ClassNotFoundException,SecurityException
 		return start(to,parms)
-								
+
 	method execute(to=Runnable)
 		startrunnable(to)
-		
+
 	method startrunnable(to=Runnable)
 		(ThreadPoolExecutor (HashMap poolmap.get(poolno)).get(poolsiz3)).execute(to)
-		
+
 	method startmain(to=Object,parms=String) signals ClassNotFoundException,SecurityException
 		if to<=String then to=Class.forName(String to)
 		if to<=Class then do
@@ -112,7 +112,7 @@ Class RexxTaskPool implements Executor,Runnable
 			catch e=Exception
 				say e
 			end
-		else -			
+		else -
 		do
 			mainmethod = to.getClass().getMethod('main',ca1)
 			catch e=Exception
@@ -148,29 +148,41 @@ Class RexxTaskPool implements Executor,Runnable
 			catch e=Exception
 				say e
 			end
-			
-	method RexxTaskPool(rt=Object,parms=String)
 
+	method RexxTaskPool(rt=Object,parms=String)
 		realtask=rt
 		saveparms=parms
-		
+
 	method run
-		if saveparms\=null then sa=saveparms.split(' ')
-			else sa=sa0
+		AccessController.doPrivileged(RexxTaskPool.RxPrivilegedAction())
+
+class RexxTaskPool.RxPrivilegedAction private dependent implements PrivilegedAction
+
+	method run returns Object
+		if parent.saveparms\=null then sa=parent.saveparms.split(" ")
+		else sa=parent.sa0
 		oa1=Object[1]
 		oa1[0]=sa
-		if realtask<=Class then do
-			mainmethod = (Class realtask).getMethod('main',ca1)
+		if parent.realtask<=Class then do
+			mainmethod=(Class parent.realtask).getMethod("main",parent.ca1)
 			mainmethod.setAccessible(1)
 			mainmethod.invoke(null,oa1)
-			catch e=Exception
-				say e
+			catch nsm=NoSuchMethodException
+				say nsm
+			catch iae=IllegalAccessException
+				say iae
+			catch ite=InvocationTargetException
+				say ite
 			end
-		else -
-		do
-			mainmethod = realtask.getClass().getMethod('main',ca1)
+		else do
+			mainmethod=parent.realtask.getClass().getMethod("main",parent.ca1)
 			mainmethod.setAccessible(1)
 			mainmethod.invoke(null,oa1)
-		catch e=Exception
-			say e
-		end
+			catch nsm=NoSuchMethodException
+				say nsm
+			catch iae=IllegalAccessException
+				say iae
+			catch ite=InvocationTargetException
+				say ite
+			end
+		return null
