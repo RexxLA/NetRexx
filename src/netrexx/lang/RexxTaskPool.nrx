@@ -12,6 +12,9 @@
 /* 18.04.17 add to caught exceptions - waitforallpools (Jason Martin) */
 /* 18.04.17 make poolmap volatile                      (Jason Martin) */
 /* 18.04.18 change more properties and run Privileged  (Jason Martin) */
+/* 18.04.20 reduce code in RxPrivilegedAction run      (Jason Martin) */
+/* 18.04.20 reorder properties                         (Jason Martin) */
+
 package netrexx.lang
 options strictargs strictcase noformat
 
@@ -55,13 +58,9 @@ RexxTaskPool().start(Test(4)).start(Test(5)).start(TestMain("6"),"6").waitforall
 
 Class RexxTaskPool implements Executor,Runnable
 
-	properties shared volatile
-		poolmap=HashMap null
-
-	properties public
-		poolnumber=int
-		poolsize=int
-		threadpool=ThreadPoolExecutor
+	properties shared constant
+		sa0=String[0]
+		ca1=[Class sa0.getClass()]
 
 	properties shared
 		poolno=Rexx
@@ -69,9 +68,13 @@ Class RexxTaskPool implements Executor,Runnable
 		realtask=Object
 		saveparms=String
 
-	properties shared constant
-		sa0=String[0]
-		ca1=[Class sa0.getClass()]
+	properties shared volatile
+		poolmap=HashMap null
+
+	properties public
+		poolnumber=int
+		poolsize=int
+		threadpool=ThreadPoolExecutor
 
 	method RexxTaskPool()  signals Exception
 		this(Runtime.getRuntime().availableProcessors())
@@ -163,8 +166,15 @@ class RexxTaskPool.RxPrivilegedAction private dependent implements PrivilegedAct
 		else sa=parent.sa0
 		oa1=Object[1]
 		oa1[0]=sa
-		if parent.realtask<=Class then do
-			mainmethod=(Class parent.realtask).getMethod("main",parent.ca1)
+		do
+			if parent.realtask<=Class then do
+				mainmethod=(Class parent.realtask).getMethod("main",parent.ca1)
+				end
+			else do
+				mainmethod=parent.realtask.getClass().getMethod("main",parent.ca1)
+				end
+			/* AccessibleObject.setAccessible deprecated in Java 9
+				and in Java 10 - expected not to work */
 			mainmethod.setAccessible(1)
 			mainmethod.invoke(null,oa1)
 			catch nsm=NoSuchMethodException
@@ -173,16 +183,5 @@ class RexxTaskPool.RxPrivilegedAction private dependent implements PrivilegedAct
 				say iae
 			catch ite=InvocationTargetException
 				say ite
-			end
-		else do
-			mainmethod=parent.realtask.getClass().getMethod("main",parent.ca1)
-			mainmethod.setAccessible(1)
-			mainmethod.invoke(null,oa1)
-			catch nsm=NoSuchMethodException
-				say nsm
-			catch iae=IllegalAccessException
-				say iae
-			catch ite=InvocationTargetException
-				say ite
-			end
+		end
 		return null
