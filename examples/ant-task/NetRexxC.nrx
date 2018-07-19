@@ -156,34 +156,34 @@ class NetRexxC extends MatchingTask
         if (compileClasspath = null) then compileClasspath = superclasspath
         	else compileClasspath.append(superclasspath)
  
-    /**
-     * Gets the classpath to be used for this compilation.
-     * @return the class path
-     */
-     method getClasspath() returns Path
-        return compileClasspath
-
-    /**
-     * Adds a path to the classpath.
-     * @return a class path to be configured
-     */
-    method createClasspath() returns Path
-        if (compileClasspath = null) then compileClasspath = Path(getProject())
-        return compileClasspath.createPath()
-
-    /**
-     * Adds a reference to a classpath defined elsewhere.
-     * @param r a reference to a classpath
-     */
-    method setClasspathRef(r=Reference)
-        createClasspath().setRefid(r)
-
-        -----------------------------------------------
-       		
-    method setClasspath(cp=String)
-        classpath = cp
-  
-        	        
+  /**
+   * Gets the classpath to be used for this compilation.
+   * @return the class path
+   */
+  method getClasspath() returns Path
+    return compileClasspath
+    
+  /**
+   * Adds a path to the classpath.
+   * @return a class path to be configured
+   */
+  method createClasspath() returns Path
+    if (compileClasspath = null) then compileClasspath = Path(getProject())
+    return compileClasspath.createPath()
+    
+  /**
+   * Adds a reference to a classpath defined elsewhere.
+   * @param r a reference to a classpath
+   */
+  method setClasspathRef(r=Reference)
+    createClasspath().setRefid(r)
+    
+    -----------------------------------------------
+    
+  method setClasspath(cp=String)
+    classpath = cp
+    
+    
   /**
    * Set whether the NetRexx compiler should compile the generated java code
    * Valid true values are "on" or "true". Anything else sets the flag to
@@ -348,26 +348,26 @@ class NetRexxC extends MatchingTask
 	  log("Compiling one (1) source file to" destDir)
 	else
 	  log("Compiling" compileList.size() "source files to" destDir)
-
+	
 	doNetRexxCompile()
-		
-	  if (removeKeepExtension & (\compile | keep)) then removeKeepExtensions()		
+	
+	if (removeKeepExtension & (\compile | keep)) then removeKeepExtensions()		
       end
-
+    
     return
-
-    /**
-     * Scans the directory looking for source files to be compiled and support
-     * files to be copied.
-     */
-
-  Method scanDir(srcDir_ = File, destDir_ = File, files = String[])
-
+    
+  /**
+   * Scans the directory looking for source files to be compiled and support
+   * files to be copied.
+   */
+    
+  method scanDir(srcDir_ = File, destDir_ = File, files = String[])
+    
     loop i = 0 to files.length -1
       srcFile  = File(srcDir_ , files[i])
       destFile = File(destDir_, files[i])
       fileName = files[i]
-
+      
       /* if it's a non source file, copy it if a later date than the dest.
        * if it's a source file, see if the destination class file needs
        * to be recreated via compilation
@@ -375,30 +375,30 @@ class NetRexxC extends MatchingTask
       if fileName.toLowerCase().endsWith(".nrx") then
 	do
 	  classFile = File(destDir_, fileName.substring(0, fileName.lastIndexOf('.'))".class")
-
+	  
 	  javaFile = File(destDir_, fileName.substring(0, fileName.lastIndexOf('.'))||'.java.keep .java'.word((removeKeepExtension)+1))
-
-	                 --// nocompile case tests against .java[.keep] file
-      if (\compile & (srcFile.lastModified() > javaFile.lastModified())) then do
-                    filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath());
-                    compileList.addElement(destFile.getAbsolutePath());
-					end
-                   --// compile case tests against .class file
-                else -
-	  if compile & (srcFile.lastModified() > classFile.lastModified()) then
-	    do
-	      filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath())
-	      compileList.addElement(destFile.getAbsolutePath())
-	    end
+	  
+	  --// nocompile case tests against .java[.keep] file
+	  if (\compile & (srcFile.lastModified() > javaFile.lastModified())) then do
+            filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath());
+            compileList.addElement(destFile.getAbsolutePath());
+	  end
+          --// compile case tests against .class file
+      else -
+	if compile & (srcFile.lastModified() > classFile.lastModified()) then
+      do
+	filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath())
+	compileList.addElement(destFile.getAbsolutePath())
+      end
 	end
       else
 	if srcFile.lastModified() > destFile.lastModified() then
 	  filecopyList.put(srcFile.getAbsolutePath(), destFile.getAbsolutePath())
       
     end
-
+    
     return
-
+    
     /**
      * Copy eligible files from the srcDir to the destDir
      */
@@ -419,65 +419,65 @@ class NetRexxC extends MatchingTask
     enum_ = filecopyList.keys()
     loop while enum_.hasMoreElements()
       fromFilename = String enum_.nextElement()
---      say fromFilename
+      --      say fromFilename
       fromFile = File(fromFilename)
       toFilename  = String filecopyList.get(fromFilename)
---      say toFilename
+      --      say toFilename
       if toFilename=null then say "toFilename is null"
       toFile   = File(toFilename)
       
-		do
+      do
 	/*  probably best to use this arcane syntax to call the Copy task
-		   as there was an effort in 2006 to remove the deprecated Project.copyfile methods   */
-		   
-		Cp = Copy()
-		Cp.setFile(fromFile)
-		Cp.setTofile(toFile)
-		Cp.execute()
+	   as there was an effort in 2006 to remove the deprecated Project.copyfile methods   */
+	
+	Cp = Copy()
+	Cp.setFile(fromFile)
+	Cp.setTofile(toFile)
+	Cp.execute()
 	/*
-		this.getProject().copyfile(fromFile, toFile)
-		  catch ioe = IOException
-			msg = "Failed to copy" fromfile "to" toFile "due to" ioe.getMessage()
-			signal BuildException(msg, ioe)
-			end
+	   this.getProject().copyfile(fromFile, toFile)
+      catch ioe = IOException
+	   msg = "Failed to copy" fromfile "to" toFile "due to" ioe.getMessage()
+	   signal BuildException(msg, ioe)
+	   end
 	 */     
-		end
+      end
     end
     return
-
+    
     /**
      * Rename .java.keep files (back) to .java. The netrexxc renames all
      * .java files to .java.keep if either -keep or -nocompile option is set.
      */
    method removeKeepExtensions()
-        if (compileList.size() > 0) then do
-            log("Removing .keep extension on " compileList.size() " file"||'s'.word((compileList.size() = 1)+1))
-            e = compileList.elements()
-            loop while (e.hasMoreElements()) 
-                nrxName = String e.nextElement()
-                baseName = nrxName.substring(0, nrxName.lastIndexOf('.'))
-                fromFile = File(baseName".java.keep")
-                toFile = File(baseName".java")
-                if (fromFile.renameTo(toFile)) then -
-                    log("Successfully renamed "  fromFile " to " toFile, Project.MSG_VERBOSE)
-					else log("Failed to rename " fromFile " to " toFile)
-				end
-			end
-    
+     if (compileList.size() > 0) then do
+       log("Removing .keep extension on " compileList.size() " file"||'s'.word((compileList.size() = 1)+1))
+       e = compileList.elements()
+       loop while (e.hasMoreElements()) 
+         nrxName = String e.nextElement()
+         baseName = nrxName.substring(0, nrxName.lastIndexOf('.'))
+         fromFile = File(baseName".java.keep")
+         toFile = File(baseName".java")
+         if (fromFile.renameTo(toFile)) then -
+            log("Successfully renamed "  fromFile " to " toFile, Project.MSG_VERBOSE)
+	 else log("Failed to rename " fromFile " to " toFile)
+       end
+     end
+     
 
   method doNetRexxCompile() signals BuildException private
     log("Using NetRexx compiler", Project.MSG_VERBOSE)
-
+    
     classpath	   = getCompileClasspath()
     compileOptions = StringBuffer()
-/*     fileList	   = StringBuffer() */
-
+    /*     fileList	   = StringBuffer() */
+    
     /* create an array of strings for input to the compiler: one array
      * comes from the compile options, the other from the compileList
      */
     compileOptionsArrayList = getCompileOptionsAsArrayList()
     fileListArray	    = String[compileList.size()]
-
+    
     e = compileList.elements()
     j = 0
 
@@ -530,26 +530,26 @@ class NetRexxC extends MatchingTask
     currentProperties.put("java.class.path", classpath)
 
     do
---      nrx_ = org.netrexx.Nrx(compileArgs)
+      --      nrx_ = org.netrexx.Nrx(compileArgs)
       nrx_ = org.netrexx.process.NetRexxC.main2(compileArgs)
-/*     catch ioe = Exception */
-/*       signal BuildException("Unexpected Exception while playing with Strings", ioe) */
-/*     finally */
+      /*     catch ioe = Exception */
+      /*       signal BuildException("Unexpected Exception while playing with Strings", ioe) */
+      /*     finally */
       -- need to reset java.class.path property
       -- since the NetRexx compiler has no option for the classpath
-/*       currentProperties = System.getProperties() */
+      /*       currentProperties = System.getProperties() */
       currentProperties.put("java.class.path", currentClassPath)
     end
---    if nrx_.getReturnCode() > 0 then
+    --    if nrx_.getReturnCode() > 0 then
     if nrx_ > 1 then
       do
 	signal  BuildException("Compile failed, messages should have been provided.")
       end
     return
-
-    /**
-     * Builds the compilation classpath
-     */
+    
+  /**
+   * Builds the compilation classpath
+   */
   method getCompileClasspath() returns String private
     cp = StringBuffer()
 
@@ -680,5 +680,5 @@ class NetRexxC extends MatchingTask
       else
 	log("Dropping from classpath:" f.getAbsolutePath(), Project.MSG_VERBOSE)
     end
-
+    
     return

@@ -1,8 +1,8 @@
 # This is the overall makefile for NetRexx on Unixlike systems
 # for documentation purposes and people with habits that are hard to shake
-
+# withjavac was: compile
 all:
-	java -jar ant/ant-launcher.jar compile
+	java -jar ant/ant-launcher.jar withjavac
 	java -jar ant/ant-launcher.jar jars
 	cp build/lib/NetRexxF.jar ~/lib
 
