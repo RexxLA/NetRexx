@@ -17,13 +17,15 @@
 /* Change list (see RxLanguage for master change list)                */
 /* 1996.06.14 Initial                                                 */
 /* 1998.04.11 Fully parse class [inner classes move SourceFile]       */
-	--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
--- 2015.06.09 switch RuntimeConstants to local copy so tools.jar is not needed for NetRexx build -- issue #131 -- KK	
+/* 2015.05.02 switch javac use to jsr199 java compiler api -- KK      */
+/* 2015.06.09 switch RuntimeConstants to local copy so tools.jar is   */
+/* not needed for NetRexx build -- issue #131 -- KK                   */	
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
 
-class RxFixup uses org.netrexx.process.RuntimeConstants		-- 2015.06.09 switch RuntimeConstants to local copy so tools.jar is not needed for NetRexx build -- issue #131 -- KK
+-- 2015.06.09 switch RuntimeConstants to local copy so tools.jar is not needed for NetRexx build -- issue #131 -- KK
+class RxFixup uses org.netrexx.process.RuntimeConstants
 --class RxFixup uses sun.tools.java.RuntimeConstants
  sourcename=Rexx              -- name of the source file
  data=byte[]                  -- class file data
@@ -55,76 +57,78 @@ class RxFixup uses org.netrexx.process.RuntimeConstants		-- 2015.06.09 switch Ru
           particularly dangerous as a recompilation will fix it.
 
     */
- method fixit(classname=String, outname=String classname, ba=byte[] null) returns int			--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
- 	 data=ba
--- method fixit(classname=String, outname=String classname) returns int
-  cfileob=File(classname)
-  ofileob=File(outname)
-  -- say '# fixing' classname outname sourcename
-  do
-    -- process the class file
-    if data=null then do			--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
-    inhandle=FileInputStream(cfileob)
-    size=inhandle.available()
-    data=byte[size]
-    inhandle.read(data, 0, size)
-    inhandle.close()
-    inhandle=null                       -- done with stream
-    end
-    else size=data.length
-
-    if byte2char(data[0])\='\xCA' then return 0
-    if byte2char(data[1])\='\xFE' then return 0
-    -- constant pool count
-    cpcount=byte2int(data[8])*256 + byte2int(data[9])
-
-    /* Scan the constants, and record the source string constant index */
-    conoffset=int[cpcount]    -- list of offsets of constants (in data)
-    conoffset[0]=-1           -- disallowed
-    cons=cpcount-1            -- number of constants
-    sourceindex=0             -- filename, not found yet
-    sfindex=0                 -- attribute keyword, not found yet
-    start=10                  -- first constant offset (0 doesn't exist)
-    loop i=1 to cons
-      conoffset[i]=start      -- record its start
-      tag=byte2int(data[start])
-      select case tag              -- calculate length of constant
-        /* See classfile specifications for these constants */
-        when 1 then do             -- CONSTANT_UTF8
-          ctwo=byte2int(data[start+1])*256 + byte2int(data[start+2])
-          len=ctwo+3
-          if sourceindex*sfindex=0 then /* need string */ do
-            ca=char[ctwo]          -- to character array
-            loop c=0 to ctwo-1
-              ca[c]=byte2char(data[start+3+c])
+  method fixit(classname=String, outname=String classname, ba=byte[] null) returns int
+    --	2015.05.02 switch javac use to jsr199 java compiler api -- KK
+    data=ba
+    -- method fixit(classname=String, outname=String classname) returns int
+    cfileob=File(classname)
+    ofileob=File(outname)
+    -- say '# fixing' classname outname sourcename
+    do
+      -- process the class file
+      if data=null then
+	do			--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
+	  inhandle=FileInputStream(cfileob)
+	  size=inhandle.available()
+	  data=byte[size]
+	  inhandle.read(data, 0, size)
+	  inhandle.close()
+	  inhandle=null                       -- done with stream
+	end
+      else size=data.length
+      
+      if byte2char(data[0])\='\xCA' then return 0
+      if byte2char(data[1])\='\xFE' then return 0
+      -- constant pool count
+      cpcount=byte2int(data[8])*256 + byte2int(data[9])
+      
+      /* Scan the constants, and record the source string constant index */
+      conoffset=int[cpcount]    -- list of offsets of constants (in data)
+      conoffset[0]=-1           -- disallowed
+      cons=cpcount-1            -- number of constants
+      sourceindex=0             -- filename, not found yet
+      sfindex=0                 -- attribute keyword, not found yet
+      start=10                  -- first constant offset (0 doesn't exist)
+      loop i=1 to cons
+	conoffset[i]=start      -- record its start
+	tag=byte2int(data[start])
+	select case tag              -- calculate length of constant
+	  /* See classfile specifications for these constants */
+	  when 1 then do             -- CONSTANT_UTF8
+	    ctwo=byte2int(data[start+1])*256 + byte2int(data[start+2])
+	    len=ctwo+3
+	    if sourceindex*sfindex=0 then /* need string */ do
+              ca=char[ctwo]          -- to character array
+              loop c=0 to ctwo-1
+		ca[c]=byte2char(data[start+3+c])
               end c
-            if sourceindex=0 then if ca==sourcename then sourceindex=i
-            if sfindex=0 then if ca=='SourceFile' then sfindex=i
-            end
-          end
-        when 7  then len=3
-        when 9  then len=5
-        when 10 then len=5
-        when 11 then len=5
-        when 8  then len=3
-        when 3  then len=5
-        when 4  then len=5
-        when 5  then do; len=9; i=i+1; end
-        when 6  then do; len=9; i=i+1; end
-        when 12 then len=5
-        when 2  then do
-          ctwo=byte2int(data[start+1])*256 + byte2int(data[start+2])
-          len=ctwo*2+3
-          end
-        otherwise return 0         -- bad (unknown) tag
-        end
+              if sourceindex=0 then if ca==sourcename then sourceindex=i
+              if sfindex=0 then if ca=='SourceFile' then sfindex=i
+	  end
+	end
+	  when 7  then len=3
+	  when 9  then len=5
+	  when 10 then len=5
+	  when 11 then len=5
+	  when 8  then len=3
+	  when 3  then len=5
+	  when 4  then len=5
+	  when 5  then do; len=9; i=i+1; end
+	  when 6  then do; len=9; i=i+1; end
+	  when 12 then len=5
+	  when 2  then do
+	    ctwo=byte2int(data[start+1])*256 + byte2int(data[start+2])
+	    len=ctwo*2+3
+	  end
+	  otherwise return 0         -- bad (unknown) tag
+      end
       start=start+len
-      end i
+    end i
     /* say '# Constants skipped, now at:' start */
     if sfindex=0 then return 0     -- Attribute name not found
     if sourceindex=0 then return 0 -- Source constant field not found
-
--- test code
+    
+    -- test code
     -- cacc       =u2(start)       -- class access flags
     -- thisclassi =u2(start+2)     -- -> CONSTANT_CLASS
     -- superclassi=u2(start+4)     -- maybe 0, or -> CONSTANT_CLASS
@@ -134,12 +138,12 @@ class RxFixup uses org.netrexx.process.RuntimeConstants		-- 2015.06.09 switch Ru
     start=start+2
     loop i=0 for propcount
       start=skipfield(start)
-      end i
+    end i
     methcount=u2(start)            -- method count
     start=start+2
     loop i=0 for methcount
       start=skipfield(start)
-      end i
+    end i
     -- class attributes
     attcount=u2(start)             -- attribute count
     attstart=start+2               -- -> first attribute
@@ -150,110 +154,112 @@ class RxFixup uses org.netrexx.process.RuntimeConstants		-- 2015.06.09 switch Ru
       if aname=='SourceFile' then do
         sfatt=attstart
         leave a
-        end
+      end
       attstart=attstart+alen+6     -- step past attribute
-      end a
+    end a
     if sfatt=0 then return 0       -- not found
-
+    
     /* and now update the file */
     sihi=byte sourceindex%256
     silo=byte sourceindex//256
     data[sfatt+6]=sihi             -- point to new SourceFile value
     data[sfatt+7]=silo             -- ..
-
+    
     -- so far so good -- delete the original file now
     cfileob.delete()
-
+    
     -- now write the output file [quite possibly to the same place]
     if rxt.classlist=null then do			--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-    outhandle=FileOutputStream(ofileob)
-    outhandle.write(data, 0, size)      -- [must rewrite the whole]
-    outhandle.close()
-    outhandle=null                      -- done with stream
-      end							--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+      --say 'writing' outname 'for' size 'bytes'
+      outhandle=FileOutputStream(ofileob)
+      outhandle.write(data, 0, size)      -- [must rewrite the whole]
+      outhandle.close()
+      outhandle=null                      -- done with stream
+    end							--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
     else rxt.classlist.add(data)	--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-
+    
   catch IOException                     -- any failure caught here
     return 0
     end
   return 1
 
- /** Return unsigned one-byte starting at offset into data */
- method u1(o=int) private returns int
-  return (data[o] & 255)
-
- /** Return unsigned two-byte starting at offset into data */
- method u2(o=int) private returns int
-  return (data[o] & 255)*256 + (data[o+1] & 255)
-
- /** Return 'unsigned' four-byte starting at offset into data
-    (returns -ve if top bit set) */
- method u4(o=int) private returns int
-  return (data[o]   & 255)*16777216 + (data[o+1] & 255)*65536-
-       + (data[o+2] & 255)*256      + (data[o+3] & 255)
-
- /** Convert byte to low-8 bits of a char */
- method byte2char(b=byte) private static returns char
-   return char(b & 255)
-
- /** Convert byte to low-8 bits of an int (no sign-extend) */
- method byte2int(b=byte) private static returns int
-   return (b & 255)
-
- /** Return String from a CONSTANT_UTF8
-    Arg1 is constant index
-    returns '' if error
-    */
- method getutf8(index=int) private returns String
-  o=conoffset[index]         -- get data offset
-  if u1(o)\=CONSTANT_UTF8 then return ''
-  len=u2(o+1)                -- input bytes
-  work=char[len]             -- result will be this or shorter
-  j=0                        -- j -> output array
-  last=o+3+len-1             -- last character of input string
-  loop i=o+3 to last         -- i -> input array
-    c=char(u1(i))
-    if c>'\x7F' then do      -- multibyte
-      if c<'\xC0' then return ''
-      if c<='\xDF' then do   -- two-byte
-        if i=last then return ''
-        c2=char(u1(i+1))
-        if c2<'\x80' | c2>'\xBF' then return ''
-        c=char((int(c) &int('\x1F'))*64-
-              +(int(c2)&int('\x3F')))
-        i=i+1
+  /** Return unsigned one-byte starting at offset into data */
+  method u1(o=int) private returns int
+    return (data[o] & 255)
+    
+  /** Return unsigned two-byte starting at offset into data */
+  method u2(o=int) private returns int
+    return (data[o] & 255)*256 + (data[o+1] & 255)
+    
+  /** Return 'unsigned' four-byte starting at offset into data
+     (returns -ve if top bit set) */
+  method u4(o=int) private returns int
+    return (data[o]   & 255)*16777216 + (data[o+1] & 255)*65536-
+	    + (data[o+2] & 255)*256      + (data[o+3] & 255)
+    
+  /** Convert byte to low-8 bits of a char */
+  method byte2char(b=byte) private static returns char
+    return char(b & 255)
+    
+  /** Convert byte to low-8 bits of an int (no sign-extend) */
+  method byte2int(b=byte) private static returns int
+    return (b & 255)
+    
+  /** Return String from a CONSTANT_UTF8
+     Arg1 is constant index
+     returns '' if error
+   */
+  method getutf8(index=int) private returns String
+    o=conoffset[index]         -- get data offset
+    if u1(o)\=CONSTANT_UTF8 then return ''
+    len=u2(o+1)                -- input bytes
+    work=char[len]             -- result will be this or shorter
+    j=0                        -- j -> output array
+    last=o+3+len-1             -- last character of input string
+    loop i=o+3 to last         -- i -> input array
+      c=char(u1(i))
+      if c>'\x7F' then do      -- multibyte
+	if c<'\xC0' then return ''
+	if c<='\xDF' then do   -- two-byte
+          if i=last then return ''
+          c2=char(u1(i+1))
+          if c2<'\x80' | c2>'\xBF' then return ''
+          c=char((int(c) &int('\x1F'))*64-
+		 +(int(c2)&int('\x3F')))
+          i=i+1
         end
-       else if c<='\xEF' then do -- three-byte
-        if i+2>last then return ''
-        c2=char(u1(i+1)); c3=char(u1(i+2))
-        if c2<'\x80' | c3<'\x80' | c2>'\xBF' | c3>'\xBF' then return ''
-        c=char((int(c) &int('\x1F'))*4096-
-             + (int(c2)&int('\x3F'))*64-
-             + (int(c3)&int('\x3F')))
-        i=i+2
+	else if c<='\xEF' then do -- three-byte
+          if i+2>last then return ''
+          c2=char(u1(i+1)); c3=char(u1(i+2))
+          if c2<'\x80' | c3<'\x80' | c2>'\xBF' | c3>'\xBF' then return ''
+          c=char((int(c) &int('\x1F'))*4096-
+		 + (int(c2)&int('\x3F'))*64-
+		 + (int(c3)&int('\x3F')))
+          i=i+2
         end
-       else return ''
+	else return ''
       end
-    work[j]=c
-    j=j+1
+      work[j]=c
+      j=j+1
     end i
-  return String(work, 0, j)
-
- /** Step over a field
-    Arg1 is offset into data
-    returns offset in data after the field is processed
-    */
- method skipfield(o=int) private returns int
-  -- facc=u2(o)                    -- access flags
-  -- fname=getutf8(u2(o+2))        -- name
-  -- fjsig=getutf8(u2(o+4))        -- signature (Java-style)
-  attcount=u2(o+6)                 -- attribute count
-  attstart=o+8                     -- -> first attribute
-  loop label a for attcount
-    -- aname=getutf8(u2(attstart)) -- attribute name
-    alen=u4(attstart+2)            -- length
-    -- Now process attributes of note
-    attstart=attstart+alen+6       -- step past attribute
+    return String(work, 0, j)
+    
+  /** Step over a field
+     Arg1 is offset into data
+     returns offset in data after the field is processed
+   */
+  method skipfield(o=int) private returns int
+    -- facc=u2(o)                    -- access flags
+    -- fname=getutf8(u2(o+2))        -- name
+    -- fjsig=getutf8(u2(o+4))        -- signature (Java-style)
+    attcount=u2(o+6)                 -- attribute count
+    attstart=o+8                     -- -> first attribute
+    loop label a for attcount
+      -- aname=getutf8(u2(attstart)) -- attribute name
+      alen=u4(attstart+2)            -- length
+				     -- Now process attributes of note
+      attstart=attstart+alen+6       -- step past attribute
     end a
-  return attstart
-
+    return attstart
+    
+    
