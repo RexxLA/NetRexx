@@ -13,6 +13,7 @@ jars:
 .PHONY: tests
 tests:
 	java -jar ant/ant-launcher.jar tests
+	java -jar ant/ant-launcher.jar run.tests
 
 .PHONY: clean
 clean: 
