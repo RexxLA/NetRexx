@@ -22,12 +22,13 @@ apt-get install the -y && \
 apt-get install the-doc && \
 apt-get install zsh -y && \
 chmod +x /bin/nrc && \
-chmod +x /bin/NetRexxC.sh
+chmod +x /bin/NetRexxC.sh && \
+chmod +x /bin/pipe
 
 # Make port 80 available to the world outside this container
 #EXPOSE 80
 
 # Define environment variable
-ENV CLASSPATH /lib/NetRexxF.jar
+ENV CLASSPATH .:/lib/NetRexxF.jar
 
 # Run when the container launches
