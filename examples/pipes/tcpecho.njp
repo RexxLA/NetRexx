@@ -11,24 +11,24 @@
 
 pipe (watch stall 30000 end ? debug 3 )
 
-   console !      -- use stop to quit this
-   find stop!
+   console |      -- use stop to quit this
+   find stop|
 g: gate ?
 
-   literal !      -- limit us to 5 broadcast/viewer sessions
-   dup 4 !
-c: fanin !
+   literal |      -- limit us to 5 broadcast/viewer sessions
+   dup 4 |
+c: fanin |
 
-   tcplisten {2} timeout 2000 backlog 1 !       -- the viewer
- g: !
+   tcplisten {2} timeout 2000 backlog 1 |       -- the viewer
+ g: |
 
-o: fanout !                                     -- enable a broadcaster
+o: fanout |                                     -- enable a broadcaster
 e: tcpecho {} ?
- o: !
-   tcplisten {1} timeout 2000 backlog 1 !       -- the broadcaster
+ o: |
+   tcplisten {1} timeout 2000 backlog 1 |       -- the broadcaster
  e: ?
- e: !             -- pass objects that tcpecho produces
-   g: !           -- when terminating to tcplisten so
+ e: |             -- pass objects that tcpecho produces
+   g: |           -- when terminating to tcplisten so
    c:             -- it can start sessions
 
 
@@ -48,39 +48,39 @@ method run() public
 
          addpipe (watch stall 15000 end ? debug 0)
 
-           *out0: !
-         v: fanin !
-            tcpdata !                    -- echo broadcast to this session
+           *out0: |
+         v: fanin |
+            tcpdata |                    -- echo broadcast to this session
             hole ?                       -- and ignore any user input
-           *out1: !
-         b: fanin !                      -- echo to the sap server
-            tcpdata !
-            tcpclient {rsys} {rport} linger 1 !
-         o: fanout !
-            elastic !                    -- pass sap server output
+           *out1: |
+         b: fanin |                      -- echo to the sap server
+            tcpdata |
+            tcpclient {rsys} {rport} linger 1 |
+         o: fanout |
+            elastic |                    -- pass sap server output
            b: ?
-         o: !
-            elastic !                    -- to the viewer too
+         o: |
+            elastic |                    -- to the viewer too
            v: ?
-         o: !
-            hole !                       -- wait for this to end
-            append literal !
-         i: faninany !
+         o: |
+            hole |                       -- wait for this to end
+            append literal |
+         i: faninany |
            *out2: ?                      -- and pass an obj back to watch
-           *out2: !
+           *out2: |
            i:
 
          selectOutput(0)                 -- accept the viewer
 
          callpipe (bridge1 stall 15000 end ? debug 0)
-            *in0: ! take first 1 ! *out0:
+            *in0: | take first 1 | *out0:
 
          severOutput()
 
          selectOutput(1)                 -- and the broadcaster
 
          callpipe (bridge2 stall 15000 end ? debug 0)
-            *in1: ! take first 1 ! *out1:
+            *in1: | take first 1 | *out1:
 
          severOutput()
 
