@@ -14,8 +14,8 @@ apt-get install git -y && \
 apt-get install openjdk-8-jdk-headless -y && \
 apt-get install zip -y && \
 apt-get install wget -y && \
-wget http://netrexx.org/files/NetRexx-3.07-BETA.zip && \
-unzip NetRexx-3.07-BETA && \
+wget http://netrexx.org/files/NetRexx-3.07-GA.zip && \
+unzip NetRexx-3.07-GA && \
 apt-get install nano -y && \
 apt-get install regina-rexx -y && \
 apt-get install the -y && \
