@@ -31,19 +31,34 @@
 /* 2000.04.12 Add code to wait for single-user-thread                 */
 /* 2000.04.12 More efficient makemessage                              */
 /* 2000.04.19 Small reorganization for API; exec() now called above   */
-/* 2011.08.22 pass keepasjava option to skip rename of java files to .keep  - Kermit Kiser */
-/* 2012.07.31 System property nrx.compiler = ecj option for alternative compiler - rvj */
-/* 2012.09.09 switch to thread context classloader if NetRexx running from java lib\ext directory and use reflection to call java compiler - Kermit */
-/* 2012.09.16 change auto import interface to allow import of a single package as well as package hierarchy branches --issue #61 --Kermit */
-/* 2012.09.16 add base javax.swing package to auto imports  --issue #61 --Kermit */
-/* 2012.10.11 fix for missing package info if this class is loaded by some classloaders  -- no issue # --Kermit */
-/* 2013.01.15  switch the javac call to the documented entry point to fix issues #74, #95 and possible other problems  -- KK ----Kermit */
-/* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fixes bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
--- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
--- 2015.05.05 add cmd line options "-javac" and "ecj" - overrides nrx.compiler but nrx.compiler can now include java options after compiler pref - KK
--- 2015.05.15 reformat build info  -- KK -- Kermit
--- 2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
--- 2015.06.11 -- if using jsr199 to pass java code and no java output, don't touch disk files
+/* 2011.08.22 pass keepasjava option to skip rename of java files to  */
+/*            .keep  - Kermit Kiser                                   */
+/* 2012.07.31 System property nrx.compiler = ecj option for           */
+/*            alternative compiler - rvj                              */
+/* 2012.09.09 switch to thread context classloader if NetRexx running */
+/*            from java lib\ext directory and use reflection to call  */
+/*            java compiler - Kermit                                  */
+/* 2012.09.16 change auto import interface to allow import of a       */
+/*            single package as well as package hierarchy branches    */
+/*             --issue #61 --Kermit                                   */
+/* 2012.09.16 add base javax.swing package to auto imports            */
+/*            --issue #61 --Kermit                                    */
+/* 2012.10.11 fix for missing package info if this class is loaded by */
+/*            some classloaders  -- no issue # --Kermit               */
+/* 2013.01.15 switch the javac call to the documented entry point to  */
+/*            fix issues #74, #95 and possible other problems  -- KK -*/
+/* 2013.09.18  eliminate prob where getImplementationVersion returns  */
+/*             null so compiler will run unjared (also fixes bad      */
+/*             playing with strings msg in build - issue #105)  -- KK */
+/* 2015.05.02 switch javac use to jsr199 java compiler api issue #90  */
+/* 2015.05.05 add cmd line options "-javac" and "ecj" - overrides     */
+/*            nrx.compiler but nrx.compiler can now include java      */
+/*            options after compiler pref - KK                        */
+/* 2015.05.15 reformat build info  -- KK -- Kermit                    */
+/* 2015.06.11 fix for #134 time output needs correct compiler name    */
+/* 2015.06.11 if using jsr199 to pass java code and no java output,   */
+/*            don't touch disk files                                  */
+/* 2019.05.09 display failed summaries last - Jason Martin            */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -868,6 +883,7 @@ return compileok & \badjavac
     /* Arg1 is 1 if we had interpretation */
   method summary(hadexec=boolean)
     
+     bucket=Rexx""
     /* Summaries, one per program */
     loop f=0 for programlist.length
       program=programlist[f]                        -- current program
@@ -901,12 +917,29 @@ return compileok & \badjavac
           action='Compilation'
           okresult='successful'
         end
-	
-	if ok then say(action 'of '''inname'''' okresult||add)
-        else say(action 'of '''inname''' failed'add)
+
+	if ok then bucket[f]=action||" of \'"inname"\'"||okresult||add
+        else bucket[f]=action||" of \'"inname"\' failed"||add
       end summary
       
     end f
+    faulty=Rexx ""
+    x=0
+    loop skim=0 for programlist.length
+      if bucket[skim].lastpos("successful")\=0 then do
+        say bucket[skim]
+      end
+  else do
+    x=x+1
+    faulty[x]=bucket[skim]
+    faulty[0]=x
+  end
+    end
+    if faulty.exists("1") then do
+      loop review=1 to faulty[0]
+	say faulty[review]
+      end
+    end
     return
     
     
