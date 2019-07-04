@@ -55,3 +55,4 @@ clean:
 	rm -f *.rao
 	rm -f *.toc
 	rm -f *~
+	rm -f *.pdf

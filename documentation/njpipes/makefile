@@ -45,3 +45,5 @@ clean:
 	rm -f *.crossref
 	rm -f *.aux
 	rm -f *~
+	rm -f *.pdf
+
