@@ -664,7 +664,7 @@ class RxTranslator
       args[1]='-classpath'                -- explicit classpath needed
       args[2]=classpath                   -- .. for Java 1.2 javac
 					  -- add the filenames
-      jfoarray=JavaFileObject[programs]		--		Java compiler API	-- KK -- 2015.05.02  
+      jfoarray=JavaFileObject[programs]	  -- Java compiler API	-- KK -- 2015.05.02  
       
       optstring='-nowarn -classpath classpath' javaoptions
       optarray=optstring.toString().trim().split(" ")
@@ -675,7 +675,8 @@ class RxTranslator
 	program=programlist[f]            -- current program
 	args[f+offset]=program.streamer.outfilefull
 	parse program.programname firstname '.' .	
-	jfoarray[f]=RxInMemoryJavaFileObject(firstname.toString(),program.streamer.byteoutstream.toString())
+	jfoarray[f]=RxInMemoryJavaFileObject(firstname.toString(), -
+	program.streamer.byteoutstream.toString())
       catch cle=Exception
 	say cle
       end f
@@ -699,8 +700,8 @@ class RxTranslator
       
       javaloader=Thread.currentThread().getContextClassLoader()
       do
-	javacompiler=ToolProvider.getSystemJavaCompiler()														
-	toolman= javaloader.loadClass('com.sun.tools.javac.api.JavacTool')
+	javacompiler=ToolProvider.getSystemJavaCompiler()
+        toolman= javaloader.loadClass('com.sun.tools.javac.api.JavacTool')
       catch e=Exception
       end   	
       do
@@ -723,7 +724,8 @@ class RxTranslator
 	      compilerChoice="javac"
 	    end
 	  
-	  if compilerChoice == "javac" then if toolman==null & javacompiler=null then RxQuit(this, null, 'compiler.specification.error')
+	  if compilerChoice == "javac" then if toolman==null & javacompiler=null then
+	    RxQuit(this, null, 'compiler.specification.error')
 	  if toolman\==null, ecjclass\==null, javacompiler\==null then
 	    select
 	      
@@ -733,12 +735,16 @@ class RxTranslator
 		do
 		  if javacompiler==null then
 		    javacompiler=JavaCompiler toolman.newInstance()
-		  if javacompiler==null then javacok=boolean 0																					--		flag compile failed
+		  if javacompiler==null then javacok=boolean 0										    --		flag compile failed
 		  else do
 		    --		make file manager to capture class files in memory
-		    fileManager = RxForwardingJavaFileManager(JavaFileManager javacompiler.getStandardFileManager(null, null, null))
+		    fileManager = RxForwardingJavaFileManager( -
+				  JavaFileManager javacompiler.getStandardFileManager(null, null, null))
 		    --		run the Java compiler on the memory strings
-		    javacok=javacompiler.getTask(null,fileManager,null,Arrays.asList(optarray),null,Arrays.asList(jfoarray)).call().booleanValue()
+		    javacok=javacompiler.getTask(null,-
+						 fileManager,null,Arrays.asList(optarray),-
+						 null,-
+						 Arrays.asList(jfoarray)).call().booleanValue()
 		  end
 		  /*
 		     For the record, here are the javac exit codes:
@@ -764,14 +770,12 @@ class RxTranslator
 		  fileManager = RxForwardingJavaFileManager(JavaFileManager javacompiler.getStandardFileManager(null, null, null))
 		  --		run the Java compiler on the memory strings
 		  
-		  javacok=javacompiler.getTask(null,fileManager,null,Arrays.asList(optarray),null,Arrays.asList(jfoarray)).call().booleanValue()
-		  /*
-		     ecjclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.batch.BatchCompiler')
-		     ecpclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.CompilationProgress')
-		     compilemethod = ecjclass.getMethod('compile', [args.getClass(),PrintWriter.class,PrintWriter.class, ecpclass])
-		     javacok=boolean Boolean(compilemethod.invoke(ecjclass,[Object args, PrintWriter(System.out), PrintWriter(System.err), null]).toString()).booleanValue()
-		  -- note: ecj also returns boolean 1 (true) if successful compile!
-		   */
+		  javacok=javacompiler.getTask(null,-
+					       fileManager,-
+					       null,-
+					       Arrays.asList(optarray),-
+					       null,-
+					       Arrays.asList(jfoarray)).call().booleanValue()
 		catch cle=Exception
 		  say cle
 		end
@@ -784,82 +788,92 @@ class RxTranslator
 	  if haddiag then say '# Compiled: ok='javacok
 	  badjavac=\javacok
 	  
-	  /* Fixup any .class files that javac made for each file */
+	  /* persist any .class files that javac made for each file */
 	  /* [If javac failed we assume no new .class files were generated.] */
-	  if javacok then loop f=0 for programs
-	  program=programlist[f]                 -- current program
+	  if javacok then -
+	     loop f=0 for programs
+	       program=programlist[f]                 -- current program
+	       
+	       persister=RxPersistClass(program.source.getName(),'.',this)  -- make a persister
+	       loop c=0 for program.classes.size()
+		 -- build the filename
+		 theclass=RxClass program.classes.elementAt(c)
+		 -- name is the full name of the class, with dollars for dots
+		 localclass=Rexx(theclass.classinfo.fullname).translate('$', '.')'.class'
+		 -- it will be in the current directory
+		 dir=program.source.getPath()
+		 if dir=null then actualclass=localclass
+		 else actualclass=dir||localclass
+		 -- if SOURCEDIR specified, then we want it in the source
+		 -- directory, otherwise it goes in the current directory
+		 if program.flag.sourcedir then targetclass=actualclass
+		 else targetclass=localclass
+		 --          if program.flag.diag then say '# Fixing' actualclass-
+		 --           'to' targetclass '['program.flag.sourcedir']'
+		 
+		 /* here the compileroutput, in the form of class images in memory, is persisted to files */
+		 fmi=fileManager.classFileObjects.iterator()
+		 loop while fmi.hasNext()
+		   tba=RxByteArrayJavaClass fmi.next()
+		   persistClass=''
+		   
+		   if compilerChoice = 'ecj' then
+		     do
+		       tempcls = (Rexx tba.getName().substring(1)".class")
+		       lastslash = tempcls.lastpos('/')+1
+		       targetclass = tempcls.substr(lastslash)
+		       if dir<>null then actualclass = dir||targetclass
+		       else actualclass = targetclass
+		       if program.flag.sourcedir then targetclass=dir||targetclass
+		       lastslash=(Rexx tba.getName()).lastpos('/')
+		       persistClass=Rexx(tba.getName().substring(lastslash)".class")
+		     end -- if do
+		   if compilerChoice = 'javac' then
+		     do
+		       tempcls = (Rexx tba.getName().substring(1))
+		       lastdot= tempcls.lastpos('.')+1
+		       persistClass=Rexx(tba.getName().substring(lastdot)".class")
+		     end -- if do
+		   if persistClass = localclass  then do
+		     persister.persist(actualclass, targetclass, tba.getBytes())
 
-	  persister=RxPersistClass(program.source.getName(),'.',this)  -- make a persister
-	  loop c=0 for program.classes.size()
-	    -- build the filename
-	    theclass=RxClass program.classes.elementAt(c)
-	    -- name is the full name of the class, with dollars for dots
-	    localclass=Rexx(theclass.classinfo.fullname).translate('$', '.')'.class'
-	    -- it will be in the current directory
-            dir=program.source.getPath()
-            if dir=null then actualclass=localclass
-            else actualclass=dir||localclass
-            -- if SOURCEDIR specified, then we want it in the source
-            -- directory, otherwise it goes in the current directory
-            if program.flag.sourcedir then targetclass=actualclass
-            else targetclass=localclass
-	    --          if program.flag.diag then say '# Fixing' actualclass-
-	    --           'to' targetclass '['program.flag.sourcedir']'
-	    
-	    /* here the compileroutput, in the form of class images in memory, is persisted to files */
-	    fmi=fileManager.classFileObjects.iterator()
-            loop while fmi.hasNext()
-              tba=RxByteArrayJavaClass fmi.next()
-
-	      if compilerChoice = 'ecj' then -- for now we only need to do this for ecj
-		do
-		  tempcls = (Rexx tba.getName().substring(1)".class")
-		  lastslash = tempcls.lastpos('/')+1
-		  targetclass = tempcls.substr(lastslash)
-		  if dir<>null then actualclass = dir||targetclass
-		  else actualclass = targetclass
-		  if program.flag.sourcedir then targetclass=dir||targetclass
-		end -- if do
-	      
-	      if Rexx(tba.getName().substring(1)".class").pos(localclass)>0 then do
-		   persister.persist(actualclass, targetclass, tba.getBytes())
-	      
-	      if classlist\==null then do
-		tba.stream=ByteArrayOutputStream(1024)
-		tba.stream.write(byte[] classlist.remove(classlist.size()-1))
-		-- 	pass the fileobject back to the caller as requested		
-        	classlist.add(tba)
-	      catch cle=Exception
-		say cle
-	      end
-	      end
-            end
-          end c
-    end f
-      
-    if javacok then -							 	--		Java compiler API	-- KK -- 2015.05.02
-       if classlist\==null then do
-	 /* now build a special class loader for the class files in memory */
-	 byteCodeMap = HashMap()
-	 fmi=fileManager.classFileObjects.iterator()
-	 loop while fmi.hasNext()		--		Java compiler API	-- KK -- 2015.05.02  
-	   tba=RxByteArrayJavaClass fmi.next()			
-	   byteCodeMap.put(tba.getName().substring(1), tba.getBytes())		--	why does first char of name have to be discarded? - URI trick
-	 end
-	 classlist.add(0,RxMapClassLoader(byteCodeMap))
-       end
+		     if classlist\==null then do
+		       tba.stream=ByteArrayOutputStream(1024)
+		       tba.stream.write(byte[] classlist.remove(classlist.size()-1))
+		       -- 	pass the fileobject back to the caller as requested		
+        	       classlist.add(tba)
+		     catch cle=Exception
+		       say cle
+		     end
+		   end
+		 end
+               end c
+	     end f
+	  
+	  if javacok then -
+	     if classlist\==null then do
+	       /* now build a special class loader for the class files in memory */
+	       byteCodeMap = HashMap()
+	       fmi=fileManager.classFileObjects.iterator()
+	       loop while fmi.hasNext()
+		 tba=RxByteArrayJavaClass fmi.next()			
+		 byteCodeMap.put(tba.getName().substring(1), tba.getBytes())
+		 --	why does first char of name have to be discarded? - URI trick
+	       end
+	       classlist.add(0,RxMapClassLoader(byteCodeMap))
+	     end
+	  
+    end havejava
     
-end havejava
-
-comp=0
-return compileok & \badjavac
-
-/* --------------------------------------------------------------- */
-/* DISPOSE -- dispose of .java files and close source              */
-/*            This must always be called to clean up.              */
-/* --------------------------------------------------------------- */
-/* Arg1 is 1 to keep the java file after successful compilation    */
-/*           (normally it is erased if the compile was successful) */
+    comp=0
+    return compileok & \badjavac
+    
+    /* --------------------------------------------------------------- */
+    /* DISPOSE -- dispose of .java files and close source              */
+    /*            This must always be called to clean up.              */
+    /* --------------------------------------------------------------- */
+    /* Arg1 is 1 to keep the java file after successful compilation    */
+    /*           (normally it is erased if the compile was successful) */
   method dispose(keep1=boolean, keepasjava1=boolean 0)
     
     loop f=0 for programlist.length
