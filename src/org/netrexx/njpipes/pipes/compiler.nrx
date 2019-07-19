@@ -436,8 +436,6 @@ class compiler extends Object public
     
     -- standard imports
     d = rexx ''
-    --    readconfig.get(config).setcontext(d).runpipe()
-    --readconfig.get(config).setcontext(d).setJITCache(JC).runpipe()
     
     if d[0]='' then
       do
@@ -644,7 +642,6 @@ class compiler extends Object public
     loop i=1 to s[0]
       if r[s[i]] then do
         parse s[i] stg ' ' args
---	stg = 'org.netrexx.njpipes.stages.'||stg
         if stg.pos('(')>=stg.pos(')') then    -- constructor processing (sort)
           o[n+1] = '   _s_'i' = 'stg'()'
         else do
@@ -908,7 +905,6 @@ class compiler extends Object public
     -- save the pipe's netrexx source
     
     o[0] = n
-    --rc = writepipe.get(pInfo'.nrx').setContext(o).setJITCache(JC).runpipe()
     rc = writepipe.get(pInfo'.nrx').setContext(o).runpipe()
     
     return rc
@@ -925,9 +921,6 @@ class compiler extends Object public
     
     verb   = '-verbose0 -nologo'           -- default verbose and crossref settings chg rvj 20110816 quiet it down for interpreting
     xref   = '-nocrossref'
-    
-    --JC = Hashtable(51)             -- global JIT cache table
-    
     
     parse a . '(' name compopts ')' text
     if name<>'' then                      -- from command line
@@ -997,7 +990,6 @@ class compiler extends Object public
             aa['fin'] = w'.njp'
             aa['xout'] = w
             ll = rexx ''
-            --r = processNjp.get(aa).setContext(ll).setJITCache(JC).runpipe()
 	    r = processNjp.get(aa).setContext(ll).runpipe()
             ll[1] = ll[1].strip('L')
             if r>rc then
@@ -1027,7 +1019,6 @@ class compiler extends Object public
           do
             say 'Expanding group 'w
             new = a
-            --r = readgroup.get(w'.grp').setContext(new).setJITCache(JC).runpipe()
 	    r = readgroup.get(w'.grp').setContext(new).runpipe()
             if r=0 then
               a = new[1]
@@ -1117,18 +1108,13 @@ class compiler extends Object public
 	args[i+2] = jlist.word(i)
       end
       
-      -- if sun.tools.javac.Main(System.out,'javac').compile(args) then
-      --    say "javac compiled '"jlist.strip('B')"' successfully"
       javaloader=this.getClass().getClassLoader()
       if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
       
       compilerChoice = System.getProperty("nrx.compiler","javac")
       select
 	when compilerChoice == "javac" then do
-	  --if program.flag.diag then say '# compiling' program.programname 'using javac'
-	  -- javacok=sun.tools.javac.Main(System.out, 'javac').compile(args)
 	  do
-	    -- switch the javac call to the documented entry point to fix issues 74, 95 and possible other problems  -- 2013-01-15 -- KK --
 	    -- this entry point has different return codes than the original undocumented entry point
 	    javacclass=javaloader.loadClass('com.sun.tools.javac.Main')
 	    compilemethod = javacclass.getMethod('compile', [Class args.getClass(), PrintWriter.class])
@@ -1141,8 +1127,6 @@ class compiler extends Object public
 	end
 	
 	when compilerChoice == "ecj" then do
-	  --if program.flag.diag then say '# compiling' program.programname 'using eclipse batch compiler'
-	  --	javacok=org.eclipse.jdt.core.compiler.batch.BatchCompiler.compile(args, PrintWriter(System.out), PrintWriter(System.err), null)
 	  do
 	    ecjclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.batch.BatchCompiler')
 	    ecpclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.CompilationProgress')
