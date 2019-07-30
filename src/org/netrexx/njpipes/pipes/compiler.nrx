@@ -21,7 +21,7 @@ import org.netrexx.process.
 -- 99/05/15 minor fixups in arg() processing.  ejt
 -- 99/05/11 fix .grp compiling.  ejt
 -- 99/05/09 pass lists of _just_ nrx files to netrexx.  ejt
--- 99/05/06 reconize the cont option.  ejt
+-- 99/05/06 recognize the cont option.  ejt
 -- 98/08/25 accept hashtables in get/setup & constructor.  ejt
 -- 98/08/25 multiple args on one line now handled correctly.  ejt
 -- 98/08/23 add dynamic argument flag support.  ejt
@@ -36,14 +36,14 @@ import org.netrexx.process.
 -- 98/07/18 stageArg must be called before stageExit for each stage.  EJT
 
 class compiler extends Object public
-  
+
   rc    = int
   keep  = boolean
   tonrc = rexx
   JC    = Hashtable
   
-  method compile(a=rexx) inheritable returns int
-    say a    
+  method compile(a=rexx, squelch=rexx 0) inheritable returns int
+    if squelch <> 'true' then say a    
     ssep  = rexx '|'
     pend  = rexx '?'
     pInfo = rexx
@@ -910,7 +910,7 @@ class compiler extends Object public
     return rc
     
     
-  method compiler(a=rexx)
+  method compiler(a=rexx,squelch='false')
     
     keep   = boolean 0             -- assume nokeep
     nokeep = Rexx ''               -- generated .nrx files to delete
@@ -948,7 +948,7 @@ class compiler extends Object public
 	
         if verb = '' then say 'Building pipe 'name
 	
-        rc = compile('( 'name' 'compopts' ) 'text)
+        rc = compile('( 'name' 'compopts' ) 'text,squelch)
         if rc=0 then do
           parms = tonrc' 'name
           work = 1
@@ -1110,7 +1110,7 @@ class compiler extends Object public
       
       javaloader=this.getClass().getClassLoader()
       if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
-      
+
       compilerChoice = System.getProperty("nrx.compiler","javac")
       select
 	when compilerChoice == "javac" then do
@@ -1125,7 +1125,7 @@ class compiler extends Object public
 	    say cle
 	  end
 	end
-	
+
 	when compilerChoice == "ecj" then do
 	  do
 	    ecjclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.batch.BatchCompiler')
@@ -1141,7 +1141,7 @@ class compiler extends Object public
       end
       
       end
-      
+
       loop i=1 to nokeep.words()
 	fid = java.io.file(String nokeep.word(i))
 	if \fid.delete() then
@@ -1150,14 +1150,10 @@ class compiler extends Object public
     end 
 
   method compiler(t=HashTable) inheritable
-    
     JC = t
-    
-    
+
   method main(a=String[]) static
-    
     p = compiler(org.netrexx.njpipes.pipes.stage.buildArg(a))
-    
     exit p.rc
     
     

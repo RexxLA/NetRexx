@@ -1,0 +1,63 @@
+package org.netrexx.njpipes.pipes
+import org.netrexx.address.
+/*
+ *  Copyright (C) 2019 R.V. Jansen
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+--trace results
+-- the purpose of this class is to give the user an experience as close to VM
+-- Pipelines as possible, by enabling the process of speficying and running a
+-- pipe spec from the commandline.
+
+-- 2019-07-30 first version
+class runner
+
+  -- check arguments
+  -- compile the pipeline
+  -- run the pipeline
+  -- delete the generated class
+  
+  method main(args=String[]) static
+    arg=args[0] -- java stringarray to rexx variable
+
+    -- check for an empty specification, if so, then exit
+    if arg = '' then
+      do
+	say 'pipe: specify a pipeline to be executed.'
+	exit
+      end
+
+    uid = Rexx(UUID.randomUUID().toString())
+    className_ = 'p'Rexx(uid.left(7))
+    pipesrc =  '('className_')' arg
+    trace off
+    do
+      p = compiler(pipesrc,Rexx('true'))
+    catch ex=org.netrexx.njpipes.pipes.ThreadQ
+      return
+    end
+
+    -- execute the generated class
+    command    = ArrayList()
+    command.add('java')
+    command.add(className_.toString())
+    os = OSProcess()
+    a  = os.outtrap(command)
+    i  = a.iterator()
+    loop while i.hasNext()
+      say Rexx i.next()
+    end -- loop while i
+
+    -- delete the class file
+    f = File(className_.toString()'.class')
+    f.delete()
+    exit 
+    
+
+    
+
+    
