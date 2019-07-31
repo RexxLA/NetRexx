@@ -8,52 +8,52 @@
  */
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.pipes
-
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
-
--- 14/08/23 change to use new javac and ecj invocation
--- 01/05/12 do not generate ThreadGroup.stop call.  ejt
--- 01/05/10 handle tabs in input files.  ejt
--- 00/07/04 java.util.Stack is not thread safe...  ejt
--- 00/07/04 handle IBM SDK 1.3's treatment of extra \r at the end of a file.  ejt
--- 99/05/16 handle dummy netrexx for public java class.  ejt
--- 99/05/15 minor fixups in arg() processing.  ejt
--- 99/05/11 fix .grp compiling.  ejt
--- 99/05/09 pass lists of _just_ nrx files to netrexx.  ejt
--- 99/05/06 recognize the cont option.  ejt
--- 98/08/25 accept hashtables in get/setup & constructor.  ejt
--- 98/08/25 multiple args on one line now handled correctly.  ejt
--- 98/08/23 add dynamic argument flag support.  ejt
--- 98/08/13 find stages compiled with a _prefix.  ejt
--- 98/08/11 optimized generated code for poolable pipes.  ejt
--- 98/08/01 generate code for poolable pipes.  ejt
--- 98/07/30 improvements Handling stageExit errors.  ejt
--- 98/07/24 fix an IllegalArgumentException exception with stageArg.  ejt
--- 98/07/23 logic to name stages improved.  ejt
--- 98/07/20 ensure stage names do not include stage arguments.  ejt
--- 98/07/18 set not[i+1] to pInfo[8] after stageExit so not can be controled.  EJT
--- 98/07/18 stageArg must be called before stageExit for each stage.  EJT
+--trace results
+-- 2019-07-30 changes for direct pipe execution
+-- 2014-08-23 change to use new javac and ecj invocation
+-- 2001-05-12 do not generate ThreadGroup.stop call.  ejt
+-- 2001-05-10 handle tabs in input files.  ejt
+-- 2000-07-04 java.util.Stack is not thread safe...  ejt
+-- 2000-07-04 handle IBM SDK 1.3's treatment of extra \r at the end of a file.  ejt
+-- 1999-05-16 handle dummy netrexx for public java class.  ejt
+-- 1999-05-15 minor fixups in arg() processing.  ejt
+-- 1999-05-11 fix .grp compiling.  ejt
+-- 1999-05-09 pass lists of _just_ nrx files to netrexx.  ejt
+-- 1999-05-06 recognize the cont option.  ejt
+-- 1998-08-25 accept hashtables in get-setup & constructor.  ejt
+-- 1998-08-25 multiple args on one line now handled correctly.  ejt
+-- 1998-08-23 add dynamic argument flag support.  ejt
+-- 1998-08-13 find stages compiled with a _prefix.  ejt
+-- 1998-08-11 optimized generated code for poolable pipes.  ejt
+-- 1998-08-01 generate code for poolable pipes.  ejt
+-- 1998-07-30 improvements Handling stageExit errors.  ejt
+-- 1998-07-24 fix an IllegalArgumentException exception with stageArg.  ejt
+-- 1998-07-23 logic to name stages improved.  ejt
+-- 1998-07-20 ensure stage names do not include stage arguments.  ejt
+-- 1998-07-18 set not[i+1] to pInfo[8] after stageExit so not can be controled.  EJT
+-- 1998-07-18 stageArg must be called before stageExit for each stage.  EJT
 
 class compiler extends Object public
 
-  rc    = int
-  keep  = boolean
-  tonrc = rexx
-  JC    = Hashtable
+  rc						    = int
+  keep						    = boolean
+  tonrc						    = rexx
+  JC						    = Hashtable
   
-  method compile(a=rexx, squelch=rexx 0) inheritable returns int
+  method compile(a				    = rexx, squelch=rexx 0) inheritable returns int
     if squelch <> 'true' then say a    
-    ssep  = rexx '|'
-    pend  = rexx '?'
-    pInfo = rexx
-    code  = rexx ''
-    tonrc = ''
+    ssep					    = rexx '|'
+    pend					    = rexx '?'
+    pInfo					    = rexx
+    code					    = rexx ''
+    tonrc					    = ''
     
-    stall  = int 2000
-    config = 'pipes.cnf'
+    stall					    = int 2000
+    config					    = 'pipes.cnf'
     
-    lvl = rexx 0
+    lvl						    = rexx 0
     
     -- get pipe to process
     
@@ -70,85 +70,85 @@ class compiler extends Object public
     
     -- standard headers
     
-    o = rexx ''
-    o[1]='/* 'pInfo' - Pipes for NetRexx version 0.60 */'
-    n = 2
+    o						    = rexx ''
+    o[1]					    = '/* 'pInfo' - Pipes for NetRexx version 0.60 */'
+    n						    = 2
     
     -- set gen/nogen status for file
     
-    i = opts.wordpos('-gen')
+    i						    = opts.wordpos('-gen')
     if i>0 then do
-      keep = 1
-      opts = opts.delword(i)
+      keep					    = 1
+      opts					    = opts.delword(i)
     end
     
-    i = opts.wordpos('-nogen')
+    i						    = opts.wordpos('-nogen')
     if i>0 then do
-      keep = 0
-      opts = opts.delword(i)
+      keep					    = 0
+      opts					    = opts.delword(i)
     end
     
     -- set runaway time for pipe
     
-    i = opts.wordpos('runaway')
+    i						    = opts.wordpos('runaway')
     if i>0 then do
       if \opts.word(i+1).datatype('W') then do
         say 'Error - runaway time must be numeric'
         return 16
       end
-    stall = opts.word(i+1)
-    opts = opts.delword(i,2)
+    stall					    = opts.word(i+1)
+    opts					    = opts.delword(i,2)
     end
     
-    i = opts.wordpos('stall')
+    i						    = opts.wordpos('stall')
     if i>0 then do
       if \opts.word(i+1).datatype('W') then do
         say 'Error - stall time must be numeric'
         return 16
       end
-    stall = opts.word(i+1)
-    opts = opts.delword(i,2)
+    stall					    = opts.word(i+1)
+    opts					    = opts.delword(i,2)
     end
     
     -- process config statement
     
-    i = opts.wordpos('config')
+    i						    = opts.wordpos('config')
     if i>0 then do
-      config = opts.subword(i,2)
-      n = n+1
-      opts = opts.delword(i,2)
+      config					    = opts.subword(i,2)
+      n						    = n+1
+      opts					    = opts.delword(i,2)
     end
     
     -- set stage seperator
     
-    i = opts.wordpos('sep')
+    i						    = opts.wordpos('sep')
     if i>0 then do
-      ssep = opts.word(i+1)
-      opts = opts.delword(i,2)
+      ssep					    = opts.word(i+1)
+      opts					    = opts.delword(i,2)
     end
-    pInfo[6] = ssep
+    pInfo[6]					    = ssep
     
     -- set end of pipe indicator
     
-    i = opts.wordpos('end')
+    i						    = opts.wordpos('end')
     if i>0 then do
-      pend = opts.word(i+1)
-      opts = opts.delword(i,2)
+      pend					    = opts.word(i+1)
+      opts					    = opts.delword(i,2)
     end
-    pInfo[7] = pend
+    pInfo[7]					    = pend
     
     -- set cont indicator
     
-    i = opts.wordpos('cont')
+    i						    = opts.wordpos('cont')
     if i>0 then
-      opts = opts.delword(i,2)
+      opts					    = opts.delword(i,2)
     
     -- set debug level
     
-    i = opts.wordpos('debug')
+    i						    = opts.wordpos('debug')
     if i>0 then do
-      lvl  = opts.word(i+1)
-      opts = opts.delword(i,2)
+      lvl					    = opts.word(i+1)
+      opts					    = opts.delword(i,2)
       if \lvl.datatype('W') then do
         say 'Error - debug level must be numeric, found 'lvl
         return 16
@@ -157,10 +157,10 @@ class compiler extends Object public
     
     -- verify cache
     
-    i = opts.wordpos('cache')
+    i						    = opts.wordpos('cache')
     if i>0 then do
-      work = opts.word(i+1)
-      opts = opts.delword(i,2)
+      work					    = opts.word(i+1)
+      opts					    = opts.delword(i,2)
       if \work.datatype('S') then do
         say 'Error - cache must be followed by a valid symbol, found 'work
         return 16
@@ -170,71 +170,79 @@ class compiler extends Object public
     
     -- extract stages
     
-    s   = rexx ''         -- the stages...
-    l   = rexx  0         -- find a labeled stage
-    c   = rexx  0         -- table used to build connections, negative value is a link
-    r   = rexx  1         -- count of pipes, flags for stages
-    not = rexx  0         -- true if 'not' modifier is active for stage
-    ls  = rexx  0         -- reset stream number to...
-    i   = 0
-    k   = 0
-    m   = 0
+    s						    = rexx ''         -- the stages...
+    l						    = rexx  0         -- find a labeled stage
+    c						    = rexx  0         -- table used to build connections, negative value is a link
+    r						    = rexx  1         -- count of pipes, flags for stages
+    not						    = rexx  0         -- true if 'not' modifier is active for stage
+    ls						    = rexx  0         -- reset stream number to...
+    i						    = 0
+    k						    = 0
+    m						    = 0
     
     if work.strip('T').right(1)<>pend then
-      work = work' 'pend
+      work					    = work' 'pend
     
-    loop p=1 to 9999 until work=''          -- for each pipe segment
+    loop p					    = 1 to 9999 until work=''          -- for each pipe segment
       parse work piece (pend) work
       
-      loop j=1 to 999 until piece=''       -- for each stage/label
+      loop j					    = 1 to 999 until piece=''       -- for each stage/label
         parse piece stg (ssep) piece
 	
         select                              -- show the pipe's source
-          when work<>'' & piece='' then
-            o[n+1] = '-- 'stg.strip('L')||pend
+          when work<>'' & piece			    = '' then
+            o[n+1]				    = '-- 'stg.strip('L')||pend
           when piece<>'' then
-            o[n+1] = '-- 'stg.strip('L')||ssep
+            o[n+1]				    = '-- 'stg.strip('L')||ssep
           otherwise
-            o[n+1] = '-- 'stg.strip('L')
+            o[n+1]				    = '-- 'stg.strip('L')
         end
-        n=n+1
+        n					    = n+1
 	
 	-- special processing for NOT stage modifier
 	
-        if stg.word(1).upper()='NOT' then
+        if stg.word(1).upper()			    = 'NOT' then
           do
-            not[i+1] = 1
-            stg = stg.subword(2)
+            not[i+1]				    = 1
+            stg					    = stg.subword(2)
           end
         else
           do
-            if stg.word(1).right(1)=':' & stg.word(2).upper()='NOT' then do
-              not[i+1] = 1
-              stg = stg.word(1)' 'stg.subword(3)
+            if stg.word(1).right(1)		    = ':' & stg.word(2).upper()='NOT' then do
+              not[i+1]				    = 1
+              stg				    = stg.word(1)' 'stg.subword(3)
             end
           end
-	
+	-- substitute the disk stages here for the VM abbreviations < > >>
+	select
+	  when stg.pos('<') > 0 then stg=stg.changestr('<','diskr')
+	  when stg.pos('>') > 0 then stg=stg.changestr('>','diskw')
+	  when stg.wordpos('>>') > 0 then stg=stg.changestr('>>','diska')
+	  otherwise
+	    nop
+	end
+
 	-- call the complerExit if its a regular stage
 	
-        if stg.word(1).right(1)=':' then
+        if stg.word(1).right(1)			    = ':' then
           do                                    -- extract any labels
             parse stg label ':' stg
-            label = label.strip('B')
+            label				    = label.strip('B')
             if label.left(1)<>'-' then
-              lstream = 0
+              lstream				    = 0
             else do
-              lstream = 1
-              label = label.substr(2)
+              lstream				    = 1
+              label				    = label.substr(2)
             end
           end
         else
-          label = ''
+          label					    = ''
 	
         select
 	  
           /* special processing to use pipes as stages */
 	  
-          when stg.word(1).pos('=')>0 then do
+          when stg.word(1).pos('		    = ')>0 then do
             if piece<>'' then do
               say 'Error - pipe definition 'stg' must be terminated by 'pend
               return 16
@@ -247,8 +255,8 @@ class compiler extends Object public
             say 'Error - pipe definition 'stg' cannot be labeled'
             return 16
           end
-          m = m+1
-          r[m] = stg.strip('B')
+          m					    = m+1
+          r[m]					    = stg.strip('B')
           iterate j
           end
 	  
@@ -262,44 +270,44 @@ class compiler extends Object public
             return 16
           end
           if r[stg.word(1)] then
-            r[stg.word(1)]=0         -- must be recorded before stageExit
+            r[stg.word(1)]			    = 0         -- must be recorded before stageExit
           else do
             say 'Error - duplicate pipe as stage at 'stg
             return 16
           end
           end
 	  
-          when stg.left(1)='*' then do
+          when stg.left(1)			    = '*' then do
             say 'Error - missing : in connector at 'stg
             return 16
           end
 	  
-          when label.left(1)='*' then
+          when label.left(1)			    = '*' then
             if stg<>'' then do
               say 'Error - cannot define connectors as stages labels 'stg
               return 16
             end
 	  
-          when stg='' then
+          when stg				    = '' then
             nop
 	  
           otherwise
 	    
 	    -- find stages to call stage arg for
-            se = rexx ''
-            loop cs=1 to 99
+            se					    = rexx ''
+            loop cs				    = 1 to 99
               do
-                stgc = Class.forName(String 'org.netrexx.njpipes.stages.'stg.word(1))
+                stgc				    = Class.forName(String 'org.netrexx.njpipes.stages.'stg.word(1))
               catch ClassNotFoundException
-                stgc = Class.forName(String 'org.netrexx.njpipes.stages._'stg.word(1))
+                stgc				    = Class.forName(String 'org.netrexx.njpipes.stages._'stg.word(1))
               end
-              stgi = utils stgc.newInstance()
-              astg = stgi.stageArg(stg.subword(2))
-              if astg='' then
+              stgi				    = utils stgc.newInstance()
+              astg				    = stgi.stageArg(stg.subword(2))
+              if astg				    = '' then
                 leave
               else do
-                se[cs] = stg.left(stg.pos(astg)-1)
-                stg = astg
+                se[cs]				    = stg.left(stg.pos(astg)-1)
+                stg				    = astg
               end
             catch IllegalArgumentException
             catch ClassNotFoundException
@@ -307,56 +315,56 @@ class compiler extends Object public
             catch IllegalAccessException
             catch NoSuchMethodError
             finally
-              se[cs] = stg
+              se[cs]				    = stg
             end cs
 	    
 	    -- setup common info for all stageExits
 	    
-            pInfo[1] = i+1
-            pInfo[2] = label
-            pInfo[5] = work
-            pInfo[8] = not[i+1]
-            pInfo[9] = (j=1)
-            pInfo[10] = (piece='')
-            code[i+1,0] = 0
+            pInfo[1]				    = i+1
+            pInfo[2]				    = label
+            pInfo[5]				    = work
+            pInfo[8]				    = not[i+1]
+            pInfo[9]				    = (j=1)
+            pInfo[10]				    = (piece='')
+            code[i+1,0]				    = 0
 	    
 	    -- call stageExits for all stages in reverse order rebuilding the stg string
 	    
-            stg = ''
-            loop cs = cs to 1 by -1
+            stg					    = ''
+            loop cs				    = cs to 1 by -1
 	      
-              stg = se[cs]||stg               -- restore the stage command
+              stg				    = se[cs]||stg               -- restore the stage command
 	      
-              pInfo[3] = stg.word(1)         -- setup Info for it
-              pInfo[4] = stg.subword(2)
-              pInfo[11] = pInfo[3]
+              pInfo[3]				    = stg.word(1)         -- setup Info for it
+              pInfo[4]				    = stg.subword(2)
+              pInfo[11]				    = pInfo[3]
 	      
               loop while pInfo[11]<>''
                 do
-                  stgc = Class.forName(String 'org.netrexx.njpipes.stages.'pInfo[11])
+                  stgc				    = Class.forName(String 'org.netrexx.njpipes.stages.'pInfo[11])
                 catch ClassNotFoundException
-                  stgc = Class.forName(String 'org.netrexx.njpipes.stages._'pInfo[11])
-                  pInfo[3] = '_'pInfo[3]
+                  stgc				    = Class.forName(String 'org.netrexx.njpipes.stages._'pInfo[11])
+                  pInfo[3]			    = '_'pInfo[3]
                 end
-                stgi = utils stgc.newInstance()
-                pInfo[11] = ''
+                stgi				    = utils stgc.newInstance()
+                pInfo[11]			    = ''
                 if stgi.stageExit(pInfo,code[i+1]) then do
-                  label = pInfo[2].strip('B')
-                  if label.left(2)='--' then do
+                  label				    = pInfo[2].strip('B')
+                  if label.left(2)		    = '--' then do
                     say 'Warning - stageExits overloaded label at 'stg
                     return 16
                   end
                   if label.left(1)<>'-' then
-                    lstream = 0
+                    lstream			    = 0
                   else do
-                    lstream = 1
-                    label = label.substr(2)
+                    lstream			    = 1
+                    label			    = label.substr(2)
                   end
-                  stg = pinfo[3]' 'pInfo[4]
-                  work = pInfo[5]
+                  stg				    = pinfo[3]' 'pInfo[4]
+                  work				    = pInfo[5]
                   if work<>'' & work.strip('T').right(1)<>pend then
-                    work = work' 'pend
-                  not[i+1] = pInfo[8]
+                    work			    = work' 'pend
+                  not[i+1]			    = pInfo[8]
                 end
               catch ClassNotFoundException
               catch InstantiationException
@@ -364,7 +372,7 @@ class compiler extends Object public
               catch IllegalArgumentException
               catch NoSuchMethodError
                 say 'Warning - Missing constructor 'stg'() stageExit was not called'
-              catch err=StageError
+              catch err				    = StageError
                 say err.getMessage()
                 return err.rc()
               end
@@ -387,155 +395,157 @@ class compiler extends Object public
                   say 'Error - Label 'label' must not be numeric'
                   return 16
                 end
-                i = i+1
-                s[i] = stg.strip('B')
-                l[label] = i
-                c[p,j] = i
-                ls[p,j] = lstream
+                i				    = i+1
+                s[i]				    = stg.strip('B')
+                l[label]			    = i
+                c[p,j]				    = i
+                ls[p,j]				    = lstream
               end
             else
               do
-                if label.left(1)='*' then
+                if label.left(1)		    = '*' then
                   do
                     if label.length()<3 then do
                       say 'Error - connectors must be named'
                       return 16
                     end
-                    k = k+1                -- define a link connector
-                    l[k] = label.substr(2)
-                    c[p,j] = -k
+                    k				    = k+1                -- define a link connector
+                    l[k]			    = label.substr(2)
+                    c[p,j]			    = -k
                   end
                 else                         -- replace with stage number
                 do
-                  if l[label]=0 then do
+                  if l[label]			    = 0 then do
                     say 'Error - Label 'label' not defined'
                     return 16
                   end
-                  if c[p,j-1]=l[label] then do
+                  if c[p,j-1]			    = l[label] then do
                     say 'Error - Use a nop stage between 'label' definition a second use'
                     return 16
                   end
-                  c[p,j]  = l[label]
-                  ls[p,j] = lstream
+                  c[p,j]			    = l[label]
+                  ls[p,j]			    = lstream
                 end
               end
           end
         else
           do                                    -- build an unlabeled stage
-            i = i+1
-            s[i] = stg.strip('B')
-            c[p,j] = i
+            i					    = i+1
+            s[i]				    = stg.strip('B')
+            c[p,j]				    = i
           end
       end j
     end p
-    s[0] = i     -- number of stages
-    l[0] = k     -- number of links
-    r[0] = m     -- number of pipes
+    s[0]					    = i     -- number of stages
+    l[0]					    = k     -- number of links
+    r[0]					    = m     -- number of pipes
     
-    n = n+1
+    n						    = n+1
     
     -- standard imports
-    d = rexx ''
+    d						    = rexx ''
     
-    if d[0]='' then
+    if d[0]					    = '' then
       do
-        o[n+1]='import org.netrexx.njpipes.pipes.'
-        o[n+2]='import org.netrexx.njpipes.stages.'
-        n = n+2
+        o[n+1]					    = 'import org.netrexx.njpipes.pipes.'
+        o[n+2]					    = 'import org.netrexx.njpipes.stages.'
+        n					    = n+2
       end
     else
-      loop i=1 to d[0]
-        o[n+1] = d[i]
-        n = n+1
+      loop i					    = 1 to d[0]
+        o[n+1]					    = d[i]
+        n					    = n+1
       end
     
     -- process package statement
     
-    i = opts.wordpos('package')
+    i						    = opts.wordpos('package')
     if i>0 then do
-      o[n+1] = opts.subword(i,2)
-      n = n+1
-      opts = opts.delword(i,2)
+      o[n+1]					    = opts.subword(i,2)
+      n						    = n+1
+      opts					    = opts.delword(i,2)
     end
     
     -- process imports
     
-    i = opts.wordpos('import')
+    i						    = opts.wordpos('import')
     loop while i>0
-      o[n+1] = opts.subword(i,2)
-      n = n+1
-      opts = opts.delword(i,2)
-      i = opts.wordpos('import')
+      o[n+1]					    = opts.subword(i,2)
+      n						    = n+1
+      opts					    = opts.delword(i,2)
+      i						    = opts.wordpos('import')
     end
-    n = n+1
+    n						    = n+1
     
     if opts<>'' then
-      tonrc = opts
+      tonrc					    = opts
     
     
     -- build headers
     
-    o[n+1]='options binary'
-    o[n+3]='class 'pInfo' extends org.netrexx.njpipes.pipes.pipe final'
-    o[n+5]='properties static private'
-    o[n+7]='   pool = Stack()'
-    n = n+8
+    o[n+1]					    = 'options binary'
+    o[n+3]					    = 'class 'pInfo' extends org.netrexx.njpipes.pipes.pipe final'
+    o[n+5]					    = 'properties static private'
+    o[n+7]					    = '   pool = Stack()'
+    n						    = n+8
     
     
     -- link variables
     
     if l[0]>0 then do
       
-      o[n+1] = 'properties public'
-      n = n+1
+      o[n+1]					    = 'properties public'
+      n						    = n+1
       
-      loop i=1 to l[0]
-        o[n+1] = l[i]' = link'
-        n = n+1
+      loop i					    = 1 to l[0]
+        o[n+1]					    = l[i]' = link'
+        n					    = n+1
       end i
-      n = n+1
+      n						    = n+1
       
     end
     
     -- pipe variable
     
-    o[n+1] = 'properties private'
-    n = n+2
+    o[n+1]					    = 'properties private'
+    n						    = n+2
     
     if r[0]>0 then do
-      loop i=1 to r[0]
-        parse r[i] name '=' type '(' .
-        o[n+1] = name' = 'type.strip('B')
-        n = n+1
+      loop i					    = 1 to r[0]
+        parse r[i] name '			    = ' type '(' .
+        o[n+1]					    = name' = 'type.strip('B')
+        n					    = n+1
       end i
-    n = n+1
+    n						    = n+1
     end
     
     -- stage variables
-    loop i=1 to s[0]
+    loop i					    = 1 to s[0]
       if r[s[i]] then do
-        o[n+1] = '_s_'i' = org.netrexx.njpipes.pipes.stage'
-        n = n+1
+        o[n+1]					    = '_s_'i' = org.netrexx.njpipes.pipes.stage'
+        n					    = n+1
       end
     end i
-    n = n+1
+    n						    = n+1
     -- build context method header
-    x = rexx 1
-    context = ''
-    loop i=1 to s[0]
+    x						    = rexx 1
+    context					    = ''
+    loop i					    = 1 to s[0]
       parse s[i] stg work .
+
+      
       if r[stg] then do
         parse stg stg '(' .
-        stgc = Class.forName(String 'org.netrexx.njpipes.stages.'stg)
-        stgi = utils stgc.newInstance()
-        ra = stgi.rexxArg(work)
+        stgc					    = Class.forName(String 'org.netrexx.njpipes.stages.'stg)
+        stgi					    = utils stgc.newInstance()
+        ra					    = stgi.rexxArg(work)
         if ra<>'' then do
-          if context = '' then
-            context = ra'=Rexx'
+          if context				    = '' then
+            context				    = ra'=Rexx'
           else
             if x[work] then
-              context = context','ra'=Rexx'
-          x[work] = 0
+              context				    = context','ra'=Rexx'
+          x[work]				    = 0
         end
       catch ClassNotFoundException
       catch InstantiationException
@@ -545,28 +555,28 @@ class compiler extends Object public
         nop
       end
     end
-    x = null
+    x						    = null
     -- generate the context method body
     
     if context<>'' then do
       
-      o[n+2] = 'method setContext('context') returns pipe'
+      o[n+2]					    = 'method setContext('context') returns pipe'
       --    say 'Info - 'o[n+2].word(2)
-      n = n+3
+      n						    = n+3
       
-      x = rexx 1
-      loop i=1 to s[0]
+      x						    = rexx 1
+      loop i					    = 1 to s[0]
         parse s[i] stg work .
         if r[stg] then do
           parse stg stg '(' .
-          stgc = Class.forName(String 'org.netrexx.njpipes.stages.'stg)
-          stgi = utils stgc.newInstance()
-          ra = stgi.rexxArg(work)
+          stgc					    = Class.forName(String 'org.netrexx.njpipes.stages.'stg)
+          stgi					    = utils stgc.newInstance()
+          ra					    = stgi.rexxArg(work)
           if ra<>'' then
             if x[work] then do
-              o[n+1] = '   setRexx('''work''','work')'
-              n = n+1
-              x[work] = 0
+              o[n+1]				    = '   setRexx('''work''','work')'
+              n					    = n+1
+              x[work]				    = 0
             end
         catch ClassNotFoundException
         catch InstantiationException
@@ -576,141 +586,141 @@ class compiler extends Object public
         end
       end i
       
-      o[n+2] = 'return (pipe this)'
-      n = n+3
+      o[n+2]					    = 'return (pipe this)'
+      n						    = n+3
       
     end
     
     -- constructor method header
     
-    o[n+1] = 'method 'pInfo'(a=object null)'
-    o[n+2] = '   setup(a)'
-    n = n+3
+    o[n+1]					    = 'method 'pInfo'(a=object null)'
+    o[n+2]					    = '   setup(a)'
+    n						    = n+3
     
     -- build reset method
     
-    o[n+1] ='method reset() private'
-    o[n+3] ='   stage_reset()'
-    o[n+4] ='   pipe_reset()'
-    n=n+5
+    o[n+1]					    = 'method reset() private'
+    o[n+3]					    = '   stage_reset()'
+    o[n+4]					    = '   pipe_reset()'
+    n						    = n+5
     
     if r[0]>0 then do
-      loop i=1 to r[0]
-        parse r[i] name '=' defn '(' pargs ')'
-        o[n+1] = '   'name' = 'defn'.get('pargs')'
+      loop i					    = 1 to r[0]
+        parse r[i] name '			    = ' defn '(' pargs ')'
+        o[n+1]					    = '   'name' = 'defn'.get('pargs')'
         parse defn type '('
-        o[n+2] = '   'name'.setName('''type.strip('B')'_'i''')'
-        n = n+3
+        o[n+2]					    = '   'name'.setName('''type.strip('B')'_'i''')'
+        n					    = n+3
       end i
     end
     
-    loop i=1 to s[0]
+    loop i					    = 1 to s[0]
       if r[s[i]] then do
-        o[n+1] = '   _s_'i'.stage_reset()'
-        n = n+1
+        o[n+1]					    = '   _s_'i'.stage_reset()'
+        n					    = n+1
       end
     end
-    n = n+1
+    n						    = n+1
     
     
     -- build pool constructor
     
-    o[n+1] ='method get(a=object null) returns 'pInfo' static'
-    o[n+3] ='   do'
-    o[n+4] ='      do protect pool'
-    o[n+5] ='         e = 'pInfo' pool.pop()'
-    o[n+6] ='      end'
-    o[n+7] ='      e.reset()'
-    o[n+8] ='      e.setArg(a)'
-    o[n+9] ='   catch EmptyStackException'
-    o[n+10]='      e = 'pInfo'(a)'
-    o[n+11]='   end'
-    o[n+12]='   e.config()'
-    o[n+13]='   return e'
-    n = n+14
+    o[n+1]					    = 'method get(a=object null) returns 'pInfo' static'
+    o[n+3]					    = '   do'
+    o[n+4]					    = '      do protect pool'
+    o[n+5]					    = '         e = 'pInfo' pool.pop()'
+    o[n+6]					    = '      end'
+    o[n+7]					    = '      e.reset()'
+    o[n+8]					    = '      e.setArg(a)'
+    o[n+9]					    = '   catch EmptyStackException'
+    o[n+10]					    = '      e = 'pInfo'(a)'
+    o[n+11]					    = '   end'
+    o[n+12]					    = '   e.config()'
+    o[n+13]					    = '   return e'
+    n						    = n+14
     
     -- start of pipe setup method
     
-    o[n+1] = 'method setup(a=object) private'
-    o[n+3] = '   setArg(a)'
-    o[n+4] = '   setName('''pInfo''')'
-    o[n+5] = '   setRunaway('stall')'
-    n = n+6
+    o[n+1]					    = 'method setup(a=object) private'
+    o[n+3]					    = '   setArg(a)'
+    o[n+4]					    = '   setName('''pInfo''')'
+    o[n+5]					    = '   setRunaway('stall')'
+    n						    = n+6
     
     -- build stages definitions
     
-    loop i=1 to s[0]
+    loop i					    = 1 to s[0]
       if r[s[i]] then do
         parse s[i] stg ' ' args
         if stg.pos('(')>=stg.pos(')') then    -- constructor processing (sort)
-          o[n+1] = '   _s_'i' = 'stg'()'
+          o[n+1]				    = '   _s_'i' = 'stg'()'
         else do
           say 'Error - stage contructor must be (), found: 'stg
           return 16
         end
-        if stg.right(i.length())=i then
-          o[n+2] = '   _s_'i'.setName('''stg''')'
+        if stg.right(i.length())		    = i then
+          o[n+2]				    = '   _s_'i'.setName('''stg''')'
         else
-          o[n+2] = '   _s_'i'.setName('''stg'_'i''')'
-        n = n+3
+          o[n+2]				    = '   _s_'i'.setName('''stg'_'i''')'
+        n					    = n+3
       end
     end i
-    o[n+1] = '   setup2()'
-    n = n+2
+    o[n+1]					    = '   setup2()'
+    n						    = n+2
     
     -- add the stages
     
-    loop i=1 to s[0]
+    loop i					    = 1 to s[0]
       if r[s[i]] then do
-        o[n+1] = '   addstage(_s_'i')'
-        n = n+1
+        o[n+1]					    = '   addstage(_s_'i')'
+        n					    = n+1
       end
     end i
-    n = n+1
+    n						    = n+1
     
     -- add stages and build connections
     
-    o[n+1]='method config() private'
-    n = n+2
+    o[n+1]					    = 'method config() private'
+    n						    = n+2
     
     -- build pipe definitions
     
     if r[0]>0 then do
       -- check
-      loop i=1 to r[0]
-        parse r[i] name '=' defn '(' pargs ')'
-        o[n+1] = '   'name' = 'defn'.get('pargs')'
+      loop i					    = 1 to r[0]
+        parse r[i] name '			    = ' defn '(' pargs ')'
+        o[n+1]					    = '   'name' = 'defn'.get('pargs')'
         parse defn type '('
-        o[n+2] = '   'name'.setName('''type.strip('B')'_'i''')'
-        n = n+3
+        o[n+2]					    = '   'name'.setName('''type.strip('B')'_'i''')'
+        n					    = n+3
       end i
     
     end
     
     -- build connections and links
     
-    f = rexx 0                         -- reference count in stages
-    loop i = 1 to p
+    f						    = rexx 0                         -- reference count in stages
+    loop i					    = 1 to p
       if ls[i,1] then                              -- reset stream no
-        f[c[i,1]] = -1
-	loop j = 2 to 999 while c[i,j]<>0
+        f[c[i,1]]				    = -1
+	loop j					    = 2 to 999 while c[i,j]<>0
           if ls[i,j] then                           -- reset stream no
-            f[c[i,j]] = -1
+            f[c[i,j]]				    = -1
             select
               when c[i,j-1]<0 & c[i,j]<0 then
 		nop
               when c[i,j-1]<0 then
-		o[n+1] = '   'l[-c[i,j-1]]' = link(_s_'c[i,j]','f[c[i,j]]',1)'
+		o[n+1]				    = '   'l[-c[i,j-1]]' = link(_s_'c[i,j]','f[c[i,j]]',1)'
               when c[i,j]<0 then
 		do
-                  k = f[c[i,j-1]]                  -- not logic
+                  k				    = f[c[i,j-1]]                  -- not logic
                   if not[c[i,j-1]] & k<2 then
-                    k = \ k
-                  o[n+1] = '   'l[-c[i,j]]' = link(_s_'c[i,j-1]','k',0)'
+                    k				    = \ k
+                  o[n+1]			    = '   'l[-c[i,j]]' = link(_s_'c[i,j-1]','k',0)'
 		end
               otherwise
 		select
-                  when r[s[c[i,j-1]]]+r[s[c[i,j]]]=0 then
+                  when r[s[c[i,j-1]]]+r[s[c[i,j]]]  = 0 then
                     do
                       say 'Error - need to use a nop stage between 's[c[i,j-1]]' 'ssep' 's[c[i,j]]
                       return 16
@@ -718,240 +728,240 @@ class compiler extends Object public
                   when \r[s[c[i,j-1]]] then
                     do
                       parse s[c[i,j-1]] . '.' name '.' link .
-                      o[n+1] = '   connect('name'.'link',_s_'c[i,j]','f[c[i,j]]')'
+                      o[n+1]			    = '   connect('name'.'link',_s_'c[i,j]','f[c[i,j]]')'
                     end
                   when \r[s[c[i,j]]] then
                     do
                       parse s[c[i,j]] link '.' name '.' .
-                      k = f[c[i,j-1]]
+                      k				    = f[c[i,j-1]]
                       if not[c[i,j-1]] & k<2 then      -- not logic
-                        k = \ k
-                        o[n+1] = '   connect(_s_'c[i,j-1]','k','name'.'link')'
+                        k			    = \ k
+                        o[n+1]			    = '   connect(_s_'c[i,j-1]','k','name'.'link')'
                     end
                   otherwise
                     do
-                      k = f[c[i,j-1]]                  -- not logic
+                      k				    = f[c[i,j-1]]                  -- not logic
                       if not[c[i,j-1]] & k<2 then
-                        k = \ k
-                      o[n+1] = '   connect(_s_'c[i,j-1]','k',_s_'c[i,j]','f[c[i,j]]')'
+                        k			    = \ k
+                      o[n+1]			    = '   connect(_s_'c[i,j-1]','k',_s_'c[i,j]','f[c[i,j]]')'
 		      --                      say i j s[c[i,j-1]] c[i,j-1] s[c[i,j]] c[i,j] k f[c[i,j]]
                     end
 		end
             end
-            n = n+1
+            n					    = n+1
             if f[c[i,j-1]]>=0 then
-              f[c[i,j-1]] = f[c[i,j-1]]+1
+              f[c[i,j-1]]			    = f[c[i,j-1]]+1
             else
-              f[c[i,j-1]] = f[c[i,j-1]]-1
+              f[c[i,j-1]]			    = f[c[i,j-1]]-1
 	end j
 	if f[c[i,j-1]]>=0 then
-          f[c[i,j-1]] = f[c[i,j-1]]+1
+          f[c[i,j-1]]				    = f[c[i,j-1]]+1
 	else
-          f[c[i,j-1]] = f[c[i,j-1]]-1
-	c[i,0] = j-1
+          f[c[i,j-1]]				    = f[c[i,j-1]]-1
+	c[i,0]					    = j-1
     end i
-    n = n+1
+    n						    = n+1
     
     -- add links to table
     
     if l[0]>0 then do
-      loop i=1 to l[0]
-        o[n+1]='   putLink("'l[i]'",'l[i]')'
-        n = n+1
+      loop i					    = 1 to l[0]
+        o[n+1]					    = '   putLink("'l[i]'",'l[i]')'
+        n					    = n+1
       end i
-    n = n+1
+    n						    = n+1
     end
     
     -- add stages and build connections
     
-    o[n+1]='method setup2() private'
-    n = n+2
+    o[n+1]					    = 'method setup2() private'
+    n						    = n+2
     
     -- set priorites to give the JVM hints
     
-    ok = rexx 1
-    loop i = 1 to p
-      j = c[i,c[i,0]]
+    ok						    = rexx 1
+    loop i					    = 1 to p
+      j						    = c[i,c[i,0]]
       if j>0 & ok[j] then do
         if f[j]<-1 | f[j]>1 then
-          o[n+1] = '   _s_'j'.setRelPriority(+1)'
+          o[n+1]				    = '   _s_'j'.setRelPriority(+1)'
         else
-          o[n+1] = '   _s_'j'.setRelPriority(+2)'
-      ok[j] = 0
+          o[n+1]				    = '   _s_'j'.setRelPriority(+2)'
+      ok[j]					    = 0
       end
-      n = n+1
+      n						    = n+1
     end i
     
     -- set static arguments
     
-    loop i=1 to s[0]
+    loop i					    = 1 to s[0]
       parse s[i] stg ' ' args                      -- get filtered argument
-      sargs = args.strip('L')                      -- strip leading blanks
+      sargs					    = args.strip('L')                      -- strip leading blanks
       if r[stg] then
         select
           when sargs.pos('arg(')>0 then
             iterate
-          when sargs.left(3)='_s_' & sargs.length()>3 then do
-            o[n+1] = '   _s_'i'.setArg(Object 'sargs')'
-            n = n+1
+          when sargs.left(3)			    = '_s_' & sargs.length()>3 then do
+            o[n+1]				    = '   _s_'i'.setArg(Object 'sargs')'
+            n					    = n+1
           end
-          when args<>'' & stg.upper()='LITERAL' then do
-            args = args.changestr('"','""')
-            o[n+1] = '   _s_'i'.setArg(Rexx "'args'")'
-            n = n+1
+          when args<>'' & stg.upper()		    = 'LITERAL' then do
+            args				    = args.changestr('"','""')
+            o[n+1]				    = '   _s_'i'.setArg(Rexx "'args'")'
+            n					    = n+1
           end
           when sargs<>'' then do
-            sargs = sargs.changestr('"','""')
-            o[n+1] = '   _s_'i'.setArg(Rexx "'sargs'")'
-            n = n+1
+            sargs				    = sargs.changestr('"','""')
+            o[n+1]				    = '   _s_'i'.setArg(Rexx "'sargs'")'
+            n					    = n+1
           end
           otherwise
         end
     end i
-    n = n+1
+    n						    = n+1
     
     -- run method header
     
-    o[n+2] = 'method run()'
-    n = n+3
+    o[n+2]					    = 'method run()'
+    n						    = n+3
     
     -- set dynamic arguments
     
-    loop i=1 to s[0]
+    loop i					    = 1 to s[0]
       parse s[i] stg ' ' args                      -- get filtered argument
-      sargs = args.strip('L')                      -- strip leading blanks
+      sargs					    = args.strip('L')                      -- strip leading blanks
       if r[stg] then
         select
-          when args='arg(_)' | args='arg()' then do         -- passthru
-            o[n+1] = '   _s_'i'.setArg(arg(),boolean 1)'   -- for stageexit
-            n = n+1
+          when args				    = 'arg(_)' | args='arg()' then do         -- passthru
+            o[n+1]				    = '   _s_'i'.setArg(arg(),boolean 1)'   -- for stageexit
+            n					    = n+1
           end
-          when sargs.left(4)='arg(' & sargs.countstr('arg(')=1 & sargs.right(1)='}' then do
-            o[n+1] = '   _s_'i'.setArg('sargs.changestr("}",")")',boolean 1)'
-            n = n+1
+          when sargs.left(4)			    = 'arg(' & sargs.countstr('arg(')=1 & sargs.right(1)='}' then do
+            o[n+1]				    = '   _s_'i'.setArg('sargs.changestr("}",")")',boolean 1)'
+            n					    = n+1
           end
           when sargs.pos('arg(')>0 then do
-            sargs = sargs.strip('B','"')              -- unquote string
-            sargs = sargs.changestr('"','""')         -- escape "
-            sargs = sargs.changestr('arg(','"arg(')   -- unquote args(..)
-            sargs = sargs.changestr('}',')"')
-            sargs = '"'sargs'"'                       -- requote
-            if sargs.left(2)='""' then                   -- strip "" s
-              sargs = sargs.delstr(1,2)
-              if sargs.right(2)='""' then                  -- fixup 1
-                sargs = sargs.delstr(sargs.length()-1,2)
-		if sargs.right(7)='"arg()"' then             -- fixup 2
-                  sargs = sargs.left(sargs.length()-1)
-		  if sargs.left(7)='"arg()"' then              -- fixup 3
-                    sargs = sargs.substr(2)
-		    o[n+1] = '   _s_'i'.setArg('sargs',boolean 1)'
-		    n = n+1
+            sargs				    = sargs.strip('B','"')              -- unquote string
+            sargs				    = sargs.changestr('"','""')         -- escape "
+            sargs				    = sargs.changestr('arg(','"arg(')   -- unquote args(..)
+            sargs				    = sargs.changestr('}',')"')
+            sargs				    = '"'sargs'"'                       -- requote
+            if sargs.left(2)			    = '""' then                   -- strip "" s
+              sargs				    = sargs.delstr(1,2)
+              if sargs.right(2)			    = '""' then                  -- fixup 1
+                sargs				    = sargs.delstr(sargs.length()-1,2)
+		if sargs.right(7)		    = '"arg()"' then             -- fixup 2
+                  sargs				    = sargs.left(sargs.length()-1)
+		  if sargs.left(7)		    = '"arg()"' then              -- fixup 3
+                    sargs			    = sargs.substr(2)
+		    o[n+1]			    = '   _s_'i'.setArg('sargs',boolean 1)'
+		    n				    = n+1
           end
           otherwise
         end
     end i
-    n = n+1
+    n						    = n+1
     
     -- start pipes used as stages
     
     if r[0]>0 then do
-      loop i=1 to r[0]
-        parse r[i] name '=' .
-        o[n+1] = '   addpipe('name')'
-        n = n+1
+      loop i					    = 1 to r[0]
+        parse r[i] name '			    = ' .
+        o[n+1]					    = '   addpipe('name')'
+        n					    = n+1
       end i
-    n = n+1
+    n						    = n+1
     end
     
     -- insert debug call
     if lvl>0 then do
-      o[n+2] = '   setDebug('lvl')'
-      n = n+2
+      o[n+2]					    = '   setDebug('lvl')'
+      n						    = n+2
     end
     
     -- start this pipe
     
-    o[n+1] = '   go()'
-    o[n+2] = '   do protect pool'
-    o[n+3] = '      pool.push(this)'
-    o[n+4] = '   end'
-    n = n+5
+    o[n+1]					    = '   go()'
+    o[n+2]					    = '   do protect pool'
+    o[n+3]					    = '      pool.push(this)'
+    o[n+4]					    = '   end'
+    n						    = n+5
     
     
     -- main method header
     
-    o[n+1] = 'method main(a=String[]) static'
-    o[n+3] = '   p = 'pInfo'.get(buildArg(a))'
-    o[n+4] = '   p.runpipe()'
-    o[n+5] = '   if p.rc()<>0 & p.rc()<>12 then say "RC="p.rc'
-    -- o[n+6] = '   ThreadPool.stop()'
-    o[n+8] = 'exit p.rc()'
-    n=n+9
+    o[n+1]					    = 'method main(a=String[]) static'
+    o[n+3]					    = '   p = 'pInfo'.get(buildArg(a))'
+    o[n+4]					    = '   p.runpipe()'
+    o[n+5]					    = '   if p.rc()<>0 & p.rc()<>12 then say "RC="p.rc'
+    -- o[n+6]					    = '   ThreadPool.stop()'
+    o[n+8]					    = 'exit p.rc()'
+    n						    = n+9
     
     
     -- add code from stageExit invokations
     
-    loop i=1 to s[0]
+    loop i					    = 1 to s[0]
       if code[i,0]<>0 then do
-        loop j=1 to code[i,0]
-          n = n+1
-          o[n] = code[i,j]
+        loop j					    = 1 to code[i,0]
+          n					    = n+1
+          o[n]					    = code[i,j]
         end
-      n = n+2
+      n						    = n+2
       end
     end
     
     
     -- save the pipe's netrexx source
     
-    o[0] = n
-    rc = writepipe.get(pInfo'.nrx').setContext(o).runpipe()
+    o[0]					    = n
+    rc						    = writepipe.get(pInfo'.nrx').setContext(o).runpipe()
     
     return rc
     
     
-  method compiler(a=rexx,squelch='false')
+  method compiler(a				    = rexx,squelch='false')
     
-    keep   = boolean 0             -- assume nokeep
-    nokeep = Rexx ''               -- generated .nrx files to delete
-    work   = boolean 0
-    parms  = Rexx ''               -- pass to netrexx
-    jlist  = Rexx ''               -- pass to javac
-    jx     = Rexx ''               -- javac options
+    keep					    = boolean 0             -- assume nokeep
+    nokeep					    = Rexx ''               -- generated .nrx files to delete
+    work					    = boolean 0
+    parms					    = Rexx ''               -- pass to netrexx
+    jlist					    = Rexx ''               -- pass to javac
+    jx						    = Rexx ''               -- javac options
     
-    verb   = '-verbose0 -nologo'           -- default verbose and crossref settings chg rvj 20110816 quiet it down for interpreting
-    xref   = '-nocrossref'
+    verb					    = '-verbose0 -nologo'           -- default verbose and crossref settings chg rvj 20110816 quiet it down for interpreting
+    xref					    = '-nocrossref'
     
     parse a . '(' name compopts ')' text
     if name<>'' then                      -- from command line
       do
-        i = compopts.wordpos('-gen')
+        i					    = compopts.wordpos('-gen')
         if i>0 then
-          compopts = compopts.delword(i)
+          compopts				    = compopts.delword(i)
         else
-          nokeep = name'.nrx'
+          nokeep				    = name'.nrx'
 	
-        i = compopts.wordpos('-nogen')
+        i					    = compopts.wordpos('-nogen')
         if i>0 then
-          compopts = compopts.delword(i)
+          compopts				    = compopts.delword(i)
 	
         if compopts.pos('-verbose')>0 then
 	  do
-            verb = ''
-	    nv = NrVersion()
+            verb				    = ''
+	    nv					    = NrVersion()
 	    say nv.getPipesVersion()
 	    say nv.getPipesCopyright()
 	  end
 	
         if compopts.pos('crossref')>0 then
-          xref = ''
+          xref					    = ''
 	
-        if verb = '' then say 'Building pipe 'name
+        if verb					    = '' then say 'Building pipe 'name
 	
-        rc = compile('( 'name' 'compopts' ) 'text,squelch)
-        if rc=0 then do
-          parms = tonrc' 'name
-          work = 1
+        rc					    = compile('( 'name' 'compopts' ) 'text,squelch)
+        if rc					    = 0 then do
+          parms					    = tonrc' 'name
+          work					    = 1
         end
       end
     else                                     -- from a list of files
@@ -960,79 +970,79 @@ class compiler extends Object public
       parse a w ' ' a                    -- get stripped word
       parse w w '.' .
       
-      njp = java.io.file(String w'.njp')
-      nrx = java.io.file(String w'.nrx')
-      grp = java.io.file(String w'.grp')
+      njp					    = java.io.file(String w'.njp')
+      nrx					    = java.io.file(String w'.nrx')
+      grp					    = java.io.file(String w'.grp')
       
       select
 	
-        when w='-gen' then             -- options for pipes
-          keep = 1
+        when w					    = '-gen' then             -- options for pipes
+          keep					    = 1
 	  
-        when w='-nogen' then           -- options for pipes
-          keep = 0
+        when w					    = '-nogen' then           -- options for pipes
+          keep					    = 0
 	  
         when w.pos('verbose')>0 then
-          verb = w
+          verb					    = w
 	
         when w.pos('crossref')>0 then
-          xref = w
+          xref					    = w
 	
-        when w.left(1)='-' then         -- pass to netrexx
-          parms = parms' 'w
+        when w.left(1)				    = '-' then         -- pass to netrexx
+          parms					    = parms' 'w
 	  
         when njp.exists() then
           do
-            savekeep = keep
-            if verb = w then say 'Processing 'w'.njp'
+            savekeep				    = keep
+            if verb				    = w then say 'Processing 'w'.njp'
 	    
-            aa = rexx ''
-            aa['fin'] = w'.njp'
-            aa['xout'] = w
-            ll = rexx ''
-	    r = processNjp.get(aa).setContext(ll).runpipe()
-            ll[1] = ll[1].strip('L')
+            aa					    = rexx ''
+            aa['fin']				    = w'.njp'
+            aa['xout']				    = w
+            ll					    = rexx ''
+	    r					    = processNjp.get(aa).setContext(ll).runpipe()
+            ll[1]				    = ll[1].strip('L')
             if r>rc then
-              rc = r
+              rc				    = r
             if ll[1]<>'' then do
-              if verb = w then say 'Built 'll[1]
-              parms = parms' 'll[1]
-              work = 1
+              if verb				    = w then say 'Built 'll[1]
+              parms				    = parms' 'll[1]
+              work				    = 1
               if \keep then
-                nokeep = nokeep' 'll[1]
-              if parms.strip('T').right(5)='.java' then do
-                i = parms.words()
-                jlist = jlist' 'parms.word(i)
-                parms = parms.delword(i)
+                nokeep				    = nokeep' 'll[1]
+              if parms.strip('T').right(5)	    = '.java' then do
+                i				    = parms.words()
+                jlist				    = jlist' 'parms.word(i)
+                parms				    = parms.delword(i)
               end
             end
-            keep = savekeep
+            keep				    = savekeep
           end
 	
         when nrx.exists then
           do
-            parms = parms' 'w
-            work = 1
+            parms				    = parms' 'w
+            work				    = 1
           end
 	
         when grp.exists then
           do
             say 'Expanding group 'w
-            new = a
-	    r = readgroup.get(w'.grp').setContext(new).runpipe()
-            if r=0 then
-              a = new[1]
+            new					    = a
+	    r					    = readgroup.get(w'.grp').setContext(new).runpipe()
+            if r				    = 0 then
+              a					    = new[1]
             else do
-              say 'Error - problem reading group rc='r
+              say 'Error - problem reading group rc = 'r
               if r>rc then
-                rc = r
+                rc				    = r
             end
           end
 	
         otherwise
           say 'Error - 'w' is unrecognized.  Does the file exist?'
           if 2>rc then
-            rc = 2
+            rc					    = 2
 	  
       end
       
@@ -1042,39 +1052,39 @@ class compiler extends Object public
       
       if jlist<>'' then do
 	
-	jx[1]='-g'                  -- extract javac parms
-	jx[2]='-O'
-	jx[3]='-deprecation'
-	jx[4]='-sourcepath'         -- these use two words
-	jx[5]='-bootclasspath'
-	jx[6]='-extdirs'
-	jx[7]='-d'
-	jx[8]='-target'
+	jx[1]					    = '-g'                  -- extract javac parms
+	jx[2]					    = '-O'
+	jx[3]					    = '-deprecation'
+	jx[4]					    = '-sourcepath'         -- these use two words
+	jx[5]					    = '-bootclasspath'
+	jx[6]					    = '-extdirs'
+	jx[7]					    = '-d'
+	jx[8]					    = '-target'
 	
-	i = 1
+	i					    = 1
 	loop label outer while i<=parms.words()
-          loop j=1 to 8
+          loop j				    = 1 to 8
             if parms.word(i).abbrev(jx[j]) then do
               if j<4 then
 		do
-                  jlist = parms.word(i)' 'jlist
-                  parms = parms.delword(i)
+                  jlist				    = parms.word(i)' 'jlist
+                  parms				    = parms.delword(i)
 		end
               else
 		do
-                  jlist = parms.subword(i,2)' 'jlist
-                  parms = parms.delword(i,2)
+                  jlist				    = parms.subword(i,2)' 'jlist
+                  parms				    = parms.delword(i,2)
 		end
             iterate outer
             end
           end j
-          i = i+1
+          i					    = i+1
 	end
 	-- rename the java files
-	loop i=1 to jlist.words()
-          j = jlist.word(i)
-          jav = File(j)
-          tmp = File(j.changestr('.java','.njtmp'))
+	loop i					    = 1 to jlist.words()
+          j					    = jlist.word(i)
+          jav					    = File(j)
+          tmp					    = File(j.changestr('.java','.njtmp'))
           jav.renameTo(tmp)
           if \tmp.exists then
             say j.changestr('.java','.njtmp')' does not exist!!!'
@@ -1082,34 +1092,34 @@ class compiler extends Object public
 	
       end
 
-      p = verb' 'xref' 'parms
-      r = org.netrexx.process.NetRexxC.main(p)
+      p						    = verb' 'xref' 'parms
+      r						    = org.netrexx.process.NetRexxC.main(p)
 
       
       if r>rc then
-	rc = r
+	rc					    = r
       
       if jlist<>'' then do
 	-- recover the renamed files
-	loop i=1 to jlist.words()
-          j = jlist.word(i)
-          jav = File(j)
-          tmp = File(j.changestr('.java','.njtmp'))
+	loop i					    = 1 to jlist.words()
+          j					    = jlist.word(i)
+          jav					    = File(j)
+          tmp					    = File(j.changestr('.java','.njtmp'))
           tmp.renameTo(jav)
           if \jav.exists then
             say j' does not exist!!!'
 	end
       
-      args = String[jlist.words()+3]
-      args[0] = '-nowarn'
-      args[1] = '-classpath'
-      args[2] = System.getProperty('java.class.path')
-      loop i=1 to jlist.words()
-	args[i+2] = jlist.word(i)
+      args					    = String[jlist.words()+3]
+      args[0]					    = '-nowarn'
+      args[1]					    = '-classpath'
+      args[2]					    = System.getProperty('java.class.path')
+      loop i					    = 1 to jlist.words()
+	args[i+2]				    = jlist.word(i)
       end
       
-      javaloader=this.getClass().getClassLoader()
-      if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
+      javaloader				    = this.getClass().getClassLoader()
+      if javaloader.getParent()			    =                                             null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
 
       compilerChoice = System.getProperty("nrx.compiler","javac")
       select
