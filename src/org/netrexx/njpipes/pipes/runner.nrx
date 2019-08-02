@@ -13,7 +13,8 @@ import org.netrexx.address.
 -- Pipelines as possible, by enabling the process of speficying and running a
 -- pipe spec from the commandline.
 
--- 2019-07-30 first version
+-- 2019-07-30 first version. rvj
+-- 2019-08-02 enable running with specified pipe names. rvj
 class runner
 
   -- check arguments
@@ -22,25 +23,34 @@ class runner
   -- delete the generated class
   
   method main(args=String[]) static
-    arg=args[0] -- java stringarray to rexx variable
-
+    do
+      arg=Rexx
+      arg=args[0] -- java stringarray to rexx variable
+      if arg='' then signal ArrayIndexOutOfBoundsException
+    catch ArrayIndexOutOfBoundsException
     -- check for an empty specification, if so, then exit
-    if arg = '' then
-      do
-	say 'pipe: specify a pipeline to be executed.'
-	exit
-      end
+      say 'pipe: specify a pipeline to be executed.'
+      exit
+    end -- do
+    parse arg '(' className_ ')'
+    -- prepend a classname when absent and compile it
+    if className_<>'' then do
+      className_ = className_.word(1)
+      pipesrc = arg
+    end
+    else do
+      uid = Rexx(UUID.randomUUID().toString())
+      className_ = 'p'Rexx(uid.left(7))
+      pipesrc =  '('className_')' arg
+    end
 
-    uid = Rexx(UUID.randomUUID().toString())
-    className_ = 'p'Rexx(uid.left(7))
-    pipesrc =  '('className_')' arg
-    trace off
+
     do
       p = compiler(pipesrc,Rexx('true'))
     catch ex=org.netrexx.njpipes.pipes.ThreadQ
       return
     end
-
+    
     -- execute the generated class
     command    = ArrayList()
     command.add('java')

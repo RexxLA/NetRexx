@@ -1,49 +1,50 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *
+ *  Copyright (C) 2011-2019 Rexx Language Association
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  *
  */
 
--- 01/05/12 fix Emsg to iterrupt the stage too - we cannot let the stage run...  ejt
--- 01/05/11 fix exit logic to commit to -1 and report init errors.  ejt
--- 01/05/10 fix sever/autocommit logic so severs have priority.  ejt
--- 01/05/09 added severCallback for carefull use in threaded stages.  ejt
--- 01/05/07 fix counter() method logic so testing via counter(0) works.  ejt
--- 99/12/22 fixed checkOut to show correct rc for eofReport EITHER.  ejt
--- 99/12/21 selectInput and Output logic corrected (errors on W9x).  ejt
--- 99/05/12 selectInput and Output logic enhanced (remember reportEOF).  ejt
--- 99/05/09 REVERTED selectInput and Output no longer report rc=4, just 12.  ejt
--- 99/05/07 fixed a problem setting T and going.  ejt
--- 99/05/04 added reuse() method to override to reset static elements.  ejt
--- 98/12/06 use a hashtable to pass args.  ejt
--- 98/09/08 commit should have returned the pipes current return code.  ejt
--- 98/09/03 fixed protect logic in selectAnyInput.  ejt
--- 98/08/28 added the mrc methods and code as an alternate way to track the rc.  ejt
--- 98/08/28 selectInput/output now raise a stageerror if reselecting a severed stream.  ejt
--- 98/08/28 fix output to correctly protect its nullpointerexception routine.  ejt
--- 98/08/27 exit nolonger does commit(-1).  ejt
--- 98/08/27 support new stage error code, added Error method.  ejt
--- 98/08/27 work stage vars for peekto/readto.  ejt
--- 98/08/26 any debug options cause threads to be named.  ejt
--- 98/08/26 removed dead code in severOutput.  ejt
--- 98/08/26 added either option to eofReport (tested with selectanyinput).  ejt
--- 98/08/25 selectAnyInput now see all severs (eofReport needs this).  ejt
--- 98/08/25 eofReport state is not reset when stage is reused.  ejt
--- 98/08/25 improved stall setting logic.  ejt
--- 98/08/23 added dynamic arguement and doSetup() logic.  ejt
--- 98/08/23 startThread no longer uses a name.  ejt
--- 98/08/13 all interal peekto/readto/output force the class to stage.  ejt
--- 98/08/13 optimized rc logic.  ejt
--- 98/08/12 optimized runaway logic.  ejt
--- 98/08/11 optimized code.  ejt
--- 98/08/03 all stage instance objects now reused.  ejt
--- 98/08/02 deadlock between readto/peekto and commit fixed.  ejt
--- 98/08/02 commit logic fixed.  ejt
--- 98/08/01 handle poolable stages.  ejt
--- 98/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
+-- 2019/08/02 remove all jitcache references. rvj
+-- 2001/05/12 fix Emsg to iterrupt the stage too - we cannot let the stage run...  ejt
+-- 2001/05/11 fix exit logic to commit to -1 and report init errors.  ejt
+-- 2001/05/10 fix sever/autocommit logic so severs have priority.  ejt
+-- 2001/05/09 added severCallback for carefull use in threaded stages.  ejt
+-- 2001/05/07 fix counter() method logic so testing via counter(0) works.  ejt
+-- 1999/12/22 fixed checkOut to show correct rc for eofReport EITHER.  ejt
+-- 1999/12/21 selectInput and Output logic corrected (errors on W9x).  ejt
+-- 1999/05/12 selectInput and Output logic enhanced (remember reportEOF).  ejt
+-- 1999/05/09 REVERTED selectInput and Output no longer report rc=4, just 12.  ejt
+-- 1999/05/07 fixed a problem setting T and going.  ejt
+-- 1999/05/04 added reuse() method to override to reset static elements.  ejt
+-- 1998/12/06 use a hashtable to pass args.  ejt
+-- 1998/09/08 commit should have returned the pipes current return code.  ejt
+-- 1998/09/03 fixed protect logic in selectAnyInput.  ejt
+-- 1998/08/28 added the mrc methods and code as an alternate way to track the rc.  ejt
+-- 1998/08/28 selectInput/output now raise a stageerror if reselecting a severed stream.  ejt
+-- 1998/08/28 fix output to correctly protect its nullpointerexception routine.  ejt
+-- 1998/08/27 exit nolonger does commit(-1).  ejt
+-- 1998/08/27 support new stage error code, added Error method.  ejt
+-- 1998/08/27 work stage vars for peekto/readto.  ejt
+-- 1998/08/26 any debug options cause threads to be named.  ejt
+-- 1998/08/26 removed dead code in severOutput.  ejt
+-- 1998/08/26 added either option to eofReport (tested with selectanyinput).  ejt
+-- 1998/08/25 selectAnyInput now see all severs (eofReport needs this).  ejt
+-- 1998/08/25 eofReport state is not reset when stage is reused.  ejt
+-- 1998/08/25 improved stall setting logic.  ejt
+-- 1998/08/23 added dynamic arguement and doSetup() logic.  ejt
+-- 1998/08/23 startThread no longer uses a name.  ejt
+-- 1998/08/13 all interal peekto/readto/output force the class to stage.  ejt
+-- 1998/08/13 optimized rc logic.  ejt
+-- 1998/08/12 optimized runaway logic.  ejt
+-- 1998/08/11 optimized code.  ejt
+-- 1998/08/03 all stage instance objects now reused.  ejt
+-- 1998/08/02 deadlock between readto/peekto and commit fixed.  ejt
+-- 1998/08/02 commit logic fixed.  ejt
+-- 1998/08/01 handle poolable stages.  ejt
+-- 1998/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
 
 /* Futures 98/11/30 ejt.
 
@@ -1497,15 +1498,6 @@ method setDebug(l=int)
 method getDebug() returns int
 
    return p._debug
-
-
--- method setJITCache(c=Hashtable) returns pipe
-
---   return p.setJITCache(c)
-
--- method getJITCache() returns Hashtable
-
---    return p.JITCache
 
 method getPipeName()
 
