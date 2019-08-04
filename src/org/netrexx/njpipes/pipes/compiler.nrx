@@ -11,7 +11,6 @@ options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
---trace results
 -- 2019-08-01 add VM device driver shortcuts <,>,>> for diskr, diskw and diska. rvj
 -- 2019-07-30 changes for direct pipe execution. rvj
 -- 2014-08-23 change to use new javac and ecj invocation. rvj
@@ -44,16 +43,17 @@ class compiler extends Object public
   tonrc						    = rexx
   JC						    = Hashtable
   
-  method compile(a = rexx, squelch=rexx 0) inheritable returns int
-    if squelch <> 'true' then say a    
-    ssep	   = rexx '|'
+  method compile(a = rexx, squelch=boolean 0, pipeClassName=Rexx('')) inheritable returns int
+    
+    if \squelch then say a    
+    ssep   = rexx '|'
     pend   = rexx '?'
     pInfo  = rexx
     code   = rexx ''
     tonrc  = ''
     
     stall  = int 2000
-    config = 'pipes.cnf'
+    --config = 'pipes.cnf'
     
     lvl	   = rexx 0
     
@@ -203,7 +203,6 @@ class compiler extends Object public
 	end
 
 	-- call the compilerExit if it's a regular stage
-	
         if stg.word(1).right(1)			    = ':' then
           do                                    -- extract any labels
             parse stg label ':' stg
@@ -221,7 +220,6 @@ class compiler extends Object public
         select
 	  
           /* special processing to use pipes as stages */
-	  
           when stg.word(1).pos('		    = ')>0 then do
             if piece<>'' then do
               say 'Error - pipe definition 'stg' must be terminated by 'pend
@@ -299,7 +297,6 @@ class compiler extends Object public
             end cs
 	    
 	    -- setup common info for all stageExits
-	    
             pInfo[1]				    = i+1
             pInfo[2]				    = label
             pInfo[5]				    = work
@@ -309,7 +306,6 @@ class compiler extends Object public
             code[i+1,0]				    = 0
 	    
 	    -- call stageExits for all stages in reverse order rebuilding the stg string
-	    
             stg					    = ''
             loop cs				    = cs to 1 by -1
 	      
@@ -362,7 +358,6 @@ class compiler extends Object public
         end  -- select
 	
 	-- handle labels here
-	
         if label<>'' then
           do
             if stg<>'' then
@@ -438,7 +433,6 @@ class compiler extends Object public
       end
     
     -- process package statement
-    
     i						    = opts.wordpos('package')
     if i>0 then do
       o[n+1]					    = opts.subword(i,2)
@@ -447,7 +441,6 @@ class compiler extends Object public
     end
     
     -- process imports
-    
     i						    = opts.wordpos('import')
     loop while i>0
       o[n+1]					    = opts.subword(i,2)
@@ -462,7 +455,6 @@ class compiler extends Object public
     
     
     -- build headers
-    
     o[n+1]					    = 'options binary'
     o[n+3]					    = 'class 'pInfo' extends org.netrexx.njpipes.pipes.pipe final'
     o[n+5]					    = 'properties static private'
@@ -471,7 +463,6 @@ class compiler extends Object public
     
     
     -- link variables
-    
     if l[0]>0 then do
       
       o[n+1]					    = 'properties public'
@@ -486,7 +477,6 @@ class compiler extends Object public
     end
     
     -- pipe variable
-    
     o[n+1]					    = 'properties private'
     n						    = n+2
     
@@ -539,11 +529,8 @@ class compiler extends Object public
     -- generate the context method body
     
     if context<>'' then do
-      
       o[n+2]					    = 'method setContext('context') returns pipe'
-      --    say 'Info - 'o[n+2].word(2)
       n						    = n+3
-      
       x						    = rexx 1
       loop i					    = 1 to s[0]
         parse s[i] stg work .
@@ -892,16 +879,24 @@ class compiler extends Object public
     end
     
     
-    -- save the pipe's netrexx source
-    
-    o[0]					    = n
-    rc						    = writepipe.get(pInfo'.nrx').setContext(o).runpipe()
+    -- save the pipe's netrexx source or compile from memory
+    o[0] = n
+    -- when do do a live run of a pipe, do not save the netrexx source
+    -- but compile from memory by running the o array into a string
+    if \squelch then rc	 = writepipe.get(pInfo'.nrx').setContext(o).runpipe()
+    else
+      do
+	nrxsrc = ''
+	loop ii = 1 to n
+	  nrxsrc = nrxsrc o[ii] '\n'
+	end
+	NetRexxC.main(pipeClassName '-nologo -verbose0',nrxsrc)
+      end
     
     return rc
     
     
-  method compiler(a				    = rexx,squelch='false')
-    
+  method compiler(a = rexx,squelch=0,pipeClassName=Rexx(''))
     keep					    = boolean 0             -- assume nokeep
     nokeep					    = Rexx ''               -- generated .nrx files to delete
     work					    = boolean 0
@@ -938,10 +933,11 @@ class compiler extends Object public
 	
         if verb					    = '' then say 'Building pipe 'name
 	
-        rc					    = compile('( 'name' 'compopts' ) 'text,squelch)
-        if rc					    = 0 then do
-          parms					    = tonrc' 'name
-          work					    = 1
+        rc = compile('( 'name' 'compopts' ) 'text, squelch, pipeClassName)
+	if squelch then return
+        if rc = 0 then do
+          parms	= tonrc' 'name
+          work = 1
         end
       end
     else                                     -- from a list of files
@@ -1072,13 +1068,14 @@ class compiler extends Object public
 	
       end
 
-      p						    = verb' 'xref' 'parms
-      r						    = org.netrexx.process.NetRexxC.main(p)
-
+      p	 = verb' 'xref' 'parms
+      r	 = org.netrexx.process.NetRexxC.main(p)
       
       if r>rc then
 	rc					    = r
-      
+
+      /* this segment is only used if .java files are present. It might go away */
+      /* if you want to compile java, you probably know where to find it        */
       if jlist<>'' then do
 	-- recover the renamed files
 	loop i					    = 1 to jlist.words()
@@ -1099,44 +1096,45 @@ class compiler extends Object public
       end
       
       javaloader				    = this.getClass().getClassLoader()
-      if javaloader.getParent()			    =                                             null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
+      if javaloader.getParent()			    = null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
 
       compilerChoice = System.getProperty("nrx.compiler","javac")
       select
-	when compilerChoice == "javac" then do
-	  do
-	    -- this entry point has different return codes than the original undocumented entry point
-	    javacclass=javaloader.loadClass('com.sun.tools.javac.Main')
-	    compilemethod = javacclass.getMethod('compile', [Class args.getClass(), PrintWriter.class])
-	    jok=Rexx(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString())
-	    javacok=boolean (jok=="0")
-	    javacok=javacok -- get rid of warning
-	  catch cle=Exception
-	    say cle
-	  end
-	end
+      	when compilerChoice == "javac" then do
+      	  do
+      	    -- this entry point has different return codes than the original undocumented entry point
+      	    javacclass=javaloader.loadClass('com.sun.tools.javac.Main')
+      	    compilemethod = javacclass.getMethod('compile', [Class args.getClass(), PrintWriter.class])
+      	    jok=Rexx(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString())
+      	    javacok=boolean (jok=="0")
+      	    javacok=javacok -- get rid of warning
+      	  catch cle=Exception
+      	    say cle
+      	  end
+      	end
 
-	when compilerChoice == "ecj" then do
-	  do
-	    ecjclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.batch.BatchCompiler')
-	    ecpclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.CompilationProgress')
-	    compilemethod = ecjclass.getMethod('compile', [args.getClass(),PrintWriter.class,PrintWriter.class, ecpclass])
-	    javacok=boolean Boolean(compilemethod.invoke(ecjclass,[Object args, PrintWriter(System.out), PrintWriter(System.err), null]).toString()).booleanValue()
-	    -- note: ecj also returns boolean 1 (true) if successful compile!
-	  catch cle=Exception
-	    say cle
-	  end
-	end
-	
+      	when compilerChoice == "ecj" then do
+      	  do
+      	    ecjclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.batch.BatchCompiler')
+      	    ecpclass=javaloader.loadClass('org.eclipse.jdt.core.compiler.CompilationProgress')
+      	    compilemethod = ecjclass.getMethod('compile', [args.getClass(),PrintWriter.class,PrintWriter.class, ecpclass])
+      	    javacok=boolean Boolean(compilemethod.invoke(ecjclass,[Object args, PrintWriter(System.out), PrintWriter(System.err), null]).toString()).booleanValue()
+      	    -- note: ecj also returns boolean 1 (true) if successful compile!
+      	  catch cle=Exception
+      	    say cle
+      	  end
+      	end
       end
       
-      end
+    end
 
-      loop i=1 to nokeep.words()
-	fid = java.io.file(String nokeep.word(i))
-	if \fid.delete() then
-          say 'Warning - could not delete 'nokeep.word(i)
-      end i
+      if \squelch then do
+	loop i=1 to nokeep.words()
+	  fid = java.io.file(String nokeep.word(i))
+	  if \fid.delete() then
+            say 'Warning - could not delete 'nokeep.word(i)
+	end i
+      end
     end 
 
   method compiler(t=HashTable) inheritable
