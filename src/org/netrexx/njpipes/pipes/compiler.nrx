@@ -53,7 +53,6 @@ class compiler extends Object public
     tonrc  = ''
     
     stall  = int 2000
-    --config = 'pipes.cnf'
     
     lvl	   = rexx 0
     
@@ -151,7 +150,8 @@ class compiler extends Object public
     
     s						    = rexx ''         -- the stages...
     l						    = rexx  0         -- find a labeled stage
-    c						    = rexx  0         -- table used to build connections, negative value is a link
+    c						    = rexx  0         -- table used to build connections,
+								      -- negative value is a link
     r						    = rexx  1         -- count of pipes, flags for stages
     not						    = rexx  0         -- true if 'not' modifier is active for stage
     ls						    = rexx  0         -- reset stream number to...
@@ -169,27 +169,27 @@ class compiler extends Object public
         parse piece stg (ssep) piece
 	
         select                              -- show the pipe's source
-          when work<>'' & piece			    = '' then
-            o[n+1]				    = '-- 'stg.strip('L')||pend
+          when work<>'' & piece	= '' then
+            o[n+1] = '-- 'stg.strip('L')||pend
           when piece<>'' then
-            o[n+1]				    = '-- 'stg.strip('L')||ssep
+            o[n+1] = '-- 'stg.strip('L')||ssep
           otherwise
-            o[n+1]				    = '-- 'stg.strip('L')
+            o[n+1] = '-- 'stg.strip('L')
         end
-        n					    = n+1
+        n = n+1
 	
 	-- special processing for NOT stage modifier
 	
-        if stg.word(1).upper()			    = 'NOT' then
+        if stg.word(1).upper() = 'NOT' then
           do
-            not[i+1]				    = 1
-            stg					    = stg.subword(2)
+            not[i+1] = 1
+            stg	= stg.subword(2)
           end
         else
           do
-            if stg.word(1).right(1)		    = ':' & stg.word(2).upper()='NOT' then do
-              not[i+1]				    = 1
-              stg				    = stg.word(1)' 'stg.subword(3)
+            if stg.word(1).right(1) = ':' & stg.word(2).upper()='NOT' then do
+              not[i+1] = 1
+              stg = stg.word(1)' 'stg.subword(3)
             end
           end
 	-- substitute the disk stages here for the VM abbreviations < > >>
@@ -220,7 +220,7 @@ class compiler extends Object public
         select
 	  
           /* special processing to use pipes as stages */
-          when stg.word(1).pos('		    = ')>0 then do
+          when stg.word(1).pos('=')>0 then do
             if piece<>'' then do
               say 'Error - pipe definition 'stg' must be terminated by 'pend
               return 16
@@ -233,8 +233,8 @@ class compiler extends Object public
             say 'Error - pipe definition 'stg' cannot be labeled'
             return 16
           end
-          m					    = m+1
-          r[m]					    = stg.strip('B')
+          m = m+1
+          r[m] = stg.strip('B')
           iterate j
           end
 	  
@@ -248,7 +248,7 @@ class compiler extends Object public
             return 16
           end
           if r[stg.word(1)] then
-            r[stg.word(1)]			    = 0         -- must be recorded before stageExit
+            r[stg.word(1)] = 0         -- must be recorded before stageExit
           else do
             say 'Error - duplicate pipe as stage at 'stg
             return 16
@@ -883,14 +883,20 @@ class compiler extends Object public
     o[0] = n
     -- when do do a live run of a pipe, do not save the netrexx source
     -- but compile from memory by running the o array into a string
+    -- register a delete exit for the generated class file
     if \squelch then rc	 = writepipe.get(pInfo'.nrx').setContext(o).runpipe()
     else
       do
 	nrxsrc = ''
+	classFilesToDelete = ''
 	loop ii = 1 to n
 	  nrxsrc = nrxsrc o[ii] '\n'
+	  if o[ii].left(5) = 'class' then classFilesToDelete = classFilesToDelete o[ii].word(2)
 	end
 	NetRexxC.main(pipeClassName '-nologo -verbose0',nrxsrc)
+	loop iii=1 to classFilesToDelete.words()
+	  File(classFilesToDelete.word(iii)'.class').deleteOnExit()
+	end
       end
     
     return rc
