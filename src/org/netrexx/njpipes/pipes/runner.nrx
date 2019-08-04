@@ -10,7 +10,7 @@ import org.netrexx.address.
  */
 --trace results
 -- the purpose of this class is to give the user an experience as close to VM
--- Pipelines as possible, by enabling the process of speficying and running a
+-- Pipelines as possible, by enabling the process of specifying and running a
 -- pipe spec from the commandline.
 
 -- 2019-07-30 first version. rvj
@@ -44,30 +44,46 @@ class runner
       pipesrc =  '('className_')' arg
     end
 
-
     do
       p = compiler(pipesrc,Rexx('true'))
     catch ex=org.netrexx.njpipes.pipes.ThreadQ
       return
     end
-    
-    -- execute the generated class
-    command    = ArrayList()
-    command.add('java')
-    command.add(className_.toString())
-    os = OSProcess()
-    a  = os.outtrap(command)
-    i  = a.iterator()
-    loop while i.hasNext()
-      say Rexx i.next()
-    end -- loop while i
 
+    --shellRun(className_)
+    javaRun(className_)
+    deleteClassFile(className_)
+
+  method javaRun(className_) static
+    do
+      c = Class.forName(className_.toString())
+      o = Object c.newInstance()
+      paramTypes = Class[1]
+      paramTypes[0] = String[].class
+      methodName = String "main"
+      m = c.getMethod(methodName, paramTypes)
+      params = Object[1]
+      params[0] = String[0]
+      rc = m.invoke(o, params)
+    catch e=Exception
+      say 'Reflection exception encountered:'
+      say e.getMessage()
+    end
+    
+  method shellRun(className_) static
+    -- execute the generated class
+      command    = ArrayList()
+      command.add('java')
+      command.add(className_.toString())
+      os = OSProcess()
+      a  = os.outtrap(command)
+      i  = a.iterator()
+      loop while i.hasNext()
+	say Rexx i.next()
+      end -- loop while i
+      
+  method deleteClassFile(className_) static
     -- delete the class file
     f = File(className_.toString()'.class')
     f.delete()
     exit 
-    
-
-    
-
-    
