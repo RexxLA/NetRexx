@@ -1,0 +1,1913 @@
+-- Workspace.nrx
+
+package org.vpad.extra.workspace
+
+import COM.ibm.netrexx.process.NetRexxA
+import org.vpad.extra.workspace.Frame
+
+options binary strictcase
+
+
+class Workspace
+
+  interpreter = NetRexxA
+  parser = Parser
+  id = Rexx
+
+  framesRing = Vector()
+  framesTable = Hashtable()
+  readStack = Rexx ''
+  currentFrame = Frame
+  currentFileName = Rexx 'workspace.input'
+  currentDirectory = System.getProperty('user.dir')
+
+  settings = Rexx ''                -- workspace settings
+  synonyms = Rexx ''                -- defined synonyms
+
+  properties static private
+  instances = Hashtable()
+  instance = int 0
+  filter = FilteringOutputStream
+  printStream = PrintStream
+  ID = Long.toHexString(System.currentTimeMillis)
+  nl = System.getProperty('line.separator')
+  initialDirectory = System.getProperty('user.dir')
+  ruleSet = RuleSet([Rule('numeric digits %*', -
+                          'do;$digits=%*numeric digits $digits;end;', -
+                          '$digits=Rexx;', -
+                          'if $digits\\=null then $frame.setDigits($digits);'), -
+                     Rule('numeric form %*', -
+                          'do;$form="%*";numeric form %*end;', -
+                          '$form=Rexx;', -
+                          'if $form\\=null then $frame.setForm($form.strip("T",";"));')])
+  path = Rexx 'netrexx.lang. java.lang. java.io. java.util. java.net. java.awt. java.applet.'
+  cmds = Rexx 'cd. cl.ear d.isplay f.rame he.lp hi.story i.mport n.umeric o.ptions pa.ckage pq.uit q.uit r.ead se.t sh.ow syn.onym sys.tem t.race u.se w.hat'
+  defaultOptions = Rexx 'nobinary decimal noexplicit nostrictargs nostrictassign nostrictcase nostrictsignal'
+  optionsList = Rexx 'binary decimal explicit strictargs strictassign strictcase strictsignal'
+  help = [Rexx '  )cd', -
+          '  )cd <directory>', -
+          '  )clear all', -
+          '  )clear properties all', -
+          '  )clear properties <obj1> [<obj2> ...]', -
+          '  )display all', -
+          '  )display properties', -
+          '  )display properties all', -
+          '  )display properties [<obj1> [<obj2> ...] ]', -
+          '  )display type all', -
+          '  )display type [<obj1> [<obj2> ...] ]', -
+          '  )display names', -
+          '  )frame new <frameName>', -
+          '  )frame drop [<frameName>]', -
+          '  )frame next', -
+          '  )frame last', -
+          '  )frame names', -
+          '  )frame import <frameName> [<objectName1> [<objectName2> ...] ]', -
+          '  )help', -
+          '  )help <commandName>', -
+          '  )history )on', -
+          '  )history )off', -
+          '  )history )show [<n>]', -
+          '  )history )write <historyInputFileName>', -
+          '  )import query', -
+          '  )import class <fullClassName>', -
+          '  )import package <packageName>', -
+          '  )import drop <packageOrFullClassName>', -
+          '  )numeric', -
+          '  )numeric digits <number>', -
+          '  )numeric form scientific | engineering', -
+          '  )options', -
+          '  )options )default', -
+          '  )options <optionName> [)off]', -
+          '  )package', -
+          '  )package )default', -
+          '  )package <packageName>', -
+          '  )pquit', -
+          '  )quit', -
+          '  )read [<fileName>] [)quiet] [)ifthere]', -
+          '  )set', -
+          '  )set <label1> [... <labelN>]', -
+          '  )set <label1> [... <labelN>] <newValue>', -
+          '  )show <name>', -
+          '  )show <name> )operations', -
+          '  )show <name> )attributes', -
+          '  )synonym', -
+          '  )synonym <synonym> <fullCommand>', -
+          '  )system <cmdExpression>', -
+          '  )trace', -
+          '  )trace off', -
+          '  )trace all', -
+          '  )trace methods', -
+          '  )trace results', -
+          '  )trace var [<var1> [<var2> ...] ]', -
+          '  )use query', -
+          '  )use add <className>', -
+          '  )use drop <className>', -
+          '  )what commands <pattern1> [<pattern2> ...]', -
+          '  )what synonyms <pattern1> [<pattern2> ...]', -
+          '  )what things <pattern1> [<pattern2> ...]']
+
+  method main(args = String[]) static
+    init
+
+    say 'Workspace for NetRexx'
+    say 'Version 0.02 Jun 6 2000'
+    say '(C) Copyright Martin Lafaix 2000'
+    say 'All rights reserved'
+
+    ws = Workspace()
+
+    f = File(System.getProperty('user.home'), 'workspace.input')
+    if f.isFile then do
+      ws.exec(f.getCanonicalPath)
+    catch IOException
+    end
+    else do
+      is = Workspace.class.getResourceAsStream('/src/input/workspace.input')
+      if is \= null then do
+        ws.doReadStream(BufferedReader(InputStreamReader(is)), 'I')
+        is.close
+      end
+    end
+    ws.start
+
+  method init static
+    filter = FilteringOutputStream(System.out)
+    printStream = PrintStream(filter)
+    System.setOut(printStream)
+
+  method getInstance(uid) static returns Workspace
+    return Workspace instances.get(uid)
+
+  method getUniqID static protect returns Rexx
+    instance = instance + 1
+    return 'WS'instance
+
+  method Workspace
+    this(Frame('initial'))
+    initFrame
+
+  method Workspace(initialFrame = Frame)
+    synonyms['apr'] = 'what things'
+    synonyms['apropos'] = 'what things'
+
+    interpreter = NetRexxA()
+    parser = Parser()
+    newFrame(initialFrame)
+    id = getUniqID
+    instances.put(id, this)
+
+    settings['diag'] = 'off'
+    settings['display.depth'] = 10
+    settings['display.level'] = 4
+    settings['history'] = 'on'
+    settings['history.write'] = 'protected'
+    settings['import'] = ''
+    settings['interpreter'] = 'on'
+    settings['message.prompt'] = 'default'
+    settings['numeric.digits'] = 9
+    settings['numeric.form'] = 'scientific'
+    settings['option'] = defaultOptions
+    settings['package'] = ''
+    settings['parser'] = 'quiet'
+    settings['quit'] = 'protected'
+    settings['screen.width'] = 72
+    settings['show'] = 'all'
+    settings['trace'] = 'off'
+    settings['use'] = ''
+
+  method start
+    loop forever
+      currentFrame.incStep
+      prompt = settings['message.prompt']
+      if prompt \= 'default' then
+        if prompt = "frame" then
+          say currentFrame.getName' \-'
+        else
+          say prompt.subword(2) '\-'
+      say '('currentFrame.getStep') -> \-'
+      print(eval(read))
+    end
+
+  method exec(script = String, option = String "A")
+    if option = null, -
+       option.length < 1, -
+       option.charAt(0) \= 'A' & option.charAt(0) \= 'a' & -
+       option.charAt(0) \= 'I' & option.charAt(0) \= 'i' & -
+       option.charAt(0) \= 'N' & option.charAt(0) \= 'n' then
+      signal IllegalArgumentException('Invalid option' option '(expection A, I, or N)')
+    doRead(script ')ifthere', option)
+
+  method read
+    l = ''
+    line = ask
+    loop while parser.stripTrailingComment(line).right(1) = '-'
+      l = l || line || nl
+      line = ask
+    end
+    l = l || line
+    currentFrame.log(l)
+    return l
+
+  method eval(cmd)
+    if cmd = '' then
+      return ''
+
+    if cmd.charAt(0) = ')' then
+      return doSystemCommand(cmd)
+
+    return doStatements(cmd)
+
+  method print(rc)
+
+  method doStatements(cmd)
+    name = String '_'id'_'ID
+
+    tmpOptions = Rexx ''
+    tmpPackage = Rexx ''
+    tmpTrace = Rexx ''
+    tmpImports = Rexx ''
+    tmpDigits = Rexx ''
+    tmpForm = Rexx ''
+    tmpMethods = Vector
+    isTrace = boolean 0
+    inHeader = boolean 0
+
+    imports = currentFrame.getImports
+
+    step1 = parser.parse(cmd)
+
+    if step1 then do
+      inHeader = 1
+      clauses = parser.getClauses
+      loop i = 0 for clauses.size
+        clause = Rexx clauses.elementAt(i)
+        if clause = null then
+          iterate
+
+        clause = clause.strip('T', ';')
+        w1 = clause.word(1)
+        w2 = clause.word(2)
+        t2 = w2.left(1).datatype('S')
+
+        select
+          when w1 = 'method' & t2 then do
+            tmpMethods = findMethods(clauses, i)
+            if tmpMethods = null then
+              return '' -- error
+          end
+          when inHeader & w1 = 'options' & t2 then do
+            opts = clause.subword(2)
+            loop j = 1 for opts.words
+              w = opts.word(j)
+              if optionsList.wordpos(w) > 0, w.left(2) = 'no' & optionsList.wordpos(w.substr(2)) > 0 then
+                tmpOptions = tmpOptions w
+              else
+                say 'option' w ' ignored'
+            end
+            clauses.setElementAt(null, i)
+          end
+          when inHeader & w1 = 'import' & t2 then do
+            imp = clause.subword(2)
+            if tmpImports.wordpos(imp) > 0, imports.contains(imp) then
+              say 'duplicate import instruction :' clause
+            else
+              tmpImports = tmpImports imp
+            clauses.setElementAt(null, i)
+          end
+          when inHeader & w1 = 'package' & t2 & tmpPackage = '' then do
+            tmpPackage = w2
+            clauses.setElementAt(null, i)
+          end
+          when inHeader & w1 = 'trace' & t2 & w2 \= 'var' then do
+            tmpTrace = clause.subword(2)
+            clauses.setElementAt(null, i)
+          end
+          when inHeader & w1 = 'numeric' & w2 = 'digits' & clause.subword(3).strip.datatype('W') then do
+            tmpDigits = clause.subword(3)
+            clauses.setElementAt(null, i)
+          end
+          when inHeader & w1 = 'numeric' & w2 = 'form' & (clause.subword(3) = 'scientific' | clause.subword(3) = 'engineering') then do
+            tmpForm = clause.subword(3)
+            clauses.setElementAt(null, i)
+          end
+          when w1 = 'trace' & t2 then do
+            -- not in header, so copy args to $trace
+            -- (can't use a rule yet, as context is not supported)
+            if w2 = 'var' then
+              clauses.setElementAt(Rexx 'do;'clause';$frame.addTraceVar("'clause.subword(3)'");end;', i)
+            else do
+              if clause.subword(2) = "off" then
+                clauses.setElementAt(Rexx 'do;$trace="off";'clause';$frame.setTraceVarEnabled(0);end;', i)
+              else
+                clauses.setElementAt(Rexx 'do;$trace="'clause.subword(2)'";'clause';end;', i)
+              isTrace = 1
+            end
+            inHeader = 0
+          end
+          when (w1 = 'properties' | w1 = 'class') & t2 then do
+            say w1 'instruction not allowed :' clause
+            return ''
+          end
+          when clause = '' then
+            nop
+        otherwise
+          inHeader = 0
+        end
+      end
+    end
+
+    freevars = parser.getDandlingVars
+
+    do
+      f = PrintWriter(FileWriter(name'.nrx'))
+
+      -- syntaxic sugar
+      f.print('/*' name '*/')
+
+      -- package
+      if tmpPackage \= '' then
+        f.print('package' tmpPackage';')
+      else
+      if currentFrame.getPackage \= '' then
+        f.print('package' currentFrame.getPackage';')
+
+      -- imports
+      loop i = 0 for imports.size
+        f.print('import' imports.elementAt(i)';')
+      end
+      loop i = 1 for tmpImports.words
+        f.print('import' tmpImports.word(i)';')
+      end
+
+      -- options
+      f.print('options' currentFrame.getOptions tmpOptions';')
+
+      -- global trace
+      if tmpTrace \= '' then do
+        if tmpTrace \= 'off' then
+          f.print('trace' tmpTrace';')
+      end
+      else
+      if currentFrame.getTrace \= 'off' then
+        f.print('trace' currentFrame.getTrace';')
+
+      -- global numeric
+      if tmpDigits \= '' & tmpDigits \= 9 then
+        f.print('numeric digits' tmpDigits';')
+      if tmpForm \= '' & tmpForm \= 'scientific' then
+        f.print('numeric form' tmpForm';')
+
+      -- specifying numeric format if required
+      if tmpDigits = '' & currentFrame.getDigits \= 9 then
+        f.print('numeric digits' currentFrame.getDigits';')
+      if tmpForm = '' & currentFrame.getForm \= 'scientific' then
+        f.print('numeric form' currentFrame.getForm';')
+
+      -- use list if any
+      if currentFrame.getUses \= '' then
+        f.print('class' name 'uses' currentFrame.getUses.space.translate(',', ' ')';method main(args = String[]) static;')
+      else
+        f.print('class' name';method main(args = String[]) static;')
+
+      -- hiding trace if needed
+      if tmpTrace \= '' then
+        if tmpTrace \= 'off' then
+          f.print('trace off;')
+        else
+          nop
+      else
+        if currentFrame.getTrace \= 'off' then
+          f.print('trace off;')
+
+      -- defining the $frame shortcut
+      f.print('$frame=org.vpad.extra.workspace.Workspace.getInstance("'id'").getCurrentFrame;')
+
+      -- exposing environment
+      currentFrame.restoreVarsOn(f)
+
+      -- restoring trace mode
+      if tmpTrace \= '' then do
+        if tmpTrace \= 'off' & tmpTrace \= 'methods' then
+          f.print('trace' tmpTrace';')
+      end
+      else
+      if currentFrame.getTrace \= 'off' & currentFrame.getTrace \= 'methods' then
+        f.print('trace' currentFrame.getTrace';')
+
+      -- traced vars
+      if currentFrame.isTraceVarEnabled & currentFrame.getTraceVar \= '' then
+        if tmpTrace \= 'off' then
+          f.print('trace var' currentFrame.getTraceVar';')
+
+      f.println('do')
+
+      if step1 then do
+        parser.rewrite(ruleSet)
+
+        clauses = parser.getClauses
+        loop i = 0 for clauses.size
+          c = Rexx clauses.elementAt(i)
+          if c \= null then
+            f.print(c)
+        end
+      end
+      else
+        f.print(cmd)
+
+      f.println
+      f.println('finally')
+      f.println('trace off')
+
+      currentFrame.saveVarsOn(f)
+
+      if freevars \= '' then
+        currentFrame.bindVarsOn(f, freevars)
+
+      if isTrace then
+        f.println('  $frame.setTrace($trace)')
+
+      f.println('  $frame=$frame')
+
+      f.println('end')
+
+      -- functions
+      if \ inHeader then
+        currentFrame.saveFunctionsOn(f)
+
+      if \ inHeader & tmpMethods \= null then
+        loop i = 0 for tmpMethods.size
+          f.println((Function tmpMethods.elementAt(i)).value)
+        end
+
+      f.close
+    catch FileNotFoundException
+      say 'FileNotFoundException'
+    catch IOException
+      say 'IOException'
+    end
+
+    files = [String name]
+    if settings['diag'] = 'on' then
+      flags1 = ['diag', 'nocrossref', 'nologo']
+    else
+      flags1 = ['nocrossref', 'nologo', 'verbose0']
+
+    if \ interpreter.parse(files, flags1) then
+      return ''
+
+    if \ step1 then do
+      say 'Error: parsing mismatch'
+      return ''
+    end
+
+    -- statements valid, commit global changes
+    if tmpPackage \= '' then
+      currentFrame.setPackage(tmpPackage)
+    if tmpImports \= '' then
+      loop i = 1 for tmpImports.words
+        imports.addElement(tmpImports.word(i))
+      end
+    if tmpOptions \= '' then
+      loop i = 1 for tmpOptions.words
+        doOptions(tmpOptions.word(i))
+      end
+    if tmpTrace \= '' then
+      currentFrame.setTrace(tmpTrace)
+    if tmpTrace = 'off' then
+      currentFrame.setTraceVarEnabled(0)
+    if tmpMethods \= null then
+      loop i = 0 for tmpMethods.size
+        fn = Function tmpMethods.elementAt(i)
+        currentFrame.put(fn.name, Symbol fn)
+      end
+    if tmpDigits \= '' then
+      currentFrame.setDigits(tmpDigits)
+    if tmpForm \= '' then
+      currentFrame.setForm(tmpForm)
+
+    if settings['interpreter'] = 'on' & \ inHeader then do
+      if currentFrame.getPackage = '' then
+        evalClass = interpreter.getClassObject(null, name)
+      else
+        evalClass = interpreter.getClassObject(currentFrame.getPackage, name)
+
+      if evalClass \= null then do
+        classes = [interpreter.getClassObject('java.lang', 'String', 1)]
+
+        mainMethod = evalClass.getMethod('main', classes)
+
+        mainMethod.invoke(null, [Object String[0]])
+      end
+
+    catch NoSuchMethodException
+      say 'Method main not found'
+    catch IllegalAccessException
+      say 'IllegalAccessException'
+    catch ite = InvocationTargetException
+      say ite.getTargetException
+      if settings['diag'] = 'on' then
+        ite.printStackTrace
+    end
+
+    -- clean up file if everything was OK
+    if settings['diag'] = 'off' then
+      File(name'.nrx').delete
+
+    return ''
+
+  method findMethods(clauses = Vector, index = int) returns Vector
+    methods = Vector()
+
+    loop forever
+      clause = (Rexx clauses.elementAt(index)).strip('T', ';')
+      isValid = boolean 0
+
+      loop label b i = clause.words to 3 by -1
+        w = clause.word(i)
+        if w.pos(')') > 0 then
+          leave
+        if w = 'constant', w = 'static' then do
+          name = clause.word(2)
+          if name.pos('(') > 0 then do
+            name = name.left(name.pos('(')-1)
+          end
+          isValid = 1
+          leave b
+        end
+      end
+
+      if \ isValid then
+        leave
+
+      clauses.setElementAt(null, index)
+      def = clause';'
+      loop i = index + 1 to clauses.size - 1
+        clause = (Rexx clauses.elementAt(i)).strip('T', ';')
+        if clause.word(1) = 'method' & clause.word(2).left(1).datatype('S') then
+          leave
+        if clause.word(1) = 'class' & clause.word(2).left(1).datatype('S') then do
+          say 'class instruction not allowed :' clause
+          return null
+        end
+        def = def clause';'
+        clauses.setElementAt(null, i)
+      end
+
+      methods.addElement(Function(name, def))
+
+      if i >= clauses.size, clauses.elementAt(i) = null then
+        return methods
+
+      index = i
+    end
+
+    say 'method must be static or constant :' clause
+    return null
+
+  -- system command support
+  --
+  -- To add a new command, don't forget to update the static properties
+  -- 'cmds' and 'help' accordingly.
+  method doSystemCommand(cmd) inheritable
+    args = cmd.subword(2)
+
+    sc = cmd.word(1).substr(2).lower
+
+    if synonyms[sc] \= '' then do
+      args = synonyms[sc].subword(2) args
+      sc = synonyms[sc].word(1)
+    end
+
+    select
+      when 'cd'.abbrev(sc, 2) then
+        doCD(args)
+      when 'clear'.abbrev(sc, 2) then
+        doClear(args)
+      when 'display'.abbrev(sc, 1) then
+        doDisplay(args)
+      when 'frame'.abbrev(sc, 1) then
+        doFrame(args)
+      when 'help'.abbrev(sc, 2) then
+        doHelp(args)
+      when 'history'.abbrev(sc, 2) then do
+        if currentFrame.isRecording then
+          currentFrame.log.removeElementAt(currentFrame.log.size-1)
+        doHistory(args)
+      end
+      when 'import'.abbrev(sc, 1) then
+        doImport(args)
+      when 'numeric'.abbrev(sc, 1) then
+        doNumeric(args)
+      when 'options'.abbrev(sc, 1) then
+        doOptions(args)
+      when 'package'.abbrev(sc, 2) then
+        doPackage(args)
+      when 'pquit'.abbrev(sc, 2) then
+        if prompt('leave the interactive environment and return to the operating system') then
+          exit
+      when 'quit'.abbrev(sc, 1) then
+        if settings['quit'] = 'unprotected', prompt('leave the interactive environment and return to the operating system') then
+          exit
+      when 'read'.abbrev(sc, 1) then
+        doRead(args, 'A')
+      when 'set'.abbrev(sc, 2) then
+        doSet(args)
+      when 'show'.abbrev(sc, 2) then
+        doShow(args)
+      when 'synonym'.abbrev(sc, 3) then
+        doSynonym(args)
+      when 'system'.abbrev(sc, 3) then
+        doSystem(args)
+      when 'trace'.abbrev(sc, 1) then
+        doTrace(args)
+      when 'use'.abbrev(sc, 1) then
+        doUse(args)
+      when 'what'.abbrev(sc, 1) then
+        doWhat(args)
+    otherwise
+      say 'unknown or ambiguous system command :' cmd
+    end
+    return ''
+
+  method doCD(args)
+    if args = '' then do
+      header('Directories')
+      say '  Home directory:   ' System.getProperty('user.home')
+      say '  Initial directory:' initialDirectory
+      say
+      say '  Current directory:' currentDirectory
+    end
+    else do
+      args = resolveFileName(args)
+      f = File(args)
+      if f.isDirectory then
+        currentDirectory = f.getCanonicalPath
+      else
+        say 'invalid or inexistant directory :' args
+    catch e = IOException
+      say 'IO Error :' e
+    end
+
+  method doClear(args)
+    select case args.word(1).lower
+      when 'properties', 'p' then
+        if args.subword(2) = 'all' then
+          currentFrame.reset
+        else do
+          vars = args.subword(2)
+          loop j = 1 to vars.words
+            currentFrame.remove(vars.word(j))
+          end
+        end
+      when 'all' then do
+        currentFrame.reset
+        currentFrame.setStep(0)
+      end
+    otherwise
+      say 'invalid argument for )clear :' args
+    end
+
+  method doDisplay(args)
+    parse args w1 w2 .
+    count = args.words
+
+    select
+      when args = 'names', args = 'n' then do
+        ap = currentFrame.getProperties
+        loop i = 0 for ap.length
+          say ap[i].name' \-'
+        end
+        say
+      end
+      when (w1 = 'type' | w1 = 't') & w2 = 'all' & count = 2 then do
+        ap = currentFrame.getProperties
+        loop i = 0 for ap.length
+          if ap[i] <= Var then
+            say '  'ap[i].name' =' (Var ap[i]).type
+        end
+      end
+      when args = 'all', args = 'properties', args = 'p', ((w1 = 'properties' | w1 = 'p') & w2 = 'all' & count = 2) then do
+        ap = currentFrame.getProperties
+        loop i = 0 for ap.length
+          if ap[i] <= Var then
+            doDisplayVar(Var ap[i])
+          else
+            say ap[i]
+        end
+      end
+      when w1 = 'type', w1 = 't' then do
+        vars = args.subword(2)
+        loop i = 1 for count - 1
+          p = currentFrame.get(vars.word(i))
+          if p \= null then
+            if p <= Var then
+              say '  'p.name' =' (Var p).type
+        end
+      end
+      when w1 = 'properties', w1 = 'p' then do
+        vars = args.subword(2)
+        loop i = 1 for count - 1
+          p = currentFrame.get(vars.word(i))
+          if p \= null then
+            if p <= Var then
+              doDisplayVar(Var p)
+            else
+              say p
+        end
+
+      end
+      when count = 0 then
+        say 'possible argument for )display : names type all properties'
+    otherwise
+      say 'unknown argument for )display :' args
+    end
+
+  method doDisplayVar(obj = Var)
+    say '  'obj.name' =' obj.type '\-'
+    doDisplayValue(obj.value, settings['display.level'])
+    say
+
+  method doDisplayValue(val = Object, l = int)
+    if val = null then
+      say 'null\-'
+    else
+    if val.getClass.isArray & l = 0 then
+      say '...\-'
+    else
+    if val.getClass.isArray then do
+      depth = settings['display.depth']
+      count = Math.min(depth, Array.getLength(val))
+      say '[\-'
+      loop i = 0 for count
+        if i > 0 then
+          say ', \-'
+        elt = Array.get(val, i)
+        doDisplayValue(elt, l-1)
+      end
+      if Array.getLength(val) > depth then
+        say ', ...\-'
+      say ']\-'
+    end
+    else
+    if val <= String, val <= Rexx then
+      say '"'val'"\-'
+    else
+      say val'\-'
+
+  method doFrame(args)
+    parse args w1 w2 .
+    count = args.words
+
+    select
+      when args = 'names' then do
+        header('Available frames')
+        prolog('The name of the current frame is prefixed by an asterisk.')
+        loop f = 0 for framesRing.size
+          o = framesRing.elementAt(f)
+          if o = currentFrame then
+            say ' *'currentFrame.getName
+          else
+            say '  '(Frame o).getName
+        end
+      end
+      when args = 'next' then
+        nextFrame
+      when args = 'last' then
+        lastFrame
+      when w1 = 'drop' & count <= 2 then
+        if count = 1 then
+          dropFrame(currentFrame.getName)
+        else
+          dropFrame(args.subword(2))
+      when w1 = 'new' & w2.datatype('S') & count = 2 then do
+        old = currentFrame
+        newFrame(Frame(w2))
+        if old \== currentFrame then
+          initFrame
+      end
+      when w1 = 'import' & count >= 2 then
+        if count = 2 then
+          importFrame(w2)
+        else
+          importFrame(w2, args.subword(3))
+      when count = 0 then
+        say 'possible argument for )frame : new drop next last names import'
+    otherwise
+      say 'invalid argument for )frame :' args
+    end
+
+  method doHelp(cmd)
+    if cmd = '' then do
+      header('Available System Commands')
+      loop i = 0 for help.length
+        say help[i]
+      end
+    end
+    else
+    if cmd.words = 1 then do
+      loop label a i = 1 for cmds.words
+        w = cmds.word(i)
+        if w.changestr('.', '').abbrev(cmd, w.pos('.')-1) then do
+          w = ')'w.changestr('.', '')
+          leave a
+        end
+      end
+      if w.pos('.') \= 0 then
+        say 'no help found for :' cmd '(invalid or ambiguous system command)'
+      else
+        loop i = 0 for help.length
+          if help[i].word(1) = w then
+            say help[i]
+        end
+    end
+    else
+      say 'invalid argument for )help :' cmd
+
+  method doHistory(args)
+    select
+      when ')off'.abbrev(args, 3) then
+        currentFrame.setRecording(0)
+      when args = ')on' then
+        if \ currentFrame.isEmpty & \ currentFrame.isRecording then
+          if prompt('clear the current frame in order to enable logging') then do
+            currentFrame.reset
+            currentFrame.setStep(0)
+            currentFrame.setRecording(1)
+          end
+          else
+            nop
+        else
+          currentFrame.setRecording(1)
+      when ')show'.abbrev(args.word(1), 2) & args.words <= 2 then do
+        if args.words = 1 then
+          count = 20
+        else
+        if args.word(2).datatype('W') then
+          count = args.word(2)
+        else do
+          say 'invalid argument for )history )show :' args.word(2)
+          return
+        end
+
+        header('Frame' currentFrame.getName)
+        data = currentFrame.log
+        loop i = Math.max(0, data.size-count) by 1 while i < data.size
+          say data.elementAt(i)
+        end
+      end
+      when ')write'.abbrev(args.word(1), 2) & args.words = 2 then do
+        n = args.word(2)
+
+        if n.pos('.') = 0 then
+          n = n'.input'
+
+        n = resolveFileName(n)
+
+        if settings['history.write'] = 'protected' & File(n).exists then
+          if \ prompt('overwrite' n) then
+            return
+
+        currentFrame.file(n)
+      end
+    when args = '' then
+      say 'possible argument for )history : )on )off )show )write'
+    otherwise
+      say 'invalid argument for )history :' args
+    end
+
+  method doImport(args)
+    parse args w1 w2 .
+    count = args.words
+    imports = currentFrame.getImports
+
+    select
+      when args = 'query' then do
+        header('Frame' currentFrame.getName)
+        prolog('import list:')
+        if imports.size = 0 then
+          say '  <empty>'
+        else
+          loop i = 0 for imports.size
+            say '  'imports.elementAt(i)
+          end
+      end
+      when (w1 = 'package' | w1 = 'class') & count = 2 then
+        if imports.contains(w2) then
+          say 'package or class' w2 'already present in import list : ignored'
+        else
+          imports.addElement(w2)
+      when w1 = 'drop' & count = 2 then
+        if imports.contains(w2) then do
+          if prompt('drop element' w2 'from import list') then
+            imports.removeElement(w2)
+        end
+        else
+          say 'package or class' w2 'not present in import list : ignored'
+      when count = 0 then
+        say 'possible argument for )import : query package class drop'
+    otherwise
+      say 'invalid argument for )import :' args
+    end
+
+  method doNumeric(args)
+    parse args w1 w2 .
+    count = args.words
+
+    select
+      when count = 0 then do
+        header('Frame' currentFrame.getName)
+        prolog('numeric status:')
+        say '  numeric digits' currentFrame.getDigits
+        say '  numeric form' currentFrame.getForm
+      end
+      when w1 = 'digits' & count = 2 then
+        if w2.datatype('W') & w2 > 0 then
+          currentFrame.setDigits(w2)
+        else
+          say 'invalid argument for )numeric digits :' w2
+      when w1 = 'form' & count = 2 then
+        if w2 = 'scientific' | w2 = 'engineering' then
+          currentFrame.setForm(w2)
+        else
+          say 'invalid argument for )numeric form :' w2
+    otherwise
+      say 'invalid argument for )numeric :' args
+    end
+
+  method doOptions(args)
+    parse args w1 w2 .
+    count = args.words
+
+    if count = 0 then do
+      header('Frame' currentFrame.getName)
+      prolog('options status:')
+      opts = currentFrame.getOptions
+      loop i = 1 to opts.words
+        w = opts.word(i)
+        if w.left(2) = 'no' then
+          say '  'w.substr(3) '.'.copies(34-w.length) 'disabled'
+        else
+          say '  'w '.'.copies(34-w.length-2) 'enabled'
+      end
+    end
+    else
+    if count = 1 & ')default'.abbrev(w1, 2) then
+      currentFrame.setOptions(defaultOptions)
+    else
+    if (optionsList.wordpos(w1) > 0 | -
+        (w1.left(2) = 'no' & optionsList.wordpos(w1.substr(3)) > 0)) & -
+       (w2 = '' | ')off'.abbrev(w2, 2)) & -
+       count <= 2 then do
+      if w2 \= '' then
+        if w1.left(2) = 'no' then
+          w1 = w1.substr(3)
+        else
+          w1 = 'no'w1
+      old = currentFrame.getOptions
+      new = ''
+      loop i = 1 for old.words
+        w = old.word(i)
+        if w = w1 then
+          return
+        if w.pos(w1) > 0, w1.pos(w) > 0 then
+          new = new w1
+        else
+          new = new w
+      end
+      currentFrame.setOptions(new)
+    end
+    else
+      say 'invalid or ambiguous argument for )options :' args
+
+  method doPackage(args)
+    parse args w1 .
+    count = args.words
+
+    select
+      when count = 0 then
+        if currentFrame.getPackage = '' then
+          say 'default package'
+        else
+          say 'package' currentFrame.getPackage
+      when ')default'.abbrev(w1, 2) & count = 1 then
+        currentFrame.setPackage('')
+      when w1.left(1) \= ')' & count = 1 then
+        if validatePackage(w1) then
+          currentFrame.setPackage(w1)
+        else
+          say 'invalid package name :' w1
+    otherwise
+      say 'invalid argument for )package :' args
+    end
+
+  method doRead(args, option = String)
+    parse args w1 w2 w3 .
+    count = args.words
+    quiet = boolean 0
+    ifthere = boolean 0
+
+    if count > 3 then do
+      say 'invalid number of arguments for )read :' args
+      return
+    end
+
+    if w1 = '', w1.left(1) = ')' then do
+      w3 = w2
+      w2 = w1
+    end
+    else
+      currentFileName = w1
+
+    if ')quiet'.abbrev(w2, 2) then
+      quiet = 1
+    else
+    if w3 = '' then
+      w3 = w2
+    else do
+      say 'invalid arguments for )read :' args
+      return
+    end
+
+    if ')ifthere'.abbrev(w3, 2) then
+      ifthere = 1
+    else
+    if w3 \= '' then do
+      say 'invalid arguments for )read :' args
+      return
+    end
+
+    if currentFileName.pos('.') = 0 then
+      currentFileName = currentFileName'.input'
+
+    currentFileName = resolveFileName(currentFileName)
+
+    if option.charAt(0) = 'A', option.charAt(0) = 'a' then
+      if currentFileName.right(6) = '.input' then
+        option = 'I'
+      else
+      if currentFileName.right(4) = '.nrx' then
+        option = 'N'
+
+    do
+      file = File(currentFileName)
+
+      if \ file.exists then
+        if ifthere then
+          return
+        else
+          loop while \ file.exists
+            flow('file' currentFileName 'does not exist.  Please enter an existing file name : \-')
+            currentFileName = ask
+            if currentFileName = '' then
+              return
+            if currentFileName.pos('.') = 0 then
+              currentFileName = currentFileName'.input'
+            currentFileName = resolveFileName(currentFileName)
+            file = File(currentFileName)
+          end
+
+      cfn = currentFileName
+      if readStack.wordpos(cfn) > 0 then do
+        say 'recursive reading of :' cfn ': ignored'
+        return
+      end
+      rs = readStack
+      readStack = currentFileName readStack
+
+      in = BufferedReader(FileReader(file))
+      if quiet then
+        if System.out == printStream then do
+          filter.push
+          pushed = boolean 1
+        end
+      doReadStream(in, option)
+      in.close
+
+    catch IOException
+      say 'IOException while reading file :' cfn
+    finally
+      if pushed then
+        filter.pop
+      if cfn \= null then
+        currentFileName = cfn
+      if rs \= null then
+        readStack = rs
+    end
+
+  method doReadStream(in = BufferedReader, option = String) signals IOException
+    cfn = currentFileName
+    l = in.readLine
+    if option.charAt(0) = 'A', option.charAt(0) = 'a' then
+      if l.length < 2, l.charAt(0) \= '/', l.charAt(1) \= '*' then
+        option = 'I'
+      else
+        option = 'N'
+    if option.charAt(0) = 'I', option.charAt(0) = 'i' then
+      loop label a while l \= null
+        r = Rexx l
+        loop while parser.stripTrailingComment(l).right(1) = '-'
+          l = in.readLine
+          if l = null then do
+            say 'invalid input file (unexpected end of file) : ' cfn
+            leave a
+          end
+          r = r || nl || l
+        end
+        eval(r)
+        l = in.readLine
+      end
+    else do
+      r = ''
+      loop while l \= null
+        r = r || l || nl
+        l = in.readLine
+      end
+      eval(r)
+    end
+
+  method doSet(args)
+    parse args w1 w2 w3 .
+    count = args.words
+
+    select
+      when w1 = 'diag' then
+        doSetProperty('diag', args.subword(2), 'on off')
+      when w1 = 'display' & w2 = 'depth' then
+        doSetNumericProperty('display.depth', args.subword(3), 1)
+      when w1 = 'display' & w2 = 'level' then
+        doSetNumericProperty('display.level', args.subword(3), 0)
+      when w1 = 'display' & count = 1 then
+        say 'possible argument for )set display : depth level'
+      when w1 = 'display' then
+        say 'invalid argument for )set display :' args.subword(2) '(expecting depth level)'
+      when w1 = 'history' & w2 = 'write' then
+        doSetProperty('history.write', args.subword(3), 'protected unprotected')
+      when w1 = 'history' then
+        if doSetProperty('history', args.subword(2), 'on off write') & (w2 = 'on' | w2 = 'off') then
+          if w2 = 'on' then
+            doHistory(')on')
+          else
+            currentFrame.setRecording(0)
+      when w1 = 'import' & count = 1 then do
+        header('Import Settings')
+        prolog('currently imported class(es) and package(s):')
+        loop i = 1 to settings['import'].words
+          say '  'settings['import'].word(i)
+        end
+      end
+      when w1 = 'import' & count = 4 & (w2 = 'add' | w2 = 'drop') & (w3 = 'class' | w3 = 'package') then do
+        w4 = args.word(4)
+        p4 = settings['import'].wordpos(w4)
+        if w2 = 'add' then do
+          if p4 = 0 then
+            settings['import'] = settings['import'] w4
+          else
+            say w3 w4 'already present in import list : ignored'
+          if \ currentFrame.getImports.contains(w4) then
+            currentFrame.getImports.addElement(w4)
+        end
+        else
+          if p4 = 0 then
+            say w3 w4 'not present in import list : ignored'
+          else
+          if prompt('drop element' w2 'from import list') then do
+            settings['import'] = settings['import'].delword(p4, 1)
+            if currentFrame.getImports.contains(w4) then
+              currentFrame.getImports.removeElement(w4)
+          end
+      end
+      when w1 = 'import' then
+        say 'invalid argument for )import :' args.subword(2)
+      when w1 = 'interpreter' then
+        doSetProperty('interpreter', args.subword(2), 'on off')
+      when w1 = 'message' & w2 = 'prompt' then
+        if w3 \= 'label' then
+          doSetProperty('message.prompt', args.subword(3), 'default frame label')
+        else
+          if count = 3 then
+            say 'label required for )set message prompt label'
+          else
+            settings['message.prompt'] = args.subword(3)
+      when w1 = 'message' then
+        if count = 1 then
+          say 'possible argument for )set message : prompt'
+        else
+          say 'invalid argument for )set message :' args.subword(2)
+      when w1 = 'numeric' & w2 = 'digits' then
+        if doSetNumericProperty('numeric.digits', args.subword(3), 1) then
+          currentFrame.setDigits(settings['numeric.digits'])
+      when w1 = 'numeric' & w2 = 'form' then
+        if doSetProperty('numeric.form', args.subword(3), 'scientific engineering') then
+          currentFrame.setForm(settings['numeric.form'])
+      when w1 = 'numeric' & count = 1 then do
+        header('Numeric Settings')
+        prolog('                             New frames    Current frame')
+        say '  digits ...................' settings['numeric.digits'].center(11)'    'Rexx(currentFrame.getDigits).center(11)
+        say '  form .....................' settings['numeric.form'].left(11)'    'currentFrame.getForm
+        epilog('Possible arguments for )set numeric are : digits form.')
+      end
+      when w1 = 'numeric' then
+        say 'invalid argument for )set numeric :' args.subword(2) '(expecting one of : digits form)'
+      when w1 = 'option' & count = 1 then do
+        header('Option Settings')
+        prolog('                             New frames    Current frame')
+        loop i = 1 for optionsList.words
+          w = optionsList.word(i)
+          say  '  '(w' ').left(27, '.') '\-'
+          if settings['option'].wordpos(w) > 0 then
+            say 'enabled        \-'
+          else
+            say 'disabled       \-'
+          if currentFrame.getOptions.wordpos(w) > 0 then
+            say 'enabled'
+          else
+            say 'disabled'
+        end
+        epilog('To enable an option such as binary, issue the command )set option binary on')
+      end
+      when w1 = 'option' then
+        if count = 2 & optionsList.wordpos(w2) > 0 then
+          if settings['option'].wordpos(w2) > 0 then
+            if currentFrame.getOptions.wordpos(w2) > 0 then
+              say 'option' w2 'on'
+            else do
+              say 'current frame : option' w2 'off'
+              say 'new frames : option' w2 'on'
+            end
+          else
+            if currentFrame.getOptions.wordpos(w2) = 0 then
+              say 'option' w2 'off'
+            else do
+              say 'current frame : option' w2 'on'
+              say 'new frames : option' w2 'off'
+            end
+        else
+        if count = 3 & optionsList.wordpos(w2) > 0 & (w3 = 'on' | w3 = 'off') then do
+          if w3 = 'on' then
+            doOptions(w2)
+          else
+            doOptions(w2 ')off')
+          if w3 = 'off' then
+            w2 = 'no'w2
+          old = settings['option']
+          new = ''
+          loop i = 1 for old.words
+            w = old.word(i)
+            if w = w2 then
+              return
+            if w.pos(w2) > 0, w2.pos(w) > 0 then
+              new = new w2
+            else
+              new = new w
+          end
+          settings['option'] = new
+        end
+        else
+          say 'invalid argument for )set option :' args.subword(2)
+      when w1 = 'package' & count = 1 then
+        if settings['package'] = currentFrame.getPackage then
+          if settings['package'] = '' then
+            say 'default package'
+          else
+            say 'package' settings['package']
+        else do
+          if currentFrame.getPackage = '' then
+            say 'current frame : default package'
+          else
+            say 'current frame : package' currentFrame.getPackage
+          if settings['package'] = '' then
+            say 'new frames : default package'
+          else
+            say 'new frames : package' settings['package']
+        end
+      when w1 = 'package' then
+        if w2 = 'default' & count = 2 then do
+          settings['package'] = ''
+          currentFrame.setPackage('')
+        end
+        else
+        if count = 2 then do
+          if validatePackage(w2) then do
+            settings['package'] = w2
+            currentFrame.setPackage(w2)
+          end
+          else
+            say 'invalid package name :' w2
+        end
+        else
+          say 'invalid argument for )set package :' args.subword(2)
+      when w1 = 'parser' then
+        if doSetProperty('parser', args.subword(2), 'verbose quiet') then
+          parser.verbose = settings['parser'] = 'verbose'
+      when w1 = 'quit' then
+        doSetProperty('quit', args.subword(2), 'protected unprotected')
+      when w1 = 'screen' & count = 1 then
+        say 'possible argument for )set screen : width'
+      when w1 = 'screen' & w2 = 'width' then
+        doSetNumericProperty('screen.width', args.subword(3), 1)
+      when w1 = 'screen' then
+        say 'invalid argument for )set screen :' args.subword(2) '(expecting width)'
+      when w1 = 'show' then
+        doSetProperty('show', args.subword(2), 'all declared')
+      when w1 = 'trace' & count = 1 then do
+        header('Trace Settings')
+        say '  current frame ....................' currentFrame.getTrace
+        say '  new frames .......................' settings['trace']
+        epilog('Possible arguments for )set trace are : all off methods results.')
+      end
+      when w1 = 'trace' then
+        if doSetProperty('trace', args.subword(2), 'all off methods results') & w2 \= '' then
+          doTrace(w2)
+      when w1 = 'use' & count = 1 then do
+        header('Use Settings')
+        loop i = 1 for settings['use'].words
+          say '  'settings['use'].word(i)
+        end
+      end
+      when w1 = 'use' & (w2 = 'add' | w2 = 'drop') & count = 3 then
+        if w2 = 'add' then
+          if validateClass(w3) then do
+            if settings['use'].wordpos(w3) > 0 then
+              say 'class' w3 'already present in use list : ignored'
+            else
+              settings['use'] = settings['use'] w3
+            list = currentFrame.getUses
+            if list.wordpos(w3) = 0 then
+              currentFrame.setUses(list w3)
+          end
+          else
+            say 'invalid class name :' w3
+        else do
+          if settings['use'].wordpos(w3) = 0 then
+            say 'class' w3 'not present in use list : ignored'
+          else
+            settings['use'] = settings['use'].delword(settings['use'].wordpos(w3), 1)
+          list = currentFrame.getUses
+          if list.wordpos(w3) \= 0 then
+            currentFrame.setUses(list.delword(list.wordpos(w3), 1))
+        end
+      when w1 = 'use' then
+        say 'invalid argument for )set use :' args.subword(2) '(expecting one of : add drop)'
+      when count = 0 then do
+        header('System Settings')
+        prolog('possible arguments for )set :')
+        top = Rexx '0'
+        loop s over settings
+          parse s s '.' .
+          top[s] = top[s] + 1
+        end
+        loop s over top
+          if top[s] > 1 then
+            say '  's'...'
+          else
+            say '  's
+        end
+        epilog('Settings ending with an ellipsis contain subsettings.')
+      end
+    otherwise
+      say 'unknown argument for )set :' args
+    end
+
+  -- returns 1 if new is valid
+  method doSetProperty(propertyname, new, choices) returns boolean
+    if new = '' then do
+      header(propertyname.translate(' ', '.') 'Settings')
+      prolog('Possible options for )set' propertyname.translate(' ', '.')':')
+      loop i = 1 for choices.words
+        if settings[propertyname] = choices.word(i) then
+          say ' *'choices.word(i)
+        else
+          say '  'choices.word(i)
+      end
+      epilog('The current status is prefixed by an asterisk.')
+    end
+    else
+    if choices.wordpos(new) = 0 then do
+      flow('invalid argument for )set' propertyname.translate(' ', '.') ':' new '(expecting one of :' choices')')
+      return 0
+    end
+    else
+      settings[propertyname] = new
+    return 1
+
+  -- returns 1 if new is valid
+  method doSetNumericProperty(propertyname, new, minimum) returns boolean
+    if new = '' then
+      say propertyname.translate(' ', '.') settings[propertyname]
+    else
+    if new.datatype('W') then
+      if new >= minimum then
+        settings[propertyname] = new
+      else do
+        flow('invalid argument for )set' propertyname.translate(' ', '.') ':' new '(expecting' minimum 'or higher)')
+        return 0
+      end
+    else do
+      flow('invalid argument for )set' propertyname.translate(' ', '.') ':' new '(expecting a number)')
+      return 0
+    end
+    return 1
+
+  method doShow(args)
+    count = args.words
+    if count = 0, count > 2 then do
+      say 'invalid argument for )show :' args
+      return
+    end
+
+    parse args name what .
+    declared = settings['show'] = 'declared'
+
+    do
+      obj = Class.forName(name)
+    catch ClassNotFoundException
+      loop i = 1 for path.words
+        do
+          -- pas exactement, en ce sens que la recherche n'est pas ici
+          -- r‚cursive dans la hierarchie.
+          obj = Class.forName(path.word(i)name)
+        catch ClassNotFoundException
+        end
+        if obj \= null then
+          leave
+      end
+      if obj = null then do
+        imports = currentFrame.getImports
+        loop i = 0 for imports.size
+          do
+            -- pas exactement, en fait.  il faut traiter les imports
+            -- de classes et de hierarchie.
+            obj = Class.forName((Rexx imports.elementAt(i)).strip('T', '.')'.'name)
+          catch ClassNotFoundException
+          end
+          if obj \= null then
+            leave
+        end
+      end
+      if obj = null then do
+        say 'class' name 'not found'
+        return
+      end
+    end
+
+    if ')attributes'.abbrev(what, 2) then do
+      header('Attributes for class' name.substr(name.lastpos('.')+1))
+      say 'class' obj.getName||classmodifiers(obj.getModifiers)
+      if obj.getSuperclass \= null then
+        if obj.getSuperclass \= Object.class then
+          say '  extends' obj.getSuperclass.getName
+      ai = obj.getInterfaces
+      loop i = 0 for ai.length
+        ic = ai[i]
+        say '  implements' ic.getName
+      end
+    end
+    else
+    if what = '', ')operations'.abbrev(what, 2) then do
+      header('Operations for class' name.substr(name.lastpos('.')+1))
+      if declared then
+        af = obj.getDeclaredFields
+      else
+        af = obj.getFields
+      loop i = 0 for af.length
+        say '  'af[i].getName '=' type(af[i].getType.getName)
+      end
+      if af.length > 0 then
+        say
+      if declared then
+        ac = obj.getDeclaredConstructors
+      else
+        ac = obj.getConstructors
+      loop i = 0 for ac.length
+        c = ac[i]
+        say '  constructor' c.getName'(\-'
+        p = c.getParameterTypes
+        loop j = 0 for p.length
+          say type(p[j].getName)'\-'
+          if j \= p.length - 1 then
+            say ', \-'
+        end
+        say ')'
+      end
+      if ac.length > 0 then
+        say
+      if declared then
+        am = obj.getDeclaredMethods
+      else
+        am = obj.getMethods
+      loop i = 0 for am.length
+        m = am[i]
+        say '  method' m.getName'(\-'
+        p = m.getParameterTypes
+        loop j = 0 for p.length
+          say type(p[j].getName)'\-'
+          if j \= p.length - 1 then
+            say ', \-'
+        end
+        if m.getReturnType.getName = "void" then
+          say ')'modifiers(m.getModifiers)
+        else
+          say ')'modifiers(m.getModifiers) 'returns' type(m.getReturnType.getName)
+      end
+    end
+    else
+      say 'invalid argument for )show :' args
+
+  method doSynonym(args)
+    select
+      when args = '' then
+        loop i over synonyms
+          say i
+        end
+      when args.words = 1 then
+        if synonyms[args] = '' then
+          say 'unknown system command synonym :' args
+        else
+        if prompt('drop the system command synonym' args) then
+          synonyms[args] = null
+    otherwise
+      synonyms[args.word(1)] = args.subword(2)
+    end
+
+  method doSystem(args)
+    do
+      proc = Runtime.getRuntime.exec(args)
+      in = proc.getInputStream
+      c = in.read
+      loop while c \= -1
+        say (Rexx c).d2c'\-'
+        c = in.read
+      end
+      in.close
+      proc.waitFor
+    catch InterruptedException
+      say 'InterruptedException'
+    catch IOException
+      say 'IOException while running command'
+    end
+
+  method doTrace(args)
+    select
+      when args = '' then do
+        if currentFrame.getTrace = 'off' then do
+          if \ currentFrame.isTraceVarEnabled then
+            say 'trace off'
+        end
+        else
+          say 'trace' currentFrame.getTrace
+        if currentFrame.isTraceVarEnabled then
+          say 'trace var' currentFrame.getTraceVar
+      end
+      when args = 'all', args = 'methods', args = 'results', args = 'off' then do
+        currentFrame.setTrace(args)
+        if args = 'off' then
+          currentFrame.setTraceVarEnabled(0)
+      end
+      when args.word(1) = 'var' then do
+        new = args.subword(2)
+        cur = currentFrame.getTraceVar
+        loop i = 1 for new.words
+          w = new.word(i).strip('L', '+')
+          if w.datatype('S') | (w.left(1) = "-" & w.substr(2).datatype('S')) then do
+            if w.left(1) = '-' then do
+              w = w.substr(2)
+              p = cur.wordpos(w)
+              if p > 0 then
+                cur = cur.delword(p, 1)
+            end
+            else
+            if cur.wordpos(w) = 0 then
+              cur = cur w
+          end
+          else
+            say 'element' w 'is not a valid variable name : ignored'
+        end
+        currentFrame.setTraceVar(cur)
+        currentFrame.setTraceVarEnabled(1)
+      end
+    otherwise
+      say 'invalid argument for )trace :' args
+    end
+
+  method doUse(args)
+    parse args w1 w2 w3
+
+    select
+      when w1 = 'query' & w2 = '' then do
+        header('Frame' currentFrame.getName)
+        prolog('use list:')
+        list = currentFrame.getUses
+        if list.words = 0 then
+          say '  <empty>'
+        else
+          loop i = 1 for list.words
+            say '  'list.word(i)
+          end
+      end
+      when w1 = 'add' & w2 \= '' & w3 = '' then do
+        list = currentFrame.getUses
+        if list.wordpos(w2) > 0 then
+          say 'frame' currentFrame.getName ': class' w2 'already present in use list : ignored'
+        else
+        if validateClass(w2) then
+          currentFrame.setUses(list w2)
+        else
+          say 'invalid class name :' w2
+      end
+      when w1 = 'drop' & w2 \= '' & w3 = '' then do
+        list = currentFrame.getUses
+        if list.wordpos(w2) > 0 then
+          currentFrame.setUses(list.delword(list.wordpos(w2), 1))
+        else
+          say 'frame' currentFrame.getName ': class' w2 'not present in use list : ignored'
+      end
+      when w1 = '' then
+        say 'possible argument for )use : query add drop'
+    otherwise
+      say 'invalid argument for )use :' args
+    end
+
+  method doWhat(args)
+    parse args w1 patterns
+
+    select
+      when w1 = 'commands' then do
+        header('System Commands')
+        prolog('system commands satisfying pattern(s):', patterns)
+        doWhatCommands(patterns)
+        epilog('To get more information about a command such as display, issue the command )help display')
+      end
+      when w1 = 'synonyms' then do
+        header('System Command Synonyms')
+        prolog('user-defined synonyms satisfying pattern(s):', patterns)
+        doWhatSynonyms(patterns)
+      end
+      when w1 = 'things' then do
+        header('Available Things')
+        prolog('system commands and user-defined synonyms satisfying pattern(s):', patterns)
+        doWhatCommands(patterns)
+        doWhatSynonyms(patterns)
+        epilog('To get more information about a command such as display, issue the command )help display')
+      end
+      when w1 = '' then
+        say 'possible argument for )what : commands synonyms things'
+    otherwise
+      say 'invalid argument for )what :' args
+    end
+
+  method doWhatCommands(patterns)
+    loop i = 1 for cmds.words
+      c = cmds.word(i).changestr('.', '')
+      if match(c, patterns) then
+        say '  )'c
+    end
+
+  method doWhatSynonyms(patterns)
+    loop s over synonyms
+      if match(s, patterns) then
+        say '  )'s '.'.copies(31-s.length) ')'synonyms[s]
+    end
+
+  -- frame management
+  method newFrame(f = Frame)
+    if framesTable.get(f.getName) \= null then do
+      say 'frame' f.getName 'already exits: new ignored'
+      return
+    end
+    framesRing.addElement(f)
+    framesTable.put(f.getName, f)
+    currentFrame = f
+
+  method initFrame
+    currentFrame.setDigits(settings['numeric.digits'])
+    currentFrame.setForm(settings['numeric.form'])
+    currentFrame.setPackage(settings['package'])
+    currentFrame.setOptions(settings['option'])
+    currentFrame.setUses(settings['use'])
+    currentFrame.setTrace(settings['trace'])
+    imports = currentFrame.getImports
+    loop i = 1 for settings['import'].words
+      imports.addElement(settings['import'].word(i))
+    end
+
+  method dropFrame(n = String)
+    o = framesTable.get(n)
+    if o \= null then do
+      if framesRing.size = 1 then do
+        say 'frame' n 'is the last frame in the ring: drop ignored'
+        return
+      end
+      old = framesRing.indexOf(o)
+      framesRing.removeElement(o)
+      framesTable.remove(n)
+      if old = framesRing.size then
+        old = old - 1
+      currentFrame = Frame framesRing.elementAt(old)
+    end
+    else
+      say 'unknown frame :' n
+
+  method nextFrame
+    s = framesRing.size
+    if s = 1 then
+      return
+
+    old = framesRing.indexOf(currentFrame)
+    if old = s - 1 then
+      old = 0
+    else
+      old = old + 1
+    currentFrame = Frame framesRing.elementAt(old)
+
+  method lastFrame
+    currentFrame = Frame framesRing.lastElement
+
+  method importFrame(n = String, objects = Rexx null)
+    o = Frame framesTable.get(n)
+    if o == currentFrame then
+      say 'cannot import elements from current frame'
+    else
+    if o \= null then do
+      if objects = null then do
+        if prompt('import all elements from frame' n) then do
+          ap = o.getProperties
+          loop i = 0 for ap.length
+            currentFrame.put(ap[i].name, ap[i])
+          end
+        end
+      end
+      else
+        loop p = 1 for objects.words
+          v = objects.word(p)
+          if o.get(v) \= null then
+            currentFrame.put(v, o.get(v))
+          else
+            say 'element' v 'not present in frame' n ': ignored'
+        end
+    end
+    else
+      say 'unknown frame :' n
+
+  method getCurrentFrame returns Frame
+    return currentFrame
+
+  -- private members
+  method fieldtype(t) static private
+    t = t.translate('.', '/')
+    r = t.substr(1, t.verify('[')-1).changestr('[',',')
+    if r \= '' then
+      r = '['r.substr(2)']'
+    t = t.strip('l', '[')
+    l = t.left(1)
+    select
+      when l == 'B' then r = 'byte'r
+      when l == 'C' then r = 'char'r
+      when l == 'D' then r = 'double'r
+      when l == 'F' then r = 'float'r
+      when l == 'I' then r = 'int'r
+      when l == 'J' then r = 'long'r
+      when l == 'L' then r = t.substr(2,t.pos(';')-2)r
+      when l == 'S' then r = 'short'r
+      when l == 'Z' then r = 'boolean'r
+    otherwise
+      r = t||r
+    end
+    return r.translate('.', '$')
+
+  method type(t) static private
+    if t.left(1) = '[' then
+      return fieldtype(t)
+    else
+      return t.translate('.', '$')
+
+  method modifiers(m = int) static private
+    r = ''
+    if Modifier.isProtected(m) then
+      r = r' inheritable'
+    if Modifier.isAbstract(m) then
+      r = r' abstract'
+    if Modifier.isFinal(m) then
+      r = r' final'
+    if Modifier.isPrivate(m) then
+      r = r' private'
+    if Modifier.isSynchronized(m) then
+      r = r' protect'
+    if Modifier.isStatic(m) then
+      r = r' static'
+    return r
+
+  method classmodifiers(m = int) static private
+    r = ''
+    if Modifier.isInterface(m) then
+      r = r' interface'
+    if Modifier.isAbstract(m) then
+      r = r' abstract'
+    if Modifier.isPrivate(m) then
+      r = r' shared'
+    if Modifier.isFinal(m) then
+      r = r' final'
+    return r
+
+  method flow(msg) private
+    screenWidth = settings['screen.width']
+    loop while msg.length >= screenWidth
+      p = msg.lastpos(' ', screenWidth)
+      if p > 0 then do
+        say msg.left(p-1)
+        msg = msg.substr(p+1)
+      end
+      else
+        leave
+    end
+    say msg
+
+  method prompt(msg) private
+    flow('please enter y or yes if you really want to' msg ': \-')
+    r = ask
+    return r = 'y' | r = 'yes'
+
+  method match(c, pattern) static private returns boolean
+    if pattern = '' then
+      return 1
+
+    loop i = 1 for pattern.words
+      if c.pos(pattern.word(i)) > 0 then
+        return 1
+    end
+    return 0
+
+  method header(msg) private
+    prolog((' 'msg.strip' ').center(settings['screen.width']-1, '-'))
+
+  method prolog(msg, msg2 = '') private
+    flow(msg)
+    if msg2 \= '' then
+      flow('      'msg2)
+    say
+
+  method epilog(msg) private
+    say
+    flow(msg)
+
+  method validatePackage(new) returns boolean
+    valid = new.right(1) \= '.'
+    loop while new \= ''
+      parse new a '.' new
+      valid = valid & a.datatype('S')
+    end
+    return valid
+
+  method validateClass(new) returns boolean
+    return validatePackage(new)
+
+  method resolveFileName(name)
+    do
+      file = File(name)
+      if file.isAbsolute then
+        if file.exists then
+          return file.getCanonicalPath
+        else
+          return name
+      file = File(currentDirectory, name)
+      if file.exists then
+        return file.getCanonicalPath
+      else
+        return file.getAbsolutePath
+    catch e = IOException
+      say 'IOError while resolving file name' name ':' e
+      return ''
+    end
+
+
+class Workspace.FilteringOutputStream extends OutputStream
+
+  status = Hashtable
+  old = OutputStream
+
+  method FilteringOutputStream(previous = OutputStream)
+    old = previous
+
+  method push protect
+    if status = null then
+      status = Hashtable()
+
+    o = status.get(Thread.currentThread)
+    if o = null then
+      status.put(Thread.currentThread, Integer(1))
+    else
+      status.put(Thread.currentThread, Integer((Integer o).intValue + 1))
+
+  method pop
+    o = Integer status.get(Thread.currentThread)
+    if o.intValue = 1 then
+      status.remove(Thread.currentThread)
+    else
+      status.put(Thread.currentThread, Integer(o.intValue - 1))
+
+  method write(b = int) signals IOException
+    if status = null, \ status.containsKey(Thread.currentThread) then
+      old.write(b)
+
+  method flush
+    if status = null, \ status.containsKey(Thread.currentThread) then
+      old.flush

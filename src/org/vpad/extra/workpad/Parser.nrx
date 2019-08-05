@@ -1,0 +1,425 @@
+-- Parser.nrx
+
+package org.vpad.extra.workspace
+
+options binary strictcase
+
+
+class Parser
+
+  free = Rexx
+  clauses = Vector
+  usedRules = Hashtable
+
+  verbose = boolean
+
+  properties static private
+  nl = Rexx System.getProperty('line.separator')
+
+  method Parser
+    clauses = Vector()
+    usedRules = Hashtable()
+
+  method getDandlingVars
+    return free
+
+  method getClauses returns Vector
+    return clauses
+
+  method rewrite(rules = RuleSet null)
+    if rules = null then
+      return
+
+    -- !!! should explode statements returned by rules, as they may
+    -- !!! contain more than one clause.
+    new = Vector()
+    usedRules.clear
+    loop i = 0 for clauses.size
+      c = Rexx clauses.elementAt(i)
+      if c = null then
+        iterate
+      rules.rewrite(c, usedRules)
+    end
+    if \ usedRules.isEmpty then do
+      new.addElement(Rexx 'do;')
+      loop o over usedRules
+        new.addElement((Rule o).introduce)
+      end
+    end
+    loop i = 0 for clauses.size
+      c = Rexx clauses.elementAt(i)
+      if c = null then
+        iterate
+      new.addElement(rules.rewrite(c, usedRules))
+    end
+    if \ usedRules.isEmpty then do
+      new.addElement(Rexx 'finally;')
+      loop o over usedRules
+        new.addElement((Rule o).conclude)
+      end
+      new.addElement(Rexx 'end;')
+    end
+    clauses = new
+
+  method parse(cmd) returns boolean
+    inMain = boolean 1
+    clauses.removeAllElements
+    free = ''
+    len = nl.length
+
+    what = removeComments(cmd)
+    start = Rexx 1
+    loop while what.pos(nl, start) = start
+      start = start + len
+    end
+    what = what.substr(start)
+
+    loop while what \= ''
+      clause = getClause(what)
+      start = clause.length+1
+      loop while what.pos(nl, start) = start
+        start = start + len
+      end
+      what = what.substr(start)
+
+--      clause = reflow(clause)
+-- KLUDGE : cannot use the above, as it crashes JDK 1.1.8 IBM build o118-20000323
+--          with JIT javax V3.5-IBMJDK1.1-20000323 enabled on second invocation
+--          of parse()
+      new = Rexx ''
+      loop while clause \= ''
+        parse clause line (nl) clause
+        new = new || line.strip('t')
+        if new.right(1) = '-' then
+          new = new.left(new.length-1)
+      end
+      clause = new
+
+      if verbose then
+        say '['clause']'
+      if clause \= ';' then
+        clauses.addElement(clause.strip)
+      else
+        iterate
+
+      lhs = clause.word(1)
+      select
+        when (lhs = 'method' | lhs = 'class') & clause.word(2).left(1).datatype('S') then
+          inMain = 0
+        when inMain & lhs = 'parse' then
+          free = free doParse(clause)
+        when inMain & lhs = 'loop' then
+          free = free doLoop(clause)
+        when inMain & lhs.datatype('S') & clause.word(2).left(1) = '=' then
+          free = free doAssign(clause)
+        when inMain & lhs.pos('=') > 1 then
+          if lhs.left(lhs.pos('=')-1).datatype('S') then
+            free = free doAssign(clause)
+      otherwise
+      end
+
+    catch e = RuntimeException
+      if verbose then
+        say '['what'] ('e')'
+      clauses.addElement(what)
+      free = ''
+      e.printStackTrace
+      return 0
+    end
+    return 1
+
+  method reflow(str)
+    new = Rexx ''
+    loop while str \= ''
+      parse str line (nl) str
+      new = new || line
+      new = new.strip
+      if new.right(1) = '-' then
+        new = new.left(new.length-1)
+    end
+    return new
+
+  method getClause(str)
+    clause = getClause2(str)
+    -- if <expr>, then, else, when <expr>, otherwise, finally
+    w1 = clause.word(1)
+    if w1 = 'if', w1 = 'when', w1 = 'then', w1 = 'else', w1 = 'otherwise', w1 = 'finally' then do
+      w2 = clause.word(2)
+      c2 = w2.left(1)
+  
+      if c2 = '=', c2 = ';' then
+        return clause
+  
+      select
+        when w1 = 'if', w1 = 'when' then do
+          pos = clause.wordindex(2)
+          loop
+            s = clause.substr(pos)
+            w = s.word(1)
+            c = w.left(1)
+            pos = pos + s.wordindex(1)-1
+            select
+              when w = 'then', w = 'then;' then
+                return clause.left(pos-2)';'
+              when c = ';' then
+                return clause.left(pos)
+              when c = '"', c = "'" then
+                pos = pos + getLeadingString(clause.substr(pos)).length
+              when c = '[', c = '(' then
+                pos = pos + getLeadingExpression(clause.substr(pos)).length
+            otherwise
+              pos2 = w.verify('([;"''', 'M')
+              if pos2 \= 0 then
+                pos = pos + pos2 - 1
+              else do
+                pos = pos + w.length
+                pos = pos + clause.substr(pos).wordindex(1) - 1
+              end
+            end
+          end
+        end
+        when w1 = 'then', w1 = 'else', w1 = 'otherwise', w1 = 'finally' then
+          return ' '.copies(clause.wordindex(1)-1)||w1';'
+--      otherwise
+--        return clause
+      end
+    end
+    else
+      return clause
+
+  -- !!! just like striptrailingcomment
+  method getClause2(str)
+    pos = str.verify(';"''', 'M')
+    if pos = 0 then
+      return str
+    if str.charAt(pos-1) = ';' then
+      return str.left(pos)
+    partial = str.substr(pos)
+    lead = getLeadingString(partial)
+    return str.left(pos-1) || lead || getClause(partial.substr(lead.length+1))
+
+  method removeComments(str)
+    new = Rexx ''
+    loop label a while str \= ''
+      parse str line (nl) str
+      pc = findComment(line)
+      if pc > 0 then do
+        what = line.substr(pc, 2)
+        if what = '--' then
+          line = stripTrailingComment(line)
+        else do
+          str = line.left(pc-1) removeBlockComment(line.substr(pc+2) || nl || str)
+          iterate a
+        end
+      end
+      new = new || line
+      new = new.strip
+      if new.right(1) \= '-' & new.right(1) \= ';' then
+        new = new || ';'
+      new = new || nl
+    end
+    return new
+
+  method findComment(str)
+    pc = str.pos('--')
+    pb = str.pos('/'||'*')
+    if pc = 0 & pb = 0 then
+      return 0
+    po = str.verify('"''', 'M')
+    if po > 0 & (pb > po | pc > po) then do
+      partial = str.substr(po)
+      offset = po + getLeadingString(partial).length - 1
+      result = findComment(removeLeadingString(partial))
+      if result \= 0 then
+        return offset + result
+      else
+        return 0
+    end
+    if pc \= 0 & (pc < pb | pb = 0) then
+      return pc
+    else
+      return pb
+
+  method removeBlockComment(str)
+    ps = str.pos('/*')
+    pe = str.pos('*/')
+    if pe = 0 then
+      return '' -- in fact, error : missing ending comment mark
+    if ps = 0, pe < ps then
+      return str.substr(pe + 2)
+    return removeBlockComment(removeBlockComment(str.substr(ps + 2)))
+
+  -- !!! just like getclause2
+  method stripTrailingComment(str)
+    pc = str.pos('--')
+    if pc = 0 then
+      return str
+    po = str.verify('"''', 'M')
+    if pc < po, po = 0 then
+      return str.left(pc-1).strip('T')
+    partial = str.substr(po)
+    lead = getLeadingString(partial)
+    return str.left(po-1) || lead || stripTrailingComment(partial.substr(lead.length+1))
+
+  method getLeadingString(str)
+    start = str.left(1)
+    last = str.pos(start, 2)
+    loop while str.left(last-1).reverse.verify('\\') // 2 = 0
+      last = str.pos(start, last+1)
+    end
+    return str.left(last)
+
+  method removeLeadingString(str)
+    start = str.left(1)
+    last = str.pos(start, 2)
+    loop while str.left(last-1).reverse.verify('\\') // 2 = 0
+      last = str.pos(start, last+1)
+    end
+    return str.substr(last+1)
+
+  method getLeadingExpression(str)
+    return str.left(str.length-removeLeadingExpression(str).length)
+
+  method removeLeadingExpression(str)
+    return removeLeadingExpression2(str.substr(2), str.left(1))
+
+  method removeLeadingExpression2(str, needle)
+    start = str.left(1)
+    select
+      when start = ')' & needle = '(', start = ']' & needle = '[' then
+        return str.substr(2)
+      when start = '(', start = '[' then
+        return removeLeadingExpression2(str.substr(2), start)
+      when start = '"', start = "'" then
+        return removeLeadingExpression2(removeLeadingString(str), needle)
+    otherwise
+      parse str w1 rest
+
+      dot = w1.pos('.')
+      oparent = w1.pos('(')
+      cparent = w1.pos(')')
+      obracket = w1.pos('[')
+      cbracket = w1.pos(']')
+
+      if dot = 0 & oparent = 0 & cparent = 0 & obracket = 0 & cbracket = 0 then
+        return removeLeadingExpression2(rest, needle)
+
+      if needle = '(' & cparent > 1 & (cparent < oparent | oparent = 0) then
+        return str.substr(cparent+1)
+      if needle = '[' & cbracket > 1 & (cbracket < obracket | obracket = 0) then
+        return str.substr(cbracket+1)
+      if needle = '(' & obracket > 1 & (obracket < cparent | cparent = 0) then
+        return removeLeadingExpression2(removeLeadingExpression(str.substr(obracket)), needle)
+      if needle = '[' & oparent > 1 & (oparent < cbracket | cbracket = 0) then
+        return removeLeadingExpression2(removeLeadingExpression(str.substr(oparent)), needle)
+      if needle = '(' & oparent > 1 & (oparent < cparent | cparent = 0) then
+        return removeLeadingExpression2(removeLeadingExpression(str.substr(oparent)), needle)
+      if needle = '[' & obracket > 1 & (obracket < cbracket | cbracket = 0) then
+        return removeLeadingExpression2(removeLeadingExpression(str.substr(obracket)), needle)
+      if dot > 0 & oparent = 0 & cparent = 0 & obracket = 0 & cbracket = 0 then
+        return removeLeadingExpression2(str.substr(dot+1), needle)
+      if oparent = 1, obracket = 1 then
+        return removeLeadingExpression2(removeLeadingExpression(w1 rest), needle)
+say 'invalid pattern' dot oparent cparent obracket cbracket '"'needle'"'
+      return '' -- invalid pattern
+    end
+
+  -- semantic actions
+  method doAssign(clause) inheritable
+    parse clause var '=' .
+    return var
+
+  method doLoop(clause) inheritable
+    if clause.pos('=') = 0 then
+      return ''
+    clause = clause.subword(2)
+    if clause.word(1) = 'protect' then
+      clause = clause.subword(2)
+    if clause.word(1) = 'label' then
+      clause = clause.subword(3)
+    if clause.word(1) = 'protect' then
+      clause = clause.subword(2)
+    -- if an iterator is present, clause must be "iterator=..." at this point
+    iterator = clause.word(1)
+    if iterator.pos('=') = 0 & iterator.datatype('S') then
+      if clause.subword(2).strip.left(1) = '=' then
+        return iterator
+      else
+        return ''
+    parse iterator iterator '=' .
+    if iterator.datatype('S') then
+      return iterator
+    else
+      return ''
+
+  method doParse(clause) inheritable
+    return doParse2(clause.subword(2))
+
+  method doParse2(expr)
+    parse expr start template
+    start = start.strip
+    expr = start template
+    -- skip term
+    if start.datatype('S') then
+      return doTemplate(template)
+    if start.datatype('N') then
+      return doTemplate(template)
+    if start.left(1) = '"', start.left(1) = "'" then do
+      val = removeLeadingString(expr)
+      if val.left(1) \== ' ' then
+        return doParse2(val)
+      else
+        return doTemplate(val)
+    end
+
+    if start.left(1) = '.' then
+      return doParse2(expr.substr(2))
+    dot = start.pos('.')
+    parent = start.pos('(')
+    if dot > 0 & (parent = 0 | dot < parent) then
+      return doParse2(expr.substr(dot))
+
+    if parent = 1 then do -- Expression
+      val = removeLeadingExpression(expr)
+      if val.left(1) \== ' ' then
+        return doParse2(val)
+      else
+        return doTemplate(val)
+    end
+
+    if parent > 1 then -- Method call
+      return doParse2(expr.substr(parent))
+
+    if start.pos('[') > 1 then do -- Array access
+      val = removeLeadingExpression(expr.substr(start.pos('[')))
+      if val.left(1) \== ' ' then
+        return doParse2(val)
+      else
+        return doTemplate(val)
+    end
+    return ''
+
+  method doTemplate(expr)
+    expr = expr.strip('T', ';')
+    vars = ''
+    loop while expr \= ''
+      parse expr w1 expr
+      if w1.datatype('S') then
+        vars = vars w1
+      else
+      if w1 = '.', '-+='.pos(w1.left(1)) > 0, w1.datatype('N') then
+        nop
+      else
+      if w1.left(1) = '"', w1.left(1) = "'" then
+        expr = removeLeadingString(w1 expr)
+      else
+      if w1.left(1) = "(" then do
+        expr = w1 expr
+        p = expr.pos(')')
+        if p > 0 then
+          expr = expr.substr(p+1)
+        else
+          expr = '' -- invalid pattern
+      end
+    end
+    return vars

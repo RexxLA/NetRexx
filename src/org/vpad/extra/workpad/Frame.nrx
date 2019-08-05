@@ -1,0 +1,348 @@
+-- Frame.nrx
+
+package org.vpad.extra.workspace
+
+options binary strictcase
+
+
+class Frame
+
+  log = Vector()
+  rep = Hashtable()
+  pkg = String
+
+  properties indirect
+  name = String
+  step = int 0
+  recording = boolean 1
+  digits = int 9
+  form = Rexx 'scientific'
+  imports = Vector()
+  options = Rexx 'nobinary decimal noexplicit nostrictargs nostrictassign nostrictcase nostrictsignal'
+  uses = Rexx ''
+  trace = Rexx 'off'
+  traceVar = Rexx ''
+  traceVarEnabled = boolean 0
+
+  method Frame(n = String)
+    name = n
+
+  method Frame(n = String, initialBindings = Symbol[])
+    this(n)
+    if initialBindings \= null then
+      loop i = 0 for initialBindings.length
+        rep.put(initialBindings[i].name, initialBindings[i])
+      end
+
+  method incStep
+    step = step + 1
+
+  method equals(o = Object) returns boolean
+    return o == this
+
+  method file(n)
+    if \ recording then
+      return
+
+    do
+      f = PrintWriter(FileWriter(n))
+      loop i = 0 for log.size
+        f.println(String log.elementAt(i))
+      end
+      f.close
+    catch e = IOException
+      say e
+    end
+
+  method log(s = String)
+    if isRecording then
+      log.addElement(s)
+
+  method reset
+    rep.clear
+    log.removeAllElements
+    recording = 1
+
+  method restoreVarsOn(w = PrintWriter)
+    loop v over rep
+      o = get(Rexx v)
+      if o <= Var then
+        w.print(emitExposeVar(Var o))
+    end
+
+  method saveVarsOn(w = PrintWriter)
+    loop v over rep
+      o = get(Rexx v)
+      if o <= Var then
+        w.println('  $frame.put("'v'", 'v')')
+    end
+
+  method bindVarsOn(w = PrintWriter, vars)
+    exposed = Rexx ''
+    loop i = 1 for vars.words
+      v = vars.word(i)
+      if \ rep.containsKey(v) & exposed.wordpos(v) = 0 then do
+        w.println('  $frame.put("'v'", 'v')')
+        exposed = exposed v
+      end
+    end
+
+  method saveFunctionsOn(w = PrintWriter)
+    loop v over rep
+      o = get(Rexx v)
+      if o <= Function then do
+        w.println(o.value)
+      end
+    end
+
+  method isEmpty returns boolean
+    return rep.isEmpty
+
+  method getProperties returns Symbol[]
+    r = Symbol[rep.size]
+    i = 0
+    loop s over rep
+      r[i] = get(Rexx s)
+      i = i + 1
+    end
+    return r
+
+  method getPackage returns String
+    return pkg
+
+  method setPackage(p = String)
+    pkg = p
+
+  method addTraceVar(list)
+    traceVarEnabled = 1
+    new = list
+    cur = traceVar
+    loop i = 1 for new.words
+      w = new.word(i).strip('L', '+')
+      if w.datatype('S') | (w.left(1) = '-' & w.substr(2).datatype('S')) then do
+        if w.left(1) = '-' then do
+          w = w.substr(2)
+          p = cur.wordpos(w)
+          if p > 0 then
+            cur = cur.delword(p, 1)
+        end
+        else
+        if cur.wordpos(w) = 0 then
+          cur = cur w
+      end
+    end
+    traceVar = cur
+
+  -- persistence management
+  method emitExposeVar(var = Var)
+    o = var.value
+    select
+      when o <= BYTE then
+        return var.name '= byte $frame.get_byte("'var.name'");'
+      when o <= CHAR then
+        return var.name '= char $frame.get_char("'var.name'");'
+      when o <= DOUBLE then
+        return var.name '= double $frame.get_double("'var.name'");'
+      when o <= FLOAT then
+        return var.name '= float $frame.get_float("'var.name'");'
+      when o <= INT then
+        return var.name '= int $frame.get_int("'var.name'");'
+      when o <= LONG then
+        return var.name '= long $frame.get_long("'var.name'");'
+      when o <= SHORT then
+        return var.name '= short $frame.get_short("'var.name'");'
+      when o <= BOOLEAN then
+        return var.name '= boolean $frame.get_boolean("'var.name'");'
+    otherwise
+      return var.name '=' var.type '$frame.get_value("'var.name'");'
+    end
+
+  method remove(n)
+    rep.remove(n)
+
+  method put(n, value = Symbol)
+    rep.put(n, value)
+
+  method put(n, value = Object)
+    s = rep.get(n)
+    if s \= null then
+      (Var s).value = value
+    else
+      rep.put(n, Var(n, type(value.getClass.getName), value))
+
+  method put(n, value = Rexx)
+    put(n, Object value)
+
+  method put(n, value = byte)
+    rep.put(n, Var(n, "byte", BYTE(value)))
+
+  method put(n, value = char)
+    rep.put(n, Var(n, "char", CHAR(value)))
+
+  method put(n, value = double)
+    rep.put(n, Var(n, "double", DOUBLE(value)))
+
+  method put(n, value = float)
+    rep.put(n, Var(n, "float", FLOAT(value)))
+
+  method put(n, value = int)
+    rep.put(n, Var(n, "int", INT(value)))
+
+  method put(n, value = long)
+    rep.put(n, Var(n, "long", LONG(value)))
+
+  method put(n, value = short)
+    rep.put(n, Var(n, "short", SHORT(value)))
+
+  method put(n, value = boolean)
+    rep.put(n, Var(n, "boolean", BOOLEAN(value)))
+
+  method get(n) returns Symbol
+    return Symbol rep.get(n)
+
+  method get_value(n) returns Object
+    return get(n).value
+
+  method get_byte(n) returns byte
+    return (BYTE get(n).value).value
+
+  method get_char(n) returns char
+    return (CHAR get(n).value).value
+
+  method get_double(n) returns double
+    return (DOUBLE get(n).value).value
+
+  method get_float(n) returns float
+    return (FLOAT get(n).value).value
+
+  method get_int(n) returns int
+    return (INT get(n).value).value
+
+  method get_long(n) returns long
+    return (LONG get(n).value).value
+
+  method get_short(n) returns short
+    return (SHORT get(n).value).value
+
+  method get_boolean(n) returns boolean
+    return (BOOLEAN get(n).value).value
+
+  -- private members
+  method fieldtype(t) static private
+    t = t.translate('.', '/')
+    r = t.substr(1, t.verify('[')-1).changestr('[',',')
+    if r \= '' then
+      r = '['r.substr(2)']'
+    t = t.strip('l', '[')
+    l = t.left(1)
+    select
+      when l == 'B' then r = 'byte'r
+      when l == 'C' then r = 'char'r
+      when l == 'D' then r = 'double'r
+      when l == 'F' then r = 'float'r
+      when l == 'I' then r = 'int'r
+      when l == 'J' then r = 'long'r
+      when l == 'L' then r = t.substr(2,t.pos(';')-2)r
+      when l == 'S' then r = 'short'r
+      when l == 'Z' then r = 'boolean'r
+    otherwise
+      r = t||r
+    end
+    return r.translate('.', '$')
+
+  method type(t) static private
+    if t.left(1) = '[' then
+      return fieldtype(t)
+    else
+      return t.translate('.', '$')
+
+
+class Frame.BYTE private
+ 
+  value = byte
+
+  method BYTE(v = byte)
+    value = v
+
+  method toString returns String
+    return String.valueOf(value)
+
+
+class Frame.CHAR private
+
+  value = char
+
+  method CHAR(v = char)
+    value = v
+
+  method toString returns String
+    return String.valueOf(value)
+
+
+class Frame.DOUBLE private
+
+  value = double
+
+  method DOUBLE(v = double)
+    value = v
+
+  method toString returns String
+    return String.valueOf(value)
+
+
+class Frame.FLOAT private
+
+  value = float
+
+  method FLOAT(v = float)
+    value = v
+
+  method toString returns String
+    return String.valueOf(value)
+
+
+class Frame.INT private
+
+  value = int
+
+  method INT(v = int)
+    value = v
+
+  method toString returns String
+    return String.valueOf(value)
+
+
+class Frame.LONG private
+
+  value = long
+
+  method LONG(v = long)
+    value = v
+
+  method toString returns String
+    return String.valueOf(value)
+
+
+class Frame.SHORT private
+
+  value = short
+
+  method SHORT(v = short)
+    value = v
+
+  method toString returns String
+    return String.valueOf(value)
+
+
+class Frame.BOOLEAN private
+
+  value = boolean
+
+  method BOOLEAN(v = boolean)
+    value = v
+
+  method toString returns String
+    if value then
+      return "1"
+    else
+      return "0"

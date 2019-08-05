@@ -11,6 +11,7 @@ options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
+-- 2019-08-05 support NetRexxC compile-load-go for direct pipe execution. rvj
 -- 2019-08-01 add VM device driver shortcuts <,>,>> for diskr, diskw and diska. rvj
 -- 2019-07-30 changes for direct pipe execution. rvj
 -- 2014-08-23 change to use new javac and ecj invocation. rvj
@@ -69,7 +70,7 @@ class compiler extends Object public
     
     -- standard headers
     o						    = rexx ''
-    o[1]					    = '/* 'pInfo' - Pipes for NetRexx version 0.60 */'
+    o[1]					    = '/* 'pInfo NrVersion().getPipesVersion()' */'
     n						    = 2
     
     -- set gen/nogen status for file
@@ -881,9 +882,9 @@ class compiler extends Object public
     
     -- save the pipe's netrexx source or compile from memory
     o[0] = n
-    -- when do do a live run of a pipe, do not save the netrexx source
+    -- when doing a live run of a pipe, do not save the netrexx source
     -- but compile from memory by running the o array into a string
-    -- register a delete exit for the generated class file
+    -- then NetRexxC.clgMain method will call the main method with no args
     if \squelch then rc	 = writepipe.get(pInfo'.nrx').setContext(o).runpipe()
     else
       do
@@ -893,10 +894,9 @@ class compiler extends Object public
 	  nrxsrc = nrxsrc o[ii] '\n'
 	  if o[ii].left(5) = 'class' then classFilesToDelete = classFilesToDelete o[ii].word(2)
 	end
-	NetRexxC.main(pipeClassName '-nologo -verbose0',nrxsrc)
-	loop iii=1 to classFilesToDelete.words()
-	  File(classFilesToDelete.word(iii)'.class').deleteOnExit()
-	end
+
+	clsList=ArrayList()
+	nc=NetRexxC.clgMain(pipeClassName,nrxsrc,clsList)
       end
     
     return rc
