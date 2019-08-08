@@ -1,4 +1,11 @@
 -- Parser.nrx
+/*  Copyright (C) 2000 Martin Lafaix
+ *  parts Copyright (C) 2019- Rexx Language Association 
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
 
 package org.vpad.extra.workspace
 
@@ -33,29 +40,29 @@ class Parser
     -- !!! should explode statements returned by rules, as they may
     -- !!! contain more than one clause.
     new = Vector()
-    usedRules.clear
-    loop i = 0 for clauses.size
+    usedRules.clear()
+    loop i = 0 for clauses.size()
       c = Rexx clauses.elementAt(i)
       if c = null then
         iterate
       rules.rewrite(c, usedRules)
     end
-    if \ usedRules.isEmpty then do
+    if \ usedRules.isEmpty() then do
       new.addElement(Rexx 'do;')
       loop o over usedRules
-        new.addElement((Rule o).introduce)
+        new.addElement((Rule o).introduce())
       end
     end
-    loop i = 0 for clauses.size
+    loop i = 0 for clauses.size()
       c = Rexx clauses.elementAt(i)
       if c = null then
         iterate
       new.addElement(rules.rewrite(c, usedRules))
     end
-    if \ usedRules.isEmpty then do
+    if \ usedRules.isEmpty() then do
       new.addElement(Rexx 'finally;')
       loop o over usedRules
-        new.addElement((Rule o).conclude)
+        new.addElement((Rule o).conclude())
       end
       new.addElement(Rexx 'end;')
     end
@@ -63,9 +70,9 @@ class Parser
 
   method parse(cmd) returns boolean
     inMain = boolean 1
-    clauses.removeAllElements
+    clauses.removeAllElements()
     free = ''
-    len = nl.length
+    len = nl.length()
 
     what = removeComments(cmd)
     start = Rexx 1
@@ -76,7 +83,7 @@ class Parser
 
     loop while what \= ''
       clause = getClause(what)
-      start = clause.length+1
+      start = clause.length()+1
       loop while what.pos(nl, start) = start
         start = start + len
       end
@@ -91,14 +98,14 @@ class Parser
         parse clause line (nl) clause
         new = new || line.strip('t')
         if new.right(1) = '-' then
-          new = new.left(new.length-1)
+          new = new.left(new.length()-1)
       end
       clause = new
 
       if verbose then
         say '['clause']'
       if clause \= ';' then
-        clauses.addElement(clause.strip)
+        clauses.addElement(clause.strip())
       else
         iterate
 
@@ -123,7 +130,7 @@ class Parser
         say '['what'] ('e')'
       clauses.addElement(what)
       free = ''
-      e.printStackTrace
+      e.printStackTrace()
       return 0
     end
     return 1
@@ -133,9 +140,9 @@ class Parser
     loop while str \= ''
       parse str line (nl) str
       new = new || line
-      new = new.strip
+      new = new.strip()
       if new.right(1) = '-' then
-        new = new.left(new.length-1)
+        new = new.left(new.length()-1)
     end
     return new
 
@@ -164,15 +171,15 @@ class Parser
               when c = ';' then
                 return clause.left(pos)
               when c = '"', c = "'" then
-                pos = pos + getLeadingString(clause.substr(pos)).length
+                pos = pos + getLeadingString(clause.substr(pos)).length()
               when c = '[', c = '(' then
-                pos = pos + getLeadingExpression(clause.substr(pos)).length
+                pos = pos + getLeadingExpression(clause.substr(pos)).length()
             otherwise
               pos2 = w.verify('([;"''', 'M')
               if pos2 \= 0 then
                 pos = pos + pos2 - 1
               else do
-                pos = pos + w.length
+                pos = pos + w.length()
                 pos = pos + clause.substr(pos).wordindex(1) - 1
               end
             end
@@ -196,7 +203,7 @@ class Parser
       return str.left(pos)
     partial = str.substr(pos)
     lead = getLeadingString(partial)
-    return str.left(pos-1) || lead || getClause(partial.substr(lead.length+1))
+    return str.left(pos-1) || lead || getClause(partial.substr(lead.length()+1))
 
   method removeComments(str)
     new = Rexx ''
@@ -213,7 +220,7 @@ class Parser
         end
       end
       new = new || line
-      new = new.strip
+      new = new.strip()
       if new.right(1) \= '-' & new.right(1) \= ';' then
         new = new || ';'
       new = new || nl
@@ -228,7 +235,7 @@ class Parser
     po = str.verify('"''', 'M')
     if po > 0 & (pb > po | pc > po) then do
       partial = str.substr(po)
-      offset = po + getLeadingString(partial).length - 1
+      offset = po + getLeadingString(partial).length() - 1
       result = findComment(removeLeadingString(partial))
       if result \= 0 then
         return offset + result
@@ -259,12 +266,12 @@ class Parser
       return str.left(pc-1).strip('T')
     partial = str.substr(po)
     lead = getLeadingString(partial)
-    return str.left(po-1) || lead || stripTrailingComment(partial.substr(lead.length+1))
+    return str.left(po-1) || lead || stripTrailingComment(partial.substr(lead.length()+1))
 
   method getLeadingString(str)
     start = str.left(1)
     last = str.pos(start, 2)
-    loop while str.left(last-1).reverse.verify('\\') // 2 = 0
+    loop while str.left(last-1).reverse().verify('\\') // 2 = 0
       last = str.pos(start, last+1)
     end
     return str.left(last)
@@ -272,13 +279,13 @@ class Parser
   method removeLeadingString(str)
     start = str.left(1)
     last = str.pos(start, 2)
-    loop while str.left(last-1).reverse.verify('\\') // 2 = 0
+    loop while str.left(last-1).reverse().verify('\\') // 2 = 0
       last = str.pos(start, last+1)
     end
     return str.substr(last+1)
 
   method getLeadingExpression(str)
-    return str.left(str.length-removeLeadingExpression(str).length)
+    return str.left(str.length()-removeLeadingExpression(str).length())
 
   method removeLeadingExpression(str)
     return removeLeadingExpression2(str.substr(2), str.left(1))
@@ -342,7 +349,7 @@ say 'invalid pattern' dot oparent cparent obracket cbracket '"'needle'"'
     -- if an iterator is present, clause must be "iterator=..." at this point
     iterator = clause.word(1)
     if iterator.pos('=') = 0 & iterator.datatype('S') then
-      if clause.subword(2).strip.left(1) = '=' then
+      if clause.subword(2).strip().left(1) = '=' then
         return iterator
       else
         return ''
@@ -357,7 +364,7 @@ say 'invalid pattern' dot oparent cparent obracket cbracket '"'needle'"'
 
   method doParse2(expr)
     parse expr start template
-    start = start.strip
+    start = start.strip()
     expr = start template
     -- skip term
     if start.datatype('S') then

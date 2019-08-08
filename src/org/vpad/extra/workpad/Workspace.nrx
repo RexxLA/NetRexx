@@ -1,8 +1,15 @@
 -- Workspace.nrx
+/*  Copyright (C) 2000 Martin Lafaix
+ *  parts Copyright (C) 2019- Rexx Language Association 
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
 
 package org.vpad.extra.workspace
 
-import COM.ibm.netrexx.process.NetRexxA
+import org.netrexx.process.NetRexxA
 import org.vpad.extra.workspace.Frame
 
 options binary strictcase
@@ -11,14 +18,14 @@ options binary strictcase
 class Workspace
 
   interpreter = NetRexxA
-  parser = Parser
-  id = Rexx
+  parser      = Parser
+  id	      = Rexx
 
-  framesRing = Vector()
-  framesTable = Hashtable()
-  readStack = Rexx ''
-  currentFrame = Frame
-  currentFileName = Rexx 'workspace.input'
+  framesRing	   = Vector()
+  framesTable	   = Hashtable()
+  readStack	   = Rexx ''
+  currentFrame	   = org.vpad.extra.workspace.Frame
+  currentFileName  = Rexx 'workspace.input'
   currentDirectory = System.getProperty('user.dir')
 
   settings = Rexx ''                -- workspace settings
@@ -29,7 +36,7 @@ class Workspace
   instance = int 0
   filter = FilteringOutputStream
   printStream = PrintStream
-  ID = Long.toHexString(System.currentTimeMillis)
+  ID = Long.toHexString(System.currentTimeMillis())
   nl = System.getProperty('line.separator')
   initialDirectory = System.getProperty('user.dir')
   ruleSet = RuleSet([Rule('numeric digits %*', -
@@ -106,31 +113,33 @@ class Workspace
           '  )what synonyms <pattern1> [<pattern2> ...]', -
           '  )what things <pattern1> [<pattern2> ...]']
 
-  method main(args = String[]) static
-    init
-
+  method main(args = String[]) static signals IOException
+    init()
+    
     say 'Workspace for NetRexx'
-    say 'Version 0.02 Jun 6 2000'
+    say org.netrexx.process.NrVersion().getWorkspaceVersion()
     say '(C) Copyright Martin Lafaix 2000'
-    say 'All rights reserved'
-
+    say '(C) parts Copyright RexxLA 2019-'
+    
     ws = Workspace()
-
+    
     f = File(System.getProperty('user.home'), 'workspace.input')
-    if f.isFile then do
-      ws.exec(f.getCanonicalPath)
-    catch IOException
-    end
-    else do
-      is = Workspace.class.getResourceAsStream('/src/input/workspace.input')
-      if is \= null then do
-        ws.doReadStream(BufferedReader(InputStreamReader(is)), 'I')
-        is.close
+    if f.isFile() then
+      do
+	ws.exec(f.getCanonicalPath())
+      catch IOException
       end
-    end
-    ws.start
+    else
+      do
+	is = Workspace.class.getResourceAsStream('/src/input/workspace.input')
+	if is \= null then do
+	  ws.doReadStream(BufferedReader(InputStreamReader(is)), 'I')
+	  is.close()
+	end
+      end
+    ws.start()
 
-  method init static
+  method init static 
     filter = FilteringOutputStream(System.out)
     printStream = PrintStream(filter)
     System.setOut(printStream)
@@ -143,17 +152,17 @@ class Workspace
     return 'WS'instance
 
   method Workspace
-    this(Frame('initial'))
-    initFrame
+    this(org.vpad.extra.workspace.Frame('initial'))
+    initFrame()
 
-  method Workspace(initialFrame = Frame)
+  method Workspace(initialFrame = org.vpad.extra.workspace.Frame)
     synonyms['apr'] = 'what things'
     synonyms['apropos'] = 'what things'
 
     interpreter = NetRexxA()
     parser = Parser()
     newFrame(initialFrame)
-    id = getUniqID
+    id = getUniqID()
     instances.put(id, this)
 
     settings['diag'] = 'off'
@@ -177,20 +186,20 @@ class Workspace
 
   method start
     loop forever
-      currentFrame.incStep
+      currentFrame.incStep()
       prompt = settings['message.prompt']
       if prompt \= 'default' then
         if prompt = "frame" then
-          say currentFrame.getName' \-'
+          say currentFrame.getName()' \-'
         else
           say prompt.subword(2) '\-'
-      say '('currentFrame.getStep') -> \-'
-      print(eval(read))
+      say '('currentFrame.getStep()') -> \-'
+      print(eval(read()))
     end
 
   method exec(script = String, option = String "A")
     if option = null, -
-       option.length < 1, -
+       option.length() < 1, -
        option.charAt(0) \= 'A' & option.charAt(0) \= 'a' & -
        option.charAt(0) \= 'I' & option.charAt(0) \= 'i' & -
        option.charAt(0) \= 'N' & option.charAt(0) \= 'n' then
@@ -232,14 +241,14 @@ class Workspace
     isTrace = boolean 0
     inHeader = boolean 0
 
-    imports = currentFrame.getImports
+    imports = currentFrame.getImports()
 
     step1 = parser.parse(cmd)
 
     if step1 then do
       inHeader = 1
-      clauses = parser.getClauses
-      loop i = 0 for clauses.size
+      clauses = parser.getClauses()
+      loop i = 0 for clauses.size()
         clause = Rexx clauses.elementAt(i)
         if clause = null then
           iterate
@@ -257,7 +266,7 @@ class Workspace
           end
           when inHeader & w1 = 'options' & t2 then do
             opts = clause.subword(2)
-            loop j = 1 for opts.words
+            loop j = 1 for opts.words()
               w = opts.word(j)
               if optionsList.wordpos(w) > 0, w.left(2) = 'no' & optionsList.wordpos(w.substr(2)) > 0 then
                 tmpOptions = tmpOptions w
@@ -282,7 +291,7 @@ class Workspace
             tmpTrace = clause.subword(2)
             clauses.setElementAt(null, i)
           end
-          when inHeader & w1 = 'numeric' & w2 = 'digits' & clause.subword(3).strip.datatype('W') then do
+          when inHeader & w1 = 'numeric' & w2 = 'digits' & clause.subword(3).strip().datatype('W') then do
             tmpDigits = clause.subword(3)
             clauses.setElementAt(null, i)
           end
@@ -316,7 +325,7 @@ class Workspace
       end
     end
 
-    freevars = parser.getDandlingVars
+    freevars = parser.getDandlingVars()
 
     do
       f = PrintWriter(FileWriter(name'.nrx'))
@@ -328,19 +337,19 @@ class Workspace
       if tmpPackage \= '' then
         f.print('package' tmpPackage';')
       else
-      if currentFrame.getPackage \= '' then
-        f.print('package' currentFrame.getPackage';')
+      if currentFrame.getPackage() \= '' then
+        f.print('package' currentFrame.getPackage()';')
 
       -- imports
-      loop i = 0 for imports.size
+      loop i = 0 for imports.size()
         f.print('import' imports.elementAt(i)';')
       end
-      loop i = 1 for tmpImports.words
+      loop i = 1 for tmpImports.words()
         f.print('import' tmpImports.word(i)';')
       end
 
       -- options
-      f.print('options' currentFrame.getOptions tmpOptions';')
+      f.print('options' currentFrame.getOptions() tmpOptions';')
 
       -- global trace
       if tmpTrace \= '' then do
@@ -348,8 +357,8 @@ class Workspace
           f.print('trace' tmpTrace';')
       end
       else
-      if currentFrame.getTrace \= 'off' then
-        f.print('trace' currentFrame.getTrace';')
+      if currentFrame.getTrace() \= 'off' then
+        f.print('trace' currentFrame.getTrace()';')
 
       -- global numeric
       if tmpDigits \= '' & tmpDigits \= 9 then
@@ -358,14 +367,14 @@ class Workspace
         f.print('numeric form' tmpForm';')
 
       -- specifying numeric format if required
-      if tmpDigits = '' & currentFrame.getDigits \= 9 then
-        f.print('numeric digits' currentFrame.getDigits';')
-      if tmpForm = '' & currentFrame.getForm \= 'scientific' then
-        f.print('numeric form' currentFrame.getForm';')
+      if tmpDigits = '' & currentFrame.getDigits() \= 9 then
+        f.print('numeric digits' currentFrame.getDigits()';')
+      if tmpForm = '' & currentFrame.getForm() \= 'scientific' then
+        f.print('numeric form' currentFrame.getForm()';')
 
       -- use list if any
-      if currentFrame.getUses \= '' then
-        f.print('class' name 'uses' currentFrame.getUses.space.translate(',', ' ')';method main(args = String[]) static;')
+      if currentFrame.getUses() \= '' then
+        f.print('class' name 'uses' currentFrame.getUses().space().translate(',', ' ')';method main(args = String[]) static;')
       else
         f.print('class' name';method main(args = String[]) static;')
 
@@ -376,11 +385,11 @@ class Workspace
         else
           nop
       else
-        if currentFrame.getTrace \= 'off' then
+        if currentFrame.getTrace() \= 'off' then
           f.print('trace off;')
 
       -- defining the $frame shortcut
-      f.print('$frame=org.vpad.extra.workspace.Workspace.getInstance("'id'").getCurrentFrame;')
+      f.print('$frame=org.vpad.extra.workspace.Workspace.getInstance("'id'").getCurrentFrame();')
 
       -- exposing environment
       currentFrame.restoreVarsOn(f)
@@ -391,21 +400,21 @@ class Workspace
           f.print('trace' tmpTrace';')
       end
       else
-      if currentFrame.getTrace \= 'off' & currentFrame.getTrace \= 'methods' then
-        f.print('trace' currentFrame.getTrace';')
+      if currentFrame.getTrace() \= 'off' & currentFrame.getTrace() \= 'methods' then
+        f.print('trace' currentFrame.getTrace()';')
 
       -- traced vars
-      if currentFrame.isTraceVarEnabled & currentFrame.getTraceVar \= '' then
+      if currentFrame.isTraceVarEnabled() & currentFrame.getTraceVar() \= '' then
         if tmpTrace \= 'off' then
-          f.print('trace var' currentFrame.getTraceVar';')
+          f.print('trace var' currentFrame.getTraceVar()';')
 
       f.println('do')
 
       if step1 then do
         parser.rewrite(ruleSet)
 
-        clauses = parser.getClauses
-        loop i = 0 for clauses.size
+        clauses = parser.getClauses()
+        loop i = 0 for clauses.size()
           c = Rexx clauses.elementAt(i)
           if c \= null then
             f.print(c)
@@ -414,7 +423,7 @@ class Workspace
       else
         f.print(cmd)
 
-      f.println
+      f.println()
       f.println('finally')
       f.println('trace off')
 
@@ -435,11 +444,11 @@ class Workspace
         currentFrame.saveFunctionsOn(f)
 
       if \ inHeader & tmpMethods \= null then
-        loop i = 0 for tmpMethods.size
-          f.println((Function tmpMethods.elementAt(i)).value)
+        loop i = 0 for tmpMethods.size()
+          f.println(( org.vpad.extra.workspace.Function tmpMethods.elementAt(i)).value)
         end
 
-      f.close
+      f.close()
     catch FileNotFoundException
       say 'FileNotFoundException'
     catch IOException
@@ -464,11 +473,11 @@ class Workspace
     if tmpPackage \= '' then
       currentFrame.setPackage(tmpPackage)
     if tmpImports \= '' then
-      loop i = 1 for tmpImports.words
+      loop i = 1 for tmpImports.words()
         imports.addElement(tmpImports.word(i))
       end
     if tmpOptions \= '' then
-      loop i = 1 for tmpOptions.words
+      loop i = 1 for tmpOptions.words()
         doOptions(tmpOptions.word(i))
       end
     if tmpTrace \= '' then
@@ -476,8 +485,8 @@ class Workspace
     if tmpTrace = 'off' then
       currentFrame.setTraceVarEnabled(0)
     if tmpMethods \= null then
-      loop i = 0 for tmpMethods.size
-        fn = Function tmpMethods.elementAt(i)
+      loop i = 0 for tmpMethods.size()
+        fn =  org.vpad.extra.workspace.Function tmpMethods.elementAt(i)
         currentFrame.put(fn.name, Symbol fn)
       end
     if tmpDigits \= '' then
@@ -486,10 +495,10 @@ class Workspace
       currentFrame.setForm(tmpForm)
 
     if settings['interpreter'] = 'on' & \ inHeader then do
-      if currentFrame.getPackage = '' then
+      if currentFrame.getPackage() = '' then
         evalClass = interpreter.getClassObject(null, name)
       else
-        evalClass = interpreter.getClassObject(currentFrame.getPackage, name)
+        evalClass = interpreter.getClassObject(currentFrame.getPackage(), name)
 
       if evalClass \= null then do
         classes = [interpreter.getClassObject('java.lang', 'String', 1)]
@@ -504,14 +513,14 @@ class Workspace
     catch IllegalAccessException
       say 'IllegalAccessException'
     catch ite = InvocationTargetException
-      say ite.getTargetException
+      say ite.getTargetException()
       if settings['diag'] = 'on' then
-        ite.printStackTrace
+        ite.printStackTrace()
     end
 
     -- clean up file if everything was OK
     if settings['diag'] = 'off' then
-      File(name'.nrx').delete
+      File(name'.nrx').delete()
 
     return ''
 
@@ -522,7 +531,7 @@ class Workspace
       clause = (Rexx clauses.elementAt(index)).strip('T', ';')
       isValid = boolean 0
 
-      loop label b i = clause.words to 3 by -1
+      loop label b i = clause.words() to 3 by -1
         w = clause.word(i)
         if w.pos(')') > 0 then
           leave
@@ -541,7 +550,7 @@ class Workspace
 
       clauses.setElementAt(null, index)
       def = clause';'
-      loop i = index + 1 to clauses.size - 1
+      loop i = index + 1 to clauses.size() - 1
         clause = (Rexx clauses.elementAt(i)).strip('T', ';')
         if clause.word(1) = 'method' & clause.word(2).left(1).datatype('S') then
           leave
@@ -553,9 +562,9 @@ class Workspace
         clauses.setElementAt(null, i)
       end
 
-      methods.addElement(Function(name, def))
+      methods.addElement( org.vpad.extra.workspace.Function(name, def))
 
-      if i >= clauses.size, clauses.elementAt(i) = null then
+      if i >= clauses.size(), clauses.elementAt(i) = null then
         return methods
 
       index = i
@@ -571,7 +580,7 @@ class Workspace
   method doSystemCommand(cmd) inheritable
     args = cmd.subword(2)
 
-    sc = cmd.word(1).substr(2).lower
+    sc = cmd.word(1).substr(2).lower()
 
     if synonyms[sc] \= '' then do
       args = synonyms[sc].subword(2) args
@@ -590,8 +599,8 @@ class Workspace
       when 'help'.abbrev(sc, 2) then
         doHelp(args)
       when 'history'.abbrev(sc, 2) then do
-        if currentFrame.isRecording then
-          currentFrame.log.removeElementAt(currentFrame.log.size-1)
+        if currentFrame.isRecording() then
+          currentFrame.log.removeElementAt(currentFrame.log.size()-1)
         doHistory(args)
       end
       when 'import'.abbrev(sc, 1) then
@@ -640,8 +649,8 @@ class Workspace
     else do
       args = resolveFileName(args)
       f = File(args)
-      if f.isDirectory then
-        currentDirectory = f.getCanonicalPath
+      if f.isDirectory() then
+        currentDirectory = f.getCanonicalPath()
       else
         say 'invalid or inexistant directory :' args
     catch e = IOException
@@ -649,18 +658,18 @@ class Workspace
     end
 
   method doClear(args)
-    select case args.word(1).lower
+    select case args.word(1).lower()
       when 'properties', 'p' then
         if args.subword(2) = 'all' then
-          currentFrame.reset
+          currentFrame.reset()
         else do
           vars = args.subword(2)
-          loop j = 1 to vars.words
+          loop j = 1 to vars.words()
             currentFrame.remove(vars.word(j))
           end
         end
       when 'all' then do
-        currentFrame.reset
+        currentFrame.reset()
         currentFrame.setStep(0)
       end
     otherwise
@@ -669,25 +678,25 @@ class Workspace
 
   method doDisplay(args)
     parse args w1 w2 .
-    count = args.words
+    count = args.words()
 
     select
       when args = 'names', args = 'n' then do
-        ap = currentFrame.getProperties
+        ap = currentFrame.getProperties()
         loop i = 0 for ap.length
           say ap[i].name' \-'
         end
         say
       end
       when (w1 = 'type' | w1 = 't') & w2 = 'all' & count = 2 then do
-        ap = currentFrame.getProperties
+        ap = currentFrame.getProperties()
         loop i = 0 for ap.length
           if ap[i] <= Var then
             say '  'ap[i].name' =' (Var ap[i]).type
         end
       end
       when args = 'all', args = 'properties', args = 'p', ((w1 = 'properties' | w1 = 'p') & w2 = 'all' & count = 2) then do
-        ap = currentFrame.getProperties
+        ap = currentFrame.getProperties()
         loop i = 0 for ap.length
           if ap[i] <= Var then
             doDisplayVar(Var ap[i])
@@ -731,10 +740,10 @@ class Workspace
     if val = null then
       say 'null\-'
     else
-    if val.getClass.isArray & l = 0 then
+    if val.getClass().isArray() & l = 0 then
       say '...\-'
     else
-    if val.getClass.isArray then do
+    if val.getClass().isArray() then do
       depth = settings['display.depth']
       count = Math.min(depth, Array.getLength(val))
       say '[\-'
@@ -756,34 +765,34 @@ class Workspace
 
   method doFrame(args)
     parse args w1 w2 .
-    count = args.words
+    count = args.words()
 
     select
       when args = 'names' then do
         header('Available frames')
         prolog('The name of the current frame is prefixed by an asterisk.')
-        loop f = 0 for framesRing.size
+        loop f = 0 for framesRing.size()
           o = framesRing.elementAt(f)
           if o = currentFrame then
-            say ' *'currentFrame.getName
+            say ' *'currentFrame.getName()
           else
-            say '  '(Frame o).getName
+            say '  '( org.vpad.extra.workspace.Frame o).getName()
         end
       end
       when args = 'next' then
-        nextFrame
+        nextFrame()
       when args = 'last' then
-        lastFrame
+        lastFrame()
       when w1 = 'drop' & count <= 2 then
         if count = 1 then
-          dropFrame(currentFrame.getName)
+          dropFrame(currentFrame.getName())
         else
           dropFrame(args.subword(2))
       when w1 = 'new' & w2.datatype('S') & count = 2 then do
         old = currentFrame
-        newFrame(Frame(w2))
+        newFrame( org.vpad.extra.workspace.Frame(w2))
         if old \== currentFrame then
-          initFrame
+          initFrame()
       end
       when w1 = 'import' & count >= 2 then
         if count = 2 then
@@ -804,8 +813,8 @@ class Workspace
       end
     end
     else
-    if cmd.words = 1 then do
-      loop label a i = 1 for cmds.words
+    if cmd.words() = 1 then do
+      loop label a i = 1 for cmds.words()
         w = cmds.word(i)
         if w.changestr('.', '').abbrev(cmd, w.pos('.')-1) then do
           w = ')'w.changestr('.', '')
@@ -828,9 +837,9 @@ class Workspace
       when ')off'.abbrev(args, 3) then
         currentFrame.setRecording(0)
       when args = ')on' then
-        if \ currentFrame.isEmpty & \ currentFrame.isRecording then
+        if \ currentFrame.isEmpty() & \ currentFrame.isRecording() then
           if prompt('clear the current frame in order to enable logging') then do
-            currentFrame.reset
+            currentFrame.reset()
             currentFrame.setStep(0)
             currentFrame.setRecording(1)
           end
@@ -838,8 +847,8 @@ class Workspace
             nop
         else
           currentFrame.setRecording(1)
-      when ')show'.abbrev(args.word(1), 2) & args.words <= 2 then do
-        if args.words = 1 then
+      when ')show'.abbrev(args.word(1), 2) & args.words() <= 2 then do
+        if args.words() = 1 then
           count = 20
         else
         if args.word(2).datatype('W') then
@@ -849,13 +858,13 @@ class Workspace
           return
         end
 
-        header('Frame' currentFrame.getName)
+        header('Frame' currentFrame.getName())
         data = currentFrame.log
-        loop i = Math.max(0, data.size-count) by 1 while i < data.size
+        loop i = Math.max(0, data.size()-count) by 1 while i < data.size()
           say data.elementAt(i)
         end
       end
-      when ')write'.abbrev(args.word(1), 2) & args.words = 2 then do
+      when ')write'.abbrev(args.word(1), 2) & args.words() = 2 then do
         n = args.word(2)
 
         if n.pos('.') = 0 then
@@ -863,7 +872,7 @@ class Workspace
 
         n = resolveFileName(n)
 
-        if settings['history.write'] = 'protected' & File(n).exists then
+        if settings['history.write'] = 'protected' & File(n).exists() then
           if \ prompt('overwrite' n) then
             return
 
@@ -877,17 +886,17 @@ class Workspace
 
   method doImport(args)
     parse args w1 w2 .
-    count = args.words
-    imports = currentFrame.getImports
+    count = args.words()
+    imports = currentFrame.getImports()
 
     select
       when args = 'query' then do
-        header('Frame' currentFrame.getName)
+        header('Frame' currentFrame.getName())
         prolog('import list:')
-        if imports.size = 0 then
+        if imports.size() = 0 then
           say '  <empty>'
         else
-          loop i = 0 for imports.size
+          loop i = 0 for imports.size()
             say '  'imports.elementAt(i)
           end
       end
@@ -911,14 +920,14 @@ class Workspace
 
   method doNumeric(args)
     parse args w1 w2 .
-    count = args.words
+    count = args.words()
 
     select
       when count = 0 then do
-        header('Frame' currentFrame.getName)
+        header('Frame' currentFrame.getName())
         prolog('numeric status:')
-        say '  numeric digits' currentFrame.getDigits
-        say '  numeric form' currentFrame.getForm
+        say '  numeric digits' currentFrame.getDigits()
+        say '  numeric form' currentFrame.getForm()
       end
       when w1 = 'digits' & count = 2 then
         if w2.datatype('W') & w2 > 0 then
@@ -936,18 +945,18 @@ class Workspace
 
   method doOptions(args)
     parse args w1 w2 .
-    count = args.words
+    count = args.words()
 
     if count = 0 then do
-      header('Frame' currentFrame.getName)
+      header('Frame' currentFrame.getName())
       prolog('options status:')
-      opts = currentFrame.getOptions
-      loop i = 1 to opts.words
+      opts = currentFrame.getOptions()
+      loop i = 1 to opts.words()
         w = opts.word(i)
         if w.left(2) = 'no' then
-          say '  'w.substr(3) '.'.copies(34-w.length) 'disabled'
+          say '  'w.substr(3) '.'.copies(34-w.length()) 'disabled'
         else
-          say '  'w '.'.copies(34-w.length-2) 'enabled'
+          say '  'w '.'.copies(34-w.length()-2) 'enabled'
       end
     end
     else
@@ -963,9 +972,9 @@ class Workspace
           w1 = w1.substr(3)
         else
           w1 = 'no'w1
-      old = currentFrame.getOptions
+      old = currentFrame.getOptions()
       new = ''
-      loop i = 1 for old.words
+      loop i = 1 for old.words()
         w = old.word(i)
         if w = w1 then
           return
@@ -981,14 +990,14 @@ class Workspace
 
   method doPackage(args)
     parse args w1 .
-    count = args.words
+    count = args.words()
 
     select
       when count = 0 then
-        if currentFrame.getPackage = '' then
+        if currentFrame.getPackage() = '' then
           say 'default package'
         else
-          say 'package' currentFrame.getPackage
+          say 'package' currentFrame.getPackage()
       when ')default'.abbrev(w1, 2) & count = 1 then
         currentFrame.setPackage('')
       when w1.left(1) \= ')' & count = 1 then
@@ -1002,7 +1011,7 @@ class Workspace
 
   method doRead(args, option = String)
     parse args w1 w2 w3 .
-    count = args.words
+    count = args.words()
     quiet = boolean 0
     ifthere = boolean 0
 
@@ -1051,11 +1060,11 @@ class Workspace
     do
       file = File(currentFileName)
 
-      if \ file.exists then
+      if \ file.exists() then
         if ifthere then
           return
         else
-          loop while \ file.exists
+          loop while \ file.exists()
             flow('file' currentFileName 'does not exist.  Please enter an existing file name : \-')
             currentFileName = ask
             if currentFileName = '' then
@@ -1077,17 +1086,17 @@ class Workspace
       in = BufferedReader(FileReader(file))
       if quiet then
         if System.out == printStream then do
-          filter.push
+          filter.push()
           pushed = boolean 1
         end
       doReadStream(in, option)
-      in.close
+      in.close()
 
     catch IOException
       say 'IOException while reading file :' cfn
     finally
       if pushed then
-        filter.pop
+        filter.pop()
       if cfn \= null then
         currentFileName = cfn
       if rs \= null then
@@ -1096,9 +1105,9 @@ class Workspace
 
   method doReadStream(in = BufferedReader, option = String) signals IOException
     cfn = currentFileName
-    l = in.readLine
+    l = in.readLine()
     if option.charAt(0) = 'A', option.charAt(0) = 'a' then
-      if l.length < 2, l.charAt(0) \= '/', l.charAt(1) \= '*' then
+      if l.length() < 2, l.charAt(0) \= '/', l.charAt(1) \= '*' then
         option = 'I'
       else
         option = 'N'
@@ -1106,7 +1115,7 @@ class Workspace
       loop label a while l \= null
         r = Rexx l
         loop while parser.stripTrailingComment(l).right(1) = '-'
-          l = in.readLine
+          l = in.readLine()
           if l = null then do
             say 'invalid input file (unexpected end of file) : ' cfn
             leave a
@@ -1114,20 +1123,20 @@ class Workspace
           r = r || nl || l
         end
         eval(r)
-        l = in.readLine
+        l = in.readLine()
       end
     else do
       r = ''
       loop while l \= null
         r = r || l || nl
-        l = in.readLine
+        l = in.readLine()
       end
       eval(r)
     end
 
   method doSet(args)
     parse args w1 w2 w3 .
-    count = args.words
+    count = args.words()
 
     select
       when w1 = 'diag' then
@@ -1151,7 +1160,7 @@ class Workspace
       when w1 = 'import' & count = 1 then do
         header('Import Settings')
         prolog('currently imported class(es) and package(s):')
-        loop i = 1 to settings['import'].words
+        loop i = 1 to settings['import'].words()
           say '  'settings['import'].word(i)
         end
       end
@@ -1163,8 +1172,8 @@ class Workspace
             settings['import'] = settings['import'] w4
           else
             say w3 w4 'already present in import list : ignored'
-          if \ currentFrame.getImports.contains(w4) then
-            currentFrame.getImports.addElement(w4)
+          if \ currentFrame.getImports().contains(w4) then
+            currentFrame.getImports().addElement(w4)
         end
         else
           if p4 = 0 then
@@ -1172,8 +1181,8 @@ class Workspace
           else
           if prompt('drop element' w2 'from import list') then do
             settings['import'] = settings['import'].delword(p4, 1)
-            if currentFrame.getImports.contains(w4) then
-              currentFrame.getImports.removeElement(w4)
+            if currentFrame.getImports().contains(w4) then
+              currentFrame.getImports().removeElement(w4)
           end
       end
       when w1 = 'import' then
@@ -1202,8 +1211,8 @@ class Workspace
       when w1 = 'numeric' & count = 1 then do
         header('Numeric Settings')
         prolog('                             New frames    Current frame')
-        say '  digits ...................' settings['numeric.digits'].center(11)'    'Rexx(currentFrame.getDigits).center(11)
-        say '  form .....................' settings['numeric.form'].left(11)'    'currentFrame.getForm
+        say '  digits ...................' settings['numeric.digits'].center(11)'    'Rexx(currentFrame.getDigits()).center(11)
+        say '  form .....................' settings['numeric.form'].left(11)'    'currentFrame.getForm()
         epilog('Possible arguments for )set numeric are : digits form.')
       end
       when w1 = 'numeric' then
@@ -1211,14 +1220,14 @@ class Workspace
       when w1 = 'option' & count = 1 then do
         header('Option Settings')
         prolog('                             New frames    Current frame')
-        loop i = 1 for optionsList.words
+        loop i = 1 for optionsList.words()
           w = optionsList.word(i)
           say  '  '(w' ').left(27, '.') '\-'
           if settings['option'].wordpos(w) > 0 then
             say 'enabled        \-'
           else
             say 'disabled       \-'
-          if currentFrame.getOptions.wordpos(w) > 0 then
+          if currentFrame.getOptions().wordpos(w) > 0 then
             say 'enabled'
           else
             say 'disabled'
@@ -1228,14 +1237,14 @@ class Workspace
       when w1 = 'option' then
         if count = 2 & optionsList.wordpos(w2) > 0 then
           if settings['option'].wordpos(w2) > 0 then
-            if currentFrame.getOptions.wordpos(w2) > 0 then
+            if currentFrame.getOptions().wordpos(w2) > 0 then
               say 'option' w2 'on'
             else do
               say 'current frame : option' w2 'off'
               say 'new frames : option' w2 'on'
             end
           else
-            if currentFrame.getOptions.wordpos(w2) = 0 then
+            if currentFrame.getOptions().wordpos(w2) = 0 then
               say 'option' w2 'off'
             else do
               say 'current frame : option' w2 'on'
@@ -1251,7 +1260,7 @@ class Workspace
             w2 = 'no'w2
           old = settings['option']
           new = ''
-          loop i = 1 for old.words
+          loop i = 1 for old.words()
             w = old.word(i)
             if w = w2 then
               return
@@ -1265,16 +1274,16 @@ class Workspace
         else
           say 'invalid argument for )set option :' args.subword(2)
       when w1 = 'package' & count = 1 then
-        if settings['package'] = currentFrame.getPackage then
+        if settings['package'] = currentFrame.getPackage() then
           if settings['package'] = '' then
             say 'default package'
           else
             say 'package' settings['package']
         else do
-          if currentFrame.getPackage = '' then
+          if currentFrame.getPackage() = '' then
             say 'current frame : default package'
           else
-            say 'current frame : package' currentFrame.getPackage
+            say 'current frame : package' currentFrame.getPackage()
           if settings['package'] = '' then
             say 'new frames : default package'
           else
@@ -1311,7 +1320,7 @@ class Workspace
         doSetProperty('show', args.subword(2), 'all declared')
       when w1 = 'trace' & count = 1 then do
         header('Trace Settings')
-        say '  current frame ....................' currentFrame.getTrace
+        say '  current frame ....................' currentFrame.getTrace()
         say '  new frames .......................' settings['trace']
         epilog('Possible arguments for )set trace are : all off methods results.')
       end
@@ -1320,7 +1329,7 @@ class Workspace
           doTrace(w2)
       when w1 = 'use' & count = 1 then do
         header('Use Settings')
-        loop i = 1 for settings['use'].words
+        loop i = 1 for settings['use'].words()
           say '  'settings['use'].word(i)
         end
       end
@@ -1331,7 +1340,7 @@ class Workspace
               say 'class' w3 'already present in use list : ignored'
             else
               settings['use'] = settings['use'] w3
-            list = currentFrame.getUses
+            list = currentFrame.getUses()
             if list.wordpos(w3) = 0 then
               currentFrame.setUses(list w3)
           end
@@ -1342,7 +1351,7 @@ class Workspace
             say 'class' w3 'not present in use list : ignored'
           else
             settings['use'] = settings['use'].delword(settings['use'].wordpos(w3), 1)
-          list = currentFrame.getUses
+          list = currentFrame.getUses()
           if list.wordpos(w3) \= 0 then
             currentFrame.setUses(list.delword(list.wordpos(w3), 1))
         end
@@ -1373,7 +1382,7 @@ class Workspace
     if new = '' then do
       header(propertyname.translate(' ', '.') 'Settings')
       prolog('Possible options for )set' propertyname.translate(' ', '.')':')
-      loop i = 1 for choices.words
+      loop i = 1 for choices.words()
         if settings[propertyname] = choices.word(i) then
           say ' *'choices.word(i)
         else
@@ -1409,7 +1418,7 @@ class Workspace
     return 1
 
   method doShow(args)
-    count = args.words
+    count = args.words()
     if count = 0, count > 2 then do
       say 'invalid argument for )show :' args
       return
@@ -1421,7 +1430,7 @@ class Workspace
     do
       obj = Class.forName(name)
     catch ClassNotFoundException
-      loop i = 1 for path.words
+      loop i = 1 for path.words()
         do
           -- pas exactement, en ce sens que la recherche n'est pas ici
           -- r‚cursive dans la hierarchie.
@@ -1432,8 +1441,8 @@ class Workspace
           leave
       end
       if obj = null then do
-        imports = currentFrame.getImports
-        loop i = 0 for imports.size
+        imports = currentFrame.getImports()
+        loop i = 0 for imports.size()
           do
             -- pas exactement, en fait.  il faut traiter les imports
             -- de classes et de hierarchie.
@@ -1452,38 +1461,38 @@ class Workspace
 
     if ')attributes'.abbrev(what, 2) then do
       header('Attributes for class' name.substr(name.lastpos('.')+1))
-      say 'class' obj.getName||classmodifiers(obj.getModifiers)
-      if obj.getSuperclass \= null then
-        if obj.getSuperclass \= Object.class then
-          say '  extends' obj.getSuperclass.getName
-      ai = obj.getInterfaces
+      say 'class' obj.getName()||classmodifiers(obj.getModifiers())
+      if obj.getSuperclass() \= null then
+        if obj.getSuperclass() \= Object.class then
+          say '  extends' obj.getSuperclass().getName()
+      ai = obj.getInterfaces()
       loop i = 0 for ai.length
         ic = ai[i]
-        say '  implements' ic.getName
+        say '  implements' ic.getName()
       end
     end
     else
     if what = '', ')operations'.abbrev(what, 2) then do
       header('Operations for class' name.substr(name.lastpos('.')+1))
       if declared then
-        af = obj.getDeclaredFields
+        af = obj.getDeclaredFields()
       else
-        af = obj.getFields
+        af = obj.getFields()
       loop i = 0 for af.length
-        say '  'af[i].getName '=' type(af[i].getType.getName)
+        say '  'af[i].getName() '=' type(af[i].getType().getName())
       end
       if af.length > 0 then
         say
       if declared then
-        ac = obj.getDeclaredConstructors
+        ac = obj.getDeclaredConstructors()
       else
-        ac = obj.getConstructors
+        ac = obj.getConstructors()
       loop i = 0 for ac.length
         c = ac[i]
-        say '  constructor' c.getName'(\-'
-        p = c.getParameterTypes
+        say '  constructor' c.getName()'(\-'
+        p = c.getParameterTypes()
         loop j = 0 for p.length
-          say type(p[j].getName)'\-'
+          say type(p[j].getName())'\-'
           if j \= p.length - 1 then
             say ', \-'
         end
@@ -1492,22 +1501,22 @@ class Workspace
       if ac.length > 0 then
         say
       if declared then
-        am = obj.getDeclaredMethods
+        am = obj.getDeclaredMethods()
       else
-        am = obj.getMethods
+        am = obj.getMethods()
       loop i = 0 for am.length
         m = am[i]
-        say '  method' m.getName'(\-'
-        p = m.getParameterTypes
+        say '  method' m.getName()'(\-'
+        p = m.getParameterTypes()
         loop j = 0 for p.length
-          say type(p[j].getName)'\-'
+          say type(p[j].getName())'\-'
           if j \= p.length - 1 then
             say ', \-'
         end
-        if m.getReturnType.getName = "void" then
-          say ')'modifiers(m.getModifiers)
+        if m.getReturnType().getName() = "void" then
+          say ')'modifiers(m.getModifiers())
         else
-          say ')'modifiers(m.getModifiers) 'returns' type(m.getReturnType.getName)
+          say ')'modifiers(m.getModifiers()) 'returns' type(m.getReturnType().getName())
       end
     end
     else
@@ -1519,7 +1528,7 @@ class Workspace
         loop i over synonyms
           say i
         end
-      when args.words = 1 then
+      when args.words() = 1 then
         if synonyms[args] = '' then
           say 'unknown system command synonym :' args
         else
@@ -1531,15 +1540,15 @@ class Workspace
 
   method doSystem(args)
     do
-      proc = Runtime.getRuntime.exec(args)
-      in = proc.getInputStream
-      c = in.read
+      proc = Runtime.getRuntime().exec(args)
+      in = proc.getInputStream()
+      c = in.read()
       loop while c \= -1
-        say (Rexx c).d2c'\-'
-        c = in.read
+        say (Rexx c).d2c()'\-'
+        c = in.read()
       end
-      in.close
-      proc.waitFor
+      in.close()
+      proc.waitFor()
     catch InterruptedException
       say 'InterruptedException'
     catch IOException
@@ -1549,14 +1558,14 @@ class Workspace
   method doTrace(args)
     select
       when args = '' then do
-        if currentFrame.getTrace = 'off' then do
-          if \ currentFrame.isTraceVarEnabled then
+        if currentFrame.getTrace() = 'off' then do
+          if \ currentFrame.isTraceVarEnabled() then
             say 'trace off'
         end
         else
-          say 'trace' currentFrame.getTrace
-        if currentFrame.isTraceVarEnabled then
-          say 'trace var' currentFrame.getTraceVar
+          say 'trace' currentFrame.getTrace()
+        if currentFrame.isTraceVarEnabled() then
+          say 'trace var' currentFrame.getTraceVar()
       end
       when args = 'all', args = 'methods', args = 'results', args = 'off' then do
         currentFrame.setTrace(args)
@@ -1565,8 +1574,8 @@ class Workspace
       end
       when args.word(1) = 'var' then do
         new = args.subword(2)
-        cur = currentFrame.getTraceVar
-        loop i = 1 for new.words
+        cur = currentFrame.getTraceVar()
+        loop i = 1 for new.words()
           w = new.word(i).strip('L', '+')
           if w.datatype('S') | (w.left(1) = "-" & w.substr(2).datatype('S')) then do
             if w.left(1) = '-' then do
@@ -1594,20 +1603,20 @@ class Workspace
 
     select
       when w1 = 'query' & w2 = '' then do
-        header('Frame' currentFrame.getName)
+        header('Frame' currentFrame.getName())
         prolog('use list:')
-        list = currentFrame.getUses
-        if list.words = 0 then
+        list = currentFrame.getUses()
+        if list.words() = 0 then
           say '  <empty>'
         else
-          loop i = 1 for list.words
+          loop i = 1 for list.words()
             say '  'list.word(i)
           end
       end
       when w1 = 'add' & w2 \= '' & w3 = '' then do
-        list = currentFrame.getUses
+        list = currentFrame.getUses()
         if list.wordpos(w2) > 0 then
-          say 'frame' currentFrame.getName ': class' w2 'already present in use list : ignored'
+          say 'frame' currentFrame.getName() ': class' w2 'already present in use list : ignored'
         else
         if validateClass(w2) then
           currentFrame.setUses(list w2)
@@ -1615,11 +1624,11 @@ class Workspace
           say 'invalid class name :' w2
       end
       when w1 = 'drop' & w2 \= '' & w3 = '' then do
-        list = currentFrame.getUses
+        list = currentFrame.getUses()
         if list.wordpos(w2) > 0 then
           currentFrame.setUses(list.delword(list.wordpos(w2), 1))
         else
-          say 'frame' currentFrame.getName ': class' w2 'not present in use list : ignored'
+          say 'frame' currentFrame.getName() ': class' w2 'not present in use list : ignored'
       end
       when w1 = '' then
         say 'possible argument for )use : query add drop'
@@ -1656,7 +1665,7 @@ class Workspace
     end
 
   method doWhatCommands(patterns)
-    loop i = 1 for cmds.words
+    loop i = 1 for cmds.words()
       c = cmds.word(i).changestr('.', '')
       if match(c, patterns) then
         say '  )'c
@@ -1665,17 +1674,17 @@ class Workspace
   method doWhatSynonyms(patterns)
     loop s over synonyms
       if match(s, patterns) then
-        say '  )'s '.'.copies(31-s.length) ')'synonyms[s]
+        say '  )'s '.'.copies(31-s.length()) ')'synonyms[s]
     end
 
   -- frame management
-  method newFrame(f = Frame)
-    if framesTable.get(f.getName) \= null then do
-      say 'frame' f.getName 'already exits: new ignored'
+  method newFrame(f = org.vpad.extra.workspace.Frame)
+    if framesTable.get(f.getName()) \= null then do
+      say 'frame' f.getName() 'already exits: new ignored'
       return
     end
     framesRing.addElement(f)
-    framesTable.put(f.getName, f)
+    framesTable.put(f.getName(), f)
     currentFrame = f
 
   method initFrame
@@ -1685,30 +1694,30 @@ class Workspace
     currentFrame.setOptions(settings['option'])
     currentFrame.setUses(settings['use'])
     currentFrame.setTrace(settings['trace'])
-    imports = currentFrame.getImports
-    loop i = 1 for settings['import'].words
+    imports = currentFrame.getImports()
+    loop i = 1 for settings['import'].words()
       imports.addElement(settings['import'].word(i))
     end
 
   method dropFrame(n = String)
     o = framesTable.get(n)
     if o \= null then do
-      if framesRing.size = 1 then do
+      if framesRing.size() = 1 then do
         say 'frame' n 'is the last frame in the ring: drop ignored'
         return
       end
       old = framesRing.indexOf(o)
       framesRing.removeElement(o)
       framesTable.remove(n)
-      if old = framesRing.size then
+      if old = framesRing.size() then
         old = old - 1
-      currentFrame = Frame framesRing.elementAt(old)
+      currentFrame =  org.vpad.extra.workspace.Frame framesRing.elementAt(old)
     end
     else
       say 'unknown frame :' n
 
   method nextFrame
-    s = framesRing.size
+    s = framesRing.size()
     if s = 1 then
       return
 
@@ -1717,27 +1726,27 @@ class Workspace
       old = 0
     else
       old = old + 1
-    currentFrame = Frame framesRing.elementAt(old)
+    currentFrame =  org.vpad.extra.workspace.Frame framesRing.elementAt(old)
 
   method lastFrame
-    currentFrame = Frame framesRing.lastElement
+    currentFrame =  org.vpad.extra.workspace.Frame framesRing.lastElement()
 
   method importFrame(n = String, objects = Rexx null)
-    o = Frame framesTable.get(n)
+    o =  org.vpad.extra.workspace.Frame framesTable.get(n)
     if o == currentFrame then
       say 'cannot import elements from current frame'
     else
     if o \= null then do
       if objects = null then do
         if prompt('import all elements from frame' n) then do
-          ap = o.getProperties
+          ap = o.getProperties()
           loop i = 0 for ap.length
             currentFrame.put(ap[i].name, ap[i])
           end
         end
       end
       else
-        loop p = 1 for objects.words
+        loop p = 1 for objects.words()
           v = objects.word(p)
           if o.get(v) \= null then
             currentFrame.put(v, o.get(v))
@@ -1748,7 +1757,7 @@ class Workspace
     else
       say 'unknown frame :' n
 
-  method getCurrentFrame returns Frame
+  method getCurrentFrame returns org.vpad.extra.workspace.Frame
     return currentFrame
 
   -- private members
@@ -1810,7 +1819,7 @@ class Workspace
 
   method flow(msg) private
     screenWidth = settings['screen.width']
-    loop while msg.length >= screenWidth
+    loop while msg.length() >= screenWidth
       p = msg.lastpos(' ', screenWidth)
       if p > 0 then do
         say msg.left(p-1)
@@ -1830,14 +1839,14 @@ class Workspace
     if pattern = '' then
       return 1
 
-    loop i = 1 for pattern.words
+    loop i = 1 for pattern.words()
       if c.pos(pattern.word(i)) > 0 then
         return 1
     end
     return 0
 
   method header(msg) private
-    prolog((' 'msg.strip' ').center(settings['screen.width']-1, '-'))
+    prolog((' 'msg.strip()' ').center(settings['screen.width']-1, '-'))
 
   method prolog(msg, msg2 = '') private
     flow(msg)
@@ -1863,16 +1872,16 @@ class Workspace
   method resolveFileName(name)
     do
       file = File(name)
-      if file.isAbsolute then
-        if file.exists then
-          return file.getCanonicalPath
+      if file.isAbsolute() then
+        if file.exists() then
+          return file.getCanonicalPath()
         else
           return name
       file = File(currentDirectory, name)
-      if file.exists then
-        return file.getCanonicalPath
+      if file.exists() then
+        return file.getCanonicalPath()
       else
-        return file.getAbsolutePath
+        return file.getAbsolutePath()
     catch e = IOException
       say 'IOError while resolving file name' name ':' e
       return ''
@@ -1882,32 +1891,32 @@ class Workspace
 class Workspace.FilteringOutputStream extends OutputStream
 
   status = Hashtable
-  old = OutputStream
+  old	 = OutputStream
 
   method FilteringOutputStream(previous = OutputStream)
     old = previous
 
-  method push protect
+  method push() protect
     if status = null then
       status = Hashtable()
 
-    o = status.get(Thread.currentThread)
+    o = status.get(Thread.currentThread())
     if o = null then
-      status.put(Thread.currentThread, Integer(1))
+      status.put(Thread.currentThread(), Integer(1))
     else
-      status.put(Thread.currentThread, Integer((Integer o).intValue + 1))
+      status.put(Thread.currentThread(), Integer((Integer o).intValue() + 1))
 
-  method pop
-    o = Integer status.get(Thread.currentThread)
-    if o.intValue = 1 then
-      status.remove(Thread.currentThread)
+  method pop()
+    o = Integer status.get(Thread.currentThread())
+    if o.intValue() = 1 then
+      status.remove(Thread.currentThread())
     else
-      status.put(Thread.currentThread, Integer(o.intValue - 1))
+      status.put(Thread.currentThread(), Integer(o.intValue() - 1))
 
   method write(b = int) signals IOException
-    if status = null, \ status.containsKey(Thread.currentThread) then
+    if status = null, \ status.containsKey(Thread.currentThread()) then
       old.write(b)
 
-  method flush
-    if status = null, \ status.containsKey(Thread.currentThread) then
-      old.flush
+  method flush() signals IOException
+    if status = null, \ status.containsKey(Thread.currentThread()) then
+      old.flush()
