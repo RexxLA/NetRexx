@@ -7,10 +7,10 @@
  *  and distributing this program.
  */
 
-package org.vpad.extra.workspace
+package org.vpad.extra.workpad
 
 import org.netrexx.process.NetRexxA
-import org.vpad.extra.workspace.Frame
+import org.vpad.extra.workpad.Frame
 
 options binary strictcase
 
@@ -24,7 +24,7 @@ class Workspace
   framesRing	   = Vector()
   framesTable	   = Hashtable()
   readStack	   = Rexx ''
-  currentFrame	   = org.vpad.extra.workspace.Frame
+  currentFrame	   = org.vpad.extra.workpad.Frame
   currentFileName  = Rexx 'workspace.input'
   currentDirectory = System.getProperty('user.dir')
 
@@ -113,32 +113,36 @@ class Workspace
           '  )what synonyms <pattern1> [<pattern2> ...]', -
           '  )what things <pattern1> [<pattern2> ...]']
 
-  method main(args = String[]) static signals IOException
-    init()
-    
-    say 'Workspace for NetRexx'
-    say org.netrexx.process.NrVersion().getWorkspaceVersion()
-    say '(C) Copyright Martin Lafaix 2000'
-    say '(C) parts Copyright RexxLA 2019-'
-    
-    ws = Workspace()
-    
-    f = File(System.getProperty('user.home'), 'workspace.input')
-    if f.isFile() then
-      do
-	ws.exec(f.getCanonicalPath())
-      catch IOException
-      end
-    else
-      do
-	is = Workspace.class.getResourceAsStream('/src/input/workspace.input')
-	if is \= null then do
-	  ws.doReadStream(BufferedReader(InputStreamReader(is)), 'I')
-	  is.close()
+  method main(args = String[]) static
+    do
+      init()
+      
+      say 'Workspace for NetRexx'
+      say org.netrexx.process.NrVersion().getWorkspaceVersion()
+      say '(C) Copyright Martin Lafaix 2000'
+      say '(C) parts Copyright RexxLA 2019-'
+      
+      ws = Workspace()
+      
+      f = File(System.getProperty('user.home'), 'workspace.input')
+      if f.isFile() then
+	do
+	  ws.exec(f.getCanonicalPath())
+	catch IOException
 	end
-      end
-    ws.start()
-
+      else
+	do
+	  is = Workspace.class.getResourceAsStream('/src/input/workspace.input')
+	  if is \= null then do
+	    ws.doReadStream(BufferedReader(InputStreamReader(is)), 'I')
+	    is.close()
+	  end
+	end
+      ws.start()
+    catch iox=IOException
+      say iox.getMessage()
+    end -- do
+    
   method init static 
     filter = FilteringOutputStream(System.out)
     printStream = PrintStream(filter)
@@ -152,10 +156,10 @@ class Workspace
     return 'WS'instance
 
   method Workspace
-    this(org.vpad.extra.workspace.Frame('initial'))
+    this(org.vpad.extra.workpad.Frame('initial'))
     initFrame()
 
-  method Workspace(initialFrame = org.vpad.extra.workspace.Frame)
+  method Workspace(initialFrame = org.vpad.extra.workpad.Frame)
     synonyms['apr'] = 'what things'
     synonyms['apropos'] = 'what things'
 
@@ -389,7 +393,7 @@ class Workspace
           f.print('trace off;')
 
       -- defining the $frame shortcut
-      f.print('$frame=org.vpad.extra.workspace.Workspace.getInstance("'id'").getCurrentFrame();')
+      f.print('$frame=org.vpad.extra.workpad.Workspace.getInstance("'id'").getCurrentFrame();')
 
       -- exposing environment
       currentFrame.restoreVarsOn(f)
@@ -445,7 +449,7 @@ class Workspace
 
       if \ inHeader & tmpMethods \= null then
         loop i = 0 for tmpMethods.size()
-          f.println(( org.vpad.extra.workspace.Function tmpMethods.elementAt(i)).value)
+          f.println(( org.vpad.extra.workpad.Function tmpMethods.elementAt(i)).value)
         end
 
       f.close()
@@ -486,7 +490,7 @@ class Workspace
       currentFrame.setTraceVarEnabled(0)
     if tmpMethods \= null then
       loop i = 0 for tmpMethods.size()
-        fn =  org.vpad.extra.workspace.Function tmpMethods.elementAt(i)
+        fn =  org.vpad.extra.workpad.Function tmpMethods.elementAt(i)
         currentFrame.put(fn.name, Symbol fn)
       end
     if tmpDigits \= '' then
@@ -562,7 +566,7 @@ class Workspace
         clauses.setElementAt(null, i)
       end
 
-      methods.addElement( org.vpad.extra.workspace.Function(name, def))
+      methods.addElement( org.vpad.extra.workpad.Function(name, def))
 
       if i >= clauses.size(), clauses.elementAt(i) = null then
         return methods
@@ -776,7 +780,7 @@ class Workspace
           if o = currentFrame then
             say ' *'currentFrame.getName()
           else
-            say '  '( org.vpad.extra.workspace.Frame o).getName()
+            say '  '( org.vpad.extra.workpad.Frame o).getName()
         end
       end
       when args = 'next' then
@@ -790,7 +794,7 @@ class Workspace
           dropFrame(args.subword(2))
       when w1 = 'new' & w2.datatype('S') & count = 2 then do
         old = currentFrame
-        newFrame( org.vpad.extra.workspace.Frame(w2))
+        newFrame( org.vpad.extra.workpad.Frame(w2))
         if old \== currentFrame then
           initFrame()
       end
@@ -1678,7 +1682,7 @@ class Workspace
     end
 
   -- frame management
-  method newFrame(f = org.vpad.extra.workspace.Frame)
+  method newFrame(f = org.vpad.extra.workpad.Frame)
     if framesTable.get(f.getName()) \= null then do
       say 'frame' f.getName() 'already exits: new ignored'
       return
@@ -1711,7 +1715,7 @@ class Workspace
       framesTable.remove(n)
       if old = framesRing.size() then
         old = old - 1
-      currentFrame =  org.vpad.extra.workspace.Frame framesRing.elementAt(old)
+      currentFrame =  org.vpad.extra.workpad.Frame framesRing.elementAt(old)
     end
     else
       say 'unknown frame :' n
@@ -1726,13 +1730,13 @@ class Workspace
       old = 0
     else
       old = old + 1
-    currentFrame =  org.vpad.extra.workspace.Frame framesRing.elementAt(old)
+    currentFrame =  org.vpad.extra.workpad.Frame framesRing.elementAt(old)
 
   method lastFrame
-    currentFrame =  org.vpad.extra.workspace.Frame framesRing.lastElement()
+    currentFrame =  org.vpad.extra.workpad.Frame framesRing.lastElement()
 
   method importFrame(n = String, objects = Rexx null)
-    o =  org.vpad.extra.workspace.Frame framesTable.get(n)
+    o =  org.vpad.extra.workpad.Frame framesTable.get(n)
     if o == currentFrame then
       say 'cannot import elements from current frame'
     else
@@ -1757,7 +1761,7 @@ class Workspace
     else
       say 'unknown frame :' n
 
-  method getCurrentFrame returns org.vpad.extra.workspace.Frame
+  method getCurrentFrame returns org.vpad.extra.workpad.Frame
     return currentFrame
 
   -- private members

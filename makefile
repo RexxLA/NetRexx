@@ -18,8 +18,8 @@ tests:
 clean: 
 	java -jar ant/ant-launcher.jar clean
 
-.PHONY: doc
-doc:
+.PHONY: javadoc
+javadoc:
 	java -jar ant/ant-launcher.jar apidocs
 
 .PHONY: documents
