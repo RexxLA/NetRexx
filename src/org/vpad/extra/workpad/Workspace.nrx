@@ -11,14 +11,16 @@ package org.vpad.extra.workpad
 
 import org.netrexx.process.NetRexxA
 import org.vpad.extra.workpad.Frame
+import org.jline.reader.
+import org.jline.terminal.
 
 options binary strictcase
 
-
+--trace results
 class Workspace
 
   interpreter = NetRexxA
-  parser      = Parser
+  parser      = org.vpad.extra.workpad.Parser
   id	      = Rexx
 
   framesRing	   = Vector()
@@ -31,7 +33,17 @@ class Workspace
   settings = Rexx ''                -- workspace settings
   synonyms = Rexx ''                -- defined synonyms
 
+  properties public static
+
+  ANSI_RESET  = '\u001B[0m'
+  ANSI_BLUE   = '\u001B[34m'
+  ANSI_RED    = '\u001B[31m'  
+  ANSI_YELLOW = '\u001B[33m'
+  
   properties static private
+  -- jline things
+  reader = LineReader
+  -- end of jline things
   instances = Hashtable()
   instance = int 0
   filter = FilteringOutputStream
@@ -117,10 +129,10 @@ class Workspace
     do
       init()
       
-      say 'Workspace for NetRexx \-'
-      say org.netrexx.process.NrVersion().getWorkspaceVersion()
-      say '(C) Copyright Martin Lafaix 2000'
-      say '(C) parts Copyright RexxLA 2019-'
+      say ANSI_YELLOW'Workspace for NetRexx \-'
+      say org.netrexx.process.NrVersion().getWorkspaceVersion()ANSI_RESET
+      say 'Copyright (c) Martin Lafaix 2000'
+      say 'Copyright (c) parts RexxLA 2019'
       
       ws = Workspace()
       
@@ -141,12 +153,16 @@ class Workspace
       ws.start()
     catch iox=IOException
       say iox.getMessage()
-    end -- do
+    end 
     
-  method init static 
+  method init static signals IOException 
     filter = FilteringOutputStream(System.out)
     printStream = PrintStream(filter)
     System.setOut(printStream)
+    terminal = TerminalBuilder.terminal()
+    historyFile = 'nrws.history'
+    reader = LineReaderBuilder.builder().terminal(terminal).history(DefaultHistory()).variable(LineReader.HISTORY_FILE, historyFile).build()
+  
 
   method getInstance(uid) static returns Workspace
     return Workspace instances.get(uid)
@@ -164,7 +180,7 @@ class Workspace
     synonyms['apropos'] = 'what things'
 
     interpreter = NetRexxA()
-    parser = Parser()
+    parser = org.vpad.extra.workpad.Parser()
     newFrame(initialFrame)
     id = getUniqID()
     instances.put(id, this)
@@ -182,7 +198,7 @@ class Workspace
     settings['option'] = defaultOptions
     settings['package'] = ''
     settings['parser'] = 'quiet'
-    settings['quit'] = 'protected'
+    settings['quit'] = 'unprotected'
     settings['screen.width'] = 72
     settings['show'] = 'all'
     settings['trace'] = 'off'
@@ -191,13 +207,6 @@ class Workspace
   method start
     loop forever
       currentFrame.incStep()
-      prompt = settings['message.prompt']
-      if prompt \= 'default' then
-        if prompt = "frame" then
-          say currentFrame.getName()' \-'
-        else
-          say prompt.subword(2) '\-'
-      say '('currentFrame.getStep()') -> \-'
       print(eval(read()))
     end
 
@@ -212,9 +221,20 @@ class Workspace
 
   method read
     l = ''
-    line = ask
+    line = String null
+    prompt = ANSI_BLUE' nrws:> '.toString()
+    do
+      line = Rexx(this.reader.readLine(prompt,-
+		  ANSI_BLUE||currentFrame.getName() currentFrame.getStep(),-
+		  null,null))
+    catch ux=UserInterruptException
+      nop
+    catch eofx=EndOfFileException
+      return 'eof'
+    end -- do
+    
     loop while parser.stripTrailingComment(line).right(1) = '-'
-      l = l || line || nl
+      --l = l || line || nl
       line = ask
     end
     l = l || line
