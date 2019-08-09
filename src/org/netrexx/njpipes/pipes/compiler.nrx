@@ -44,7 +44,7 @@ class compiler extends Object public
   tonrc						    = rexx
   JC						    = Hashtable
   
-  method compile(a = rexx, squelch=boolean 0, pipeClassName=Rexx('')) inheritable returns int
+  method compile(a = rexx, squelch=boolean 0, pipeClassName=Rexx(''),shouldExit=boolean 1) inheritable returns int
     
     if \squelch then say a    
     ssep   = rexx '|'
@@ -863,7 +863,8 @@ class compiler extends Object public
     o[n+4]					    = '   p.runpipe()'
     o[n+5]					    = '   if p.rc()<>0 & p.rc()<>12 then say "RC="p.rc'
     -- o[n+6]					    = '   ThreadPool.stop()'
-    o[n+8]					    = 'exit p.rc()'
+    o[n+8]					    = 'return p.rc()'
+    --o[n+8]			    = 'exit p.rc()'
     n						    = n+9
     
     
@@ -897,12 +898,13 @@ class compiler extends Object public
 
 	--clsList=ArrayList()
 	nc=NetRexxC.clgMain(pipeClassName,nrxsrc)
+	if shouldExit then exit
       end
     
     return rc
     
     
-  method compiler(a = rexx,squelch=0,pipeClassName=Rexx(''))
+  method compiler(a = rexx,squelch=0,pipeClassName=Rexx(''),shouldExit=1 )
     keep					    = boolean 0             -- assume nokeep
     nokeep					    = Rexx ''               -- generated .nrx files to delete
     work					    = boolean 0
@@ -939,7 +941,7 @@ class compiler extends Object public
 	
         if verb					    = '' then say 'Building pipe 'name
 	
-        rc = compile('( 'name' 'compopts' ) 'text, squelch, pipeClassName)
+        rc = compile('( 'name' 'compopts' ) 'text, squelch, pipeClassName, shouldExit)
 	if squelch then return
         if rc = 0 then do
           parms	= tonrc' 'name

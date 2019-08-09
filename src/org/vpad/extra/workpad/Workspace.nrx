@@ -132,11 +132,11 @@ class Workspace
       say ANSI_YELLOW'Workspace for NetRexx \-'
       say org.netrexx.process.NrVersion().getWorkspaceVersion()ANSI_RESET
       say 'Copyright (c) Martin Lafaix 2000'
-      say 'Copyright (c) parts RexxLA 2019'
+      say 'Copyright (c)  parts RexxLA 2019'
       
       ws = Workspace()
       
-      f = File(System.getProperty('user.home'), 'workspace.input')
+      f							  = File('nrws.input')
       if f.isFile() then
 	do
 	  ws.exec(f.getCanonicalPath())
@@ -144,65 +144,65 @@ class Workspace
 	end
       else
 	do
-	  is = Workspace.class.getResourceAsStream('/src/input/workspace.input')
-	  if is \= null then do
+	  is						  = Workspace.class.getResourceAsStream('/src/input/workspace.input')
+	  if is \					  = null then do
 	    ws.doReadStream(BufferedReader(InputStreamReader(is)), 'I')
 	    is.close()
 	  end
 	end
       ws.start()
-    catch iox=IOException
+    catch iox						  = IOException
       say iox.getMessage()
     end 
     
   method init static signals IOException 
-    filter = FilteringOutputStream(System.out)
-    printStream = PrintStream(filter)
+    filter						  = FilteringOutputStream(System.out)
+    printStream						  = PrintStream(filter)
     System.setOut(printStream)
-    terminal = TerminalBuilder.terminal()
-    historyFile = 'nrws.history'
-    reader = LineReaderBuilder.builder().terminal(terminal).history(DefaultHistory()).variable(LineReader.HISTORY_FILE, historyFile).build()
+    terminal						  = TerminalBuilder.terminal()
+    historyFile						  = 'nrws.history'
+    reader						  = LineReaderBuilder.builder().terminal(terminal).history(DefaultHistory()).variable(LineReader.HISTORY_FILE, historyFile).build()
   
 
   method getInstance(uid) static returns Workspace
     return Workspace instances.get(uid)
 
   method getUniqID static protect returns Rexx
-    instance = instance + 1
+    instance						  = instance + 1
     return 'WS'instance
 
   method Workspace
     this(org.vpad.extra.workpad.Frame('initial'))
     initFrame()
 
-  method Workspace(initialFrame = org.vpad.extra.workpad.Frame)
-    synonyms['apr'] = 'what things'
-    synonyms['apropos'] = 'what things'
+  method Workspace(initialFrame				  = org.vpad.extra.workpad.Frame)
+    synonyms['apr']					  = 'what things'
+    synonyms['apropos']					  = 'what things'
 
-    interpreter = NetRexxA()
-    parser = org.vpad.extra.workpad.Parser()
+    interpreter						  = NetRexxA()
+    parser						  = org.vpad.extra.workpad.Parser()
     newFrame(initialFrame)
-    id = getUniqID()
+    id							  = getUniqID()
     instances.put(id, this)
 
-    settings['diag'] = 'off'
-    settings['display.depth'] = 10
-    settings['display.level'] = 4
-    settings['history'] = 'on'
-    settings['history.write'] = 'protected'
-    settings['import'] = ''
-    settings['interpreter'] = 'on'
-    settings['message.prompt'] = 'default'
-    settings['numeric.digits'] = 9
-    settings['numeric.form'] = 'scientific'
-    settings['option'] = defaultOptions
-    settings['package'] = ''
-    settings['parser'] = 'quiet'
-    settings['quit'] = 'unprotected'
-    settings['screen.width'] = 72
-    settings['show'] = 'all'
-    settings['trace'] = 'off'
-    settings['use'] = ''
+    settings['diag']					  = 'off'
+    settings['display.depth']				  = 10
+    settings['display.level']				  = 4
+    settings['history']					  = 'on'
+    settings['history.write']				  = 'protected'
+    settings['import']					  = ''
+    settings['interpreter']				  = 'on'
+    settings['message.prompt']				  = 'default'
+    settings['numeric.digits']				  = 9
+    settings['numeric.form']				  = 'scientific'
+    settings['option']					  = defaultOptions
+    settings['package']					  = ''
+    settings['parser']					  = 'quiet'
+    settings['quit']					  = 'unprotected'
+    settings['screen.width']				  = 72
+    settings['show']					  = 'all'
+    settings['trace']					  = 'off'
+    settings['use']					  = ''
 
   method start
     loop forever
@@ -210,42 +210,50 @@ class Workspace
       print(eval(read()))
     end
 
-  method exec(script = String, option = String "A")
-    if option = null, -
+  method exec(script					  = String, option = String "A")
+    if option						  = null, -
        option.length() < 1, -
-       option.charAt(0) \= 'A' & option.charAt(0) \= 'a' & -
-       option.charAt(0) \= 'I' & option.charAt(0) \= 'i' & -
-       option.charAt(0) \= 'N' & option.charAt(0) \= 'n' then
+       option.charAt(0) \				  = 'A' & option.charAt(0) \= 'a' & -
+       option.charAt(0) \				  = 'I' & option.charAt(0) \= 'i' & -
+       option.charAt(0) \				  = 'N' & option.charAt(0) \= 'n' then
       signal IllegalArgumentException('Invalid option' option '(expection A, I, or N)')
     doRead(script ')ifthere', option)
 
   method read
-    l = ''
-    line = String null
-    prompt = ANSI_BLUE' nrws:> '.toString()
+    l							  = ''
+    line						  = String null
+    prompt						  = ANSI_BLUE'nrws:> '.toString()
     do
-      line = Rexx(this.reader.readLine(prompt,-
+      line						  = Rexx(this.reader.readLine(prompt,-
 		  ANSI_BLUE||currentFrame.getName() currentFrame.getStep(),-
 		  null,null))
-    catch ux=UserInterruptException
+    catch ux						  = UserInterruptException
       nop
-    catch eofx=EndOfFileException
+    catch eofx						  = EndOfFileException
       return 'eof'
     end -- do
-    
+
+    /* handle continuations here */
     loop while parser.stripTrailingComment(line).right(1) = '-'
-      --l = l || line || nl
-      line = ask
+      do
+	line						  = Rexx(this.reader.readLine(prompt,-
+		    ANSI_BLUE||currentFrame.getName() currentFrame.getStep(),-
+		    null,null))
+      catch ux						  = UserInterruptException
+	nop
+      catch eofx					  = EndOfFileException
+	return 'eof'
+      end -- do
     end
-    l = l || line
+    l							  = l || line
     currentFrame.log(l)
     return l
 
   method eval(cmd)
-    if cmd = '' then
+    if cmd						  = '' then
       return ''
 
-    if cmd.charAt(0) = ')' then
+    if cmd.charAt(0)					  = ')' then
       return doSystemCommand(cmd)
 
     return doStatements(cmd)
@@ -253,20 +261,25 @@ class Workspace
   method print(rc)
 
   method doStatements(cmd)
-    name = String '_'id'_'ID
+    name						  = String '_'id'_'ID
 
-    tmpOptions = Rexx ''
-    tmpPackage = Rexx ''
-    tmpTrace = Rexx ''
-    tmpImports = Rexx ''
-    tmpDigits = Rexx ''
-    tmpForm = Rexx ''
-    tmpMethods = Vector
-    isTrace = boolean 0
-    inHeader = boolean 0
+    tmpOptions						  = Rexx ''
+    tmpPackage						  = Rexx ''
+    tmpTrace						  = Rexx ''
+    tmpImports						  = Rexx ''
+    tmpDigits						  = Rexx ''
+    tmpForm						  = Rexx ''
+    tmpMethods						  = Vector
+    isTrace						  = boolean 0
+    inHeader						  = boolean 0
 
-    imports = currentFrame.getImports()
+    imports						  = currentFrame.getImports()
 
+    if cmd.word(1) = 'pipe' then do
+      clsnm='test1'
+      parse cmd 'pipe' pipetxt
+      cmd = "org.netrexx.njpipes.pipes.compiler('("clsnm")"pipetxt"',1,'"clsnm"',0)"
+    end
     step1 = parser.parse(cmd)
 
     if step1 then do
@@ -676,7 +689,7 @@ class Workspace
       if f.isDirectory() then
         currentDirectory = f.getCanonicalPath()
       else
-        say 'invalid or inexistant directory :' args
+        say 'invalid or non-existent directory :' args
     catch e = IOException
       say 'IO Error :' e
     end
