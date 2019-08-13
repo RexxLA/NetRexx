@@ -250,56 +250,99 @@ automatically generated methods will not be visible to the subclasses).
 \end{enumerate}
 
 \chapter{Programmatic use of the \nr{}C translator}
-\nr{}C can be used in a program, to compile \nr{} programs from files,
-or to compile from strings in memory. 
+% \nr{}C can be used in a program, to compile \nr{} programs from files,
+% or to compile from strings in memory. 
 
-\section{Compiling from memory strings}
-Programs may also be compiled from memory strings by passing an array
-of strings containing programs to the translator using these methods:
+% \section{Compiling from memory strings}
+% Programs may also be compiled from memory strings by passing an array
+% of strings containing programs to the translator using these methods:
 
-\begin{lstlisting}[label=frommemory,caption=From Memory]
-method main(arg=Rexx, programarray=String[], log=PrintWriter null) static returns int
-method main2(arg=String[], programarray=String[], log=PrintWriter null) static returns int
-\end{lstlisting}
+% \begin{lstlisting}[label=frommemory,caption=From Memory]
+% method main(arg=Rexx, programarray=String[], log=PrintWriter null) static returns int
+% method main2(arg=String[], programarray=String[], log=PrintWriter null) static returns int
+% \end{lstlisting}
 
-Any programs passed as strings must be named in the arg parameter before any programs contained in files are named.
-For convenience when compiling a single program, the program can be
-passed directly to the compiler as a String with this method:
+% Any programs passed as strings must be named in the arg parameter before any programs contained in files are named.
+% For convenience when compiling a single program, the program can be
+% passed directly to the compiler as a String with this method:
 
-\begin{lstlisting}[label=string,caption=With String argument]
-method main(arg=Rexx, programstring=String, logfile=PrintWriter null) constant returns int
-\end{lstlisting}
+% \begin{lstlisting}[label=string,caption=With String argument]
+% method main(arg=Rexx, programstring=String, logfile=PrintWriter null) constant returns int
+% \end{lstlisting}
 
-Here is an example of compiling a \nr{} program from a string in
-memory:
+% Here is an example of compiling a \nr{} program from a string in
+% memory:
 
-\begin{lstlisting}[label=memexample,caption=Example of compiling from String]
-import org.netrexx.process.NetRexxC
-program = "say 'hello there via NetRexxC'"
-NetRexxC.main("myprogram",program)
-\end{lstlisting}
+% \begin{lstlisting}[label=memexample,caption=Example of compiling from String]
+% import org.netrexx.process.NetRexxC
+% program = "say 'hello there via NetRexxC'"
+% NetRexxC.main("myprogram",program)
+% \end{lstlisting}
+% This will generate a myprogram.class file on disk.
+
+% \section{Compile, load and go}
+% There is also a \marginnote{\color{gray}3.08} possibility to generate a program dynamically, compile it from a string, and
+% execute the resulting class(es) without writing intermediate class
+% files to disk. In this case, even the classfile is executed from
+% memory with a special classloader, the RxMapClassLoader. The compile,
+% load and go method calls the main method of the generated class,
+% without arguments. This method is used to dynamically generate and
+% execute NetRexx Pipelines. An example:
+
+% \begin{lstlisting}[label=memloadgoexample,caption=Example of compile-load-go]
+% nrxsrc  = "say 'hello dynamic world'"
+% clsName = 'helloDyn'
+% org.netrexx.process.NetRexxC.clgMain(clsName,nrxsrc)
+% \end{lstlisting}
+
+% \section{Using the generated classfiles array}
+% There is an overloaded main method in NetRexxC that does the compile
+% in-memory and fills a specified collection with the compiled classfile
+% images. This is in fact what clgMain() does. The generated classfile,
+% including their classloader, are then usable in your own code.
+
+% \begin{lstlisting}[label=memclasslistexample,caption=Example of using the classes collection]
+% classList = ArrayList()
+%     rc = main(arg' -nologo -verbose0',[String programstring],null,classList)
+%     mapLoader = RxMapClassLoader classList.get(0)
+%     do
+%       c = mapLoader.findClass(arg)
+%       paramTypes = Class[1]
+%       paramTypes[0] = String[].class
+%       methodName = String "main"
+%       m = c.getMethod(methodName, paramTypes)
+%       params = Object[1]
+%       params[0] = String[0]
+%       m.invoke(null, params)
+%     catch e=Exception
+%       say 'Reflection exception encountered:'
+%       say e.getMessage()
+%     end
+% \end{lstlisting}
 
 
-\section{JSR199}
-NetRexx uses the jsr-199 way of invoking the compiler, and a .java
-file is not written to disk by default. \marginnote{\color{gray}3.04} The following program
-illustrates how a complete program can be compiled and executed
-without anything being written to disk.
+% \section{JSR199}
+% NetRexx uses the jsr-199 way of invoking the compiler, and a .java
+% file is not written to disk by default. \marginnote{\color{gray}3.04} The following program
+% illustrates how a complete program can be compiled and executed
+% without anything being written to disk.
 
-\begin{lstlisting}[label=jsr199,caption=JSR199 example]
-import org.netrexx.
+% \begin{lstlisting}[label=jsr199,caption=JSR199 example]
+% import org.netrexx.
 
-pname="jsr199hello"                                --        program name
-nrp=' say "hello"\n say arg \n say "program complete" '             --        NetRexx program code
+% pname="jsr199hello"                                --        program name
+% nrp=' say "hello"\n say arg \n say "program complete" '             --        NetRexx program code
 
-classlist=ArrayList()        --    this requests a class loader and class files returned in memory
-NetRexxC.main(pname "-verbose0", nrp, null, classlist) --        ask NetRexxC to compile from string nrp
-loader=ClassLoader classlist.get(0)    --        find class loader build by NetRexx translator
-pclass=loader.loadClass(pname)        --        load our class file into the jvm
-pclass.getMethod("main", [Class -
-String[0].getClass()]).invoke(null,[Object [String 'argument
-string']])        --        locate main, call it with reflection = all done!
-\end{lstlisting}
+% classlist=ArrayList()        --    this requests a class loader and class files returned in memory
+% NetRexxC.main(pname "-verbose0", nrp, null, classlist) --        ask NetRexxC to compile from string nrp
+% loader=ClassLoader classlist.get(0)    --        find class loader build by NetRexx translator
+% pclass=loader.loadClass(pname)        --        load our class file into the jvm
+% pclass.getMethod("main", [Class -
+% String[0].getClass()]).invoke(null,[Object [String 'argument
+% string']])        --        locate main, call it with reflection = all done!
+% \end{lstlisting}
 
-Other uses of the \nr{}A API are beyond the scope
-of this Quick Start Guide and are documented in the \emph{Programming Guide}.
+Programmatic use of the translator - the compiler(NetRexxC) and the
+interpreter (NetRexxA) - used to be in this chapter, but the options
+to do this have multiplied over the years, and are now beyond the scope
+of this Quick Start Guide. They are documented in the \emph{Programming Guide}.
