@@ -11,6 +11,8 @@ options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
+-- 2019-08-24 fix precompiled pipelines. rvj
+-- 2019-08-13 add support for netrexx workspace pipelines. rvj
 -- 2019-08-05 support NetRexxC compile-load-go for direct pipe execution. rvj
 -- 2019-08-01 add VM device driver shortcuts <,>,>> for diskr, diskw and diska. rvj
 -- 2019-07-30 changes for direct pipe execution. rvj
@@ -45,8 +47,12 @@ class compiler extends Object public
   JC						    = Hashtable
   
   method compile(a = rexx, squelch=boolean 0, pipeClassName=Rexx(''),shouldExit=boolean 1) inheritable returns int
-    
-    if \squelch then say a    
+    precomp = boolean 0
+    if \squelch then do
+      -- we need an exit for a precompiled pipeline
+      say a
+      precomp = boolean 1
+    end
     ssep   = rexx '|'
     pend   = rexx '?'
     pInfo  = rexx
@@ -863,8 +869,10 @@ class compiler extends Object public
     o[n+4]					    = '   p.runpipe()'
     o[n+5]					    = '   if p.rc()<>0 & p.rc()<>12 then say "RC="p.rc'
     -- o[n+6]					    = '   ThreadPool.stop()'
+    -- we want this when we run live from a shell or the netrexx workspace
     o[n+8]					    = 'return p.rc()'
-    --o[n+8]			    = 'exit p.rc()'
+    -- we want this if we precompiled a pipeline
+    if precomp then o[n+8]			    = 'exit p.rc()'
     n						    = n+9
     
     
@@ -879,7 +887,6 @@ class compiler extends Object public
       n						    = n+2
       end
     end
-    
     
     -- save the pipe's netrexx source or compile from memory
     o[0] = n

@@ -105,92 +105,162 @@ The pipeline usually processes one record (or line) at a time. The
 pipeline reads a record for the input, processes it and sends it to
 the output. It continues until the input source is drained.
 
-\section{Building the pipeline}
-Until now everything was just theory, but now we are going to show how
-to compile and run a pipeline. The executable script \texttt{pipe} is
-included in the \nr{} distribution to specify a pipeline and to compile
-\nr{} source that contains pipelines. Pipelines can be specified on
-the command line or in a file, but will always be compiled to a .class
-file for execution in the JVM. In this case, we have the following
-pipe definition in a file called \code{firstsample.njp}. We tell the
-pipe compiler that the pipe is called \code{hello}. 
-\lstinputlisting[label=firstpipe,caption=Hello World]{firstsample.njp} 
 
-This specifies a pipeline consisting of a source stage
-\texttt{literal} that puts a string (``hello world'') into the pipeline, and
-a \texttt{console} sink, that puts the string on the screen. 
-
-We compile this pipe with the command:
+\section{Configuration}
+The required configuration is minimal. The NetRexxF.jar (java archive file) needs to be on the classpath (NetRexxC.jar, which is smaller, will suffice when there is a working javac compiler). Also, the current directory (.) needs to be on the CLASSPATH.
+It is convenient to have aliases or shell scripts defined as abbreviations for the invocation of the pipe, pipc (pipe compiler) and nrc (netrexx compiler) utility programs. 
+Aliases are preferable because some shell processors have
+idiosyncrasies in the treatment of script arguments. With an alias we
+can be sure that every NetRexx program sees its arguments the same
+way.
 \begin{verbatim}
-pipe firstsample
-\end{verbatim} 
-\bash[stdout]
-pipc firstsample
-\END
-The pipe
-compiler will echo the source of the pipe to the screen - or issue
-messages when something was mistyped. The name of the classfile is the
-name of the pipe, here specified between parentheses. Options also go there.
-
-We call execute the pipe by typing:
-\begin{verbatim}
-java hello
+.bash_aliases:
+alias pipc="java org.netrexx.njpipes.pipes.compiler"
+alias pipe="java org.netrexx.njpipes.pipes.runner"
+alias nrc="java org.netrexx.process.NetRexxC"
 \end{verbatim}
-Its output is:
-\bash[stdout]
-java hello
-\END
-Now we
-have shown the obligatory example, we can make it more interesting by
-adding a \texttt{reverse} stage in between:
-\lstinputlisting[label=secondpipe,caption=Hello World 2]{secondsample.njp} 
-When this is executed, it dutifully types 
-\bash[stdout]
-pipc secondsample
-java hello2
-\END
-
-If we replace the string after \texttt{literal} with \texttt{arg()},
-we then can start the \texttt{hello} pipeline with a an argument to
-reverse:
-
-\begin{lstlisting}[label=hellopipes3,caption=Hello World3]
-pipe "(hello) literal arg() ! reverse ! console"
-\end{lstlisting}
- and we run it with:
+For Windows, the following works:
 \begin{verbatim}
-java hello a man a plan a canal panama
+pipe.bat:
+@java org.netrexx.njpipes.pipes.runner %*
 \end{verbatim}
-and it will respond:
+\subsection{Running pipelines}
+There are a number of ways to specify and run a pipeline.
+From the command line with direct execution
+The first way is the most straightforward, and highly recognizable for users of CMS Pipelines, as it mimics the way a pipe is run in the CMS 3270 interface. The only difference is that after the PIPE command, the rest of the specification needs to be quoted in the command shells of Linux, Windows and macOS. In CMS, the pipeline specification can also be quoted - in this way, a pipeline specification can be entirely portable. Windows needs double quote, zVM/CMS does not need quotes, but if they are used they need to be double quotes. macOS and Linux can use single or double quotes.
+pipe "literal a man a plan a canal panama | reverse | console"
+Executed this way, the executed class image will not be written to disk. When the pipe is named, for example test1 with a (test1) prologue, this name will be used for the class image, instead of a generated unique name. Naming a pipe will enable specification of options for the compiler, like the pipe separator character.
 \begin{verbatim}
-amanap lanac a nalp a nam a
+pipe "(test1 sep !) literal a man a plan a canal panama ! reverse !
+console"
 \end{verbatim}
-which goes to show that without ignoring space no palindrome is very
-convincing - which we can remedy with a change to the pipeline: use the
-\texttt{change} stage to take out the spaces:
-\begin{lstlisting}[label=hellopipes4,caption=Hello World4]
-pipe "(hello) literal arg() ! change /" "// ! console"
-\end{lstlisting}
+As of pipes for NetRexx 3.08 the default separator is the | (pipe)
+symbol, as in zVM/CMS. The above example shows how to use the previous
+default, the exclamation mark.
 
-\chapter{Device Drivers}
+In this mode, which uses the pipc command (for pipe compiler), a .class file will be persisted to disk. This class can be run as many times as needed, without the overhead of compilation. This would be the right mode for pipes that take different arguments when re-run.
+The pipe name needs to be specified, and will be the class name. When the class name exists, it will be overwritten.
+pipc "(test1) literal a man a plan a canal panama | reverse | console"
+The file test1.class can be run with the command:
+java test1
+Be sure to leave out the .class suffix when invoking java.
+Additional options in this mode:
+Option
+Function
+Remarks
+gen	additionally save .nrx class to disk	default is -nogen
+keep	keep from the .nrx generated java source	default is -nokeep
+Compiled from an .njp file
+When compiled from a file, the pipe specification must not be quoted. Pipes can be specified in so-called Portret Mode, which is the standard for more complex pipelines as it is easier to read.
+An example is:
+\begin{verbatim}
+pipe (appendtest)
+ 
+   gen 100  |
+   append gen 50  |
+   rexx locate /0/ |
+   console
+\end{verbatim}
+Compile from an .njp file with additional stage definitions in NetRexx
+An example is:
+\begin{verbatim}
+length1.njp
+pipe (lengthp) < length.nrx | length1 | console
+ 
+import org.netrexx.njpipes.pipes.
+ 
+class length1 extends stage final
+ 
+  method run()
+    do
+      loop forever
+    line = rexx peekto()
+    l = line.length
+    output(l l.d2x line)
+    readto()
+      end
+    catch StageError
+      rc = rc()
+    end
+    exit(rc*(rc<>12))
+\end{verbatim}
+In this example, the name of the generated pipe is lengthp, while the name of the custom stage is length1. Be sure to invoke the right class, invoking length1 will have the JVM complain about a non-existing main method.
+This class (lengthp) will be generated by the command:
+\begin{verbatim}
+pipc length1
+\end{verbatim}
+note that the .njp suffix is optional when invoking the pipes compiler. When run, it tries to read the contents of the file length.nrx and will put out its lines, prepended by the line length in decimal and hex.
 
-A device driver reads from a device (for instance a file on disk, on
-the network, or from the shell) or writes to a device; in some cases
-it can both read from and write to the device. An example of a device
-driver is \keyword{disk} which reads and writes files. You can use it
-on the left-hand side of the pipeline as an input device and on the
-right-hand side of the pipeline as an output device.
 
 
-A pipeline can take data from one input device and write it to another
-device. Within the pipeline, data can be modified in may ways.
-The simplest process for the pipeline is to copy data from a device on
-the input side to a device on the output side. 
 
-Using any input driver with any output driver, Pipelines for NetRexx moves data directly from the input device to the output device. The pipeline implementation uses one program for each device and connects them together.
-The inherent characteristic of the pipeline is that any program can be connected to any other one because each obtains data and sends data through a device independent standard interface.
 
-The pipeline usually processes one record (or line) at a time. The pipeline reads a record from the input, processes it and sends it to the output. It continues until all records from the input have been processed.
+% \section{Building the pipeline}
+% Until now everything was just theory, but now we are going to show how
+% to compile and run a pipeline. The executable script \texttt{pipe} is
+% included in the \nr{} distribution to specify a pipeline and to compile
+% \nr{} source that contains pipelines. Pipelines can be specified on
+% the command line or in a file, but will always be compiled to a .class
+% file for execution in the JVM. In this case, we have the following
+% pipe definition in a file called \code{firstsample.njp}. We tell the
+% pipe compiler that the pipe is called \code{hello}. 
+% \lstinputlisting[label=firstpipe,caption=Hello World]{firstsample.njp} 
+
+% This specifies a pipeline consisting of a source stage
+% \texttt{literal} that puts a string (``hello world'') into the pipeline, and
+% a \texttt{console} sink, that puts the string on the screen. 
+
+% We compile this pipe with the command:
+% \begin{verbatim}
+% pipe firstsample
+% \end{verbatim} 
+% \bash[stdout]
+% pipc firstsample
+% \END
+% The pipe
+% compiler will echo the source of the pipe to the screen - or issue
+% messages when something was mistyped. The name of the classfile is the
+% name of the pipe, here specified between parentheses. Options also go there.
+
+% We call execute the pipe by typing:
+% \begin{verbatim}
+% java hello
+% \end{verbatim}
+% Its output is:
+% \bash[stdout]
+% java hello
+% \END
+% Now we
+% have shown the obligatory example, we can make it more interesting by
+% adding a \texttt{reverse} stage in between:
+% \lstinputlisting[label=secondpipe,caption=Hello World 2]{secondsample.njp} 
+% When this is executed, it dutifully types 
+% \bash[stdout]
+% pipc secondsample
+% java hello2
+% \END
+
+% If we replace the string after \texttt{literal} with \texttt{arg()},
+% we then can start the \texttt{hello} pipeline with a an argument to
+% reverse:
+
+% \begin{lstlisting}[label=hellopipes3,caption=Hello World3]
+% pipe "(hello) literal arg() | reverse | console"
+% \end{lstlisting}
+%  and we run it with:
+% \begin{verbatim}
+% java hello a man a plan a canal panama
+% \end{verbatim}
+% and it will respond:
+% \begin{verbatim}
+% amanap lanac a nalp a nam a
+% \end{verbatim}
+% which goes to show that without ignoring space no palindrome is very
+% convincing - which we can remedy with a change to the pipeline: use the
+% \texttt{change} stage to take out the spaces:
+% \begin{lstlisting}[label=hellopipes4,caption=Hello World4]
+% pipe "(hello) literal arg() | change /" "// | console"
+% \end{lstlisting}
 
 
 \chapter{Example}
@@ -330,8 +400,8 @@ l=length(line)
 end
 error: exit RC*(wordpos(RC, '8 12')=0)
 \end{alltt}
-And you would need to remember to call your filetype REXX instead of EXEC. Just sayin’ because that cost me two minutes of feeling less intelligent than usual. The ‘peekto’ reads the input but does not actually commit the read yet, so you can read it one more time with knowledge about the contents. The ‘output’ pushes its argument back into the pipeline. The ‘readto’ reads and commits the read so the line is really processed and we can go to the next one.
-In NetRexx, that would be about the same, mutatis mutandis the object oriented stuff you don't have in Classic Rexx. Here peekto(), readto() and output() are method calls on the ’stage’ object.
+And you would need to remember to call your filetype REXX instead of EXEC.  The ‘peekto’ reads the input but does not actually commit the read yet, so you can read it one more time with knowledge about the contents. The ‘output’ pushes its argument back into the pipeline. The ‘readto’ reads and commits the read so the line is really processed and we can go to the next one.
+In NetRexx, that would be about the same, but for the object oriented stuff you don't have in Classic Rexx. Here peekto(), readto() and output() are method calls on the ’stage’ object.
 \begin{alltt}
 FILE: length.nrx
 import org.netrexx.njpipes.pipes.
@@ -350,14 +420,16 @@ method run()
   exit(rc*(rc<>12))
  \end{alltt}
 So that would look fairly familiar, and admittedly, a bit easier for us already well versed in NetRexx.
-We can test this by building a pipeline and running the filter on its own source:
-pipe "(testl sep |) diskr length.nrx | length | console"
-java testl
+We can test this by building a pipeline and running the filter on its
+own source:
+\begin{alltt}
+pipe "<length.nrx | length | console"
+ \end{alltt}
 If you have a CMS handy, that would be:
 \begin{alltt}
   PIPE < LENGTH REXX | LENGTH | CONSOLE
  \end{alltt}
-on the first, Classic Rexx version of the filter. Note that the < on CMS means the same as the diskr on the NetRexx version.
+on the first, Classic Rexx version of the filter.
 
 
 \chapter{Record Selection}
@@ -378,7 +450,7 @@ To test the installation, we can run a pipeline from the command line.
 Running a pipeline from the command line
  To run a pipeline from the commandline, type:
 \begin{lstlisting}[label=countwords,caption=Count Words]
-pipe (test) 'literal arg() ! dup 999 ! count words ! console'
+pipe (test) 'literal arg() | dup 999 | count words | console'
 \end{lstlisting}
 
 The first time you use the pipe command in a new directory it will
@@ -386,7 +458,7 @@ create a default pipes.cnf file for you. When the \texttt{pipe}
 command is not on your path, you can also use:
 
 \begin{lstlisting}[label=testdup,caption=Test Dup]
-java org.netrexx.njpipes.pipes.compiler (test) 'literal arg() ! dup 999 ! count words ! console'
+java org.netrexx.njpipes.pipes.compiler (test) 'literal arg() | dup 999 | count words | console'
 \end{lstlisting}
 
 You should see a message that the pipe compiler is processing your pipe and soon after that messages from the NetRexx compiler as it processes the pipe.
@@ -422,7 +494,7 @@ Writing your own pipes or stage is simple.  Take a look at the source of the sup
        F[5]=444
 
        pipe (apipe stall 1000 )
-         stem F ! sort ! prefix literal {avar} ! console ! stem T
+         stem F | sort | prefix literal {avar} | console | stem T
 
        loop i=1 to T[0]
           say 'T['i']='T[i]
@@ -454,7 +526,7 @@ The following example shows what has to be done in a stage to access the rexx va
  The getRexx method is passed the name of a string by the pipe.  In the previous example it would be passed A and would return an Object pointer to A in testpipe. If you wish to replace a stream this can be done using connectors.  For example look at the following fragment:
 \begin{verbatim}
     -- examples\calltest.njp
-    pipe (callt1) literal test ! calltest {} ! console
+    pipe (callt1) literal test | calltest {} | console
 \end{verbatim}
 \begin{lstlisting}
     import org.netrexx.njpipes.pipes.
@@ -466,7 +538,7 @@ The following example shows what has to be done in a stage to access the rexx va
        do
           a = arg()
 
-          callpipe (cp1) gen {a} ! *out0:
+          callpipe (cp1) gen {a} | *out0:
 
           loop forever
              line = peekto()
@@ -500,7 +572,7 @@ If you do not want the stage to wait for the called pipe to complete you can use
     a  = 100
     b  = 'some text for literal'
 
-    addpipe (linktest) literal {b} ! dup {a} ! *in0:
+    addpipe (linktest) literal {b} | dup {a} | *in0:
 
     loop forever
        line = Rexx readto()
@@ -520,42 +592,33 @@ To get a good idea of what can be done with pipes look at the tasktest pipe in t
 \chapter{Deadlocks}
 Pipes for NetRexx and Java detects deadlocks and outputs information to allow you to fix the problem.  Consider the following session:
 \begin{verbatim}
-    java njp (deadlock) literal test ! a: fanin ! console ! a:
-    Pipes for NetRexx and Java version 0.33
-    Copyright (c) E. J. Tomlinson , 1998.  All rights reserved.
-    Building pipe deadlock
-    NetRexx portable processor, version 1.140
-    Copyright (c) IBM Corporation, 1998.  All rights reserved.
-    Program deadlock.nrx
-    Compilation of 'deadlock.nrx' successful
+nrws> pipe literal test | a: fanin | console | a:                                                                       0.000 s
+test
+Deadlocked in test1
 
-    njpipes/examples]java -nojit deadlock
-    test
-    Deadlocked in deadlock
+Dumping test1  Stall 2000  Monitored by test1
 
-    Dumping deadlock Monitored by deadlock
+ Flag units digit:  1=wait out, 2=wait in, 4=wait any, 8=wait commit
+                 : 10=pending autocommit, 20=pending sever
 
-     Flag units digit:  1=wait out, 2=wait in, 4=wait any, 8=wait commit
-                     : 10=pending autocommit, 20=pending sever
+ literal_1
+ Running rc=0 commit=-1 Flag=201 waits 0 args=test
+ -> out 0 fanin_2 1 test
 
-     literal_1
-     Running rc=0 commit=-1 Flag=201
-     -> out 0 fanin_2 1 test
+ fanin_2
+ Running rc=0 commit=-1 Flag=201 waits 0 args=
+ -> in  0 literal_1 1 test
+    in  1 console_3 0 test
+ -> out 0 console_3 1 test
 
-     fanin_2
-     Running rc=0 commit=-1 Flag=101
-     -> in  0 literal\_1 1 test
-        in  1 console\_3 0 test
-     -> out 0 console\_3 1 test
+ console_3
+ Running rc=0 commit=-1 Flag=201 waits 0 args=
+ -> in  0 fanin_2 1 test
+ -> out 0 fanin_2 0 test
 
-     console_3
-     Running rc=0 commit=-1 Flag=101
-     -> in  0 fanin\_2 1 test
-     -> out 0 fanin\_2 0 test
+Dumped Pipe test1 Flag 60F rc=16
 
-    Dumped Pipe deadlock Flag 40F rc=16
-
-    RC=16
+RC=16
 \end{verbatim}
 
 We can see that there are three stages Running.  None have any return codes set.  The Flags tell us that all the stages are waiting for an output to complete.  The '->' show which stream is selected.  From this we can see console\_3 is trying to output to fanin\_2. Unfortunately fanin\_2 is waiting for output on stream 0 to complete, it cannot read the datawaiting on in stream 1.  Hence the stall.
