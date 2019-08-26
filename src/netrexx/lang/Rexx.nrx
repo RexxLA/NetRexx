@@ -522,6 +522,7 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
 
   /** Return a hashcode for the value.
       */
+
   method hashCode returns int
     if chars=null then chars=layout()
     if chars.length<14 then over=(chars.length+1)%2
@@ -1035,7 +1036,7 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
     if enc=0 then return Rexx(res).right(2)
     res[1]=Hexes[enc//16]; enc=enc%16
     if enc=0 then return Rexx(res).right(3)
-    res[0]=Hexes[enc//16]; enc=enc%16
+    res[0]=Hexes[enc//16]; --enc=enc%16
     return Rexx(res)
 
   /** Datatype returns 0/1; tests datatypes.
@@ -2073,11 +2074,11 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
      A and B are right-aligned.
 
      1996.02.20 -- enhanced version of DMSRCN algorithm (1981)
-
+     
      [Performance can be improved by reuse, etc. -- see MFC's BigDecimal]
    */
   method charaddsub(a=char[], b=char[], m=int) static private-
-         returns char[]
+		    returns char[]
     /* We'll usually be right if we assume no carry */
     ap=a.length-1                  -- -> final (rightmost) digit
     bp=b.length-1                  -- ..
@@ -2090,34 +2091,34 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
       if ap>=0 then do             -- have some A digit
         da=da+int(a[ap])-int('0')
         ap=ap-1;
-        end
+      end
       if bp>=0 then do             -- have some B digit
         da=da+(int(b[bp])-int('0'))*m
         bp=bp-1
-        end
+      end
       /* result could be -82 to 91 */
       if da<0 then do
         da=da+100                  -- yes, this is right -- consider -50
         carry=da%10-10
         res[op]=char((da//10)+int('0'))
         iterate op; end
-      if da>9 then do
+	if da>9 then do
         carry=(da%10)
         res[op]=char((da//10)+int('0'))
         iterate op; end
-      /* no carry */
-      carry=0
-      res[op]=char(da+int('0'))
+	/* no carry */
+	carry=0
+	res[op]=char(da+int('0'))
       end
-    /* say '--->' res carry */
-    if carry=0 then return res
+      /* say '--->' res carry */
+      if carry=0 then return res
     -- if carry<0 then signal DivideException("internal.error ["a b m carry"]")
     /* We have carry -- need to make space for the extra digit */
     new=char[maxarr+2]
     new[0]=char(carry+int('0'))
     System.arraycopy(res, 0, new, 1, maxarr+1)
     return new
-
+    
   /** concatenates two Rexx objects, optionally with blank(s)  */
   method concat(set=RexxSet, rhs=Rexx, blanks=int) private returns Rexx
     set=set
@@ -2127,9 +2128,9 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
     System.arraycopy(this.chars, 0, res, 0, chars.length)
     if blanks>0 then
       loop i=chars.length to chars.length+blanks-1; res[i]=' '; end
-    System.arraycopy(rhs.chars, 0, res, chars.length+blanks, rhs.chars.length)
-    return Rexx(res, 1)
-
+	System.arraycopy(rhs.chars, 0, res, chars.length+blanks, rhs.chars.length)
+	return Rexx(res, 1)
+	
   /** Make a character array from an array of java.lang.String;
      the array elements are concatenated with a single blank between
      each.  */
@@ -2138,30 +2139,30 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
     if blanks<0 then return char[0]     -- empty
     len=blanks                          -- length of result (to be)
     loop i=0 to blanks; len=len+s[i].length(); end
-    res=char[len]
-    out=0                               -- output offset
-    loop i=0 to blanks
+      res=char[len]
+      out=0                               -- output offset
+      loop i=0 to blanks
       seglen=s[i].length()
       s[i].getChars(0, seglen, res, out)
       if i=blanks then leave            -- no blank after final
       out=out+seglen+1
       res[out-1]=' '
-      end i
+    end i
     return res
-
+    
   /** General Rexx compare  */
   method docompare(set=RexxSet, rhs=Rexx) private final returns int
     if this.ind\=NotaNum then
-     if rhs.ind\=NotaNum then do label numcompare
-      /* Numeric compare */
-      if this.ind==rhs.ind & this.exp==rhs.exp then do
+      if rhs.ind\=NotaNum then do label numcompare
+       /* Numeric compare */
+       if this.ind==rhs.ind & this.exp==rhs.exp then do
         /* sign & exponent the same [very common] */
         thislength=this.mant.length
         if thislength<rhs.mant.length then return -this.ind
         if thislength>rhs.mant.length then return this.ind
         /* lengths are the same; we can do a straight mantissa compare
            unless maybe rounding [rounding is very unusual] */
-        dig=DefaultDigits
+           dig=DefaultDigits
         if set\=null then dig=set.digits
         if thislength<=dig then do
           loop i=0 to thislength-1
@@ -2260,7 +2261,7 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
       */
   method finish(roundlen=int, strip=boolean) private final returns Rexx
     if this.mant.length>roundlen then this.round(roundlen)
-
+    
     /* If strip requested, remove insignificant trailing zeros */
     if strip then do
       d=mant.length
@@ -2622,271 +2623,271 @@ method tail returns Rexx
   outstr=reconstructlist(output)
   return Rexx Rexx(outstr).copyIndexed(output)
 
-method getJavaList returns java.util.List
-	return Rexx.RexxList(StructuredList this)
-
-method dumplist()
-	dumplist(this)
-	
-method dumplist(data=Rexx,key="",offset="",link="") static
+  method getJavaList returns java.util.List
+    return Rexx.RexxList(StructuredList this)
+    
+  method dumplist()
+    dumplist(this)
+    
+  method dumplist(data=Rexx,key="",offset="",link="") static
     say offset key "-->" data
     say offset key link "  element name="data["sl-elementname"]
     say offset key link "  element value="data["sl-elementvalue"]
-  if data.exists("sl-elements") then do
-    say offset "elements="data["sl-elements"]
-    loop i=1 to data["sl-elements"]
+    if data.exists("sl-elements") then do
+      say offset "elements="data["sl-elements"]
+      loop i=1 to data["sl-elements"]
         dumplist(data[i],i,offset "--*","==>")
-        end
+      end
     end
     
-method dumpvar()
-	dumpvar(this)
-	
-method dumpvar(r=Rexx,offset="") static
-	say offset r
-	loop x over r
-		say "="offset x
-		dumpvar(r[x],"==>" offset)
-		end
----------------------------------------------------------------------------------------------------------------------------------------------
+  method dumpvar()
+    dumpvar(this)
+    
+  method dumpvar(r=Rexx,offset="") static
+    say offset r
+    loop x over r
+      say "="offset x
+      dumpvar(r[x],"==>" offset)
+    end
+    ---------------------------------------------------------------------------------------------------------------------------------------------
 -- beginning of internal structured list processing methods
 ---------------------------------------------------------------------------------------------------------------------------------------------
-method reconstructlist(input=Rexx,ruleset=Rexx "",sublist=Rexx 0) static
-	if ruleset=="" then if input.exists("sl-rules") then rules=input["sl-rules"];else nop
-		else if \ruleset.exists("sl-elements") then 		--		ruleset is not a list structure
-			rules=getrules(ruleset)		--	translate rules to a list structure
-				else rules=ruleset
-  flags=getflags(rules)
-  
---  if rules["delimiters"].exists("nameseparator") then namesep=rules["delimiters","nameseparator",1];else namesep=""
-  if rules["delimiters"].exists("separator") then sep=rules["delimiters","separator",1];else sep=""
-  if rules["delimiters"].exists("start") then startlist=rules["delimiters","start",1];else startlist=""
-  if rules["delimiters"].exists("end") then endlist=rules["delimiters","end",1];else endlist=""
-  if rules["delimiters"].exists("escape") then escape=rules["delimiters","escape",1];else escape=""
-  	
-  if input.exists("sl-elementname") then		--	do we have an elementname? if so capture in segment1
-  	if rules["delimiters"].exists(input["sl-elementname"]) then return input		--	a delimiter
-  		else do
-  			segment1=input["sl-elementname"]
-  			if input["sl-elementname"].exists("sl-wrapper") then segment1=input["sl-elementname","sl-wrapper"]||segment1||input["sl-elementname","sl-wrapper"]
-  			end
-  else segment1=""
-  if input.exists("sl-namesep") then tnamesep=input["sl-namesep"];else tnamesep=""
+  method reconstructlist(input=Rexx,ruleset=Rexx "",sublist=Rexx 0) static
+    if ruleset=="" then if input.exists("sl-rules") then rules=input["sl-rules"];else nop
+    else if \ruleset.exists("sl-elements") then 		--		ruleset is not a list structure
+      rules=getrules(ruleset)		--	translate rules to a list structure
+    else rules=ruleset
+    flags=getflags(rules)
+    
+    --  if rules["delimiters"].exists("nameseparator") then namesep=rules["delimiters","nameseparator",1];else namesep=""
+    if rules["delimiters"].exists("separator") then sep=rules["delimiters","separator",1];else sep=""
+    if rules["delimiters"].exists("start") then startlist=rules["delimiters","start",1];else startlist=""
+    if rules["delimiters"].exists("end") then endlist=rules["delimiters","end",1];else endlist=""
+    if rules["delimiters"].exists("escape") then escape=rules["delimiters","escape",1];else escape=""
+    
+    if input.exists("sl-elementname") then		--	do we have an elementname? if so capture in segment1
+      if rules["delimiters"].exists(input["sl-elementname"]) then return input		--	a delimiter
+      else do
+  	segment1=input["sl-elementname"]
+  	if input["sl-elementname"].exists("sl-wrapper") then segment1=input["sl-elementname","sl-wrapper"]||segment1||input["sl-elementname","sl-wrapper"]
+      end
+      else segment1=""
+      if input.exists("sl-namesep") then tnamesep=input["sl-namesep"];else tnamesep=""
+      
+      ---------------------------------------------------------------------------------------	we have an element that is not a list
+      if \input.exists("sl-elements") then do label notalist	
 	
-  	---------------------------------------------------------------------------------------	we have an element that is not a list
-  if \input.exists("sl-elements") then do label notalist	
-
   	output=Rexx(input["sl-elementvalue"])	--	snap input so we can modify if needed
 	if input["sl-elementvalue"].exists("sl-wrapper") then output=input["sl-elementvalue","sl-wrapper"]||output||input["sl-elementvalue","sl-wrapper"]  	
   	if escape=="" then return segment1||tnamesep||output		--	no escape char ==> don't do escape handler code
   	escapeit="no"
   	if output.pos(rules["delimiters","escape",1]).toint()\=0 then do		--	element contains an escape character?
-		if flags.substr(5,1).toint()=1 then output=output.changestr(rules["delimiters","escape",1],rules["delimiters","escape",1]||rules["delimiters","escape",1])		--	make escape character preceed escape
-			else output=output.changestr(rules["delimiters","escape",1],rules["delimiters","escape",1]||rules["delimiters","escape",1])		--	or double any escape characters
-		escapeit="yes"
-		end
+	  if flags.substr(5,1).toint()=1 then output=output.changestr(rules["delimiters","escape",1],rules["delimiters","escape",1]||rules["delimiters","escape",1])		--	make escape character preceed escape
+	  else output=output.changestr(rules["delimiters","escape",1],rules["delimiters","escape",1]||rules["delimiters","escape",1])		--	or double any escape characters
+	  escapeit="yes"
+	end
   	loop i=1 to rules["delimiters","sl-elements"].toint()
-  		if output.pos(rules["delimiters",i,1])\==0 then do		--	element contains a delimiter
-  			if rules["delimiters","escape",1]\==rules["delimiters",i,1] then
-               if flags.substr(5,1).toint()=1 then output=output.changestr(rules["delimiters",i,1],rules["delimiters","escape",1]||rules["delimiters",i,1])		--	make escape character preceed delimiter
-            escapeit="yes"
-            end
-  		end
-    if escapeit=="yes" then if flags.substr(5,1).toint()=0 then output=rules["delimiters","escape",1]||output||rules["delimiters","escape",1]		--	enclose whole item in escape chars
-    return segment1||tnamesep||output
-    end notalist
-    
-  ---------------------------------------------------------------------------------------------       this element is a list
-  if segment1\=="" then 
-    if segment1\==input then segment1=segment1||tnamesep							--		save any name and its separator
-    	
-  if input.exists("sl-start") then startlist=input["sl-start"]			--		use any original sublist delimiter (for JSON "array" support)
-  if input.exists("sl-end") then endlist=input["sl-end"]			--		use any original sublist delimiter (for JSON "array" support)
-                    
-  segment=Rexx ""  
-  if input.exists("sl-elements") then do
-  	if flags.substr(7,1)=="1" then sep=""
-  	if sublist then
-			if flags.substr(7,1)=="0" then segment=startlist
-    loop i=1 to input["sl-elements"]																		--		recursively capture any list elements
-      newseg=reconstructlist(input[i],rules,1)
-      cd=delimiterinfo(newseg,rules)
-      if cd=="",cd.length()\==newseg.length() then segment=segment||newseg||sep
-      			else segment=segment||newseg
-      end
-    if segment.length().toint()>sep.length().toint() then
-			if segment.right(sep.length())==sep then segment=segment.substr(1,segment.length().toint()-sep.length().toint())
-	if sublist then
-			if flags.substr(7,1)=="0" then segment=segment||endlist
-    end
-  return segment1||segment
-	    
-method getrules(ruleset=Rexx "default") static
-	if ruleset=="default" then do		--	create a bootstrap ruleset used to generate other rulesets
-		lstart=Rexx "(" ; lstart[1]="(" ; lstart["sl-elements"]=1 
-		lend=Rexx ")" ; lend[1]=")" ;  lend["sl-elements"]=1
-		lsep=Rexx " " ; lsep[1]=" " ;  lsep["sl-elements"]=1
-		lescape=Rexx '"' ; lescape[1]='"' ;  lescape["sl-elements"]=1
-		delims=lstart||lend||lsep||lescape
-		delims[1]=lstart;delims["start"]=lstart;delims[1,"sl-elementname"]="start"
-		delims[2]=lend;delims["end"]=lend;delims[2,"sl-elementname"]="end"
-		delims[3]=lsep;delims["separator"]=lsep;delims[3,"sl-elementname"]="separator"
-		delims[4]=lescape;delims["escape"]=lescape;delims[4,"sl-elementname"]="escape"
-		delims["sl-elements"]=4
-		rules=Rexx "Ruleset"
-		rules[1]=delims
-		rules["delimiters"]=delims
-		rules[1,"sl-elementname"]="delimiters"
-		rules["sl-elements"]=1
-		return rules
-		end
-	builtin=Rexx ""
-	builtin["WORDLIST"]='delimiters(separator(" ") escape("""")) options(escape-is-quoted-string)'
-	builtin["CSV"]='delimiters(separator(,) escape("""")) options(escape-is-quoted-string)'
-	builtin["TSV"]='delimiters(separator("\t")'
-	builtin["XML"]='delimiters(start("<") end(">") separator(" ") meta("/") nameseparator("=")) options("explicit attribute names")'
-	builtin["JSON"]='delimiters(start("{") end("}") start("[") end("]") escape(\\) separator(",") nameseparator(":")) options("explicit attribute names" "single character escape" "remove enclosing quotes" "Strip leading and trailing whitespace")'
-	builtin["PYTHON"]='delimiters(start("{") end("}") start("[") end("]") start("(") end(")") escape("''") escape("""") separator(",") nameseparator(":")) options("explicit attribute names" "escape is quoted string" "Strip leading and trailing whitespace")'
-	if builtin.exists(ruleset.toString()) then rulelist=Rexx(builtin[ruleset]).buildlist()
-										 else do
-										 	 key1=ruleset.substr(1,ruleset.pos("(").toint()-1)
-										 	 if \"delimiters".abbrev(key1)&\"options".abbrev(key1) then
-										 	  signal Error("invalid ruleset")
-										     rulelist=Rexx(ruleset).buildlist()
-										 	 end		
-	loop i=1 to rulelist["sl-elements"].toint()  		--	need canonical name maps for later references
-		if "delimiters".abbrev(rulelist[i,"sl-elementname"].lower(),1) then do
-			if rulelist[i,"sl-elementname"]\=="delimiters" then rulelist["delimiters"]=rulelist[i] 
-			loop j=1 to rulelist[i,"sl-elements"].toint()
-				if "start".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="start" then rulelist["delimiters","start"]=rulelist[i,j] 				
-				if "end".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="end" then rulelist["delimiters","end"]=rulelist[i,j] 				
-				if "separator".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="separator" then rulelist["delimiters","separator"]=rulelist[i,j] 				
-				if "escape".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="escape" then rulelist["delimiters","escape"]=rulelist[i,j] 				
-				if "nameseparator".abbrev(rulelist[i,j,"sl-elementname"].lower(),1) then if rulelist[i,j,"sl-elementname"]\=="nameseparator" then rulelist["delimiters","nameseparator"]=rulelist[i,j]
-				end
-			end
-		if "options".abbrev(rulelist[i,"sl-elementname"].lower(),1) then do
-			if rulelist[i,"sl-elementname"]\=="options" then rulelist["options"]=rulelist[i] 
-			end			
-		end
-	return rulelist
-	
-method getdelims(ruleset=Rexx) static
-	delims="\0\0\0\0\0"		--	start with nulls
-	if \ruleset.exists("delimiters") then return delims
-	deli=ruleset["delimiters"]
-	delims=""
-	loop d=1 to deli["sl-elements"]
-		select
- 			when "start".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "end".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "separator".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "escape".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			when "nameseparator".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
-			otherwise 
-				delims=delims||deli[d,1].left(1)
-			end
-		end
-	return delims
-	
-method delimiterinfo(in=Rexx,rules=Rexx) static
-		remains=in.length().toint()		--	how much of string left to work with
-    	deli=rules['delimiters']
-    	rd=Rexx ""
-    	loop d=1 to deli["sl-elements"]
-    		cd=deli[d]		--	next delim
-    		cdl=cd[1].length().toint() 		--	delim length
-    		if cdl<=remains then -- can it fit on the line?
-    			if in.left(cdl)==cd[1]	then --	delimiter match?
-					do;rd=cd[1] ; rd["sl-elementname"]=cd["sl-elementname"];leave; end 	--	save delim type
-    		end
-		return rd
-	
-method getflags(ruleset=Rexx) static
-	flags=Rexx "000000000"
-	if \ruleset.exists("options") then return flags
-	opts=ruleset["options"]
-	loop o=1 to opts["sl-elements"]
-		select
-			when "separators follow sublists".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 1)
-			when "sublists are separators".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 1)
-			when "adjacent separators reduce to one".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 2)
-			when "produce empty elements for adjacent separators".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 2)
-			when "translate escape sequences".abbrev(opts[o].lower().changestr("-"," "),3) then flags=flags.overlay(Rexx "0",Rexx 3)
-			when "do not translate escape sequences".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 3)
-			when "whitespace is translated to blank".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 4)
-			when "treat whitespace as text".abbrev(opts[o].lower().changestr("-"," "),3) then flags=flags.overlay(Rexx "1",Rexx 4)
-			when "escape is quoted string".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 5)
-			when "single character escape".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 5)
-			when "attribute names are implicit".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 6)
-			when "explicit attribute names".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 6)
-			when "delimiters are implicit".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 7)
-			when "tokens are delimiters".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 7)
-			when "keep leading and trailing whitespace".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 8)
-			when "strip leading and trailing whitespace".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 8)
-			when "enclosing quotes are data".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 9)
-			when "remove enclosing quotes".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 9)			
-			otherwise nop
-			end
-		end 
-	return flags
-/* 
-																											buildlist method to parse most list formats:
-*/
-method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
-
-	start=startloc.toint()
-	if \ruleset.exists("sl-elements") then 		--		ruleset is not a list structure:
-		rules=getrules(ruleset)					--	translate rules to a list structure
-	else rules=ruleset
-	delims=getdelims(rules)
-	inflags=getflags(rules)
-  flags=inflags.left(9).changestr(" ","0")
-  if flags.substr(4,1).toint()=0 then in1=Rexx(this.translate(" ","\t\n\r\f\x0b"))					--			0 = whitespace is translated to blank (TAB,FF,LF,CR,VT)
-    else in1=Rexx(Rexx this)
-  in=Rexx in1																													--			var "in" contains the string to be parsed into a list format 
-  in["sl-count"]=start-1 --  in order to work recursively, we will need to count how many characters are consumed at each step
-  in["sl-rules"]=Rexx(rules).copyindexed(rules)
-  segment=Rexx("")    --  may have to capture token segments
-  quotemode=Rexx "" --  may need a scan mode when using quoted escape option
-  elementname=Rexx("")  --  may need to explicitly separate names and values
-  namesep=Rexx("")  --  may need to explicitly separate names and values
-             
-  startno=1			--	element number?
-  if start>1 then		--		we are handling a sublist
-             if flags.substr(7,1).toint()=1 then do -- delimiters are separate elements
-				cd=delimiterinfo(in,rules)		--	get info about the current delimiter (if no name, false alarm)
-				cdn=cd["sl-elementname"].lower()
-				in[startno]=Rexx(cd)  --  capture token
-				in[startno,"sl-elementname"]=cdn
-				in[in[startno,"sl-elementname"]]=in[startno]		--	create a map entry from the element name to the element value
-				startno=2
-            	end
-            				--		-------------------------------------------------------------------------------------------------------------------------------------		begin loop to parse input data
-  loop label scanloop itemno=startno while start<=in.length().toint()   --    need to loop in case multiple items
-    deloc=in.substr(start).verify(delims,"match").toint()   --  locate next delimiter
-    in[itemno]=Rexx("")
-    
-    if deloc=0 then do																																		 					--did not find a delimiter = done with list parse, capture it
-    	if flags.substr(8,1).toint()=1 then capture=Rexx((segment||in.substr(start)).strip()) 	--	strip white?
-    		else capture=Rexx(segment||in.substr(start))
-       if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
-       in[itemno]=Rexx(elementname||namesep||capture)
-       in[itemno,"sl-elementvalue"]=Rexx(capture)
-       in[itemno,"sl-elementname"]=elementname
-       in[itemno,"sl-namesep"]=namesep       --  save any explicit name separator
-       checkextraquotes(in,itemno,flags);metamap(in,itemno)
-       in["sl-count"]=in["sl-count"].toint()+in.substr(start).length().toint()
-       leave scanloop
-       end
+  	  if output.pos(rules["delimiters",i,1])\==0 then do		--	element contains a delimiter
+  	    if rules["delimiters","escape",1]\==rules["delimiters",i,1] then
+              if flags.substr(5,1).toint()=1 then output=output.changestr(rules["delimiters",i,1],rules["delimiters","escape",1]||rules["delimiters",i,1])		--	make escape character preceed delimiter
+              escapeit="yes"
+          end
+  	end
+	if escapeit=="yes" then if flags.substr(5,1).toint()=0 then output=rules["delimiters","escape",1]||output||rules["delimiters","escape",1]		--	enclose whole item in escape chars
+	return segment1||tnamesep||output
+      end notalist
       
-    else do label checkdelimiter 																																			--found a possible delimiter
+      ---------------------------------------------------------------------------------------------       this element is a list
+      if segment1\=="" then 
+	if segment1\==input then segment1=segment1||tnamesep							--		save any name and its separator
+    	
+	if input.exists("sl-start") then startlist=input["sl-start"]			--		use any original sublist delimiter (for JSON "array" support)
+	if input.exists("sl-end") then endlist=input["sl-end"]			--		use any original sublist delimiter (for JSON "array" support)
+        
+	segment=Rexx ""  
+	if input.exists("sl-elements") then do
+  	  if flags.substr(7,1)=="1" then sep=""
+  	  if sublist then
+	    if flags.substr(7,1)=="0" then segment=startlist
+	    loop i=1 to input["sl-elements"]																		--		recursively capture any list elements
+	      newseg=reconstructlist(input[i],rules,1)
+	      cd=delimiterinfo(newseg,rules)
+	      if cd=="",cd.length()\==newseg.length() then segment=segment||newseg||sep
+      	      else segment=segment||newseg
+	    end
+	    if segment.length().toint()>sep.length().toint() then
+	      if segment.right(sep.length())==sep then segment=segment.substr(1,segment.length().toint()-sep.length().toint())
+	      if sublist then
+		if flags.substr(7,1)=="0" then segment=segment||endlist
+	end
+	return segment1||segment
+	
+  method getrules(ruleset=Rexx "default") static
+    if ruleset=="default" then do		--	create a bootstrap ruleset used to generate other rulesets
+      lstart=Rexx "(" ; lstart[1]="(" ; lstart["sl-elements"]=1 
+      lend=Rexx ")" ; lend[1]=")" ;  lend["sl-elements"]=1
+      lsep=Rexx " " ; lsep[1]=" " ;  lsep["sl-elements"]=1
+      lescape=Rexx '"' ; lescape[1]='"' ;  lescape["sl-elements"]=1
+      delims=lstart||lend||lsep||lescape
+      delims[1]=lstart;delims["start"]=lstart;delims[1,"sl-elementname"]="start"
+      delims[2]=lend;delims["end"]=lend;delims[2,"sl-elementname"]="end"
+      delims[3]=lsep;delims["separator"]=lsep;delims[3,"sl-elementname"]="separator"
+      delims[4]=lescape;delims["escape"]=lescape;delims[4,"sl-elementname"]="escape"
+      delims["sl-elements"]=4
+      rules=Rexx "Ruleset"
+      rules[1]=delims
+      rules["delimiters"]=delims
+      rules[1,"sl-elementname"]="delimiters"
+      rules["sl-elements"]=1
+      return rules
+    end
+    builtin=Rexx ""
+    builtin["WORDLIST"]='delimiters(separator(" ") escape("""")) options(escape-is-quoted-string)'
+    builtin["CSV"]='delimiters(separator(,) escape("""")) options(escape-is-quoted-string)'
+    builtin["TSV"]='delimiters(separator("\t")'
+    builtin["XML"]='delimiters(start("<") end(">") separator(" ") meta("/") nameseparator("=")) options("explicit attribute names")'
+    builtin["JSON"]='delimiters(start("{") end("}") start("[") end("]") escape(\\) separator(",") nameseparator(":")) options("explicit attribute names" "single character escape" "remove enclosing quotes" "Strip leading and trailing whitespace")'
+    builtin["PYTHON"]='delimiters(start("{") end("}") start("[") end("]") start("(") end(")") escape("''") escape("""") separator(",") nameseparator(":")) options("explicit attribute names" "escape is quoted string" "Strip leading and trailing whitespace")'
+    if builtin.exists(ruleset.toString()) then rulelist=Rexx(builtin[ruleset]).buildlist()
+    else do
+      key1=ruleset.substr(1,ruleset.pos("(").toint()-1)
+      if \"delimiters".abbrev(key1)&\"options".abbrev(key1) then
+	signal Error("invalid ruleset")
+      rulelist=Rexx(ruleset).buildlist()
+    end		
+    loop i=1 to rulelist["sl-elements"].toint()  		--	need canonical name maps for later references
+      if "delimiters".abbrev(rulelist[i,"sl-elementname"].lower(),1) then do
+	if rulelist[i,"sl-elementname"]\=="delimiters" then rulelist["delimiters"]=rulelist[i] 
+	loop j=1 to rulelist[i,"sl-elements"].toint()
+	  if "start".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="start" then rulelist["delimiters","start"]=rulelist[i,j] 				
+	  if "end".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="end" then rulelist["delimiters","end"]=rulelist[i,j] 				
+	  if "separator".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="separator" then rulelist["delimiters","separator"]=rulelist[i,j] 				
+	  if "escape".abbrev(rulelist[i,j,"sl-elementname"].lower(),2) then if rulelist[i,j,"sl-elementname"]\=="escape" then rulelist["delimiters","escape"]=rulelist[i,j] 				
+	  if "nameseparator".abbrev(rulelist[i,j,"sl-elementname"].lower(),1) then if rulelist[i,j,"sl-elementname"]\=="nameseparator" then rulelist["delimiters","nameseparator"]=rulelist[i,j]
+	end
+      end
+      if "options".abbrev(rulelist[i,"sl-elementname"].lower(),1) then do
+	if rulelist[i,"sl-elementname"]\=="options" then rulelist["options"]=rulelist[i] 
+      end			
+    end
+    return rulelist
+    
+  method getdelims(ruleset=Rexx) static
+    delims="\0\0\0\0\0"		--	start with nulls
+    if \ruleset.exists("delimiters") then return delims
+    deli=ruleset["delimiters"]
+    delims=""
+    loop d=1 to deli["sl-elements"]
+      select
+ 	when "start".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+	when "end".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+	when "separator".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+	when "escape".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+	when "nameseparator".abbrev(deli[d,"sl-elementname"].lower().changestr("-"," ")) then delims=delims||deli[d,1].left(1)
+	otherwise 
+	  delims=delims||deli[d,1].left(1)
+      end
+    end
+    return delims
+    
+  method delimiterinfo(in=Rexx,rules=Rexx) static
+    remains=in.length().toint()		--	how much of string left to work with
+    deli=rules['delimiters']
+    rd=Rexx ""
+    loop d=1 to deli["sl-elements"]
+      cd=deli[d]		--	next delim
+      cdl=cd[1].length().toint() 		--	delim length
+      if cdl<=remains then -- can it fit on the line?
+    	if in.left(cdl)==cd[1]	then --	delimiter match?
+	  do;rd=cd[1] ; rd["sl-elementname"]=cd["sl-elementname"];leave; end 	--	save delim type
+    end
+    return rd
+    
+  method getflags(ruleset=Rexx) static
+    flags=Rexx "000000000"
+    if \ruleset.exists("options") then return flags
+    opts=ruleset["options"]
+    loop o=1 to opts["sl-elements"]
+      select
+	when "separators follow sublists".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 1)
+	when "sublists are separators".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 1)
+	when "adjacent separators reduce to one".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 2)
+	when "produce empty elements for adjacent separators".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 2)
+	when "translate escape sequences".abbrev(opts[o].lower().changestr("-"," "),3) then flags=flags.overlay(Rexx "0",Rexx 3)
+	when "do not translate escape sequences".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 3)
+	when "whitespace is translated to blank".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 4)
+	when "treat whitespace as text".abbrev(opts[o].lower().changestr("-"," "),3) then flags=flags.overlay(Rexx "1",Rexx 4)
+	when "escape is quoted string".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 5)
+	when "single character escape".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 5)
+	when "attribute names are implicit".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 6)
+	when "explicit attribute names".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 6)
+	when "delimiters are implicit".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "0",Rexx 7)
+	when "tokens are delimiters".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 7)
+	when "keep leading and trailing whitespace".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 8)
+	when "strip leading and trailing whitespace".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 8)
+	when "enclosing quotes are data".abbrev(opts[o].lower().changestr("-"," "),1) then flags=flags.overlay(Rexx "0",Rexx 9)
+	when "remove enclosing quotes".abbrev(opts[o].lower().changestr("-"," "),2) then flags=flags.overlay(Rexx "1",Rexx 9)			
+	otherwise nop
+      end
+    end 
+    return flags
+    /* 
+       buildlist method to parse most list formats:
+     */
+  method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
+    
+    start=startloc.toint()
+    if \ruleset.exists("sl-elements") then 		--		ruleset is not a list structure:
+      rules=getrules(ruleset)					--	translate rules to a list structure
+    else rules=ruleset
+    delims=getdelims(rules)
+    inflags=getflags(rules)
+    flags=inflags.left(9).changestr(" ","0")
+    if flags.substr(4,1).toint()=0 then in1=Rexx(this.translate(" ","\t\n\r\f\x0b"))					--			0 = whitespace is translated to blank (TAB,FF,LF,CR,VT)
+    else in1=Rexx(Rexx this)
+    in=Rexx in1																													--			var "in" contains the string to be parsed into a list format 
+    in["sl-count"]=start-1 --  in order to work recursively, we will need to count how many characters are consumed at each step
+    in["sl-rules"]=Rexx(rules).copyindexed(rules)
+    segment=Rexx("")    --  may have to capture token segments
+    quotemode=Rexx "" --  may need a scan mode when using quoted escape option
+    elementname=Rexx("")  --  may need to explicitly separate names and values
+    namesep=Rexx("")  --  may need to explicitly separate names and values
+    
+    startno=1			--	element number?
+    if start>1 then		--		we are handling a sublist
+      if flags.substr(7,1).toint()=1 then do -- delimiters are separate elements
+	cd=delimiterinfo(in,rules)		--	get info about the current delimiter (if no name, false alarm)
+	cdn=cd["sl-elementname"].lower()
+	in[startno]=Rexx(cd)  --  capture token
+	in[startno,"sl-elementname"]=cdn
+	in[in[startno,"sl-elementname"]]=in[startno]		--	create a map entry from the element name to the element value
+	startno=2
+      end
+    --		-------------------------------------------------------------------------------------------------------------------------------------		begin loop to parse input data
+    loop label scanloop itemno=startno while start<=in.length().toint()   --    need to loop in case multiple items
+      deloc=in.substr(start).verify(delims,"match").toint()   --  locate next delimiter
+      in[itemno]=Rexx("")
+      
+      if deloc=0 then do																																		 					--did not find a delimiter = done with list parse, capture it
+    	if flags.substr(8,1).toint()=1 then capture=Rexx((segment||in.substr(start)).strip()) 	--	strip white?
+    	else capture=Rexx(segment||in.substr(start))
+	if flags.substr(8,1).toint()=1 then elementname=Rexx(elementname.strip())
+	in[itemno]=Rexx(elementname||namesep||capture)
+	in[itemno,"sl-elementvalue"]=Rexx(capture)
+	in[itemno,"sl-elementname"]=elementname
+	in[itemno,"sl-namesep"]=namesep       --  save any explicit name separator
+	checkextraquotes(in,itemno,flags);metamap(in,itemno)
+	in["sl-count"]=in["sl-count"].toint()+in.substr(start).length().toint()
+	leave scanloop
+      end
+      
+      else do label checkdelimiter 																																			--found a possible delimiter
     	cd=delimiterinfo(in.substr(start+deloc-1),rules)		--	get info about the current delimiter (if no name, false alarm)
     	cdn=cd["sl-elementname"].lower()
     	cdl=cd.length().toint()
     	if cdn=="" then itemno=itemno-1		--		no name ==> skip apparent delimiter
     	else		--	delimiter is real = handle it
-     		
+     	
       select label handledelimiter																																			--	select a delimiter processing function
       	
         when "escape".abbrev(cdn,2) then do label escape  																							--    found an escape char
@@ -3175,593 +3176,596 @@ method buildlist(ruleset=Rexx "default",startloc=Rexx "1") returns Rexx
  
 ---------------------------------------------------------------------------------------
 
-    method checkextraquotes(in=Rexx, itemno=Rexx, flags=Rexx)														--		handle special remove enclosing quote rule for JSON format
-			if flags.substr(9,1).toint()=1 then do
+  method checkextraquotes(in=Rexx, itemno=Rexx, flags=Rexx)														--		handle special remove enclosing quote rule for JSON format
+    if flags.substr(9,1).toint()=1 then do
 				il=in[itemno,"sl-elementname"].length()
-				if il.toint()>2 then
-				  if in[itemno,"sl-elementname"].substr(1,1)=='"' then		--		name starts with quote?
-					if in[itemno,"sl-elementname"].substr(il,1)=='"' then do	--	ends with?
-						in[itemno,"sl-elementname"]=in[itemno,"sl-elementname"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
-
-
-						in[itemno,"sl-elementname","sl-wrapper"]='"'	--		save wrapping quote for later
-						end
-				il=in[itemno,"sl-elementvalue"].length()
-				if il.toint()>2 then
-				if in[itemno,"sl-elementvalue"].substr(1,1)=='"' then		--		value starts with quote?
-					if in[itemno,"sl-elementvalue"].substr(il,1)=='"' then do
-						in[itemno,"sl-elementvalue"]=in[itemno,"sl-elementvalue"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
-
-						in[itemno,"sl-elementvalue","sl-wrapper"]='"'	--		save wrapping quote for later
-						end
-				end
-
----------------------------------------------------------------------------------------
---		metamap maintains meta-data for structured list elements
----------------------------------------------------------------------------------------
-	method metamap(list=Rexx,newloc=Rexx,oldloc=Rexx "0")
-		new=newloc.toint();old=oldloc.toint()
-		w="w"
-		l=Rexx list
-		if old\=0 then do			--		remove old element meta-data
-			e=l[old]
-			if e.datatype(w) then e=Rexx("#"e)
-			en=l[old,"sl-elementname"]
-			if en.datatype(w) then en=Rexx("#"en)
-			ev=l[old,"sl-elementvalue"]
-
-			if ev.datatype(w) then ev=Rexx("#"ev)
-
-
-			if en\=="" then do
-				l[en,"chain",old]=null
-					if l[en,"chain"].isindexed() then l[en]=Rexx Rexx(l[l[en,"chain"].minval(),"sl-elementvalue"]).copyindexed(l[en])
-											else l[en]=null
-				end
-			if ev\==e then do
-				l[ev,"chain",old]=null
-					if l[ev,"chain"].isindexed() then l[ev]=Rexx Rexx(l[ev,"chain"].minval()).copyindexed(l[ev])
-											else l[ev]=null
-				end
-			l[e,"chain",old]=null
-				if l[e,"chain"].isindexed() then l[e]=Rexx Rexx(l[e,"chain"].minval()).copyindexed(l[e])
-										else l[e]=null
-			end
-					
-		if new\=0 then do			--		add new element meta-data
-			e=l[new]
-			if e.datatype(w) then e=Rexx("#"e)
-			en=l[new,"sl-elementname"]
-			if en.datatype(w) then en=Rexx("#"en)
-			ev=l[new,"sl-elementvalue"]
-			if ev.datatype(w) then ev=Rexx("#"ev)
-
-
-			if \l.exists(e) then l[e]=Rexx(newloc)
-				if \l[e].exists("chain") then l[e,"chain"]="chain"
-				l[e,"chain",new]=Rexx(newloc)
-				mi=l[e,"chain"].minval()
-				if l[e]\==mi then l[e]=Rexx Rexx(mi).copyindexed(l[e])
-			if ev\==e then do
-				if \l.exists(ev) then l[ev]=Rexx(newloc)
-					if \l[ev].exists("chain") then l[ev,"chain"]="chain"
-					l[ev,"chain",new]=Rexx(newloc)
-					mi=l[ev,"chain"].minval()
-					if l[ev]\==mi then l[ev]=Rexx Rexx(mi).copyindexed(l[ev])
-				end
-			if en\=="" then do
-				if \l.exists(en) then l[en]=ev
-					if \l[en].exists("chain") then l[en,"chain"]="chain"
-					l[en,"chain",new]=Rexx(newloc)
-					mi=l[en,"chain"].minval()
-					if l[en]\==l[mi,"sl-elementvalue"] then l[en]=Rexx Rexx(l[mi,"sl-elementvalue"]).copyindexed(l[en])
-					end
-			end
-
-/****************************************************************************************/
-/*  add methods to convert arrays and lists to map  2012-11-24 -- Kermit         */
-/****************************************************************************************/
-
--- a method to build a map from arrays or Lists and add it to the Rexx object		
-	method buildmap(s1=Object,s2=Object) returns Rexx
-		return buildMap(s1,s2)
-		
-	method buildMap(s1=Object,s2=Object) returns Rexx
-		if s1=null then f1=Object[] null
-			else
-		if s1.getClass().isArray() then
-			if s1.getClass().getComponentType().isPrimitive() then 
-					f1=Object[] wrap(s1)
-			else f1=Object[] s1
-		else if s1<=java.util.List then f1=(java.util.List s1).toArray()
-				else signal BadArgumentException
-					
-		if s2=null then f2=Object[] null
-			else
-		if s2.getClass().isArray() then
-			if s2.getClass().getComponentType().isPrimitive() then 
-					f2=Object[] wrap(s2)
-			else f2=Object[] s2
-		else if s2<=java.util.List then f2=(java.util.List s2).toArray()
-				else signal BadArgumentException
-					
-		return setRexxMap(f1,f2,this)
-
-	method setRexxMap(s1=Object[],s2=Object[],r=Rexx) returns Rexx
-		if s1\=null then
-		 if s2\=null then
-			if s1.length\=s2.length then signal BadArgumentException
-	  if s1=null then
-	  	if s2=null then arraylen=0
-	  		else arraylen=s2.length
-		else arraylen=s1.length
-		loop i=0 for arraylen
-			if s1=null then r.put(Rexx(i+1),s2[i].toString())
-				else if s2=null then r.put(s1[i].toString(),Rexx(i+1))
-					else r.put(s1[i].toString(),s2[i].toString())
-			end
-		return r
-		
-	method wrap(o=Object) static returns Object[]
-		r=Object[] null
-		loop i=0 for Array.getLength(o)
-			wrapped=Array.get(o,i)
-			if r=null then r=Object[] Array.newInstance(wrapped.getClass(), Array.getLength(o))
-			r[i]=wrapped
-			end
-		return r
--------------------------------------------------------------------------------------------------------------------------------
--- Original classes, constructors, and methods added for isIndexed and Java collections support:		
--------------------------------------------------------------------------------------------------------------------------------
-
+      if il.toint()>2 then
+	if in[itemno,"sl-elementname"].substr(1,1)=='"' then		--		name starts with quote?
+	  if in[itemno,"sl-elementname"].substr(il,1)=='"' then do	--	ends with?
+	    in[itemno,"sl-elementname"]=in[itemno,"sl-elementname"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
+	    
+	    
+	    in[itemno,"sl-elementname","sl-wrapper"]='"'	--		save wrapping quote for later
+	  end
+	il=in[itemno,"sl-elementvalue"].length()
+	if il.toint()>2 then
+	  if in[itemno,"sl-elementvalue"].substr(1,1)=='"' then		--		value starts with quote?
+	    if in[itemno,"sl-elementvalue"].substr(il,1)=='"' then do
+	      in[itemno,"sl-elementvalue"]=in[itemno,"sl-elementvalue"].substr(2,il.toint()-2)			--		strip enclosing quotes for JSON type rules
+	      
+	      in[itemno,"sl-elementvalue","sl-wrapper"]='"'	--		save wrapping quote for later
+	    end
+    end
+    
+    ---------------------------------------------------------------------------------------
+    --		metamap maintains meta-data for structured list elements
+    ---------------------------------------------------------------------------------------
+  method metamap(list=Rexx,newloc=Rexx,oldloc=Rexx "0")
+    new=newloc.toint();old=oldloc.toint()
+    w="w"
+    l=Rexx list
+    if old\=0 then do			--		remove old element meta-data
+      e=l[old]
+      if e.datatype(w) then e=Rexx("#"e)
+      en=l[old,"sl-elementname"]
+      if en.datatype(w) then en=Rexx("#"en)
+      ev=l[old,"sl-elementvalue"]
+      
+      if ev.datatype(w) then ev=Rexx("#"ev)
+      
+      
+      if en\=="" then do
+	l[en,"chain",old]=null
+	if l[en,"chain"].isindexed() then l[en]=Rexx Rexx(l[l[en,"chain"].minval(),"sl-elementvalue"]).copyindexed(l[en])
+	else l[en]=null
+      end
+      if ev\==e then do
+	l[ev,"chain",old]=null
+	if l[ev,"chain"].isindexed() then l[ev]=Rexx Rexx(l[ev,"chain"].minval()).copyindexed(l[ev])
+	else l[ev]=null
+      end
+      l[e,"chain",old]=null
+      if l[e,"chain"].isindexed() then l[e]=Rexx Rexx(l[e,"chain"].minval()).copyindexed(l[e])
+      else l[e]=null
+    end
+    
+    if new\=0 then do			--		add new element meta-data
+      e=l[new]
+      if e.datatype(w) then e=Rexx("#"e)
+      en=l[new,"sl-elementname"]
+      if en.datatype(w) then en=Rexx("#"en)
+      ev=l[new,"sl-elementvalue"]
+      if ev.datatype(w) then ev=Rexx("#"ev)
+      
+      
+      if \l.exists(e) then l[e]=Rexx(newloc)
+      if \l[e].exists("chain") then l[e,"chain"]="chain"
+      l[e,"chain",new]=Rexx(newloc)
+      mi=l[e,"chain"].minval()
+      if l[e]\==mi then l[e]=Rexx Rexx(mi).copyindexed(l[e])
+      if ev\==e then do
+	if \l.exists(ev) then l[ev]=Rexx(newloc)
+	if \l[ev].exists("chain") then l[ev,"chain"]="chain"
+	l[ev,"chain",new]=Rexx(newloc)
+	mi=l[ev,"chain"].minval()
+	if l[ev]\==mi then l[ev]=Rexx Rexx(mi).copyindexed(l[ev])
+      end
+      if en\=="" then do
+	if \l.exists(en) then l[en]=ev
+	if \l[en].exists("chain") then l[en,"chain"]="chain"
+	l[en,"chain",new]=Rexx(newloc)
+	mi=l[en,"chain"].minval()
+	if l[en]\==l[mi,"sl-elementvalue"] then l[en]=Rexx Rexx(l[mi,"sl-elementvalue"]).copyindexed(l[en])
+      end
+    end
+    
+  /****************************************************************************************/
+    /*  add methods to convert arrays and lists to map  2012-11-24 -- Kermit         */
+  /****************************************************************************************/
+    
+    -- a method to build a map from arrays or Lists and add it to the Rexx object		
+  method buildmap(s1=Object,s2=Object) returns Rexx
+    return buildMap(s1,s2)
+    
+  method buildMap(s1=Object,s2=Object) returns Rexx
+    if s1=null then f1=Object[] null
+    else
+      if s1.getClass().isArray() then
+	if s1.getClass().getComponentType().isPrimitive() then 
+	  f1=Object[] wrap(s1)
+	else f1=Object[] s1
+	else if s1<=java.util.List then f1=(java.util.List s1).toArray()
+      else signal BadArgumentException
+      
+      if s2=null then f2=Object[] null
+      else
+	if s2.getClass().isArray() then
+	  if s2.getClass().getComponentType().isPrimitive() then 
+	    f2=Object[] wrap(s2)
+	  else f2=Object[] s2
+	  else if s2<=java.util.List then f2=(java.util.List s2).toArray()
+	else signal BadArgumentException
+	
+	return setRexxMap(f1,f2,this)
+	
+  method setRexxMap(s1=Object[],s2=Object[],r=Rexx) returns Rexx
+    if s1\=null then
+      if s2\=null then
+	if s1.length\=s2.length then signal BadArgumentException
+	if s1=null then
+	  if s2=null then arraylen=0
+	  else arraylen=s2.length
+	else arraylen=s1.length
+	loop i=0 for arraylen
+	  if s1=null then r.put(Rexx(i+1),s2[i].toString())
+	  else if s2=null then r.put(s1[i].toString(),Rexx(i+1))
+	  else r.put(s1[i].toString(),s2[i].toString())
+	end
+    return r
+    
+  method wrap(o=Object) static returns Object[]
+    r=Object[] null
+    loop i=0 for Array.getLength(o)
+      wrapped=Array.get(o,i)
+      if r=null then r=Object[] Array.newInstance(wrapped.getClass(), Array.getLength(o))
+      r[i]=wrapped
+    end
+    return r
+    -------------------------------------------------------------------------------------------------------------------------------
+    -- Original classes, constructors, and methods added for isIndexed and Java collections support:		
+    -------------------------------------------------------------------------------------------------------------------------------
+    
   method toMap() protect returns Rexx.RxMap      /* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */
-  	return Rexx.RxMap(this)
-  	
+    return Rexx.RxMap(this)
+    
   /** isIndexed returns a boolean flag that indicates if indexed subvalues are present in the
      Rexx object (explicitly set).  */
   method isindexed() protect returns Rexx
-  	return isIndexed()
-  	
+    return isIndexed()
+    
   method isIndexed() protect returns Rexx
     if this.size(1)==0 then return 0
-    	else return 1
-        
+    else return 1
+    
   /** Size returns the number of indexed subvalues in the
      Rexx object (explicitly set).  */
   method size(check=0) protect returns int
     -- Note that the whole operation is protected (atomic)
     if coll=null then return 0     -- that was easy [probably rare]
     do protect coll
-	  icount=int 0
+      icount=int 0
       it=coll.keys()
       loop label collcount while it.hasMoreElements()
         key=Rexx it.nextElement()
         node=RexxNode coll.get(key)   -- get the node for the key
-        -- ignore if dropped or never set explicitly
+				      -- ignore if dropped or never set explicitly
         if node.leaf=null then iterate collcount   -- a dropped item
         if Object node.leaf==Object node.initleaf then iterate collcount
         -- it's a reference that we want to count
         icount=icount+1
         if check then return 1
-        end collcount
-      end
+      end collcount
+    end
     return icount
-		
-	method Rexx(m=Map)
-		this("")
-		this.putAll(m)
-		return this
-		
-/* this is not really needed - equivalent to Rexx(r).copyindexed(s)
-	method Rexx(r=Rexx,s=Rexx)
-		this(r)
-		this.putAll(s)
-		return this
-*/
-
-	method clear()
-		this.coll=null
-		
-	method containsKey(key=Object) returns boolean
-		return testnode(Rexx(key.toString()))
-		
-	method containsValue(value=Object) returns boolean
-		rexxvalue=Rexx(value.toString())
-		if coll=null then return 0
-		keyenum=keys()
-		loop while keyenum.hasMoreElements()
-			next=Rexx keyenum.nextElement()
-			rv=getnode(next).leaf
-			if rv\=null then
-				if rv==rexxvalue then return 1
-			end
-		return 0
-		
-	method entrySet() returns Set
-		return Rexx.EntrySet(this)
-		
-	method get(key=Object) returns Object
-		if testnode(Rexx(key.toString())) then 
-			return getnode(Rexx(key.toString())).leaf
-		return null
-	
-	method isEmpty() returns boolean
-		if coll=null then return 1
-		return this.size(1)==0
-		
-	method keySet() returns Set
-		return Rexx.KeySet(this)
-		
-	method put(key=Object, value=Object) returns Object
-		returnval=get(Rexx(key.toString()))
-		getnode(Rexx(key.toString())).leaf=Rexx(value.toString())
-		return returnval
-		
-	method put(key=Object, value=Rexx) returns Object
-		returnval=get(Rexx(key.toString()))
-		getnode(Rexx(key.toString())).leaf=value
-		return returnval
-	
-	method putAll(t=Map)
-		if t=null then signal NullPointerException
-		e=t.entrySet()
-		i=e.iterator()
-		loop while i.hasNext()
-			m=Map.Entry i.next()
-			put(m.getKey(),m.getValue())
-			end
-	
-	method putAll(t=Rexx)
-		if t=null then signal NullPointerException
-		copyIndexed(t)
-	
-	method remove(key=Object) returns Object
-		if key=null then signal NullPointerException
-		returnval=get(Rexx(key.toString()))
-		getnode(Rexx(key.toString())).leaf=null
-		return returnval		
-		
-	method values() returns Collection
-		return Rexx.ValueCollection(this)
-		
-	method iterator() returns Iterator
-		return Rexx.BaseIterator(this)
-		
+    
+  method Rexx(m=Map)
+    this("")
+    this.putAll(m)
+    return this
+    
+    /* this is not really needed - equivalent to Rexx(r).copyindexed(s)
+  method Rexx(r=Rexx,s=Rexx)
+       this(r)
+       this.putAll(s)
+       return this
+     */
+    
+  method clear()
+    this.coll=null
+    
+  method containsKey(key=Object) returns boolean
+    return testnode(Rexx(key.toString()))
+    
+  method containsValue(value=Object) returns boolean
+    rexxvalue=Rexx(value.toString())
+    if coll=null then return 0
+    keyenum=keys()
+    loop while keyenum.hasMoreElements()
+      next=Rexx keyenum.nextElement()
+      rv=getnode(next).leaf
+      if rv\=null then
+	if rv==rexxvalue then return 1
+    end
+    return 0
+    
+  method entrySet() returns Set
+    return Rexx.EntrySet(this)
+    
+  method get(key=Object) returns Object
+    if testnode(Rexx(key.toString())) then 
+      return getnode(Rexx(key.toString())).leaf
+      return null
+      
+  method isEmpty() returns boolean
+    if coll=null then return 1
+    return this.size(1)==0
+    
+  method keySet() returns Set
+    return Rexx.KeySet(this)
+    
+  method put(key=Object, value=Object) returns Object
+    returnval=get(Rexx(key.toString()))
+    getnode(Rexx(key.toString())).leaf=Rexx(value.toString())
+    return returnval
+    
+  method put(key=Object, value=Rexx) returns Object
+    returnval=get(Rexx(key.toString()))
+    getnode(Rexx(key.toString())).leaf=value
+    return returnval
+    
+  method putAll(t=Map)
+    if t=null then signal NullPointerException
+    e=t.entrySet()
+    i=e.iterator()
+    loop while i.hasNext()
+      m=Map.Entry i.next()
+      put(m.getKey(),m.getValue())
+    end
+    
+  method putAll(t=Rexx)
+    if t=null then signal NullPointerException
+    copyIndexed(t)
+    
+  method remove(key=Object) returns Object
+    if key=null then signal NullPointerException
+    returnval=get(Rexx(key.toString()))
+    getnode(Rexx(key.toString())).leaf=null
+    return returnval		
+    
+  method values() returns Collection
+    return Rexx.ValueCollection(this)
+    
+  method iterator() returns Iterator
+    return Rexx.BaseIterator(this)
+    
 class Rexx.BaseIterator implements Iterator
-	
-	base=Rexx
-	e=Enumeration		--	keys are Rexx items
-	nxt=Rexx null
-	last=Rexx null
-	
-	method BaseIterator(setbase=Rexx)
-		base=setbase
-		if base.coll=null then e=null
-			else e=base.coll.keys()
-		return
-		
-	method hasNext() returns boolean
-		if nxt\=null then return 1
-		if e=null then return 0
-		loop while e.hasMoreElements()
-			nxt=Rexx e.nextElement()
-			nn=base.getnode(nxt) 
-			if nn.leaf\=null then 				--		key not dropped
-				if Object nn.leaf \== Object nn.initleaf then return 1			--		key has been set
-			end
-		nxt=null
-		return 0
-		
-	method next() returns Object
-		if nxt\=null, hasNext() then do
-			last=nxt
-			nxt=null
-			return last
-			end
-		signal NoSuchElementException
-		
-	method remove()
-		if last\=null then base.getnode(last).leaf=null
-			else signal IllegalStateException
-		last=null
-	
+  
+  base=Rexx
+  e=Enumeration		--	keys are Rexx items
+  nxt=Rexx null
+  last=Rexx null
+  
+  method BaseIterator(setbase=Rexx)
+    base=setbase
+    if base.coll=null then e=null
+    else e=base.coll.keys()
+    return
+    
+  method hasNext() returns boolean
+    if nxt\=null then return 1
+    if e=null then return 0
+    loop while e.hasMoreElements()
+      nxt=Rexx e.nextElement()
+      nn=base.getnode(nxt) 
+      if nn.leaf\=null then 				--		key not dropped
+	if Object nn.leaf \== Object nn.initleaf then return 1			--		key has been set
+    end
+    nxt=null
+    return 0
+    
+  method next() returns Object
+    if nxt\=null, hasNext() then do
+      last=nxt
+      nxt=null
+      return last
+    end
+    signal NoSuchElementException
+    
+  method remove()
+    if last\=null then base.getnode(last).leaf=null
+    else signal IllegalStateException
+    last=null
+    
 class Rexx.KeySet implements Set
-	
-	base=Rexx
-	
-	method KeySet(b=Rexx)
-		this.base=b
-		return
-		
-	method add(o=Object) returns boolean
-		signal UnsupportedOperationException
-		
-	method addAll(c=Collection) returns boolean
-		signal UnsupportedOperationException
-		
-	method clear()
-		base.clear()
-					
-	method contains(o=Object) returns boolean
-		return base.containsKey(o)
-			
-	method containsAll(c=Collection) returns boolean
-		it=c.iterator()
-		loop while it.hasNext()
-			if \base.containsKey(it.next()) then return 0
-			end
-		return 1
-
-	method equals(o=Object) returns boolean
-		return base.equals(o)
-	
-	method isEmpty() returns boolean
-		if base.coll=null then return 1
-		return base.size(1)==0
-		
-	method iterator() returns Iterator
-		return Rexx.BaseIterator(base)
-		
-	method remove(key=Object) returns boolean
-		if key=null then signal NullPointerException
-		was=base.get(Rexx key)
-		base.getnode(Rexx key).leaf=null			
-		return was\=null
-		
-	method removeAll(c=Collection) returns boolean
-		it=c.iterator()
-		rc=boolean 0
-		loop while it.hasNext()
-			ne=it.next()
-			if base.containsKey(Rexx ne) then do
-				base.getnode(Rexx ne).leaf=null
-				rc=1
-				end
-			end
-		return rc
-		
-	method retainAll(c=Collection) returns boolean
-		it=base.iterator()
-		rc=boolean 0
-		loop while it.hasNext()
-			ne=it.next()
-			if \c.contains(Rexx ne) then do
-				base.getnode(Rexx ne).leaf=null
-				rc=1
-				end
-			end
-		return rc
-	
-	method size() returns int
-		return base.size()		
-		
-	method toArray() returns Object[]
-		s=base.size()
-		a=Object[s]
-		it=base.iterator()
-		loop i=0 for s while it.hasNext()
-			a[i]=it.next()
-			end
-		return a		
-		
-	method toArray(ta=Object[ ]) returns Object[]
-		if ta=null then signal NullPointerException
---		if \(ta<=Rexx) then signal ArrayStoreException
---		if \(ta>=Rexx) then signal ArrayStoreException
-		s=base.size()
-		if s>ta.length then ta=Rexx[s]
-		it=base.iterator()
-		loop i=0 for s while it.hasNext()
-			ta[i]=it.next()
-			end
-		return ta				
-		
+  
+  base=Rexx
+  
+  method KeySet(b=Rexx)
+    this.base=b
+    return
+    
+  method add(o=Object) returns boolean
+    signal UnsupportedOperationException
+    
+  method addAll(c=Collection) returns boolean
+    signal UnsupportedOperationException
+    
+  method clear()
+    base.clear()
+    
+  method contains(o=Object) returns boolean
+    return base.containsKey(o)
+    
+  method containsAll(c=Collection) returns boolean
+    it=c.iterator()
+    loop while it.hasNext()
+      if \base.containsKey(it.next()) then return 0
+    end
+    return 1
+    
+  method equals(o=Object) returns boolean
+    return base.equals(o)
+    
+  method isEmpty() returns boolean
+    if base.coll=null then return 1
+    return base.size(1)==0
+    
+  method iterator() returns Iterator
+    return Rexx.BaseIterator(base)
+    
+  method remove(key=Object) returns boolean
+    if key=null then signal NullPointerException
+    was=base.get(Rexx key)
+    base.getnode(Rexx key).leaf=null			
+    return was\=null
+    
+  method removeAll(c=Collection) returns boolean
+    it=c.iterator()
+    rc=boolean 0
+    loop while it.hasNext()
+      ne=it.next()
+      if base.containsKey(Rexx ne) then do
+	base.getnode(Rexx ne).leaf=null
+	rc=1
+      end
+    end
+    return rc
+    
+  method retainAll(c=Collection) returns boolean
+    it=base.iterator()
+    rc=boolean 0
+    loop while it.hasNext()
+      ne=it.next()
+      if \c.contains(Rexx ne) then do
+	base.getnode(Rexx ne).leaf=null
+	rc=1
+      end
+    end
+    return rc
+    
+  method size() returns int
+    return base.size()		
+    
+  method toArray() returns Object[]
+    s=base.size()
+    a=Object[s]
+    it=base.iterator()
+    loop i=0 for s while it.hasNext()
+      a[i]=it.next()
+    end
+    return a		
+    
+  method toArray(ta=Object[ ]) returns Object[]
+    if ta=null then signal NullPointerException
+    --		if \(ta<=Rexx) then signal ArrayStoreException
+    --		if \(ta>=Rexx) then signal ArrayStoreException
+    s=base.size()
+    if s>ta.length then ta=Rexx[s]
+    it=base.iterator()
+    loop i=0 for s while it.hasNext()
+      ta[i]=it.next()
+    end
+    return ta				
+    
 class Rexx.EntrySet extends Rexx.KeySet
-	
-	base2=Rexx
-	
-	method EntrySet(b=Rexx)
-		super(b)
-		this.base2=b
-		return
-		
-	method clear()
-		base2.clear()
-					
-	method contains(o=Object) returns boolean
-		me=Map.Entry o
-		mm=base2.get(me.getKey())
-		if mm=null then return 0
-		if mm=me.getValue() then return 1
-		return 0
-			
-	method containsAll(c=Collection) returns boolean
-		it=c.iterator()
-		loop while it.hasNext()
-			if \contains(Map.Entry it.next()) then return 0
-			end
-		return 1
-		
-	method iterator() returns Iterator
-		return Rexx.EntrySetIterator(this.base)
-		
-	method remove(o=Object) returns boolean
-		if \contains(o) then return 0
-		super.remove(Rexx (Map.Entry o).getKey())
-		return 1
-		
-	method removeAll(c=Collection) returns boolean
-		it=c.iterator()
-		rc=0
-		loop while it.hasNext()
-			ne=Map.Entry it.next()
-			if contains(ne) then do
-				remove(ne)
-				rc=1
-				end
-			end
-		return rc
-		
-	method retainAll(c=Collection) returns boolean
-		it=base2.iterator()
-		rc=boolean 0
-		loop while it.hasNext()
-			ne=Map.Entry it.next()
-			if \c.contains(ne) then do
-				base2.getnode(Rexx ne.getKey()).leaf=null
-				rc=1
-				end
-			end
-		return rc
-		
-	method toArray(a=Object[]) returns Object[]
-		if a=null then signal NullPointerException
-		s=base2.size()
-		if s>a.length then a=Map.Entry[s]
-		it=base2.iterator()
-		loop i=0 for s while it.hasNext()
-			a[i]=it.next()
-			end
-		return a			
-		
+  
+  base2=Rexx
+  
+  method EntrySet(b=Rexx)
+    super(b)
+    this.base2=b
+    return
+    
+  method clear()
+    base2.clear()
+    
+  method contains(o=Object) returns boolean
+    me=Map.Entry o
+    mm=base2.get(me.getKey())
+    if mm=null then return 0
+    if mm=me.getValue() then return 1
+    return 0
+    
+  method containsAll(c=Collection) returns boolean
+    it=c.iterator()
+    loop while it.hasNext()
+      if \contains(Map.Entry it.next()) then return 0
+    end
+    return 1
+    
+  method iterator() returns Iterator
+    return Rexx.EntrySetIterator(this.base)
+    
+  method remove(o=Object) returns boolean
+    if \contains(o) then return 0
+    super.remove(Rexx (Map.Entry o).getKey())
+    return 1
+    
+  method removeAll(c=Collection) returns boolean
+    it=c.iterator()
+    rc=0
+    loop while it.hasNext()
+      ne=Map.Entry it.next()
+      if contains(ne) then do
+	remove(ne)
+	rc=1
+      end
+    end
+    return rc
+    
+  method retainAll(c=Collection) returns boolean
+    it=base2.iterator()
+    rc=boolean 0
+    loop while it.hasNext()
+      ne=Map.Entry it.next()
+      if \c.contains(ne) then do
+	base2.getnode(Rexx ne.getKey()).leaf=null
+	rc=1
+      end
+    end
+    return rc
+    
+  method toArray(a=Object[]) returns Object[]
+    if a=null then signal NullPointerException
+    s=base2.size()
+    if s>a.length then a=Map.Entry[s]
+    it=base2.iterator()
+    loop i=0 for s while it.hasNext()
+      a[i]=it.next()
+    end
+    return a			
+    
 class Rexx.EntrySetIterator extends Rexx.BaseIterator
-	
-	base2=Rexx
-	
-	method EntrySetIterator(setbase=Rexx)
-		super(setbase)
-		base2=setbase
-		return
-		
-	method next() returns Object
-		if this.nxt\=null, hasNext() then do
-			last=this.nxt
-			this.nxt=null
-			return Rexx.MapEntry(base2,last)
-			end
-		signal NoSuchElementException
-		
+  
+  base2=Rexx
+  
+  method EntrySetIterator(setbase=Rexx)
+    super(setbase)
+    base2=setbase
+    return
+    
+  method next() returns Object
+    if this.nxt\=null, hasNext() then do
+      last=this.nxt
+      this.nxt=null
+      return Rexx.MapEntry(base2,last)
+    end
+    signal NoSuchElementException
+    
 class Rexx.MapEntry implements Map.Entry
 	
-	base=Rexx
-	key=Rexx
-	
-	method MapEntry(b=Rexx,k=Rexx)
-		base=b;key=k
-		return
-		
-	method getKey() returns Object
-		return key
-		
-	method getValue() returns Object
-		return base.getnode(key).leaf
-		
-	method setValue(v=Object) returns Object
-		n=RexxNode base.getnode(key)
-		tr=n.leaf
-		n.leaf=Rexx(v.toString())
-		return tr
-		
-	method setValue(v=Rexx) returns Object
-		n=RexxNode base.getnode(key)
-		tr=n.leaf
-		n.leaf=v
-		return tr
-
+  base=Rexx
+  key=Rexx
+  
+  method MapEntry(b=Rexx,k=Rexx)
+    base=b;key=k
+    return
+    
+  method getKey() returns Object
+    return key
+    
+  method getValue() returns Object
+    return base.getnode(key).leaf
+    
+  method setValue(v=Object) returns Object
+    n=RexxNode base.getnode(key)
+    tr=n.leaf
+    n.leaf=Rexx(v.toString())
+    return tr
+    
+  method setValue(v=Rexx) returns Object
+    n=RexxNode base.getnode(key)
+    tr=n.leaf
+    n.leaf=v
+    return tr
+    
 class Rexx.ValueCollection extends AbstractCollection
-	
-	base=Rexx
-	
-	method ValueCollection(b=Rexx)
-		super()
-		base=b
-		return
-	
-	method clear()
-		base.clear()
+  
+  base=Rexx
+  
+  method ValueCollection(b=Rexx)
+    super()
+    base=b
+    return
+    
+  method clear()
+	  base.clear()
 		
-	method size() returns int
-		return base.size()
+  method size() returns int
+	  return base.size()
 		
-	method iterator() returns Iterator
-		return Rexx.ValueIterator(base)
+  method iterator() returns Iterator
+	  return Rexx.ValueIterator(base)
 		
 class Rexx.ValueIterator extends Rexx.BaseIterator
-	
-	base2=Rexx
-	
-	method ValueIterator(setbase=Rexx)
-		super(setbase)
-		base2=setbase
-		return
-		
-	method next() returns Object
-		if this.nxt\=null, hasNext() then do
-			last=this.nxt
-			this.nxt=null
-			return base2.getnode(last).leaf
-			end
-		signal NoSuchElementException
-		
----------------------------------------------------------------------------------------
---		Rexxlist class, methods for Java List interface to Structured List -- 2013-01-20	
----------------------------------------------------------------------------------------
+  
+  base2=Rexx
+  
+  method ValueIterator(setbase=Rexx)
+    super(setbase)
+    base2=setbase
+    return
+    
+  method next() returns Object
+    if this.nxt\=null, hasNext() then do
+      last=this.nxt
+      this.nxt=null
+      return base2.getnode(last).leaf
+    end
+    signal NoSuchElementException
+    
+    /*---------------------------------------------------------------------------------------*/
+    /* Rexxlist class, methods for Java List interface to Structured List -- 2013-01-20	     */
+    /*---------------------------------------------------------------------------------------*/
 /** RexxList - a Java List interface to a NetRexx Structured List  */
 
 class Rexx.RexxList extends AbstractList
 
-	properties public
-	
-		currentlist=StructuredList
-		
-	method RexxList(init=netrexx.lang.StructuredList)
-		
-		currentlist=init
-	
-	method add(index=int, element=Object )
-		if element=null then signal NullPointerException("structured list add element") 
-		if \currentlist.islist() then signal Error("cannot add element to a non-list")
-		le=currentlist.elementcount().toint()
-		if index<0, index>le then signal IndexOutOfBoundsException(index)
-		currentlist=currentlist.insertelement(Rexx(index+1),Rexx(element.toString()))
-			
-	method get(index=int) returns Object
-		if index<0,index>currentlist.elementcount().toint()-1 then signal IndexOutOfBoundsException(index)
-		t=Object (StructuredList currentlist).getelement(index+1)
-		return  t
-			
-	method set(index=int,element=Object) returns Object
-		if element=null then signal NullPointerException("structured list add element") 
-		if \currentlist.islist() then signal Error("cannot add element to a non-list")
-		le=currentlist.elementcount().toint()
-		if index<0, index>=le then 	signal IndexOutOfBoundsException(index)
-		ret=get(index)
-		currentlist=currentlist.replaceelement(Rexx(index+1),Rexx(element.toString()))
-		return ret
-			
-	method remove(index=int) returns Object
-		if \currentlist.islist() then signal Error("cannot remove element from a non-list")
-		le=currentlist.elementcount().toint()
-		if index<0, index>=le then 	signal IndexOutOfBoundsException(index)
-		ret=get(index)
-		currentlist=currentlist.deleteelement(Rexx(index+1))
-		return ret
-					
-		/** Size returns the number of indexed subvalues in the
-			 Rexx object (explicitly set).  */
-	method size returns int
-			if \currentlist.islist() then return 0
-			le=currentlist.elementcount().toint()
-			return le
-						
----------------------------------------------------------------------------------------
---		RxMap class, moves Map implementation out of Rexx class to prevent overriding String conversions in XML API  -- 2013-04-30	
-/* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser) -- add auto conversion Rexx=>Map for collections support	--		kk		-- */
----------------------------------------------------------------------------------------
+  properties public
+  
+  currentlist=StructuredList
+  
+  method RexxList(init=netrexx.lang.StructuredList)
+    
+    currentlist=init
+    
+  method add(index=int, element=Object )
+    if element=null then signal NullPointerException("structured list add element") 
+    if \currentlist.islist() then signal Error("cannot add element to a non-list")
+    le=currentlist.elementcount().toint()
+    if index<0, index>le then signal IndexOutOfBoundsException(index)
+    currentlist=currentlist.insertelement(Rexx(index+1),Rexx(element.toString()))
+    
+  method get(index=int) returns Object
+    if index<0,index>currentlist.elementcount().toint()-1 then signal IndexOutOfBoundsException(index)
+    t=Object (StructuredList currentlist).getelement(index+1)
+    return  t
+    
+  method set(index=int,element=Object) returns Object
+    if element=null then signal NullPointerException("structured list add element") 
+    if \currentlist.islist() then signal Error("cannot add element to a non-list")
+    le=currentlist.elementcount().toint()
+    if index<0, index>=le then 	signal IndexOutOfBoundsException(index)
+    ret=get(index)
+    currentlist=currentlist.replaceelement(Rexx(index+1),Rexx(element.toString()))
+    return ret
+    
+  method remove(index=int) returns Object
+    if \currentlist.islist() then signal Error("cannot remove element from a non-list")
+    le=currentlist.elementcount().toint()
+    if index<0, index>=le then 	signal IndexOutOfBoundsException(index)
+    ret=get(index)
+    currentlist=currentlist.deleteelement(Rexx(index+1))
+    return ret
+    
+  /** Size returns the number of indexed subvalues in the
+     Rexx object (explicitly set).  */
+  method size returns int
+    if \currentlist.islist() then return 0
+    le=currentlist.elementcount().toint()
+    return le
+    
+    /*---------------------------------------------------------------------------------------*/
+    /* RxMap class, moves Map implementation out of Rexx class to prevent overriding         */
+    /* String conversions in XML API  -- 2013-04-30                                          */
+    /* 2013-05-10 Move Map interface to separate subclass per issue 96. (Kermit Kiser)       */
+    /* add auto conversion Rexx=>Map for collections support	--		kk	  -- */
+    
 /** RxMap  - a Java Map version of the Rexx object   */
 
 class Rexx.RxMap extends Rexx implements java.util.Map
-
-	method RxMap(rx=Rexx)
-		super(rx)
-		this.coll=rx.coll			
+  
+  method RxMap(rx=Rexx)
+    super(rx)
+    this.coll=rx.coll			
+    
