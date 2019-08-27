@@ -770,63 +770,63 @@ class Rexx implements RexxOperators, Serializable, Comparable, Iterable, Structu
    return layout()
 
   method layout() private returns char[]     -- fast linkage version
-   /* Next are sanity checks, can be removed later */
-   -- if ind=NotaNum then say "Internal error: Rexx missing number" chars
+    /* Next are sanity checks, can be removed later */
+    -- if ind=NotaNum then say "Internal error: Rexx missing number" chars
    -- if dig<0       then do
    --   say "Internal error: Rexx: bad dig" dig
    --   dig=DefaultDigits
    --   end
-   /* say 'layout: mant ind exp dig form' mant ind exp dig form */
+    /* say 'layout: mant ind exp dig form' mant ind exp dig form */
+    
+    mag=exp+mant.length
 
-   mag=exp+mant.length
+    if mag>dig | mag<-5 then             -- exponential notation triggered
+      if form\=RexxSet.PLAIN then do      -- .. and allowed
+	sb=StringBuffer(mant.length+15)    -- -x.xxxE+999999999
+	if ind=isneg then sb.append('-')
+	euse=exp+mant.length-1             -- exponent to use
+	/* setup sig=significant digits and copy to result */
+	if form=DefaultForm then do        -- scientific
+	  sb.append(mant[0])               -- significant character
+	  if mant.length>1 then            -- have decimal part
+            sb.append('.').append(mant, int 1, mant.length-1)
+	end
+	else do label engineering
+	  sig=euse//3                      -- common
+	  if sig<0 then sig=3+sig          -- negative exponent
+	  euse=euse-sig
+	  sig=sig+1
+	  if sig>=mant.length then do      -- zero padding may be needed
+            sb.append(mant, int 0, mant.length)
+            loop for sig-mant.length
+              sb.append('0')
+            end
+          end
+          else do                         -- decimal point needed
+            sb.append(mant, int 0, sig).append('.').append(mant, sig, mant.length-sig)
+          end
+	end engineering
+	
+	if euse\=0 then do
+	  if euse<0 then do; s='-'; euse=-euse; end
+          else s='+'
+	  sb.append('E').append(s).append(euse)
+	end
+	res=char[sb.length()]; sb.getChars(0, sb.length(), res, 0)
+	return res
+      end
+    
+    /* Here for a plain number */
+    if exp=0 then /* easy */ do
+      if ind>=0 then return mant
+      res=char[mant.length+1]; res[0]='-'
+      System.arraycopy(mant, 0, res, 1, mant.length)
+      return res
+end
 
-   if mag>dig | mag<-5 then             -- exponential notation triggered
-    if form\=RexxSet.PLAIN then do      -- .. and allowed
-     sb=StringBuffer(mant.length+15)    -- -x.xxxE+999999999
-     if ind=isneg then sb.append('-')
-     euse=exp+mant.length-1             -- exponent to use
-     /* setup sig=significant digits and copy to result */
-     if form=DefaultForm then do        -- scientific
-       sb.append(mant[0])               -- significant character
-       if mant.length>1 then            -- have decimal part
-        sb.append('.').append(mant, int 1, mant.length-1)
-       end
-      else do label engineering
-       sig=euse//3                      -- common
-       if sig<0 then sig=3+sig          -- negative exponent
-       euse=euse-sig
-       sig=sig+1
-       if sig>=mant.length then do      -- zero padding may be needed
-        sb.append(mant, int 0, mant.length)
-         loop for sig-mant.length
-           sb.append('0')
-           end
-         end
-        else do                         -- decimal point needed
-        sb.append(mant, int 0, sig).append('.').append(mant, sig, mant.length-sig)
-         end
-       end engineering
-
-     if euse\=0 then do
-       if euse<0 then do; s='-'; euse=-euse; end
-        else s='+'
-       sb.append('E').append(s).append(euse)
-       end
-     res=char[sb.length()]; sb.getChars(0, sb.length(), res, 0)
-     return res
-     end
-
-   /* Here for a plain number */
-   if exp=0 then /* easy */ do
-     if ind>=0 then return mant
-     res=char[mant.length+1]; res[0]='-'
-     System.arraycopy(mant, 0, res, 1, mant.length)
-     return res
-     end
-
-   /* Need a '.', and maybe quite a few zeros */
-   sb=StringBuffer(mant.length+dig+5+3+10) -- allow for all cases
-   if ind=isneg then sb.append('-')
+  /* Need a '.', and maybe quite a few zeros */
+  sb=StringBuffer(mant.length+dig+5+3+10) -- allow for all cases
+  if ind=isneg then sb.append('-')
    /* MAG is the position of the point in the mantissa (index of the
       character it follows) */
    if mag<1 then /* 0.00xxxx form */ do
