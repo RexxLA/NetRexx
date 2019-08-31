@@ -14,8 +14,8 @@ apt-get install git -y && \
 apt-get install openjdk-8-jdk-headless -y && \
 apt-get install zip -y && \
 apt-get install wget -y && \
-wget http://netrexx.org/files/NetRexx-3.07-GA.zip && \
-unzip NetRexx-3.07-GA && \
+wget http://netrexx.org/files/NetRexx-3.08-GA.zip && \
+unzip NetRexx-3.08-GA && \
 apt-get install nano -y && \
 apt-get install regina-rexx -y && \
 apt-get install the -y && \
@@ -24,7 +24,6 @@ apt-get install zsh -y && \
 chmod +x /bin/nrc && \
 chmod +x /bin/NetRexxC.sh && \
 chmod +x /bin/pipe
-
 # Make port 80 available to the world outside this container
 #EXPOSE 80
 
@@ -32,3 +31,4 @@ chmod +x /bin/pipe
 ENV CLASSPATH .:/lib/NetRexxF.jar
 
 # Run when the container launches
+RUN source /bin/.bash_aliases
