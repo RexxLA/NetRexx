@@ -21,7 +21,7 @@
 \input{../boilerplate/conventions}
 \mainmatter
 \chapter{Introduction}
-A Pipeline, or Hartmann Pipeline\footnote{\url{http://en.wikipedia.org/wiki/Hartmann_pipeline}}, is a concept that extends and improves pipes as they are known from Unix and other operating systems. The name pipe indicates an interprocess communication mechanism, as well as the programming paradigm it has introduced. Compared to Unix pipes, Hartmann Pipelines offer multiple input- and output streams, more complex pipe topologies, and a lot more.\\
+A Pipeline, or Hartmann Pipeline\footnote{\url{http://en.wikipedia.org/wiki/Hartmann_pipeline}}, is a concept that extends and improves pipes as they are known from Unix and other operating systems. The name pipe indicates an interprocess communication mechanism, as well as the programming paradigm it has introduced. Compared to Unix pipes, Hartmann Pipelines offer multiple input- and output streams, more complex pipe topologies, and a lot more.
 
 Pipelines were first implemented on VM/CMS, one of IBM's mainframe
 operating systems. This version was later ported to TSO to run under
@@ -47,7 +47,7 @@ NetRexx Workspace. The pipes compiler has since been renamed
 
 \chapter{The Pipeline Concept}
 \section{What is a pipeline?}
-The \emph{pipeline} terminology is a metaphore derived from
+The \emph{pipeline} terminology is a set of metaphores derived from
 plumbing. Fitting two or more pipe segments together yield a
 pipeline. Water flows in one direction through the pipeline.
 
@@ -79,11 +79,12 @@ The pipeline specification is processed by the \emph{pipeline
   compiler}, and it must be contained in a character string; on the
 commandline, it needs to be between quotes, while when contained in a
 file, it needs to be between the delimiters of a \nr{} string. An
-exclamation mark (!) is used as \emph{stage separator}, while the
-solid vertical bar | can be used as an option when specifiying the
-local option for the pipe, after the pipe name.
+solid vertical bar | is used as \emph{stage separator}, while other characters
+can be used as an option when specifiying the
+local option for the pipe, after the pipe name.\footnote{In versions
+  before Pipelines for NetRexx 3.08, the default was the exclamation mark (!)}
 
-When looking a two adjaced segments in a pipeline, we call the left
+When looking a two adjacent segments in a pipeline, we call the left
 stage the \emph{producer} and the stage on the right the
 \emph{consumer}, with the \emph{stage separator} as the connector.
 \section{Device Driver}
@@ -113,7 +114,8 @@ the output. It continues until the input source is drained.
 
 
 \section{Configuration}
-The required configuration is minimal. The NetRexxF.jar (java archive file) needs to be on the classpath (NetRexxC.jar, which is smaller, will suffice when there is a working javac compiler). Also, the current directory (.) needs to be on the CLASSPATH.
+The required configuration is minimal. The NetRexxF.jar (java archive
+file) needs to be on the classpath environment variable (NetRexxC.jar, which is smaller, will suffice when there is a working javac compiler). Also, the current directory (.) needs to be on the classpath.
 It is convenient to have aliases or shell scripts defined as abbreviations for the invocation of the pipe, pipc (pipe compiler) and nrc (netrexx compiler) utility programs. 
 Aliases are preferable because some shell processors have
 idiosyncrasies in the treatment of script arguments. With an alias we
@@ -130,26 +132,62 @@ For Windows, the following works:
 pipe.bat:
 @java org.netrexx.njpipes.pipes.runner %*
 \end{verbatim}
+These aliases (or command script (in Windows it is called a batch
+file) enable you to do the following:
+ To run a pipeline from the commandline, type:
+\begin{lstlisting}
+pipe 'gen 100 | dup 999 | count words | console'
+\end{lstlisting}
+
+Remember to use double quotes on Windows shells. When the \texttt{pipe}
+alias or command script is not on your path, you can also use:
+
+\begin{lstlisting}
+java org.netrexx.njpipes.pipes.runner 'gen 100 | dup 999 | count words | console'
+\end{lstlisting}
+
+In both cases the answer should be 100000 - you have generated one
+hundred thousand lines, but fortunately you did not print them, but
+only counted them. To see them all, you can insert a | console | stage
+in between the dup and the count stage.
+
 \subsection{Running pipelines}
 There are a number of ways to specify and run a pipeline.
-\subsubsection{From the command line with direct execution}
+\subsubsection{From the NetRexx Workspace (nrws) with direct execution}
 The first way is the most straightforward, and highly recognizable for
 users of CMS Pipelines, as it mimics the way a pipe is run in the CMS
-3270 interface. The only difference is that after the PIPE command,
+3270 interface. It also yields the best response time, specially when
+the nrws.input file in your home directory preloads the Pipes subsystem, as in this
+example:
+\begin{verbatim}
+-- preload the pipe machinery for good response on first pipe
+pipe literal Pipes processor loaded. | console
+\end{verbatim}
+This is not magic: we do a Pipe execution (that displays: ``Pipe
+processor loaded'') which loads all necessary classes and leaves them
+in memory. We can then type this command after the \emph{nrws>} prompt.
+\begin{lstlisting}
+pipe literal a man a plan a canal panama | reverse | console
+\end{lstlisting}
+Executed this way, the executed class image will not be written to
+disk. The \emph{timing} option is great for prototyping and
+performance work.
+\subsubsection{From the command line with direct execution}
+The only difference is that after the PIPE command,
 the rest of the specification needs to be quoted in the command shells
 of Linux, Windows and macOS. In CMS, the pipeline specification can
 also be quoted - in this way, a pipeline specification can be entirely
 portable. Windows needs double quote, zVM/CMS does not need quotes,
 but if they are used they need to be double quotes. macOS and Linux
 can use single or double quotes.
-\begin{verbatim}
+\begin{lstlisting}
 pipe "literal a man a plan a canal panama | reverse | console"
-\end{verbatim}
+\end{lstlisting}
 Executed this way, the executed class image will not be written to disk. When the pipe is named, for example test1 with a (test1) prologue, this name will be used for the class image, instead of a generated unique name. Naming a pipe will enable specification of options for the compiler, like the pipe separator character.
-\begin{verbatim}
+\begin{lstlisting}
 pipe "(test1 sep !) literal a man a plan a canal panama ! reverse !
 console"
-\end{verbatim}
+\end{lstlisting}
 As of pipes for NetRexx 3.08 the default separator is the | (pipe)
 symbol, as in zVM/CMS. The above example shows how to use the previous
 default, the exclamation mark.
@@ -157,9 +195,9 @@ default, the exclamation mark.
 In this mode, which uses the pipc command (for pipe compiler), a .class file will be persisted to disk. This class can be run as many times as needed, without the overhead of compilation. This would be the right mode for pipes that take different arguments when re-run.
 The pipe name needs to be specified, and will be the class name. When
 the class name exists, it will be overwritten.
-\begin{verbatim}
+\begin{lstlisting}
 pipc "(test1) literal a man a plan a canal panama | reverse | console"
-\end{verbatim}
+\end{lstlisting}
 This will yield a \begin{alltt}test1.class\end{alltt} classfile, which
 can be executed by the java virtual machine.
 
@@ -175,20 +213,20 @@ Be sure to leave out the .class suffix when invoking java.
 % gen	additionally save .nrx class to disk	default is -nogen
 % keep	keep from the .nrx generated java source	default is -nokeep
 \subsubsection{Compiled from an .njp file}
-When compiled from a file, the pipe specification must not be quoted. Pipes can be specified in so-called Portret Mode, which is the standard for more complex pipelines as it is easier to read.
+When compiled from a file, the pipe specification must not be quoted. Pipes can be specified in so-called Portrait Mode, which is the standard for more complex pipelines as it is easier to read.
 An example is:
-\begin{verbatim}
+\begin{lstlisting}
 pipe (appendtest)
  
    gen 100  |
    append gen 50  |
    rexx locate /0/ |
    console
-\end{verbatim}
+\end{lstlisting}
 Compile from an .njp file with additional stage definitions in NetRexx
-An example is:
-\begin{verbatim}
-length1.njp
+An example (length1.njp) is:
+\begin{lstlisting}
+
 pipe (lengthp) < length.nrx | length1 | console
  
 import org.netrexx.njpipes.pipes.
@@ -207,13 +245,17 @@ class length1 extends stage final
       rc = rc()
     end
     exit(rc*(rc<>12))
-\end{verbatim}
+\end{lstlisting}
 In this example, the name of the generated pipe is lengthp, while the name of the custom stage is length1. Be sure to invoke the right class, invoking length1 will have the JVM complain about a non-existing main method.
 This class (lengthp) will be generated by the command:
 \begin{verbatim}
 pipc length1
 \end{verbatim}
-note that the .njp suffix is optional when invoking the pipes compiler. When run, it tries to read the contents of the file length.nrx and will put out its lines, prepended by the line length in decimal and hex.
+note that the .njp suffix is optional when invoking the pipes
+compiler. When run, it tries to read the contents of the file
+length.nrx and will put out its lines, prepended by the line length in
+decimal and hex - because that is what the (in NetRexx) specified
+homegrown stage does.
 
 
 
@@ -295,9 +337,9 @@ But if you want to really impress people, you should type in a command line and 
 Your first pipeline command should just test the waters. For this
 chapter, we will use the \begin{alltt}nrws\end{alltt} program. You send a
 command into the pipeline, and get its output:
-\begin{alltt}
+\begin{lstlisting}
 pipe command ls -laFTl | console
-\end{alltt}
+\end{lstlisting}
 As pipelines will be compiled, the name of the produced java .class is specified between parentheses, in this case the executable will be newfile.class; the ls command with the flags is the unix way to get a directory listing. In this case, we send the output into the pipeline, but as the last stage (called a pipe 'sink') occurs immediately after that, every line will be echoed on the console.
 A number of lines like these will be displayed on the console:
 \begin{alltt}
@@ -315,9 +357,9 @@ A number of lines like these will be displayed on the console:
 -rw-r--r--@ 1 rvjansen staff 66531 Oct 9 14:28:25 2017 unix.png
 \end{alltt}
 You see straight away that the relevant info is not in the first columns, and not in consecutive columns; we want to know the date (whether it is today or not) and not the time. So we filter this out of every line with a 'spec' stage.
-\begin{alltt}
+\begin{lstlisting}
 pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 | console
-\end{alltt}
+\end{lstlisting}
 \begin{alltt}
 Oct 9 2017 testwordlist.rex
 Mar 28 2018 text.bxml
@@ -335,9 +377,9 @@ Oct 9 2017 unix.png
 For the CMS users, the only two differences are the earlier mentioned pipe classname, and the rexx cast before specs (which is exactly the same). This is because the JVM handles in objects, and we need to make sure that the output of this stage is of type Rexx. 
 We can easily sort this without a lot of programming:
 
-\begin{alltt}
+\begin{lstlisting}
 pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 | sort | console
-\end{alltt}
+\end{lstlisting}
 So what now comes out of the pipeline is sorted:
 \begin{alltt}
 Oct 22 2018 DownloadFile.nrx
@@ -359,9 +401,9 @@ Sep 29 2018 rexxtest.exec
 \end{alltt}
 But this is a bit funny, we would like to see chronological order of course, so we switch around some columns with another specs stage:
 
-\begin{alltt}
+\begin{lstlisting}
 pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 | specs 7-11 1 1-6 7 12-* 12 | sort | console
-\end{alltt}
+\end{lstlisting}
 \begin{alltt}
 2018 Oct 2 hello.class
 2018 Oct 2 sqltest.njp
@@ -373,27 +415,31 @@ pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 | specs 7-11 1 1-6 7 12-* 12 
 2018 Sep 2 rexxcps.rex*
 2018 Sep 2 rexxtest.exec
 \end{alltt}
-which is very near to what we want. Only thing to do now is to filter on the date. We use the strfind stage and hardcode the date for now. Let's say it is the 2nd of March, 2019:
-pipe "(newfiles sep |) command ls -laFTl | rexx specs 42-47 1 58-* 8 |  specs 7-11 1 1-6 7 12-* 12 | strfind ' 2019 Mar 2' | sort | console"
-Voila, you have impressed the accountants and now they now there is nothing to this programming thing. Be sure to sit on it for a while and not raise the expectations too high.
-But seriously, everything you need for this example is already in NetRexx 3.07. All example commandlines work as-is,  but normally, you would specify your pipeline in a file and use so-called portait mode:
+which is very near to what we want. Only thing to do now is to filter
+on the date. We use the strfind stage and hardcode the date for
+now. Let's say it is the 2nd of March, 2019:
+\begin{lstlisting}
+pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 |  specs 7-11 1 1-6
+7 12-* 12 | strfind ' 2019 Mar 2' | sort | console
+\end{lstlisting}
+Voila, you have impressed the accountants and now they know there is nothing to this programming thing. Be sure to sit on it for a while and not raise the expectations too high.
+Normally, you would specify your pipeline in a file and use so-called portrait mode:
 commandtest.njp:
-\begin{alltt}
-pipe (newfiles sep |)
+\begin{lstlisting}
+pipe (newfiles)
 command ls -laFTl |
 rexx specs 42-47 1 58-* 8 |
 specs 7-11 1 1-6 7 12-* 12 |
 sort |
 strfind ' 2019 Mar 2' |
 console
-\end{alltt}
+\end{lstlisting}
 The filename is different from the generated class file name, on purpose. You could, and would, put different related pipelines in one file.
-We added the sep option, it is normally ! (exclamation mark) instead of | (pipe), for historical reasons on different shells. But I like pipe.
-Then I do a:
+Then we do a:
 \begin{alltt}
 pipe commandtest && newfiles.class
 \end{alltt}
-but I have a gizmo that runs java classes automatically, you can just as well specify:
+
 
 \begin{alltt}
 java newfiles
@@ -403,15 +449,16 @@ java org.netrexx.njpipes.pipes.compiler
 
 \chapter{Filters}
 So we have seen in the previous example that it is not too hard to make a simple pipeline out of things called 'device drivers' (such as command, for OS commands, diskr for reading files on disk, and literal, for inserting literal strings into a pipeline (actually you have seen only command, and in this episode we are only seeing diskr (for diskread), which is called '<' on CMS), filters and sinks.
-We received some comments, here and on the CMS-Pipelines list, that the first example was too easy and more representative for Unix pipes than for VM, which can do more involved multistream stuff. That is true, but I would like to start with the easier examples so everybody is still comfortable. So please hold your horses while I show you something that is also really cool. And please try the things we showed with the spec stages in a Unix pipe: you'll probably need awk to do that and it will not be as clean as the specs examples, so it is not that easy; writing a Unix filter in C is even more work.
-One of the most appealing characteristics of piping on CMS and TSO is
-that you can make your own filters in Rexx, and that it is really
-simple. Of course, this also works in NetRexx and its Pipelines
-implementation. Imagine, for the sake of argument, that you have an
+% We received some comments, here and on the CMS-Pipelines list, that the first example was too easy and more representative for Unix pipes than for VM, which can do more involved multistream stuff. That is true, but we would like to start with the easier examples so everybody is still comfortable. So please hold your horses while I show you something that is also really cool. And please try the things we showed with the spec stages in a Unix pipe: you'll probably need awk to do that and it will not be as clean as the specs examples, so it is not that easy; writing a Unix filter in C is even more work.
+% One of the most appealing characteristics of piping on CMS and TSO is
+% that you can make your own filters in Rexx, and that it is really
+% simple. Of course, this also works in NetRexx and its Pipelines
+% implementation.
+
+Imagine, for the sake of argument, that you have an
 assignment to quickly prefix the lines in a file with their lengths
-(in decimal, but also in hex). On CMS, that would look like:
-\begin{alltt}
-FILE: LENGTH REXX
+(in decimal, but also in hex). On CMS, that would look like: (FILE LENGTH REXX)
+\begin{lstlisting}
 Signal on novalue
 numeric digits 12
 
@@ -425,17 +472,19 @@ l=length(line)
 'readto'
 end
 error: exit RC*(wordpos(RC, '8 12')=0)
-\end{alltt}
+\end{lstlisting}
 And you would need to remember to call your filetype REXX instead of EXEC.  The ‘peekto’ reads the input but does not actually commit the read yet, so you can read it one more time with knowledge about the contents. The ‘output’ pushes its argument back into the pipeline. The ‘readto’ reads and commits the read so the line is really processed and we can go to the next one.
-In NetRexx, that would be about the same, but for the object oriented stuff you don't have in Classic Rexx. Here peekto(), readto() and output() are method calls on the ’stage’ object.
-\begin{alltt}
-FILE: length.nrx
+In NetRexx, that would be about the same, but for the object oriented
+stuff you don't have in Classic Rexx. Here peekto(), readto() and
+output() are method calls on the ’stage’ object. (FILE: length.nrx)
+\begin{lstlisting}
 import org.netrexx.njpipes.pipes.
 class length extends stage
 method run()
   do
     loop forever
-      line = rexx peekto()
+    line = rexx peekto()
+    /* process the line here */
       l = line.length
       output(l l.d2x line)
       readto()
@@ -444,7 +493,7 @@ method run()
     rc = rc()
   end
   exit(rc*(rc<>12))
- \end{alltt}
+ \end{lstlisting}
 So that would look fairly familiar, and admittedly, a bit easier for us already well versed in NetRexx.
 We can test this by building a pipeline and running the filter on its
 own source:
@@ -464,41 +513,56 @@ pipeline. These are stages called select, sort, specs, locate,
 etcetera. For a complete description we refer to the IBM Pipelines
 documentation. 
 
-\chapter{NetRexx Pipelines Implementation}
-\nr{} Pipelines enables us to follow the usage model of CMS Pipelines
-closely; in fact, the documentation for the mainframe product can be
-used for most stages.
+ % \chapter{NetRexx Pipelines Implementation}
+% \nr{} Pipelines enables us to follow the usage model of CMS Pipelines
+% closely; in fact, the documentation for the mainframe product can be
+% used for most stages.
 
-\section{Installation and verification}
-To run \nr{} Pipelines a running \nr{} installation is needed.  To write your own pipes or stages you need compilers for both Java and NetRexx. 
-The core classes for pipes and stages are in the archive \nr{}F.jar.  This file may
-be used on the -cp option or added to your CLASSPATH, as indicated in
-the \emph{NetRexx Quickstart Guide}.
+% \section{Installation and verification}
+% To run \nr{} Pipelines a running \nr{} installation is needed.  To write your own pipes or stages you need compilers for both Java and NetRexx. 
+% The core classes for pipes and stages are in the archive \nr{}F.jar.  This file may
+% be used on the -cp option or added to your CLASSPATH, as indicated in
+% the \emph{NetRexx Quickstart Guide}.
 
-To test the installation, we can run a pipeline from the command line.
-Running a pipeline from the command line
- To run a pipeline from the commandline, type:
-\begin{lstlisting}[label=countwords,caption=Count Words]
-pipe 'gen 100 | dup 999 | count words | console'
-\end{lstlisting}
+% To test the installation, we can run a pipeline from the command line.
+% Running a pipeline from the command line
+%  To run a pipeline from the commandline, type:
+% \begin{lstlisting}
+% pipe 'gen 100 | dup 999 | count words | console'
+% \end{lstlisting}
 
-Remember to use double quotes on Windows shells. When the \texttt{pipe}
-alias or command script is not on your path, you can also use:
+% Remember to use double quotes on Windows shells. When the \texttt{pipe}
+% alias or command script is not on your path, you can also use:
 
-\begin{lstlisting}[label=testdup,caption=Test Dup]
-java org.netrexx.njpipes.pipes.runner 'gen 100 | dup 999 | count words | console'
-\end{lstlisting}
+% \begin{lstlisting}
+% java org.netrexx.njpipes.pipes.runner 'gen 100 | dup 999 | count words | console'
+% \end{lstlisting}
 
-In both cases the answer should be 100000 - you have generated one
-hundred thousand lines, but fortunately you did not print them, but
-only counted them. To see them all, you can insert a | console | stage
-in between the dup and the count stage.
+% In both cases the answer should be 100000 - you have generated one
+% hundred thousand lines, but fortunately you did not print them, but
+% only counted them. To see them all, you can insert a | console | stage
+% in between the dup and the count stage.
 
 \chapter{Differences with respect to the CMS Pipelines version}
+The goal of this implementation is to be as close as possible to the
+the CMS version of Pipelines. A few differences are unavoidable.
+
+\begin{itemize}
+\item The character set is Unicode and not EBCDIC, as Unicode is the
+  character set of the underlying Java platform
+\item As shells are different, many 3270 related stages are not
+  implemented
+ \item Pipes need to be quoted on the Windows and Unix command lines;
+   the \emph{nrws} environment is an exception to this rule
+\item The mainframe is record-oriented, Pipelines for NetRexx does
+  an approximation of this
+\item Pipelines on the mainframe is interpreted; the NetRexx
+  version is compiled to Java .class files
+\end{itemize}
 
 \chapter{Developing stages in NetRexx}
 
-In z/VM CMS, it is common to use a pipe in a Rexx exec. Conversely,
+In z/VM CMS, it is quite common to use a pipe in a Rexx exec. Conversely,
 often a stage is written in Rexx. In Pipes for
 NetRexx it is also easy to write your own stages. Both scenarios are
 shown in this chapter.
@@ -643,12 +707,49 @@ Serious stage writers will probably want to take a good look at the
 methods defined in the \nr{} source package \texttt{org.netrexx.process.njpipes.stages}.  There you will find various methods for parsing ranges.  You will also find the stub for the stageExit compiler exit.  It can be used to produce 'on the fly' code at compile time.  You can also use it to change the topology of the unprocessed part of the pipe.  The major use is to allow implementations of stages like prefix, append or zone.  Its also used to produce better performing stages, for an example see specs.
 The compiler also queries the rexxArg() and stageArg() methods.  If your stage expects objects of class Rexx as arguments rexxArg() should return the number of variables expected.  If your stage expects a stage for an argument, stageArg() should return the word position of the stage.
 
-To get a good idea of what can be done with pipes look at the tasktest pipe in the examples directory.  It, using code from Melinda Varins 'Cramming for the Journeyman Plumber Exam' paper,  implements the shell of a  multitasking server - using about eight stages.  The file examples/tcptask.njp contains an example of this technique being used.
+To get a good idea of what can be done with pipes look at the tasktest
+pipe in the examples directory.  It, using code from Melinda Varians
+'Cramming for the Journeyman Plumber Exam' paper,  implements the
+shell of a  multitasking server - using about eight stages.  The file
+examples/tcptask.njp contains an example of this technique being used.
+\begin{lstlisting}
+-- usage: java tasktest <number>
+
+pipe (tasktest stall 2000 -gen)
+
+   literal 0 1 2 3 4 5 6 7 8 9 A B C D E F G H I J K L M N O P Q R S T |
+   dup 2 |
+   split |                   -- supply work for task stage
+
+   ptimer |
+a: deal secondary ?          -- send work to task stage requesting work
+b: faninany |
+   elastic |                 -- buffer requests to so no deadlocks
+   ptimer |
+
+ a: |
+   copy |                    -- buffer work so no deadlocks
+   task 1 |                  -- worker task 1
+ b: ?
+
+ a: |
+   copy |
+   task 2 |                  -- worker tast 2...
+ b: ?
+
+ a: |
+   copy |
+   task 3 |
+ b:
+\end{lstlisting}
 
 \chapter{Deadlocks}
 Pipes for NetRexx and Java detects deadlocks and outputs information to allow you to fix the problem.  Consider the following session:
+\begin{lstlisting}
+nrws> pipe literal test | a: fanin | console | a:
+0.000 s
+\end{lstlisting}
 \begin{verbatim}
-nrws> pipe literal test | a: fanin | console | a:                                                                       0.000 s
 test
 Deadlocked in test1
 
