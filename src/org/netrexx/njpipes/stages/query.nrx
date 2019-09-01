@@ -1,0 +1,43 @@
+-- query.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2019 René Jansen
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program. 
+ */
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+import org.netrexx.njpipes.pipes.
+import org.netrexx.process.
+
+class query extends stage
+  
+  method run() public
+    do
+      w1 = rexx ''
+      args = rexx ''
+      eoff = rexx ''
+      eof = rexx 1
+      
+      parse arg() w1 args
+      
+      w1 = w1.upper()
+
+      if getClass().getPackage()\=null then vv=getClass().getPackage().getImplementationVersion()
+      a = NrVersion().getPipesVersion() '(Version.Release/Mod) - Generated' vv
+      output(a)
+      select
+        when outStreamNumber()=-99 then do
+          say a
+          shortStreams()                  -- get out of the picture
+	end
+        when inStreamNumber()=-99 then
+          exit(0)                         -- just exit
+        otherwise
+          shortStreams()                  -- get out of the picture
+      end
+
+    catch StageError
+      rc = 0
+      exit(rc*(rc<>12))
+    end
