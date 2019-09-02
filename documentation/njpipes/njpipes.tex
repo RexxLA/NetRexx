@@ -106,7 +106,11 @@ connects them together.
 
 The inherent characteristic of the pipeline is that any program can be
 connected to any other program because each obtains data and sends
-data throug a device independent standard interface.
+data throug a device independent standard interface. This becomes
+apparent when data can be in-line (specified or generated within the
+pipeline specification), come in (or be outpur) to devices like disk
+or tape, or be handled through a network -- all these formats can be
+processed by the same stages.
 
 The pipeline usually processes one record (or line) at a time. The
 pipeline reads a record for the input, processes it and sends it to
@@ -329,10 +333,10 @@ homegrown stage does.
 % \end{lstlisting}
 
 
-\chapter{Example}
+\chapter{Example Session}
 Imagine you have landed a job as programmer in an accountants firm,
 and on your first day there is a question about backups; \emph{the backup
-process takes too long}. There is an urgent needs to identify the files that are produced on this day. You know how to this, of course, it is only some 20 lines of code; use the File() API, fill a collection class (you are thinking of an ArrayList already), or a TreeMap to sort the File object on last modified date already, call an instance of the Calender class, run a comparison - get that compiled and test it a bit - an hour or so would be sufficient. Of course, you need to install the Java compiler, because all machines have Java nowadays, but just not the compiler.
+process takes too long}. There is an urgent need to identify the files that are produced on this day. You know how to this, of course, it is only some 20 lines of code; use the File() API, fill a collection class (you are thinking of an ArrayList already), or a TreeMap to sort the File object on last modified date already, call an instance of the Calender class, run a comparison - get that compiled and test it a bit - an hour or so would be sufficient. Of course, you need to install the Java compiler, because all machines have Java nowadays, but just not the compiler.
 But if you want to really impress people, you should type in a command line and be done with it. For this you can use NetRexx pipelines. Fortunately, you emailed the NetRexxF.jar to yourself so you save it on the machine, and you're in business right away; you add it to the classpath.
 Your first pipeline command should just test the waters. For this
 chapter, we will use the \begin{alltt}nrws\end{alltt} program. You send a
@@ -340,88 +344,66 @@ command into the pipeline, and get its output:
 \begin{lstlisting}
 pipe command ls -laFTl | console
 \end{lstlisting}
-As pipelines will be compiled, the name of the produced java .class is specified between parentheses, in this case the executable will be newfile.class; the ls command with the flags is the unix way to get a directory listing. In this case, we send the output into the pipeline, but as the last stage (called a pipe 'sink') occurs immediately after that, every line will be echoed on the console.
-A number of lines like these will be displayed on the console:
-\begin{alltt}
--rw-r--r-- 1 rvjansen staff 112 Oct 9 14:28:25 2017 testwordlist.rex
--rw-r--r--@ 1 rvjansen staff 4188 Mar 28 13:38:07 2018 text.bxml
--rw-r--r-- 1 rvjansen staff 6639 Sep 19 17:00:03 2018 thex.rex
--rw-r--r-- 1 rvjansen staff 6034391 Oct 9 14:28:25 2017 tmp.tst
--rw-r--r-- 1 rvjansen staff 0 Oct 9 14:28:25 2017 tmpf1
--rw-r--r-- 1 rvjansen staff 0 Oct 9 14:28:25 2017 tmpf2
--rw-r--r--@ 1 rvjansen staff 33601 Mar 28 13:38:07 2018 trees.bxml
--rw-r--r-- 1 rvjansen staff 1171 Oct 9 14:28:25 2017 try.dot
--rw-r--r-- 1 rvjansen staff 32756 Oct 9 14:28:25 2017 try.png
--rw-r--r-- 1 rvjansen staff 7052 Oct 9 14:28:25 2017 try.svg
--rw-r--r--@ 1 rvjansen staff 1474 Oct 9 14:28:25 2017 unix.dot
--rw-r--r--@ 1 rvjansen staff 66531 Oct 9 14:28:25 2017 unix.png
-\end{alltt}
-You see straight away that the relevant info is not in the first columns, and not in consecutive columns; we want to know the date (whether it is today or not) and not the time. So we filter this out of every line with a 'spec' stage.
+\begin{figure}[H]
+  \includegraphics[width=0.75\textwidth]{images/example1.png}
+  \caption{example 1}
+  \label{fig:example1}
+\end{figure}
+
+The \emph{ls} command with the flags is the unix way to get a
+directory listing - for Windows we would use \emph{dir}. In this case, we send the output into the pipeline, but as the last stage (called a pipe 'sink') occurs immediately after that, every line will be echoed on the console.
+A number of lines like these will be displayed on the console, as in
+\emph{example 1}.
+
+You see straight away that the relevant info is not in the first
+columns, and not in consecutive columns; we want to know the date
+(whether it is today or not) and not the time. So we filter this out
+of every line with a 'spec' stage, as in \emph{example 2}.
 \begin{lstlisting}
 pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 | console
 \end{lstlisting}
-\begin{alltt}
-Oct 9 2017 testwordlist.rex
-Mar 28 2018 text.bxml
-Sep 19 2018 thex.rex
-Oct 9 2017 tmp.tst
-Oct 9 2017 tmpf1
-Oct 9 2017 tmpf2
-Mar 28 2018 trees.bxml
-Oct 9 2017 try.dot
-Oct 9 2017 try.png
-Oct 9 2017 try.svg
-Oct 9 2017 unix.dot
-Oct 9 2017 unix.png
-\end{alltt}
-For the CMS users, the only two differences are the earlier mentioned pipe classname, and the rexx cast before specs (which is exactly the same). This is because the JVM handles in objects, and we need to make sure that the output of this stage is of type Rexx. 
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/example2.png}
+  \caption{example 2}
+  \label{fig:example2}
+\end{figure}
+For the CMS user, the only difference is the rexx cast before specs
+(which, itself, is exactly the same). This is because the JVM handles in objects, and we need to make sure that the output of this stage is of type Rexx. 
 We can easily sort this without a lot of programming:
-
 \begin{lstlisting}
 pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 | sort | console
 \end{lstlisting}
-So what now comes out of the pipeline is sorted:
-\begin{alltt}
-Oct 22 2018 DownloadFile.nrx
-Oct 22 2018 sqltest.njp
-Oct 25 2018 hello.class
-Sep 19 2018 base64.rex
-Sep 19 2018 qtime.rex
-Sep 19 2018 testbase64.rex
-Sep 19 2018 thex.rex
-Sep 26 2018 cps.exec
-Sep 26 2018 rexxcps.rex*
-Sep 29 2016 db2conn.rexx
-Sep 29 2016 db2query.rexx
-Sep 29 2016 invdsnutil.rexx
-Sep 29 2016 rvjcmf01.panel
-Sep 29 2016 rvjcmf01.rexx
-Sep 29 2016 rvjcmf01.skel
-Sep 29 2018 rexxtest.exec
-\end{alltt}
+So what now comes out of the pipeline is sorted (see \emph{example 3}).
 But this is a bit funny, we would like to see chronological order of course, so we switch around some columns with another specs stage:
-
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/example3.png}
+  \caption{example 3}
+  \label{fig:example3}
+\end{figure}
 \begin{lstlisting}
 pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 | specs 7-11 1 1-6 7 12-* 12 | sort | console
 \end{lstlisting}
-\begin{alltt}
-2018 Oct 2 hello.class
-2018 Oct 2 sqltest.njp
-2018 Sep 1 base64.rex
-2018 Sep 1 qtime.rex
-2018 Sep 1 testbase64.rex
-2018 Sep 1 thex.rex
-2018 Sep 2 cps.exec
-2018 Sep 2 rexxcps.rex*
-2018 Sep 2 rexxtest.exec
-\end{alltt}
-which is very near to what we want. Only thing to do now is to filter
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/example4.png}
+  \caption{example 4}
+  \label{fig:example4}
+\end{figure}
+which is very near to what we want (see \emph{example 4}. Only thing to do now is to filter
 on the date. We use the strfind stage and hardcode the date for
 now. Let's say it is the 2nd of March, 2019:
 \begin{lstlisting}
 pipe command ls -laFTl | rexx specs 42-47 1 58-* 8 |  specs 7-11 1 1-6
-7 12-* 12 | strfind ' 2019 Mar 2' | sort | console
+7 12-* 12 | locate /2019 Mar 2/ | sort | console
 \end{lstlisting}
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/example5.png}
+  \caption{example 5}
+  \label{fig:example5}
+\end{figure}
+As \emph{example 5} shows, on that day there were only two files
+produced. Also, because this is a short list now, you can see that
+Pipelines runs this pipe in 0.157 seconds, because we switched on the
+time option in \emph{nrws}.
 Voila, you have impressed the accountants and now they know there is nothing to this programming thing. Be sure to sit on it for a while and not raise the expectations too high.
 Normally, you would specify your pipeline in a file and use so-called portrait mode:
 commandtest.njp:
@@ -431,24 +413,24 @@ command ls -laFTl |
 rexx specs 42-47 1 58-* 8 |
 specs 7-11 1 1-6 7 12-* 12 |
 sort |
-strfind ' 2019 Mar 2' |
+locate /2019 Mar 2/ |
 console
 \end{lstlisting}
 The filename is different from the generated class file name, on purpose. You could, and would, put different related pipelines in one file.
 Then we do a:
 \begin{alltt}
-pipe commandtest && newfiles.class
+pipe commandtest && java newfiles
 \end{alltt}
-
-
-\begin{alltt}
-java newfiles
-\end{alltt}
-If you are on Windows, you can run cmd /c instead of the command stage. If your shell cannot find the pipe command, you should make one, it should call 
+If you are on Windows, you can run cmd /c instead of the command
+stage. If your shell cannot find the pipe command, you should make one
+or alias it, it should call 
+\begin{verbatim}
 java org.netrexx.njpipes.pipes.compiler
-
+\end{verbatim}
 \chapter{Filters}
-So we have seen in the previous example that it is not too hard to make a simple pipeline out of things called 'device drivers' (such as command, for OS commands, diskr for reading files on disk, and literal, for inserting literal strings into a pipeline (actually you have seen only command, and in this episode we are only seeing diskr (for diskread), which is called '<' on CMS), filters and sinks.
+So we have seen in the previous example that it is not too hard to
+make a simple pipeline out of things called 'device drivers' (such as
+\emph{command}, for OS commands, '<' for reading files on disk, and \emph{literal}, for inserting literal strings into a pipeline.
 % We received some comments, here and on the CMS-Pipelines list, that the first example was too easy and more representative for Unix pipes than for VM, which can do more involved multistream stuff. That is true, but we would like to start with the easier examples so everybody is still comfortable. So please hold your horses while I show you something that is also really cool. And please try the things we showed with the spec stages in a Unix pipe: you'll probably need awk to do that and it will not be as clean as the specs examples, so it is not that easy; writing a Unix filter in C is even more work.
 % One of the most appealing characteristics of piping on CMS and TSO is
 % that you can make your own filters in Rexx, and that it is really
@@ -459,7 +441,7 @@ Imagine, for the sake of argument, that you have an
 assignment to quickly prefix the lines in a file with their lengths
 (in decimal, but also in hex). On CMS, that would look like: (FILE LENGTH REXX)
 \begin{lstlisting}
-Signal on novalue
+signal on novalue
 numeric digits 12
 
 signal on error
@@ -556,8 +538,10 @@ the CMS version of Pipelines. A few differences are unavoidable.
    the \emph{nrws} environment is an exception to this rule
 \item The mainframe is record-oriented, Pipelines for NetRexx does
   an approximation of this
-\item Pipelines on the mainframe is interpreted; the NetRexx
-  version is compiled to Java .class files
+\item Pipelines on the mainframe is an interpreted language with
+  components as the scanner and the dispatcher; the NetRexx
+  version is compiled to Java .class files by \emph{pipc}, the pipes
+  compiler, and dispatched as threads by the JVM.
 \end{itemize}
 
 \chapter{Developing stages in NetRexx}
@@ -795,6 +779,59 @@ the advantage that it can be executed over and over in an application
 without the need to compile it every time; the savings are
 accumulative in this scenario.
 
+\chapter{TCP/IP Networking using Pipes for NetRexx}
+As the built-in stages all work on data that is dispatched through the
+pipeline, irrespective of which device driver is used, it is also
+convenient to do network programming using a set of pipelines.
+
+The \emph{tcplisten} stage can be used as a network device driver, as
+in CMS, but limited to specification of the port and a timeout value. Below an example of how to implement a sample TCP/IP
+client/server application.
+\begin{lstlisting}
+-- one shot tcpip server receives file b.b from tcpreq
+
+pipe (tcpserv stall 60000 debug 0 )
+   tcplisten 1958 timeout 15000 | tcpexample
+
+-- one shot tcpip requestor sends file b.b to tcpserv
+
+pipe (tcpreq stall 60000 debug 0 )
+   random {} |
+   specs *-* 1 ,\n, next |
+   tcpclient deblock c localhost 1958 timeout 10000 linger 500 oneresponse |
+   rexx to console
+
+
+-- a single tasking server
+
+options binary
+import org.netrexx.njpipes.pipes.
+class tcpexample extends stage
+
+method run() public
+
+   loop forever
+
+      peekto()
+
+      callpipe (tcplog stall 15000 debug 0)
+         *in0: |
+         take first 1 |
+         console |
+      f: fanin |
+         tcpdata timeout 10000 deblock C oneresponse |
+         elastic |
+         insert /\n/ after |
+      f:
+
+   catch StageError
+      rc = rc()
+   end
+
+exit(rc*(rc<>12))
+
+\end{lstlisting}
+
 \chapter{Built-in Stages}
 This section describes the set of built in stages, i.e. the ones that are delivered with the downloadable open source package. These stages are directly executable from the njpipesC.jar file; also, the source of these stages is delivered in the package.
 General notes on the built-in stages:
@@ -803,7 +840,7 @@ General notes on the built-in stages:
 \item Most of the stages expect the objects in the pipeline to be of type Rexx
 \end{enumerate}
 % \input{stagesChapter}
-\includepdf[pages={1-14},nup=1x1,landscape=false]{stages.pdf}
+\includepdf[pages={1-12},nup=1x1,landscape=false]{stages.pdf}
 \include{appendixa}
 \backmatter
 \listoffigures
