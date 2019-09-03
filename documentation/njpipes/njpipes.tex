@@ -445,47 +445,6 @@ or alias it, it should call
 \begin{verbatim}
 java org.netrexx.njpipes.pipes.compiler
 \end{verbatim}
-\chapter{More advanced Pipelines}
-Admittedly, the example in the previous chapter could have been done
-with Unix pipes or at least with incorporation of stream utilities
-like awk or sed.
-
-
-To get a good idea of what can be done with Pipelines for NetRexx, look at the tasktest
-pipe in the examples directory.  It \footnote{using code from Melinda Varians
-'Cramming for the Journeyman Plumber Exam' paper} implements the
-shell of a  multitasking server - using about eight stages.  The file
-examples/tcptask.njp contains an example of this technique being used.
-\begin{lstlisting}
---tasktest.njp
-
-pipe (tasktest stall 2000 -gen)
-
-   literal 0 1 2 3 4 5 6 7 8 9 A B C D E F G H I J K L M N O P Q R S T |
-   dup 2 |
-   split |                   -- supply work for task stage
-
-   ptimer |
-a: deal secondary ?          -- send work to task stage requesting work
-b: faninany |
-   elastic |                 -- buffer requests to so no deadlocks
-   ptimer |
-
- a: |
-   copy |                    -- buffer work so no deadlocks
-   task 1 |                  -- worker task 1
- b: ?
-
- a: |
-   copy |
-   task 2 |                  -- worker tast 2...
- b: ?
-
- a: |
-   copy |
-   task 3 |
- b:
-\end{lstlisting}
 
 \chapter{Filters}
 So we have seen in the previous example that it is not too hard to
@@ -555,6 +514,49 @@ version also works on CMS.
   \caption{bagvendt.nrx under NetRexx}
   \label{fig:nrbagvendt}
 \end{figure}
+
+\chapter{More advanced Pipelines}
+Admittedly, the examples in the previous chapters could have been done
+with Unix pipes or at least with incorporation of stream utilities
+like awk or sed.
+
+
+To get a good idea of what can be done with Pipelines for NetRexx, look at the tasktest
+pipe in the examples directory.  It \footnote{using code from Melinda Varians
+'Cramming for the Journeyman Plumber Exam' paper} implements the
+shell of a  multitasking server - using about eight stages.  The file
+examples/tcptask.njp contains an example of this technique being used.
+\begin{lstlisting}
+--tasktest.njp
+
+pipe (tasktest stall 2000 -gen)
+
+   literal 0 1 2 3 4 5 6 7 8 9 A B C D E F G H I J K L M N O P Q R S T |
+   dup 2 |
+   split |                   -- supply work for task stage
+
+   ptimer |
+a: deal secondary ?          -- send work to task stage requesting work
+b: faninany |
+   elastic |                 -- buffer requests to so no deadlocks
+   ptimer |
+
+ a: |
+   copy |                    -- buffer work so no deadlocks
+   task 1 |                  -- worker task 1
+ b: ?
+
+ a: |
+   copy |
+   task 2 |                  -- worker tast 2...
+ b: ?
+
+ a: |
+   copy |
+   task 3 |
+ b:
+\end{lstlisting}
+
 
 \chapter{Record Selection}
 Various stages can select records and work on data in the
