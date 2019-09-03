@@ -91,8 +91,7 @@ stage the \emph{producer} and the stage on the right the
 A \emph{device driver} reads from a device (for instance a file, the
 command prompt, a machine console or a network connection) or writes
 to a device; in some cases it can both read and write. An example of a
-device drivers are \texttt{diskr} for diskread and \texttt{diskw} for
-diskwrite; these read and write data from and to files.
+device drivers are \texttt{<} and \texttt{>} ; these read and write data from and to files.
 
 A pipeline can take data from one input device and write it to a
 different device. Within the pipeline, data can be modified in almost
@@ -165,11 +164,18 @@ the nrws.input file in your home directory preloads the Pipes subsystem, as in t
 example:
 \begin{verbatim}
 -- preload the pipe machinery for good response on first pipe
-pipe literal Pipes processor loaded. | console
+pipe literal Pipelines processor loaded. | console
 \end{verbatim}
 This is not magic: we do a Pipe execution (that displays: ``Pipe
 processor loaded'') which loads all necessary classes and leaves them
-in memory. We can then type this command after the \emph{nrws>} prompt.
+in memory. We can then type this command after the \emph{nrws>}
+prompt.
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/runnrws.png}
+  \caption{Run in the NetRexx Workspace}
+  \label{fig:runnrws}
+\end{figure}
+
 \begin{lstlisting}
 pipe literal a man a plan a canal panama | reverse | console
 \end{lstlisting}
@@ -187,14 +193,23 @@ can use single or double quotes.
 \begin{lstlisting}
 pipe "literal a man a plan a canal panama | reverse | console"
 \end{lstlisting}
-Executed this way, the executed class image will not be written to disk. When the pipe is named, for example test1 with a (test1) prologue, this name will be used for the class image, instead of a generated unique name. Naming a pipe will enable specification of options for the compiler, like the pipe separator character.
-\begin{lstlisting}
-pipe "(test1 sep !) literal a man a plan a canal panama ! reverse !
-console"
-\end{lstlisting}
-As of pipes for NetRexx 3.08 the default separator is the | (pipe)
-symbol, as in zVM/CMS. The above example shows how to use the previous
-default, the exclamation mark.
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/runfromshell.png}
+  \caption{Run from the OS command line}
+  \label{fig:runfromshell}
+\end{figure}
+
+Executed this way, the executed class image will not be written to
+disk.
+
+% When the pipe is named, for example test1 with a (test1) prologue, this name will be used for the class image, instead of a generated unique name. Naming a pipe will enable specification of options for the compiler, like the pipe separator character.
+% \begin{lstlisting}
+% pipe "(test1 sep !) literal a man a plan a canal panama ! reverse !
+% console"
+% \end{lstlisting}
+% As of pipes for NetRexx 3.08 the default separator is the | (pipe)
+% symbol, as in zVM/CMS. The above example shows how to use the previous
+% default, the exclamation mark.
 \subsubsection{Precompiled Pipelines}
 In this mode, which uses the pipc command (for pipe compiler), a .class file will be persisted to disk. This class can be run as many times as needed, without the overhead of compilation. This would be the right mode for pipes that take different arguments when re-run.
 The pipe name needs to be specified, and will be the class name. When
@@ -202,6 +217,12 @@ the class name exists, it will be overwritten.
 \begin{lstlisting}
 pipc "(test1) literal a man a plan a canal panama | reverse | console"
 \end{lstlisting}
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/pipcfromshell.png}
+  \caption{Precompile a Pipeline from the OS command line}
+  \label{fig:pipcfromshell}
+\end{figure}
+
 This will yield a \begin{alltt}test1.class\end{alltt} classfile, which
 can be executed by the java virtual machine.
 
@@ -230,13 +251,10 @@ pipe (appendtest)
 Compile from an .njp file with additional stage definitions in NetRexx
 An example (length1.njp) is:
 \begin{lstlisting}
+pipe (lengthp) < output.lst | length1 | console
 
-pipe (lengthp) < length.nrx | length1 | console
- 
 import org.netrexx.njpipes.pipes.
- 
 class length1 extends stage final
- 
   method run()
     do
       loop forever
@@ -427,67 +445,116 @@ or alias it, it should call
 \begin{verbatim}
 java org.netrexx.njpipes.pipes.compiler
 \end{verbatim}
+\chapter{More advanced Pipelines}
+Admittedly, the example in the previous chapter could have been done
+with Unix pipes or at least with incorporation of stream utilities
+like awk or sed.
+
+
+To get a good idea of what can be done with Pipelines for NetRexx, look at the tasktest
+pipe in the examples directory.  It \footnote{using code from Melinda Varians
+'Cramming for the Journeyman Plumber Exam' paper} implements the
+shell of a  multitasking server - using about eight stages.  The file
+examples/tcptask.njp contains an example of this technique being used.
+\begin{lstlisting}
+--tasktest.njp
+
+pipe (tasktest stall 2000 -gen)
+
+   literal 0 1 2 3 4 5 6 7 8 9 A B C D E F G H I J K L M N O P Q R S T |
+   dup 2 |
+   split |                   -- supply work for task stage
+
+   ptimer |
+a: deal secondary ?          -- send work to task stage requesting work
+b: faninany |
+   elastic |                 -- buffer requests to so no deadlocks
+   ptimer |
+
+ a: |
+   copy |                    -- buffer work so no deadlocks
+   task 1 |                  -- worker task 1
+ b: ?
+
+ a: |
+   copy |
+   task 2 |                  -- worker tast 2...
+ b: ?
+
+ a: |
+   copy |
+   task 3 |
+ b:
+\end{lstlisting}
+
 \chapter{Filters}
 So we have seen in the previous example that it is not too hard to
 make a simple pipeline out of things called 'device drivers' (such as
-\emph{command}, for OS commands, '<' for reading files on disk, and \emph{literal}, for inserting literal strings into a pipeline.
+\emph{command}, for OS commands, '<' for reading files on disk, and
+\emph{literal}, for inserting literal strings into a pipeline,
+filters, and sinks.
 % We received some comments, here and on the CMS-Pipelines list, that the first example was too easy and more representative for Unix pipes than for VM, which can do more involved multistream stuff. That is true, but we would like to start with the easier examples so everybody is still comfortable. So please hold your horses while I show you something that is also really cool. And please try the things we showed with the spec stages in a Unix pipe: you'll probably need awk to do that and it will not be as clean as the specs examples, so it is not that easy; writing a Unix filter in C is even more work.
 % One of the most appealing characteristics of piping on CMS and TSO is
 % that you can make your own filters in Rexx, and that it is really
 % simple. Of course, this also works in NetRexx and its Pipelines
 % implementation.
-
-Imagine, for the sake of argument, that you have an
-assignment to quickly prefix the lines in a file with their lengths
-(in decimal, but also in hex). On CMS, that would look like: (FILE LENGTH REXX)
+When a filter is not delvered in the standard set of stages, it is
+very easy to make one yourself in the NetRexx language. The model for
+this closely follows the way it is done with CMS Pipelines and Classic
+Rexx.
+Imagine, for the sake of argument (and a simple example\footnote{From
+the document CMS Pipelines Explained, by John P. Hartmann}), that you have an
+assignment to quickly reverse a string.
 \begin{lstlisting}
-signal on novalue
-numeric digits 12
-
+  /* BAGVENDT REXX -- Reverse the contents of lines in the pipeline    */
 signal on error
-
-do forever
-'peekto line'
-/* Process line here */
-l=length(line)
-'output' l d2x(l) line
-'readto'
+ do forever
+   'peekto data'
+   'output' reverse(data)
+   'readto'
 end
-error: exit RC*(wordpos(RC, '8 12')=0)
+error: exit RC*(RC<>12)
 \end{lstlisting}
 And you would need to remember to call your filetype REXX instead of EXEC.  The ‘peekto’ reads the input but does not actually commit the read yet, so you can read it one more time with knowledge about the contents. The ‘output’ pushes its argument back into the pipeline. The ‘readto’ reads and commits the read so the line is really processed and we can go to the next one.
-In NetRexx, that would be about the same, but for the object oriented
-stuff you don't have in Classic Rexx. Here peekto(), readto() and
-output() are method calls on the ’stage’ object. (FILE: length.nrx)
+
+In NetRexx, that would be about the same, but for some small changes
+incurred by the object oriented model of NetRexx, which you don't have in Classic Rexx. Here peekto(), readto() and
+output() are method calls on the ’stage’ object. This will be imported
+by the import from org.netrexx.njpipes.pipes. (FILE: bagvendt.nrx)
 \begin{lstlisting}
 import org.netrexx.njpipes.pipes.
-class length extends stage
+class bagvendt extends stage
 method run()
-  do
-    loop forever
-    line = rexx peekto()
-    /* process the line here */
-      l = line.length
-      output(l l.d2x line)
+   loop forever
+      line = Rexx peekto()
+      output(line.reverse())
       readto()
-    end
-  catch StageError
-    rc = rc()
-  end
-  exit(rc*(rc<>12))
- \end{lstlisting}
+   catch StageError
+      rc = rc()
+   end
+exit(rc*(rc<>12))
+\end{lstlisting}
 So that would look fairly familiar, and admittedly, a bit easier for us already well versed in NetRexx.
 We can test this by building a pipeline and running the filter on its
 own source:
 \begin{alltt}
-pipe "<length.nrx | length | console"
+pipe "literal abcd | bagvendt | console"
  \end{alltt}
 If you have a CMS handy, that would be:
 \begin{alltt}
-  PIPE < LENGTH REXX | LENGTH | CONSOLE
+pipe literal abcd | bagvendt | console
  \end{alltt}
-on the first, Classic Rexx version of the filter.
-
+on the first, Classic Rexx version of the filter - but the quoted
+version also works on CMS.
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/vmbagvendt.png}
+  \caption{BAGVENDT under VM/CMS}
+  \label{fig:vmbagvendt}
+\end{figure}\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/nrbagvendt.png}
+  \caption{bagvendt.nrx under NetRexx}
+  \label{fig:nrbagvendt}
+\end{figure}
 
 \chapter{Record Selection}
 Various stages can select records and work on data in the
@@ -544,44 +611,40 @@ the CMS version of Pipelines. A few differences are unavoidable.
   compiler, and dispatched as threads by the JVM.
 \end{itemize}
 
-\chapter{Developing stages in NetRexx}
 
-In z/VM CMS, it is quite common to use a pipe in a Rexx exec. Conversely,
-often a stage is written in Rexx. In Pipes for
-NetRexx it is also easy to write your own stages. Both scenarios are
-shown in this chapter.
+% In z/VM CMS, it is quite common to use a pipe in a Rexx exec. Conversely,
+% often a stage is written in Rexx. In Pipes for
+% NetRexx it is also easy to write your own stages. Both scenarios are
+% shown in this chapter.
 
-Writing your own pipes or stage is simple.  Take a look at the source
-of the supplied stages in the stages directory.  Input can be supplied
-on the commandline, in which case the arguments to the NetRexx program
-are used; when the input comes \emph{through the pipleline}, the
-methods \begin{alltt}peekto(), readto()\end{alltt}
-and \begin{alltt}output()\end{alltt} methods. Here are some more
-examples.
-\begin{lstlisting}
-class length extends stage final
+% Writing your own pipes or stage is simple.  Take a look at the source
+% of the supplied stages in the stages directory.  Input can be supplied
+% on the commandline, in which case the arguments to the NetRexx program
+% are used; when the input comes \emph{through the pipleline}, the
+% methods \begin{alltt}peekto(), readto()\end{alltt}
+% and \begin{alltt}output()\end{alltt} methods. Here are some more
+% examples.
+% \begin{lstlisting}
+% class length extends stage final
  
-  method run()
-    do
-      loop forever
-    line = rexx peekto()
-    l = line.length
-    output(l l.d2x line)
-    readto()
-      end
-    catch StageError
-      rc = rc()
-    end
-    exit(rc*(rc<>12))
-  \end{lstlisting}
+%   method run()
+%     do
+%       loop forever
+%     line = rexx peekto()
+%     l = line.length
+%     output(l l.d2x line)
+%     readto()
+%       end
+%     catch StageError
+%       rc = rc()
+%     end
+%     exit(rc*(rc<>12))
+%   \end{lstlisting}
   
-\section{How to use a pipe in a NetRexx program}
+\chapter{How to use a pipe in a NetRexx program}
 
 This shows how to use a pipe in a NetRexx program:
-    -- examples/testpipe.njp
-    -- to compile use: pipe testpipe.njp
-    --             or: java njp testpipe.njp
-    -- to execute use: java testpipe some text
+
 \begin{lstlisting}
  class testpipe
 
@@ -609,8 +672,16 @@ This shows how to use a pipe in a NetRexx program:
        testpipe(Rexx(a))
 \end{lstlisting}
  A couple things can be inferred from this example.  First its simple to pass rexx variables to pipes using STEM.  Also look at the  phrase {avar}. It passes the Rexx variable's value to the stage at runtime.  In CMS the pipe would be quoted and you would unquote sections to get a similiar effect.
-Another thing to note is that the pipe extraction program is fairly smart. It detects when pipes takes several lines.  As long as there are stages, or the current line ends with a stagesep or stageend character, or the next line starts with a stagesep or stageend character.  It gets added to the pipe.
-The arg(), arg(rexx) or arg(null) methods get the arguments passed to a stage or pipe.  To get the complete rexx string of an argument use arg(). To get the nth word of a rexx argument use arg(n).  When using pipes in netrexx or java code you can use arg('name') to get the named argument. If the class of the arguement is not rexx use arg(null) to get the object.
+
+ Another thing to note is that the pipe extraction program is fairly smart. It detects when pipes takes several lines.  As long as there are stages, or the current line ends with a stagesep or stageend character, or the next line starts with a stagesep or stageend character.  It gets added to the pipe.
+
+ The arg(), arg(rexx) or arg(null) methods get the arguments passed to
+ a stage or pipe.  To get the complete rexx string of an argument use
+ arg(). To get the nth word of a rexx argument use arg(n).  When using
+ pipes in netrexx code you can use arg('name') to get the named
+ argument. If the class of the argument is not rexx use arg(null) to
+ get the object.
+ 
 In .njp files you can use {avar} phrase actually just shorthand for  arg('avar').
 The following example shows what has to be done in a stage to access the rexx variables passed by VAR, STEM and OVER.  The real  over stage is a bit more complete.
 \begin{lstlisting}
@@ -691,42 +762,6 @@ Serious stage writers will probably want to take a good look at the
 methods defined in the \nr{} source package \texttt{org.netrexx.process.njpipes.stages}.  There you will find various methods for parsing ranges.  You will also find the stub for the stageExit compiler exit.  It can be used to produce 'on the fly' code at compile time.  You can also use it to change the topology of the unprocessed part of the pipe.  The major use is to allow implementations of stages like prefix, append or zone.  Its also used to produce better performing stages, for an example see specs.
 The compiler also queries the rexxArg() and stageArg() methods.  If your stage expects objects of class Rexx as arguments rexxArg() should return the number of variables expected.  If your stage expects a stage for an argument, stageArg() should return the word position of the stage.
 
-To get a good idea of what can be done with pipes look at the tasktest
-pipe in the examples directory.  It, using code from Melinda Varians
-'Cramming for the Journeyman Plumber Exam' paper,  implements the
-shell of a  multitasking server - using about eight stages.  The file
-examples/tcptask.njp contains an example of this technique being used.
-\begin{lstlisting}
---tasktest.njp
-
-pipe (tasktest stall 2000 -gen)
-
-   literal 0 1 2 3 4 5 6 7 8 9 A B C D E F G H I J K L M N O P Q R S T |
-   dup 2 |
-   split |                   -- supply work for task stage
-
-   ptimer |
-a: deal secondary ?          -- send work to task stage requesting work
-b: faninany |
-   elastic |                 -- buffer requests to so no deadlocks
-   ptimer |
-
- a: |
-   copy |                    -- buffer work so no deadlocks
-   task 1 |                  -- worker task 1
- b: ?
-
- a: |
-   copy |
-   task 2 |                  -- worker tast 2...
- b: ?
-
- a: |
-   copy |
-   task 3 |
- b:
-\end{lstlisting}
-
 \chapter{TCP/IP Networking using Pipes for NetRexx}
 As the built-in stages all work on data that is dispatched through the
 pipeline, irrespective of which device driver is used, it is also
@@ -736,19 +771,18 @@ The \emph{tcplisten} stage can be used as a network device driver, as
 in CMS, but limited to specification of the port and a timeout value. Below an example of how to implement a sample TCP/IP
 client/server application.
 \begin{lstlisting}
--- one shot tcpip server receives file b.b from tcpreq
+-- one shot tcpip server
 
 pipe (tcpserv stall 60000 debug 0 )
    tcplisten 1958 timeout 15000 | tcpexample
 
--- one shot tcpip requestor sends file b.b to tcpserv
+-- one shot tcpip requestor
 
 pipe (tcpreq stall 60000 debug 0 )
    random {} |
    specs *-* 1 ,\n, next |
    tcpclient deblock c localhost 1958 timeout 10000 linger 500 oneresponse |
    rexx to console
-
 
 -- a single tasking server
 
@@ -777,7 +811,6 @@ method run() public
    end
 
 exit(rc*(rc<>12))
-
 \end{lstlisting}
 This example needs to be compiled with the pipes compiler, see
 \emph{TCP/IP Client/Server compile}, which yields the classes tcpserv
@@ -809,10 +842,12 @@ a series of random numbers that is sent to it.
   \label{fig:tcpcompile}
 \end{figure}
 
-
+Note that the stage \emph{tcpexample} from the \emph{tcpserver}
+pipeline is a custom stage that is written in this tcpexample.njp file. 
 
 \chapter{Deadlocks}
-Pipes for NetRexx and Java detects deadlocks and outputs information to allow you to fix the problem.  Consider the following session:
+Pipes for NetRexx and Java detects deadlocks -- also called
+\emph{Pipeline stalls} -- and outputs information to allow you to fix the problem.  Consider the following session:
 \begin{lstlisting}
 pipe literal test | a: fanin | console | a:
 \end{lstlisting}
