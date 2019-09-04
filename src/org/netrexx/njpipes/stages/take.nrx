@@ -3,10 +3,12 @@
  *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 98/09/20 support secondary output streams.  ejt
--- 98/06/12 Up to CMS Documentation. JHennick
+
+-- 2019/09/03 Major fixes in LAST and BYTES. Needs SECONDARY for BYTES. JH
+-- 1998/09/20 support secondary output streams.  ejt
+-- 1998/06/12 Up to CMS Documentation. JHennick
 
 /** take
 
@@ -18,7 +20,7 @@
 
 */
 options nostrictcase nostrictargs nostrictsignal
-package org.netrexx.njpipes.stages
+--package org.netrexx.njpipes.stages
 
 import org.netrexx.njpipes.pipes.RingBuf
 import org.netrexx.njpipes.pipes.
@@ -26,39 +28,41 @@ import org.netrexx.njpipes.pipes.
 class take extends stage
 
 method run()
-
-   s1 = boolean 1
+   first = boolean 1
+   n = rexx 1
 
    args = rexx arg().upper()
 
    parse args type .
 
    bytes = boolean (args.pos('BYTES') > 0)
-
-   first = boolean 0
-   n = rexx 1
-
-   select
-      when type = 'FIRST' then first = 1
-      when type = 'LAST' then nop
-      when type = '*' then n = 999999999
-      when type.datatype('W') then n = type
-      otherwise args = args '.'
+   last = boolean (args.pos('LAST') > 0)
+   if last then do
+      first = 0
+      parse args . type .
    end
 
-   parse args . n . 1 args
+   select
+      when type = 'FIRST' then nop
+      when type = 'LAST' then first = 0
+      when type = '*' then n = 9.copies(digits)
+      when type.datatype('W') then n = type
+      otherwise
+        args = args '.'
+   end
 
-   if n = '*' then n = 999999999
+   if n = '*' then n = 9.copies(digits)
    if \n.datatype('W') then n = 1
 
 select
    when first & bytes then                                     -- FIRST BYTES
       do
-         loop i = rexx 0 to n
+         loop i = rexx 0 to n - 1
             line = rexx peekto()
             i = i + line.length()
-            if i > n then line = line.left( n)
+            if i > n then line = line.left(i - n)
             output(line)
+            i = i - 1
             readto()
          catch StageError
             rc = rc()
@@ -73,7 +77,7 @@ select
          catch StageError
             rc = rc()
          end
-         do 
+         do
             selectoutput(1)
             shortStreams()
          catch StageError
@@ -82,51 +86,75 @@ select
          end
       end
    when bytes then                                            -- LAST BYTES
-         do
-            rbuf = RingBuf(n)
-            do
-               loop forever
-                  l = rexx peekto()
-                  rbuf.PutRingBuf(l)
-                  readto()
-               end
-            end
-         catch StageError
-            rc = rc()
-            output(rbuf.GetRingBuf())
-         end
-   otherwise                                                 -- LAST records
       do
+         buf = Vector()
          do
-           selectOutput(1)
-         catch StageError
-           s1 = 0
-         end
-         buf = Vector(n+1,n+1)
-         do
-            loop for n
-               buf.addElement(readto())
-            end
             loop forever
                buf.addElement(readto())
-               obj = buf.firstElement()
-               if s1 then do
-                  output(obj)
-               catch StageError
-                  s1 = 0
-               end
-               buf.removeElement(obj)
             end
          catch StageError
             rc = rc()
             if rc<>12 then
                 signal StageError
          end
-         selectOutput(0)
-         loop for n while \buf.isEmpty()
-            aobj = buf.firstElement()
+
+         size = buf.size() - 1
+         line = Rexx ''
+         loop i = size by -1 to 0
+            rec = Rexx buf.get(i)
+            line = line || rec
+            if line.length() >= n then leave
+         end
+         n = n.min(line.length)
+         i = i.max(0)
+         if line.length = n then
+            do
+               loop i = i to size
+                  output(buf.get(i))
+               end
+            catch StageError
+               rc = rc()
+            end
+          else do
+            rec = Rexx buf.get(i)
+            rec = rec.right(line.length - n)
+            output(rec)
+            loop i = i + 1 to size
+               output(buf.get(i))
+            end
+          catch StageError
+               rc = rc()
+          end
+         end
+   otherwise                                                 -- LAST records
+      do
+         buf = Vector()
+         do
+            loop forever
+               buf.addElement(readto())
+            end
+         catch StageError
+            rc = rc()
+            if rc<>12 then
+                signal StageError
+         end
+
+         size = buf.size()
+         n = n.min(size)
+         cut = size - n
+         do
+            selectOutput(0)
+            loop i = cut to size - 1
+               aobj = rexx buf.get(i)
+               output(aobj)
+            end
+         catch StageError
+            rc = mrc()
+         end
+         selectOutput(1)
+         loop i = 0 to cut - 1
+            aobj = buf.get(i)
             output(aobj)
-            buf.removeElement(aobj)
          end
       catch StageError
          rc = mrc()
@@ -135,4 +163,3 @@ select
       rc = mrc()
    end
 exit(rc*(rc<>12))
-
