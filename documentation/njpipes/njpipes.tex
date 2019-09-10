@@ -138,12 +138,23 @@ alias pipc="java org.netrexx.njpipes.pipes.compiler"
 alias pipe="java org.netrexx.njpipes.pipes.runner"
 alias nrc="java org.netrexx.process.\nr{}C"
 \end{verbatim}
-For Windows, the following works:
+For Windows, the following works: file \texttt{pipe.bat}:
 \begin{verbatim}
-pipe.bat:
-@java org.netrexx.njpipes.pipes.runner %*
+@java -cp "%NETREXX_HOME%\lib\NetRexxF.jar;%CLASSPATH%" org.netrexx.njpipes.pipes.runner %*
 \end{verbatim}
-These aliases (or command script (in Windows it is called a batch
+For Windows, the following works: file \texttt{pipc.bat}:
+\begin{verbatim}
+@java -cp "%NETREXX_HOME%\lib\NetRexxF.jar;%CLASSPATH%" org.netrexx.njpipes.pipes.compiler %*
+\end{verbatim}
+
+\begin{shaded}
+Do note that the Windows .bat files assume that the NETREXX\_HOME
+environment variable is set correctly, that is, to the top of the path
+where NetRexx is installed. This prepends the NetRexxF.jar file to an
+already existing CLASSPATH. For the development of local classes (that is, all precompiled pipelines), a
+dot ('.'), needs to be on this CLASSPATH.
+\end{shaded}
+These aliases (or command scripts (in Windows it is called a batch
 file) enable you to do the following:
 
 To run a pipeline from the commandline, type:
@@ -453,7 +464,7 @@ console
 The filename is different from the generated class file name, on purpose. You could, and would, put different related pipelines in one file.
 Then we do a:
 \begin{alltt}
-pipe commandtest && java newfiles
+pipc commandtest && java newfiles
 \end{alltt}
 
 \chapter{Write your own Filters}
@@ -909,34 +920,6 @@ When a stage is multithreaded, like elastic, you can get flags of 3 or 5. This m
 When a stage has a pending sever or autocommit, flag bits are set too.
 
 
-\chapter{Differences with CMS Pipelines}
-The goal of this implementation is to be as close as possible to the
-the CMS version of Pipelines. A few differences are unavoidable.
-
-\begin{itemize}
-\item The character set is Unicode and not EBCDIC, as Unicode is the
-  character set of the underlying Java platform
-\item As shells are different, many 3270 related stages are not
-  implemented
- \item Pipes need to be quoted on the Windows and Unix command lines;
-   the Workspace for \nr{} (\emph{nrws}) environment is an exception to this rule
-\item The mainframe is record-oriented in many stages, Pipelines for \nr{} does
-  an approximation of this
-\item Pipelines on the mainframe is an interpreted language with
-  components as the scanner and the dispatcher; the \nr{}
-  version is compiled to Java .class files by \emph{pipc}, the pipes
-  compiler, and dispatched as threads by the JVM.
-\item The mainframe pipes dispatcher is not multiprocessor enabled. In
-  Pipelines for \nr{} all tasks (stages) are dispatched over all available
-  processors in parallel.
-  \item The fact that pipes run from \nr{} implies that they can be
-    used in Java source. In previous releases there was more direct
-    support for this; this has lapsed due to changes in the way a java
-    toolchain works. This support can be restored in future releases.
-  \item To put the content of  a \nr{} variable in a pipe
-    specification in a \nr{} program, there is a \texttt{\{\}}
-    mechanism. In CMS the pipe would be quoted in the Rexx source and you would unquote sections to get a similiar effect.
-\end{itemize}
 
 
 % In z/VM CMS, it is quite common to use a pipe in a Rexx exec. Conversely,
@@ -1091,6 +1074,28 @@ Serious stage writers will probably want to take a good look at the
 methods defined in the \nr{} source package \texttt{org.netrexx.process.njpipes.stages}.  There you will find various methods for parsing ranges.  You will also find the stub for the stageExit compiler exit.  It can be used to produce 'on the fly' code at compile time.  You can also use it to change the topology of the unprocessed part of the pipe.  The major use is to allow implementations of stages like prefix, append or zone.  Its also used to produce better performing stages, for an example see specs.
 The compiler also queries the rexxArg() and stageArg() methods.  If your stage expects objects of class Rexx as arguments rexxArg() should return the number of variables expected.  If your stage expects a stage for an argument, stageArg() should return the word position of the stage.
 
+\chapter{Giving commands to the operating system}
+
+The \texttt{command} stage is used to issue commands to the operating
+system and trap the output to the pipeline. \texttt{command} can
+receive its input as parameters, or through the pipeline. So
+\begin{lstlisting}
+  pipe literal ls | command | sort | console
+\end{lstlisting}
+is equivalent to:
+\begin{lstlisting}
+  pipe command ls | sort | console
+\end{lstlisting}
+
+
+\section{Built-ins}
+Some commands, like \texttt{dir} in Windows, do not have a separate
+executable file; there is no \texttt{dir.exe}. This can be solved by
+having the command processor, \texttt{cmd.exe} start its built-in
+command. The pipeline would be, for example:
+\begin{lstlisting}
+  pipe literal cmd /c dir | command | sort | console
+\end{lstlisting}
 \chapter{TCP/IP Networking using Pipes for \nr{}}
 As the built-in stages all work on data that is dispatched through the
 pipeline, irrespective of which device driver is used, it is also
@@ -1316,6 +1321,37 @@ netrexx-code/src/org/netrexx/njpipes/stages
 \printindex
 \clearpage
 \psset{unit=1in}
+
+
+\chapter{Differences with CMS Pipelines}
+The goal of this implementation is to be as close as possible to the
+the CMS version of Pipelines. A few differences are unavoidable.
+
+\begin{itemize}
+\item The character set is Unicode and not EBCDIC, as Unicode is the
+  character set of the underlying Java platform
+\item As shells are different, many 3270 related stages are not
+  implemented
+ \item Pipes need to be quoted on the Windows and Unix command lines;
+   the Workspace for \nr{} (\emph{nrws}) environment is an exception to this rule
+\item The mainframe is record-oriented in many stages, Pipelines for \nr{} does
+  an approximation of this
+\item Pipelines on the mainframe is an interpreted language with
+  components as the scanner and the dispatcher; the \nr{}
+  version is compiled to Java .class files by \emph{pipc}, the pipes
+  compiler, and dispatched as threads by the JVM.
+\item The mainframe pipes dispatcher is not multiprocessor enabled. In
+  Pipelines for \nr{} all tasks (stages) are dispatched over all available
+  processors in parallel.
+  \item The fact that pipes run from \nr{} implies that they can be
+    used in Java source. In previous releases there was more direct
+    support for this; this has lapsed due to changes in the way a java
+    toolchain works. This support can be restored in future releases.
+  \item To put the content of  a \nr{} variable in a pipe
+    specification in a \nr{} program, there is a \texttt{\{\}}
+    mechanism. In CMS the pipe would be quoted in the Rexx source and you would unquote sections to get a similiar effect.
+\end{itemize}
+
 \begin{pspicture}(3.5,1in)
   \psbarcode{\isbn}{includetext guardwhitespace}{isbn}
 \end{pspicture}
