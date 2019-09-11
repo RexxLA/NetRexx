@@ -31,4 +31,4 @@ chmod +x /bin/pipe
 ENV CLASSPATH .:/lib/NetRexxF.jar
 
 # Run when the container launches
-RUN source /bin/.bash_aliases
+
