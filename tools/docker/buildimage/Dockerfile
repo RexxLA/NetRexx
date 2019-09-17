@@ -21,11 +21,14 @@ RUN ./clone.sh
 WORKDIR /netrexx-code
 RUN make
 
+ADD nrws /netrexx-code/bin
+ADD nrws.input /root
+
 WORKDIR /netrexx-code/bin
 RUN chmod +x nrc
 RUN chmod +x pipe
 RUN chmod +x pipc
-#RUN chmod +x nrws
+RUN chmod +x nrws
 RUN chmod +x NetRexxC.sh
 
 # Make port 80 available to the world outside this container

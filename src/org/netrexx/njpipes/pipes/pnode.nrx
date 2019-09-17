@@ -14,84 +14,80 @@ options binary
 -- pnodes define connections on specific streams between stages
 
 class pnode extends Object private
+  
+  properties volatile
+  
+  data    = Object         -- values passes between stages
+  holding = boolean        -- set when there is data to read/peek
+  peeked  = boolean        -- for reportEOF(ANY) logic
+  
+  outs = stage             -- stage reading values
+  outl = link              -- stacked connections
+  sout = int
+  
+  ins  = stage             -- stage suppling values
+  inl  = link              -- stacked connections
+  sin  = int
 
-properties volatile
+  nout  = pnode             -- linked list for output stage
+  nin   = pnode             -- linked list for input stage
 
-data    = Object         -- values passes between stages
-holding = boolean        -- set when there is data to read/peek
-peeked  = boolean        -- for reportEOF(ANY) logic
+  
+  -- Setup the pnode with no connections defined
 
-outs = stage             -- stage reading values
-outl = link              -- stacked connections
-sout = int
-
-ins  = stage             -- stage suppling values
-inl  = link              -- stacked connections
-sin  = int
-
-nout  = pnode             -- linked list for output stage
-nin   = pnode             -- linked list for input stage
-
-
--- Setup the pnode with no connections defined
-
-method pnode()
-
-   data    = null
-   holding = 0
-   peeked  = 0
-
-   ins  = null
-   inl  = null
-   sin  = -1
-
-   outs = null
-   outl = null
-   sout = -1
-
-   nout = null
-   nin  = null
-
-
--- save a pnode's connection info
-
-method pushIn()
-
-   l = link((link inl),ins,sin,1)
-   inl = l
-
-
--- restore a pnode's connection info
-
-method popIn()
-
-   if inl<>null then do
-
+  method pnode()
+    
+    data    = null
+    holding = 0
+    peeked  = 0
+    
+    ins  = null
+    inl  = null
+    sin  = -1
+    
+    outs = null
+    outl = null
+    sout = -1
+    
+    nout = null
+    nin  = null
+    
+    
+    -- save a pnode's connection info
+    
+  method pushIn()
+    
+    l = link((link inl),ins,sin,1)
+    inl = l
+    
+    
+    -- restore a pnode's connection info
+    
+  method popIn()
+    
+    if inl<>null then do
       sin = inl.stream()
       ins = (stage inl.stage())
       inl = (link inl.list())
-
-   end
-
-
--- save a pnode's connection info
-
-method pushOut()
-
-   l = link(outl,outs,sout,0)
-   outl = l
-
-
--- restore a pnode's connection info
-
-method popOut()
-
-   if outl<>null then do
-
+    end
+    
+    
+    -- save a pnode's connection info
+    
+  method pushOut()
+    
+    l = link(outl,outs,sout,0)
+    outl = l
+    
+    
+    -- restore a pnode's connection info
+    
+  method popOut()
+    
+    if outl<>null then do
       sout = outl.stream()
       outs = (stage outl.stage())
       outl = (link  outl.list())
-
-   end
-
-
+    end
+    
+    

@@ -5,6 +5,8 @@ WORKDIR /
 
 # Copy the current directory contents into the container at /app
 ADD .therc /root
+ADD nrws /bin
+ADD nrws.input /root
 
 #
 RUN apt-get update && \
@@ -31,4 +33,4 @@ chmod +x /bin/pipe
 ENV CLASSPATH .:/lib/NetRexxF.jar
 
 # Run when the container launches
-
+WORKDIR /root
