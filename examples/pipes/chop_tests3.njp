@@ -1,0 +1,85 @@
+// chop_tests1
+
+/** chop
+                  +--80----------------+
+>>--+--CHOP----+--+--------------------+--><-
+    +-TRUNCate-+  +-snumber------------|
+                  +--| stringtarget |--+
+stringtarget:
+ |--+-----------+--+---------------------------+-+-----+--| target |--|
+    +--ANYCase--+  |               +-BEFORE-+  | +-NOT-+
+                   +--+---------+--+--------+--+
+                      +-snumber-+  +-AFTER--+
+target:
+ |--+--xrange-----------------------+--|
+    +--+-STRing--+--delimitedString-+
+       +--ANYof--+
+*/
+
+/*
+ 19/09/20  Jeff Hennick
+*/
+
+pipe (chop_tests3)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- chop xrange ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop 61-65|
+   c1: compare any ~2# 1 chop xrange ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Th;N;L; ;N;n;progr |
+   split ; |
+   c1: ?
+
+-- chop number (secondary)  ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   s2: chop 2 ?
+   s2: |
+   c2: compare any ~2# 2 chop number (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal e;tRexx;nguage; ;tRexx is a;w human-oriented;ogramming language |
+   split ; |
+   c2: ?
+
+-- chop anycase string dstring (secondary) ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   s3: chop anycase string /re/ ?
+   s3: |
+   c3: compare any ~2# 3 chop anycase string dstring (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal _;Rexx; ; ;Rexx is a; ; ; |
+   split ; |
+   change /_// |
+   c3: ?
+
+-- chop string dstring (secondary) ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   s4: chop string /re/ ?
+   s4: |
+   c4: compare any ~2# 4 chop string dstring (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal _; ; ; ; ; ; ; |
+   split ; |
+   change /_// |
+   c4: ?
+
+-- chop anyof dstring (secondary) ?
+   literal The NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   s5: chop anyof /heNet/ ?
+   s5: |
+   c5: compare any ~2# 5 chop anyof dstring (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ |
+   o: ?
+   literal he NetRexx;e;_;NetRexx is a;ew human-oriented;e |
+   split ; |
+   change /_// |
+   c5: ?

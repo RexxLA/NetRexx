@@ -1,0 +1,119 @@
+// chop_tests2
+
+/** chop
+                  +--80----------------+
+>>--+--CHOP----+--+--------------------+--><-
+    +-TRUNCate-+  +-snumber------------|
+                  +--| stringtarget |--+
+stringtarget:
+ |--+-----------+--+---------------------------+-+-----+--| target |--|
+    +--ANYCase--+  |               +-BEFORE-+  | +-NOT-+
+                   +--+---------+--+--------+--+
+                      +-snumber-+  +-AFTER--+
+target:
+ |--+--xrange-----------------------+--|
+    +--+-STRing--+--delimitedString-+
+       +--ANYof--+
+*/
+
+/*
+ 19/09/20  Jeff Hennick
+*/
+
+pipe (chop_tests2)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- chop number before string dstring ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop 2 before string /x/|
+   c1: compare any ~2# 1 chop number before string dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The;Net;Language; ;Net;new human-oriented;programming language |
+   split ; |
+   c1: ?
+
+-- chop number after string dstring ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop 2 after string /x/ |
+   c2: compare any ~2# 2 chop number after string dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The;NetRexx;Language; ;NetRexx;new human-oriented;programming language |
+   split ; |
+   c2: ?
+
+-- chop anyof dstring  ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop anyof /naeiou/ |
+   c3: compare any ~2# 3 chop anyof dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Th;N;L; ;N; ;pr; |
+   split ; |
+   c3: ?
+
+-- chop not anyof dstring  ?
+   literal The NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop not anyof /heNet/ |
+   c4: compare any ~2# 4 chop not anyof dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ |
+   o: ?
+   literal _;_;_;Net;_;_ |
+   split ; |
+   change /_// |
+   c4: ?
+
+-- chop anycase string dstring  ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop anycase str /r/ |
+   c5: compare any ~2# 5 chop anycase string dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The;Net;Language; ;Net;new human-o;p; |
+   split ; |
+   c5: ?
+
+-- chop number before anyof dstring ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop 2 before anyof /aeiou/ |
+   c6: compare any ~2# 6 chop number before anyof dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal  ; ; ; ; ; ; ; |
+   split ; |
+   c6: ?
+
+-- chop number after anyof dstring  ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop 2 after anyof /aeiou/ |
+   c7: compare any ~2# 7 chop number after anyof dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The;NetR;Lang; ;NetR;new;progr; |
+   split ; |
+   c7: ?
+
+-- chop xstring  ?
+   literal The;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop 61-65 |
+   c8: compare any ~2# 8 chop xrange ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Th;N;L; ;N;n;progr; |
+   split ; |
+   c8: ?
+
+-- chop -number ?
+   literal The one;NetRexx;Language; ;NetRexx is a;new human-oriented;programming language |
+   split ; |
+   chop -5 |
+   c9: compare any ~2# 9 chop -number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ |
+   o: ?
+   literal Th;Ne;Lan; ;NetRexx;new human-ori;programming lan |
+   split ; |
+   c9: ?
