@@ -3,34 +3,31 @@
  *  Copyright (C) 1998  Jeffrey Hennick
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program. 
+ *  and distributing this program.
  */
+
+-- 19/09/21 Fix for negagive snumber.  Jeff Hennick
 -- 99/05/09  use mrc() instead of rc().  ejt
 -- 98/06/17 New.  JHennick
 
 /** chop
-
-                     +-80-----+
-   >>--+-CHOP-----+--+--------+-------------------------------------------><
-       +-TRUNCate-+  +-number-+
-
-
-
-   >>--CHOP--+---------+--+-------------------------+--+-----+------------->
-             +-ANYCase-+  |              +-BEFORE-+ |  +-NOT-+
-                          +-+---------+--+--------+-+
-                            +-snumber-+  +-AFTER--+
-
-   >--+ target +----------------------------------------------------------><
-
-   target:
-   +--+-xrange----------------------+--------------------------------------+
-      +-+-STRing-+--delimitedString-+
-        +-ANYof--+
-
-
+                  +--80----------------+
+>>--+--CHOP----+--+--------------------+--><-
+    +-TRUNCate-+  +-snumber------------|
+                  +--| stringtarget |--+
+stringtarget:
+ |--+-----------+--+---------------------------+-+-----+--| target |--|
+    +--ANYCase--+  |               +-BEFORE-+  | +-NOT-+
+                   +--+---------+--+--------+--+
+                      +-snumber-+  +-AFTER--+
+target:
+ |--+--xrange-----------------------+--|
+    +--+-STRing--+--delimitedString-+
+       +--ANYof--+
 */
+
 options nostrictcase nostrictargs nostrictsignal
+
 package org.netrexx.njpipes.stages
 
 import org.netrexx.njpipes.pipes.
@@ -38,16 +35,20 @@ import org.netrexx.njpipes.pipes.
 class chop extends stage
 
 method run() public
---q='';q=q;trace results
 
    parse arg() key rest
 
    args = rest
 
    number = ''
+   mnumber = boolean 0
+
    if rest = '' then do
-     if key = '' then number = 80
-     else if key.datatype('W') then number = key      -- number | nothing
+     if key = '' then number = 80           -- nothing
+     else if key.datatype('W') then do      -- number
+        number = key
+        if number < 0 then mnumber = 1
+     end
    end
 
    if number = '' then  do
@@ -82,18 +83,18 @@ method run() public
          parse args key rest
       end
                                             -- NOT
+      notk = 0
       if key = 'NOT' then do
          notk = 1
          args = rest
          parse args key rest
       end
-      else notk = 0
                                              -- target
       key = key.upper
       anyof = 0
       str = 0
-      if 'ANYOF'.abbrev(key, 3) then anyof = 1
-      else if 'STRING'.abbrev(key, 3) then str = 1
+      if 'ANYOF'.abbrev(key, 3) > 0 then anyof = 1
+      else if 'STRING'.abbrev(key, 3) > 0 then str = 1
 
       if anyof | str then target = DString(rest).String
       else do
@@ -127,7 +128,16 @@ method run() public
    when number \= '' then                 -- number
       loop forever
          line = Rexx peekto()
-         parse line outl +(number) rest
+         if mnumber then do
+            lnumber = line.length() + number
+            if lnumber < 1 then do
+               outl = ''
+               rest = line
+            end
+            else parse line outl +(lnumber) rest
+         end
+         else
+            parse line outl +(number) rest
          output(outl)
          if sec_out then do
             selectOutput(1)
@@ -211,30 +221,43 @@ method run() public
          readto()
       catch StageError
       end
-   when anyof then                 -- anyof
+   when anyof then                                  -- anyof
       loop forever
          line = Rexx peekto()
-         pp = line.verify(target,'M')
-         p = pp  - snum
-         select
-            when pp < 1 then do
-               outl = line
-               rest = ''
+         if notk then do                            -- not
+            pp = line.verify(target,'N')
+            if pp = 0 then pp = line.length() + 1
+            p = pp - snum
+            select
+               when p < 1 then do
+                  outl = ''
+                  rest = line
+               end
+               when p = 1 then do
+                  outl = ''
+                  rest = line
+               end
+               otherwise parse line outl =(p) rest
             end
-            when p < 1 then do
-               outl = ''
-               rest = line
-            end
-            when p = 1 then do
-               outl = line.left(1)
-               rest = line.substr(2)
-            end
-            otherwise parse line outl =(p) rest
          end
-         if notk then do
-            t = outl
-            outl = rest
-            rest = t
+         else do                  -- not not
+            pp = line.verify(target,'M')
+            p = pp  - snum
+            select
+               when pp < 1 then do
+                  outl = line
+                  rest = ''
+               end
+               when p < 1 then do
+                  outl = ''
+                  rest = line
+               end
+               when p = 1 then do
+                  outl = ''
+                  rest = line
+               end
+               otherwise parse line outl =(p) rest
+            end
          end
          output(outl)
          if sec_out then do
