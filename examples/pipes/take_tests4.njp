@@ -1,0 +1,51 @@
+-- tests for TAKE stage
+
+/** take
+
+             +-FIRST-+  +-1----------+
+   >>--TAKE--+-------+--+------------+--+----------+-----------------------------><
+             +-LAST--+  +-snumber(2)-+  +-BYTEs(1)-+
+                        +-*----------+
+  (1) CMS must be BYTES
+  (2) CMS only number; njpipe: minus reverses first/last
+
+*/
+
+-- 19/09/15
+
+pipe (take_tests4)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- take last 3 bytes  (last full record + 1)  ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take last 3 bytes |
+   c30: compare any ~2# 30 take last 3 bytes  (last full record + 1) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 5;r6 |
+   split ; |
+   c30: ?
+
+-- take last 4 bytes  (2 last full records) ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take last 4 bytes |
+   c31: compare any ~2# 31 take last 4 bytes  (2 last full records) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r5;r6; |
+   split ; |
+   c31: ?
+
+-- take last 24 bytes  (more than input)  ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take last 24 bytes |
+   c32: compare any ~2# 32 take last 24 bytes  (more than input) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   c32: ?
