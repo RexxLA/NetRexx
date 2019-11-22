@@ -1,0 +1,117 @@
+
+/** split
+
+   >>--SPLIT--+---------+--+-----------------+----------------------------->
+              +-ANYCase-+  +-MINimum--number-+
+
+      +-AT----------------------+           +-BLANK------------------+
+   >--+-------------------------+--+-----+--+------------------------+----><
+      +-+---------+--+-BEFORE-+-+  +-NOT-+  +-+ target +--+--------+-+
+        +-snumber-+  +-AFTER--+                           +-number-+
+
+   target:
+   +--+-xrange----------------------+--------------------------------------+
+      +-+-STRing-+--delimitedString-+
+        +-ANYof--+
+*/
+
+pipe (split_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+--   c: compare any ~2#  dup  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+
+-- split ?
+   literal 1 2 3 4 5 6 7 8 A B C |
+   split |
+   c1: compare any ~2# 1 split  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1 2 3 4 5 6 7 8 A B C |
+   split |
+   c1:  ?
+
+-- split string dstring  ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split string /dial/ |
+   c2: compare any ~2# 2 split string dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal NetRexx is intended as a;ect of Rexx that can be efficient and portable.; |
+   split ; |
+   c2:  ?
+
+-- split anyof dstring ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split anyof /dial/ |
+   c3: compare any ~2# 3 split anyof dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal NetRexx;s;nten;e;_;s;_;ect of Rexx th;t c;n be eff;c;ent;n; port;b;e.; |
+   split ; |
+   change /_// |
+   c3:  ?
+
+-- split anyof dstring number ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split anyof /dial/ 5 |
+   c4: compare any ~2# 4 split anyof dstring number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal NetRexx;s;nten;e;_;s a dialect of Rexx that can be efficient and portable.; |
+   split ; |
+   change /_// |
+   c4: ?
+
+-- split xrange (single) ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split d |
+   c5: compare any ~2# 5 split xrange (single)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal NetRexx is inten;e; as a;ialect of Rexx that can be efficient an; portable.; |
+   split ; |
+   c5: ?
+
+-- split xrange (range) ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split x-d |
+   c6: compare any ~2# 6 split xrange (range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal et;e;is;inten;e;s;i;le;t;of;e;th;t;n;e;effi;ient;n;port;le |
+   split ; |
+   c6: ?
+
+-- split not xrange (range) ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split not x-d |
+   c7: compare any ~2# 7 split not xrange (range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal N;R;xx;_;d;d a; a d;a;c;_; R;xx;a; ca; b;_;c; a;d;ab;. |
+   split ; |
+   change /_// |
+   c7: ?
+
+-- split anyc xrange (single) ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split anyc r |
+   c8: compare any ~2# 8 split anychar xrange (single)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Net;exx is intended as a dialect of;exx that can be efficient and po;table. |
+   split ; |
+   c8: ?
+
+-- split anychar anyof xrange (range) ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split anyc anyo /r-t/ |
+   c9: compare any ~2# 9 split anychar anyof xrange (range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Ne;exx is in;ended as a dialec; of;exx;ha; can be efficien; and po;able. |
+   split ; |
+   c9: ?
+
+-- split after xrange (single) ?
+   literal NetRexx is intended as a dialect of Rexx that can be efficient and portable. |
+   split after i |
+   c10: compare any ~2#10 split after xrange (single)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal NetRexx i;s i;ntended as a di;alect of Rexx that can be effi;ci;ent and portable. |
+   split ; |
+   c10: ?
