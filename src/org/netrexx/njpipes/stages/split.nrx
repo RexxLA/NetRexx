@@ -1,13 +1,17 @@
 -- split.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998 - 2019  Jeffrey Hennick, JHennick@Delphi.Com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/06/20  Binary; Output blank (but not null) lines; GetXRange.  JHennick
--- 98/06/12  DString.  Up to CMS documentation. JHennick
+
+/*
+  19/11/20  null input to ''; fix xrange number. JH
+  99/05/09  use mrc() instead of rc().  ejt
+  98/06/20  Binary; Output blank (but not null) lines; GetXRange.  JHennick
+  98/06/12  DString.  Up to CMS documentation. JHennick
+*/
 
 /** split
 
@@ -67,6 +71,8 @@ method run()
    end
 
    parse args.upper w1 w2 .
+   parse args . . rest
+   org_args = args
 
    before = boolean
    after = boolean 0
@@ -83,10 +89,15 @@ method run()
          parse args . args
       end
       when w1.datatype('W') then do
-         if w2 = 'BEFORE' then before = 1
-         if w2 = 'AFTER' then after = 1
          snum = w1
-         parse args . . args
+         args = rest
+         if w2 = 'BEFORE' then before = 1
+         else if w2 = 'AFTER' then after = 1
+         else do
+           snum = 0
+           args = org_args
+         end
+--         parse args . . args
       end
       otherwise nop
    end
@@ -115,7 +126,7 @@ method run()
       when 'STRING'.abbrev(w1, 3) then do                  -- STRing
          str = 1
       end
-      when 'ANYOF'.abbrev(w1, 3) then do                   -- ANYo
+      when 'ANYOF'.abbrev(w1, 3) then do                   -- ANYof
          anyof = 1
       end
       otherwise
@@ -124,7 +135,6 @@ method run()
 
    parse args . args
 
-
    if str | anyof then do                                   -- DelimitedString
       ds = DString(args)
       s = ds.String
@@ -132,7 +142,7 @@ method run()
    end
    else if \str & \anyof & args \= '' then do               -- xrange
       anyof = 1
-      parse args xr maxsp                                  -- xrange and maxsplits
+      parse args xr maxsp                                  -- xrange and max splits
       s = GetXRange(xr)
    catch StageError
       Emsg(11,'Bad Range')
@@ -148,6 +158,8 @@ method run()
      after = 1
    end
 
+  -- now lets run this thing
+
    if at then select
       when anyof & anycase then do                             -- AT ANYCASE  ANYOF  \STRING
          if not then vkey = 'N'
@@ -155,6 +167,7 @@ method run()
          s = s.upper()
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             p = minn
             loop for maxsp until line = ''
                if minn > 1 then do
@@ -185,6 +198,7 @@ method run()
          else vkey = 'M'
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             p = minn
             loop for maxsp until line = ''
                if minn > 1 then do
@@ -215,6 +229,7 @@ method run()
          sl = s.length()
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             loop for maxsp until line = ''
                f = ''
                if minn < 2 then do
@@ -237,6 +252,7 @@ method run()
       otherwise                                          -- AT \ANYCASE \NOT \ANYOF  STRING
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             loop for maxsp until line = ''
                f = ''
                if minn < 2 then parse line data (s) line
@@ -256,6 +272,7 @@ method run()
          s = s.upper()
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             p = minn
             loop for maxsp until line = ''
                if minn > 1 then do
@@ -282,6 +299,7 @@ method run()
          else vkey = 'M'
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             p = minn
             loop for maxsp until line = ''
                if minn > 1 then do
@@ -308,6 +326,7 @@ method run()
          sl = s.length()
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             loop for maxsp until line = ''
                f = ''
                if minn > 1 then parse line f +(minn) line
@@ -327,6 +346,7 @@ method run()
       otherwise                           -- BEFORE/AFTER \ANYCASE \NOT \ANYOF  STRING
          loop
             line = Rexx peekto()
+            if line = null then line = ''
             loop for maxsp until line = ''
                f = ''
                if minn > 1 then parse line f +(minn) line
