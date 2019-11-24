@@ -36,6 +36,11 @@ documents-clean:
 	cd documentation/nrl;make clean	
 	cd documentation/njpipes;make clean	
 
+.PHONY: natives
+	native-image -cp $CLASSPATH org.vpad.extra.workpad.Workspace
+	native-image -cp $CLASSPATH org.netrexx.process.NetRexxC
+	native-image -cp $CLASSPATH org.netrexx.njpipes.pipes.compiler
+	native-image -cp $CLASSPATH org.netrexx.njpipes.pipes.runner
 
 .PHONY: package
 package:
