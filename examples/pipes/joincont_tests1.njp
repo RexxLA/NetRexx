@@ -1,0 +1,143 @@
+/** JOINCONT
+                                 +-TRAILING----------+
+>>--JOINCONT-+---------+-+-----+-+-------------------+---->
+             +-ANYCase-+ +-NOT-+ +-RANGE--inputRange-+
+                                 +-LEADING-----------+
+
+>--+-------+-+-------+--delimitedString--+------+---->
+   +-DELAY-+ +-ANYof-+                   +-KEEP-+
+
+>--+-----------------+--><
+   +-delimitedString-+
+
+*/
+
+/*
+  19/11/24 Jeff Hennick
+*/
+pipe (joincont_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- joincont dstring ?
+   literal first;second,;thrid;fourth,;fifth,;sixth;seventh |
+   split ; |
+   joincont /,/ |
+   c1: compare any ~2# 1 joincont dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;secondthrid;fourthfifthsixth;seventh; |
+   split ; |
+   c1: ?
+
+-- joincont dstring dstring ?
+   literal first;second,;thrid;fourth,;fifth,;sixth;seventh |
+   split ; |
+   joincont /,/ /--/|
+   c2: compare any ~2# 2 joincont dstring dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;second--thrid;fourth--fifth--sixth;seventh; |
+   split ; |
+   c2: ?
+
+-- joincont leading dstring ?
+   literal first;second;,thrid;fourth;,fifth;,sixth;seventh |
+   split ; |
+   joincont leading /,/ |
+   c3: compare any ~2# 3 joincont leading dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;secondthrid;fourthfifthsixth;seventh; |
+   split ; |
+   c3: ?
+
+-- joincont leading dstring dstring ?
+   literal first;second;,thrid;fourth;,fifth;,sixth;seventh |
+   split ; |
+   joincont leading /,/ /--/ |
+   c4: compare any ~2# 4 joincont leading dstring dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;second--thrid;fourth--fifth--sixth;seventh; |
+   split ; |
+   c4: ?
+
+-- joincont leading dstring keep dstring ?
+   literal first;second;,thrid;fourth;,fifth;,sixth;seventh |
+   split ; |
+   joincont leading /,/ keep /--/ |
+   c5: compare any ~2# 5 joincont leading dstring keep dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;second--,thrid;fourth--,fifth--,sixth;seventh; |
+   split ; |
+   c5: ?
+
+-- joincont anyof dstring dstring ?
+   literal first;second,;thrid;fourth-;fifth,;sixth;seventh |
+   split ; |
+   joincont anyof /,-/ @**@ |
+   c6: compare any ~2# 6 joincont anyof dstring dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;second**thrid;fourth**fifth**sixth;seventh; |
+   split ; |
+   c6: ?
+
+-- joincont leading dstring ?
+   literal first;second;,thrid;fourth;,fifth;sixth;,seventh |
+   split ; |
+   joincont leading /,/ |
+   c7: compare any ~2# 7 joincont leading dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;secondthrid;fourthfifth;sixthseventh; |
+   split ; |
+   c7: ?
+
+-- joincont leading anyof dstring dstring ?
+   literal first;second;,thrid;fourth;$fifth;,sixth;seventh |
+   split ; |
+   joincont leading anyof /,$/ /--/ |
+   c8: compare any ~2# 8 joincont leading anyof dstring dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;second--thrid;fourth--fifth--sixth;seventh; |
+   split ; |
+   c8: ?
+
+-- joincont range drange dstring dstring ?
+   literal first;seco$nd;thrid;four$th;fift$h;sixth;seventh |
+   split ; |
+   joincont range 5.1 /$/ /--/ |
+   c9: compare any ~2# 9 joincont range drange dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;seco$nd--thrid;four$th--fift$h--sixth;seventh; |
+   split ; |
+   c9: ?
+
+-- joincont range drange anyof dstring dstring ?
+   literal first;seco$nd;thrid;four@th;fift$h;sixth;seve$nth |
+   split ; |
+   joincont range 5.1 anyof /@$/ /--/ |
+   c10: compare any ~2#10 joincont range drange anyof dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first;seco$nd--thrid;four@th--fift$h--sixth;seve$nth; |
+   split ; |
+   c10: ?
+
+-- joincont not dstring ?
+   literal first;second,;thrid;fourth,;fifth,;sixth;seventh |
+   split ; |
+   joincont not /,/ |
+   c11: compare any ~2#11 joincont not dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal firstsecond;thridfourth;fifth;sixthseventh; |
+   split ; |
+   c11: ?
+
+-- joincont not dstring keep dstring ?
+   literal first;second,;thrid;fourth,;fifth,;sixth;seventh |
+   split ; |
+   joincont not /,/ keep /--/ |
+   c12: compare any ~2#12 joincont not dstring keep dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first--second,;thrid--fourth,;fifth,;sixth--seventh; |
+   split ; |
+   c12: ?
