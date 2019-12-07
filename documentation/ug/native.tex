@@ -11,9 +11,43 @@ Native executables are produced using the Graal JVM and enable executing JVM-8 l
 \item nrws
 \item NetRexxC.jar
 \end{enumerate}
-These should be in a directory on the executable PATH environment variable. Care should be taken to disable alias statements that point to the .class versions of these executables.
+These should be in a directory on the executable PATH environment variable, or executed with ./ (for example, ./nrc). Care should be taken to disable alias statements that point to the .class versions of these executables.
 \subsection{Classpath considerations}
 The executable version needs to be able to find NetRexx.jar in a subdirectory build/lib relative to itself. When unzipping the distribution, this has been taken care of. On the \emph{nrc} command, the classpath can be specified. In some cases, it seems necessary to have a copy of NetRexxC.jar in the current directory.\footnote{under investigation; this might be a Graal bug/feature.}
 \section{Docker Image}
+Docker is a container technology. It is available for Mac, Windows and Linux. Information can be found at http://docker.com.
+The Community Edition can be used free of charge.
+In short, a container is combined from several images and runs a Linux distribution that is mapped to calls for the host OS.
+Starting with 3.07, docker images will be available for NetRexx. This has several advantages:
+\begin{enumerate}
+\item New releases can be tested without impacting the current installation of NetRexx
+\item Easy testing on multiple JDK / JRE versions (OPen JDK, IBM J9, etc)
+\item No JDK or JRE is required on your desktop / laptop / work machine to develop and run NetRexx programs
+\item No installation of NetRexx and its required path and classpath 
+\item An image is delivered with a Java version that is tested with the NetRexx release - so it is known to work
+\item The eclipse batch compiler will not be required
+\item NetRexx, its batchfiles and its classpath will be setup already to avoid all installation problems going forward
+\item When your app needs native calls, only one version needs to be produced and maintained
+\item It will insulate against incompatible JVM changes where NetRexx development needs to catch up
+\item It will be the start of a distribution mechanism for NetRexx applications cq. libraries
+\end{enumerate}
+Two ways of using the image are foreseen:
+A shell within the image
+Working with a bind mounted directory in the shell of your local machine
+Work with a shell within the image
+As producing data within the image generally is not recommended this also involves a bind-mounted directory, but you will work inside of the shell in the docker container and you can use all the tools provided in the image. 
+A suitable command line would be
+\begin{verbatim}
+docker run --rm -it -v "\$PWD":/nrx -w /nrx rvjansen/netrexx:latest zsh
+\end{verbatim}
+If you want to keep changes in the container (for example, when you added tools or configuration that are useful and need to go into a new image, based on this image), do not use the --rm switch. The docker documentation explains how to commit this container and tag its new image. The rvjansen/netrexx:3.07 will be downloaded once from the docker hub, when it is not on the local machine yet. It will know it has been downloaded the next time you start this image. Also, it will detect when the image has been updated.
+The -it switcher are needed for an interactive terminal session. the -v switch bind mounts the current directory into a directory /nrx in the image.
 
+Compile or exec from a shell on your host machine
+The term 'host machine' is used here to indicate the fact that the docker image can be seen as running a guest OS\footnote{while in reality it is a separated session on the same Linux kernel}. 
+A suitable command line would be: (assuming you want to compile a class called RSAnrx in the local directory)
+\begin{verbatim}
+docker run --rm -v "\$PWD":/nrx -w /nrx rvjansen/netrexx:latest nrc RSAnrx
+\end{verbatim}
+Here, --rm will make sure the container is not kept, the -v tells docker to bind mount the current directory to a directory /nrx within the container, and -w sets this as the working directory. The rvjansen/netrexx:3.07 will be downloaded once from the docker hub, when it is not on the local machine yet. It will know it has been downloaded the next time you start this image. Of course, in most shells is it possible to alias this command, or start a batchfile, c.q. a shell script containing this.
 
