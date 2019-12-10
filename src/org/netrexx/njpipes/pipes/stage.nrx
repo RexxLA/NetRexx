@@ -1299,114 +1299,119 @@ if severed<>-99 then
 
 -- exit a stage severing all output streams
 
-method exit(c=int) signals ThreadQ
+  method exit(c=int) signals ThreadQ
 
-  if (p._debug&8)<>0 then
+    if (p._debug&8)<>0 then
       say 'Preparing to stop' _name p c p._active
-
-  loop while super.in<>null         -- sever inputs
+    
+    loop while super.in<>null         -- sever inputs
       do
-         inn = findin(super.in.sout)
-         sin = super.in.sout
-         severInput()
+        inn = findin(super.in.sout)
+        sin = super.in.sout
+        severInput()
       catch StageError
       end
-   end
-
-   loop while super.out<>null       -- sever outputs
+    end
+    
+    loop while super.out<>null       -- sever outputs
       do
-         outn = findout(super.out.sin)
-         sout = super.out.sin
-         severOutput()
+        outn = findout(super.out.sin)
+        sout = super.out.sin
+        severOutput()
       catch StageError
       end
-   end
-
-   _rc = c
-  
-   do protect this          -- wakeup anyone waiting on us
+    end
+    
+    _rc = c
+    
+    do protect this          -- wakeup anyone waiting on us
       commit(-1)
       notifyAll()
-   end
-
-   do protect p             -- let pipe know stage is ending
+    end
+    
+    do protect p             -- let pipe know stage is ending
       if _rc>p._rc then do
-         p._rc = rc
-         p._err = _err 
+	p._rc = rc
+	p._err = _err 
       end
-      p._active = p._active-going       -- just incase exit called twice
-      going = 0
-      if (p._debug&8)<>0 then
-         say 'Stopping' _name p c p._active
-      p.notifyAll()
-   end
-
-   signal ThreadQ                       -- make sure exit is always safe...
-
-
-
--- replace output of stage with link
-
-method inStream(nn=int,l=link,s=boolean) protect signals StageError
-
-   if nn<0 then
-      Error(13,'inStream no stream selected')
-
-   n = findin(nn)                      -- does this stream exist?
-   if l.input() then
-      do                    -- *in: !
-/* */    f = l.stage                   -- track outputs for eofReport
-         do protect f
-            if f._findout(l.stream())=null then
-               f._o = f._o+1
-         end
-         if n=null then
-            p.connect(l,this,nn,0)     -- add it to this stage
-         else do
-            super.in = n.nin           -- unchain from 2
-            if s then
-               n.pushOut()             -- change the connection
-            work = l.stage()
-            n.sout = l.stream()
-            n.outs = work
-            do protect work
-               n.nin = work.in         -- link into stage lists
-               work.in = n
-            end
-         end
-      end
-   else                     -- ... ! *in:
       do
-         if s then do                  -- this is a callpipe...
-            _rc = 11
-            say 'Error - '_name' impossible link'
-            signal StageError
-         end
-/* */    f = l.stage()                 -- track outputs for eofReport
-         do protect f
-            if f._findout(l.stream())=null then
-               f._o = f._o+1
-         end
-         if n<>null then do
-            super.in = n.nin
-            n.outs = null
-         end
-         p.connect(l,this,nn,0)        -- use a new pnode so buffered
-         if sin=nn then do
-            if (flag&LEAVE_NULL)<>0 then
-               inn = null
-            else
-               inn = findin(nn)        -- data will not be lost or
-         end
---       in either case sent outn null to show sever...???
+	p._active = p._active-going       -- just incase exit called twice
+	going = 0
+      catch NullPointerException
+	p.notifyAll()
+	signal ThreadQ
       end
-   notifyAll()                         -- allow pending outputs to switch outs
-
-
--- replace input of a stage with link
-
-method outStream(nn=int,l=link,s=boolean) protect signals StageError
-
+      if (p._debug&8)<>0 then
+	say 'Stopping' _name p c p._active
+      p.notifyAll()
+    end
+    
+    signal ThreadQ                       -- make sure exit is always safe...
+    
+    
+    
+    -- replace output of stage with link
+    
+  method inStream(nn=int,l=link,s=boolean) protect signals StageError
+    
+    if nn<0 then
+      Error(13,'inStream no stream selected')
+    
+    n = findin(nn)                      -- does this stream exist?
+    if l.input() then
+      do                    -- *in: !
+	/* */    f = l.stage                   -- track outputs for eofReport
+        do protect f
+          if f._findout(l.stream())=null then
+            f._o = f._o+1
+        end
+        if n=null then
+          p.connect(l,this,nn,0)     -- add it to this stage
+        else do
+          super.in = n.nin           -- unchain from 2
+          if s then
+            n.pushOut()             -- change the connection
+          work = l.stage()
+          n.sout = l.stream()
+          n.outs = work
+          do protect work
+            n.nin = work.in         -- link into stage lists
+            work.in = n
+          end
+        end
+      end
+    else                     -- ... ! *in:
+    do
+      if s then do                  -- this is a callpipe...
+        _rc = 11
+        say 'Error - '_name' impossible link'
+        signal StageError
+      end
+      /* */    f = l.stage()                 -- track outputs for eofReport
+      do protect f
+        if f._findout(l.stream())=null then
+          f._o = f._o+1
+      end
+      if n<>null then do
+        super.in = n.nin
+        n.outs = null
+      end
+      p.connect(l,this,nn,0)        -- use a new pnode so buffered
+      if sin=nn then do
+        if (flag&LEAVE_NULL)<>0 then
+          inn = null
+        else
+          inn = findin(nn)        -- data will not be lost or
+      end
+      --       in either case sent outn null to show sever...???
+    end
+    notifyAll()                         -- allow pending outputs to switch outs
+    
+    
+    -- replace input of a stage with link
+    
+  method outStream(nn=int,l=link,s=boolean) protect signals StageError
+    
    if nn<0 then
       Error(13,'outStream no stream selected')
 
