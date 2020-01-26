@@ -6,19 +6,28 @@
  *  and distributing this program.
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
 
--- 99/05/21  fix rc logic.  ejt
--- 98/09/20  added secondary output for first and last.  ejt
--- 98/06/10  Up to CMS Documentation.  JHennick
+/*
+  99/05/21  fix rc logic.  ejt
+  98/09/20  added secondary output for first and last.  ejt
+  98/06/10  Up to CMS Documentation.  JHennick
+  20/01/25  Add DROP FIRST number BYTES (secondary); * (secondary); negative number; documentation
+
+*/
 
 /** drop
 
-            +-FIRST-+  +-1------+
-  >>--DROP--+-------+--+--------+--+-------+-----------------------------><
-            +-LAST--+  +-number-+  +-BYTES-+
-                       +-*------+
+            +-FIRST-+  +-1---------+
+  >>--DROP--+-------+--+-----------+--+----------+-----------------------><
+            +-LAST--+  +-number-(2)+  +-BYTES-(1)+
+                       +-*---------+
+
+  (1) Not CMS
+  (2) CMS: must be positive.
+      NJPipes: negative reverses FIRST/LAST, so DROP FIRST -3 is the same as DROP LAST 3.
+
 */
 
 options nostrictcase nostrictargs nostrictsignal nobinary
@@ -40,6 +49,8 @@ method run()
    number = rexx 1
    bytes = boolean 0
 
+   ll = rexx ''
+
    select
       when type = '' then number = 1
       when type = 'FIRST' then nop
@@ -52,6 +63,12 @@ method run()
    end
 
    if number = 1 & n.datatype('W') then number = n
+
+   if number < 0 then  -- njpipes only
+      do
+         number = -number
+         first = \first
+      end
 
    if arg.pos('BYTES') > 0 then bytes = 1
 
@@ -74,8 +91,14 @@ method run()
       when type = '*' | n = '*' then do    -- drop all
          if s1 then
             do
+               selectInput(0)
                selectOutput(1)
-               shortStreams()
+               loop forever
+                  l = rexx peekto()
+                  output(l)
+                  readto()
+               catch StageError
+               end
             end
          else
             loop forever
@@ -85,20 +108,32 @@ method run()
          rc = rc()
       end
       when number = '0' then shortStreams()   -- drop none
-      when first & bytes then         -- first bytes
+      when first & bytes then                 -- drop first bytes
          do
             n = 0
             loop forever
                l = rexx peekto()
-               n = n + l.length()
+               ll = ll || l
+               n = ll.length()
                if n >= number then do
-                  if n > number then output(l.substr(n - number))
+                  if n > number then output(ll.right(n - number))
+            if s1 then
+               do
+                  selectOutput(1)
+                  output(ll.left(number))
+               end
                   readto()
                   leave
                end
                readto()
             end
-            shortStreams()
+            if s1 then
+               do
+                  selectOutput(1)
+                  shortStreams()
+               end
+            else
+               shortStreams()
          catch StageError
             rc = rc()
          end
@@ -131,8 +166,8 @@ method run()
             outl = ''
             do
                loop forever
-                  l = rexx peekto()
-                  outla = buf.DelayRingBuf(l)
+                  lr = rexx peekto()
+                  outla = buf.DelayRingBuf(lr)
                   outl = outl || outla
                   readto()
                end
@@ -143,7 +178,7 @@ method run()
          end
       otherwise                           -- last lines
          do
-            vbuf = Vector(n+1,n+1)
+            vbuf = Vector(number+1,number+1)
             do
                loop for number
                   vbuf.addElement(readto())
@@ -178,6 +213,3 @@ method run()
 rc = mrc()
 
 exit(rc*(rc<>12))
-
-
-
