@@ -40,8 +40,8 @@ documents-clean:
 natives:
 #	native-image -cp $(CLASSPATH) org.vpad.extra.workpad.Workspace
 #	mv org.vpad.extra.workpad.Workspace nrws
-	native-image -cp $(CLASSPATH) --report-unsupported-elements-at-runtime org.netrexx.process.NetRexxC
-#	native-image -cp $(CLASSPATH) org.netrexx.process.NetRexxC -H:+ReportExceptionStackTraces
+#	native-image -cp $(CLASSPATH) --report-unsupported-elements-at-runtime org.netrexx.process.NetRexxC
+	native-image -cp $(CLASSPATH) org.netrexx.process.NetRexxC -H:+ReportExceptionStackTraces -H:+TraceClassInitialization
 	mv org.netrexx.process.NetRexxC nrc
 #	native-image -cp $(CLASSPATH) org.netrexx.njpipes.pipes.compiler
 #	mv org.netrexx.njpipes.pipes.compiler pipc
