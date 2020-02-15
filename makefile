@@ -38,15 +38,15 @@ documents-clean:
 
 .PHONY: natives
 natives:
-#	native-image -cp $(CLASSPATH) org.vpad.extra.workpad.Workspace
-#	mv org.vpad.extra.workpad.Workspace nrws
+	native-image -cp $(CLASSPATH) org.vpad.extra.workpad.Workspace
+	mv org.vpad.extra.workpad.workspace nrws
 #	native-image -cp $(CLASSPATH) --report-unsupported-elements-at-runtime org.netrexx.process.NetRexxC
-	native-image -cp $(CLASSPATH) org.netrexx.process.NetRexxC -H:+ReportExceptionStackTraces -H:+TraceClassInitialization
-	mv org.netrexx.process.NetRexxC nrc
+	native-image -cp $(CLASSPATH) org.netrexx.process.NetRexxC -H:+ReportExceptionStackTraces
+	mv org.netrexx.process.netrexxc nrc
 #	native-image -cp $(CLASSPATH) org.netrexx.njpipes.pipes.compiler
 #	mv org.netrexx.njpipes.pipes.compiler pipc
-#	native-image -cp $(CLASSPATH) org.netrexx.njpipes.pipes.runner
-#	mv org.netrexx.njpipes.pipes.runner pipe
+	native-image -cp $(CLASSPATH) org.netrexx.njpipes.pipes.runner -H:+ReportExceptionStackTraces
+	mv org.netrexx.njpipes.pipes.runner pipe
 
 .PHONY: package
 package:

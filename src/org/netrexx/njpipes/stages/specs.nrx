@@ -1,3 +1,4 @@
+-- specs
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
  *
@@ -18,14 +19,15 @@ package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
 
 class specs extends stage
-  
+--trace results
+
   -- The run method of specs should never get called
-  
+
   method run()
     rc = 16
     exit(rc)
-    
-    
+
+
     /*
      * pInfo    = name of pipe,
      * pInfo[1] = stage number in pipe
@@ -50,48 +52,48 @@ class specs extends stage
      * code[n]  = line n
      *
      */
-    
+
   method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
-    
+
     pid  = pInfo
     name = pInfo[3]
     b    = pInfo[4]
-    
+
     if pInfo[9] then
       signal StageError(13,'Error (specs) - 'pInfo' - cannot use as driver (yet) at 'pInfo[3]' 'pInfo[4])
-    
+
     if pInfo[8] then
       signal StageError(13,'Error (specs) - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
-    
+
     n   = o[0]          -- we update this stem and return it
     p   = rexx 0        -- true if a peek has been done
     s   = rexx '0'      -- the currently selected stream
     pr  = rexx 0        -- peakto required flag
     pad = rexx ' '      -- default pad char
-    
+
     x = rexx
     y = rexx
-    
+
     cname = stageName(name,pid,pInfo[1])
     o[n+1] ='class 'cname' extends stage private'
     --o[n+2] ='trace results'
     o[n+3]='method run()'
     n = n+4
-    
+
     cnts    = rexx 1    -- figure out how many stream we are going to use
     flgs    = rexx 1
     flgs[0] = 0
-    
+
     parse b 'select' sn work
     loop while sn.datatype('W')
       if flgs[sn] then do
-	cnts = cnts+1
-	flgs[sn] = 0
+        cnts = cnts+1
+        flgs[sn] = 0
       end
       parse work 'select' sn work
     end
     all = cnts          -- default to 'stop alleof' to end on all streams at eof
-    
+
     o[n+1]='   outp = rexx ""'
     o[n+2]='   eoff = rexx 1'
     o[n+3]='   eofc = rexx 0'
@@ -99,67 +101,72 @@ class specs extends stage
     o[n+6]='   loop label body while read'
     o[n+8] = '      read = 0'
     n = n+9
-    
+
     if b.word(b.words())<>'write' then     -- and end with a write
       b = b' write'
-      
+
       ob = b
       parse b t b         -- prime loop
-      
+
       loop label body while t<>''
-	
-	-- process stop / pad / read / readstop / select / write
-	
-	loop label options forever
-	  
-	  select
-	    
+
+        -- process stop / pad / read / readstop / select / write
+
+        loop label options forever
+
+          select
+
             when t='stop' then do
               parse b t b
               select
-		when t='alleof' then
+                when t='alleof' then
                   all = cnts
-		when t='anyeof' then
+                when t='anyeof' then
                   all = 1
-		when t.datatype('W') then do
+                when t.datatype('W') then do
                   if t>cnts then
                     signal StageError(13,'Error (specs) - 'pInfo' - there are only 'cnts' streams used')
                 all = t
-		end
-		otherwise
+                end
+                otherwise
                   signal StageError(13,'Error (specs) - 'pInfo' - stop option 't' not supported')
               end
             end
-	    
+
             when t='pad' then do
               parse b t b
-              if t.length()<>1 then
-		signal StageError(13,'Error (specs) - 'pInfo' - pad must be a single char, not 't)
+              select
+                 when t.length = 1 then nop
+                 when t.length = 2 & t.datatype('X') then t = t.x2c
+                 when t = 'blank', t = 'space' then t = ''
+                 otherwise
+                   signal StageError(13,'Error (specs) - 'pInfo' - pad must be a single char, hexchar, BLANK or SPACE not 't)
+              end
               pad = t
             end
-	    
+
             when t='select' then do
               parse b t b
               if \t.datatype('W') then
-		signal StageError(13,'Error (specs) - 'pInfo' - select number must be numeric. found 't)
+                signal StageError(13,'Error (specs) - 'pInfo' - select number must be numeric. found 't)
               if pr then do
-		o[n+1] = '      do'
-		o[n+2] = '         l's' = Rexx peekto()'
-		o[n+3] = '         read = 1'
-		o[n+4] = '      catch StageError'
-		o[n+5] = '         rc = rc()'
-		o[n+6] = '         eofc = eofc+eoff['s']'
-		o[n+7] = '         eoff['s'] = 0'
-		o[n+8] = '         if eofc>='all' then do'
-		  o[n+9] = '            if outp<>"" then'
-		  o[n+10]= '               output(outp)'
-		  o[n+11]= '            leave body'
-		  o[n+12]= '         end'
-		  o[n+13]= '         l's' = ""'
-		  o[n+14]= '      end'
-		  n = n+15
-		  p[s] = 1
-		  pr = 0
+                o[n+1] = '      do'
+                o[n+2] = '         l's' = Rexx peekto()'
+                o[n+3] = '         read = 1'
+                o[n+4] = '      catch StageError'
+                o[n+5] = '         rc = rc()'
+                o[n+6] = '         eofc = eofc+eoff['s']'
+                o[n+7] = '         eoff['s'] = 0'
+                o[n+8] = '         if eofc>='all' then do'
+                  o[n+9] = '            if outp<>"" then'
+                  o[n+10]= '               output(outp)'
+                  o[n+11]= '            leave body'
+                  o[n+12]= '         end'
+                  o[n+13]= '         l's' = ""'
+                  o[n+14]= '      end'
+                  n = n+15
+                  p[s] = 1
+                  pr = 0
               end
               o[n+1] = '      do'
               o[n+2] = '         selectInput('t')'
@@ -170,10 +177,10 @@ class specs extends stage
               pr = 1
               s = t
             end
-	    
+
             when t='read' then do
               if s<0 then
-		s = 0
+                s = 0
             o[n+1] = '      do'
             n = n+1
             if p[s] then do
@@ -198,10 +205,10 @@ class specs extends stage
               pr = 0
               p[s] = 1
             end
-	    
+
             when t='readstop' then do
               if s<0 then
-		s = 0
+                s = 0
             o[n+1] = '      do'
             n = n+1
             if p[s] then do
@@ -221,92 +228,100 @@ class specs extends stage
             pr = 0
             p[s] = 1
             end
-	    
+
             when t='write' then do                 -- write if its required
               o[n+1] = '      output(outp)'
               o[n+2] = '      outp = ""'
               n = n+3
             end
-	    
+
             otherwise
               leave options
-	      
-	  end -- select
-	  
-	  if t='write' & b='' then           -- force specs to finish
+
+          end -- select
+
+          if t='write' & b='' then           -- force specs to finish
             leave body
-	    
-	    ob = b
-	    parse b t b
-	    
-	end options
-	
-	-- wait for a record and peekto it before processing
-	
-	if \p[s] then do
-	  o[n+1] = '      do'
-	  o[n+2] = '         l's' = Rexx peekto()'
-	  o[n+3] = '         read = 1'
-	  o[n+4] = '      catch StageError'
-	  o[n+5] = '         rc = rc()'
-	  o[n+6] = '         eofc = eofc+eoff['s']'
-	  o[n+7] = '         eoff['s'] = 0'
-	  o[n+8] = '         if eofc>='all' then do'
-	    o[n+9] = '            if outp<>"" then'
-	    o[n+10]= '               output(outp)'
-	    o[n+11]= '            leave body'
-	    o[n+12]= '         end'
-	    o[n+13]= '         l's' = ""'
-	    o[n+14]= '      end'
-	    n = n+15
-	    pr = 0
-	    p[s] = 1
-	end
-	
-	-- process an input range
-	
-	if t='word' then do       -- handle word space range
-	  parse b t b
-	  t = 'word't
-	end
-	
-	rf = 0                    -- make sure we have a range
-	if t.left(4)='word' then
-	  x = t.substr(5).strip('L')
-	else
-	  x = t.strip('L')
-	select
-	  when x.pos(';')>1 then
+
+            ob = b
+            parse b t b
+
+        end options
+
+        -- wait for a record and peekto it before processing
+
+        if \p[s] then do
+          o[n+1] = '      do'
+          o[n+2] = '         l's' = Rexx peekto()'
+          o[n+3] = '         read = 1'
+          o[n+4] = '      catch StageError'
+          o[n+5] = '         rc = rc()'
+          o[n+6] = '         eofc = eofc+eoff['s']'
+          o[n+7] = '         eoff['s'] = 0'
+          o[n+8] = '         if eofc>='all' then do'
+            o[n+9] = '            if outp<>"" then'
+            o[n+10]= '               output(outp)'
+            o[n+11]= '            leave body'
+            o[n+12]= '         end'
+            o[n+13]= '         l's' = ""'
+            o[n+14]= '      end'
+            n = n+15
+            pr = 0
+            p[s] = 1
+        end
+
+        -- process an input range
+
+--trace results
+            -- deliminated string?
+        test = t b
+        ds = Dstring(test)
+        tt = ds.String
+        tr = ds.Residue
+--trace off
+
+        if t='word' then do       -- handle word space range
+          parse b t b
+          t = 'word't
+        end
+
+        rf = 0                    -- make sure we have a range
+        if t.left(4)='word' then
+          x = t.substr(5).strip('L')
+        else
+          x = t.strip('L')
+        select
+          when x.pos(';')>1 then
             parse x x ';' y
-	  when x.pos('.')>1 then
+          when x.pos('.')>1 then
             parse x x '.' y
-	  when x.pos('-')>1 then
+          when x.pos('-')>1 then
             parse x x '-' y
-	  otherwise
+          otherwise
             y = '\n'
-	end
-	if x='*' then
-	  x = 1
-	rf = x.datatype('W')&(y.datatype('W')|y='*'|y='\n')
-	
-	select
-	  when rf & t.left(4)='word' & t.pos('.')>0 then do
+        end
+        if x='*' then
+          x = 1
+        rf = x.datatype('W')&(y.datatype('W')|y='*'|y='\n')
+
+        select
+          when rf & t.left(4)='word' & t.pos('.')>0 then do
             if \x.datatype('W') | \y.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x<0 | y<0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
           o[n+1] = '      data = l's'.subword('x','y')'
           n = n+1
-	  end
-	  when rf & t.left(4)='word' & t.right(2)='-*' then do
+          end
+          when rf & t.left(4)='word' & t.right(2)='-*' then do
             if \x.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x<0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
           o[n+1] = '      data = l's'.subword('x')'
           n = n+1
-	  end
-	  when rf & t.left(4)='word' & t.pos(';')>0 then do
+          end
+          when rf & t.left(4)='word' & t.pos(';')>0 then do
             if \x.datatype('W') | \y.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x>0 | y<x then
@@ -316,40 +331,40 @@ class specs extends stage
           else
             o[n+1] = '      data = l's'.subword(l's'.words()'x+1','x.abs()+y+1')'
           n = n+1
-	  end
-	  when rf & t.left(4)='word' & t.pos('-')>0 then do
+          end
+          when rf & t.left(4)='word' & t.pos('-')>0 then do
             if \x.datatype('W') | \y.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x<0 | y<x then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
           o[n+1] = '      data = l's'.subword('x','y-x+1')'
           n = n+1
-	  end
-	  when rf & t.left(4)='word' then do
+          end
+          when rf & t.left(4)='word' then do
             if \x.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x<0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
           o[n+1] = '      data = l's'.word('x')'
           n = n+1
-	  end
-	  when rf & t.pos('.')>0 then do
+          end
+          when rf & t.pos('.')>0 then do
             if \x.datatype('W') | \y.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x<0 | y<0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
           o[n+1] = '      data = l's'.substr('x','y')'
           n = n+1
-	  end
-	  when rf & t.right(2)='-*' then do
+          end
+          when rf & t.right(2)='-*' then do
             if \x.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x<0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range')
           o[n+1] = '      data = l's'.substr('x')'
           n = n+1
-	  end
-	  when rf & t.pos(';')>0 then do
+          end
+          when rf & t.pos(';')>0 then do
             if \x.datatype('W') | \y.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x>0 | y<x then
@@ -359,18 +374,18 @@ class specs extends stage
           else
             o[n+1] = '      data = l's'.substr(1.max(l's'.length()'x+1'),'x.abs()+y+1'.min(l's'.length()))'
           n = n+1
-	  end
-	  when rf & t.pos('-')>0 then do
+          end
+          when rf & t.pos('-')>0 then do
             if \x.datatype('W') | \y.datatype('W') then
               signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
           if x<0 | y<x then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
           o[n+1] = '      data = l's'.substr('x','y-x+1')'
           n = n+1
-	  end
-	  when rf then
+          end
+          when rf then
             signal StageError(13,'Error (specs) - 'pInfo' - unreconized range 't)
-	  otherwise do
+          otherwise do
             delim = t.left(1)' '
             if ob.pos(delim)=0 then
               signal StageError(13,'Error (specs) - 'pInfo' - Missing data selector at 't)
@@ -381,99 +396,99 @@ class specs extends stage
             else
               o[n+1] = "      data = '"t"'"
             n = n+1
-	end
+        end
       end
-      
+
       -- process a string
-      
+
       parse b t b
       if t = 'strip' then do
-	o[n+1] = '      data = data.strip("B")'
-	n = n+1
-	parse b t b
+        o[n+1] = '      data = data.strip("B")'
+        n = n+1
+        parse b t b
       end
-      
+
       -- process conversion functions
-      
+
       select
-	when t = 'b2x' then do
+        when t = 'b2x' then do
           o[n+1] = '      data = data.b2x()'
           n = n+1
           parse b t b
-	end
-	when t = 'c2x' then do
+        end
+        when t = 'c2x' then do
           o[n+1] = "      l= data.length;out=''"
           n = n+1
-	  o[n+1] = '      loop i=1 to l'
-	  n = n+1
-	  o[n+1] = '        out=out||data.substr(i,1).c2x()'
-	  n = n+1
-	  o[n+1] = '      end'
-	  n = n+1
-	  o[n+1] = '      data=out'
-	  n = n+1
-	  parse b t b
-	end
-	when t = 'd2x' then do
+          o[n+1] = '      loop i=1 to l'
+          n = n+1
+          o[n+1] = '        out=out||data.substr(i,1).c2x()'
+          n = n+1
+          o[n+1] = '      end'
+          n = n+1
+          o[n+1] = '      data=out'
+          n = n+1
+          parse b t b
+        end
+        when t = 'd2x' then do
           o[n+1] = '      data = data.d2x()'
           n = n+1
           parse b t b
-	end
-	when t = 'x2b' then do
+        end
+        when t = 'x2b' then do
           o[n+1] = '      data = data.x2b()'
           n = n+1
           parse b t b
-	end
-	when t = 'x2d' then do
+        end
+        when t = 'x2d' then do
           o[n+1] = '      data = data.x2d()'
           n = n+1
           parse b t b
-	end
-	when t = 'lower' then do
+        end
+        when t = 'lower' then do
           o[n+1] = '      data = data.lower()'
           n = n+1
           parse b t b
-	end
-	when t = 'upper' then do
+        end
+        when t = 'upper' then do
           o[n+1] = '      data = data.upper()'
           n = n+1
           parse b t b
-	end
-	when t = 'string' then do
+        end
+        when t = 'string' then do
           o[n+1] = '      data = data.toString()'
           n = n+1
           parse b t b
-	end
-	otherwise
+        end
+        otherwise
           nop
       end
-      
+
       -- process formater options
-      
+
       select
-	when b.word(1) = 'right' then do
+        when b.word(1) = 'right' then do
           conv = '.strip("B").right('
           n = n+1
           b = b.subword(2)
-	end
-	when b.word(1) = 'left' then do
+        end
+        when b.word(1) = 'left' then do
           conv = '.strip("B").left('
           n = n+1
           b = b.subword(2)
-	end
-	when b.word(1) = 'center' then do
+        end
+        when b.word(1) = 'center' then do
           conv = '.strip("B").center('
           n = n+1
           b = b.subword(2)
-	end
-	otherwise
+        end
+        otherwise
           conv = ''
       end
-      
+
       -- output selector logic here
-      
+
       select
-	when t.abbrev('nextw') & t.pos('.')>0 then do
+        when (t.abbrev('nextw') | t.abbrev('nw')) & t.pos('.')>0 then do
           parse t '.' x
           if \x.datatype('W') then
             signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
@@ -483,8 +498,8 @@ class specs extends stage
             conv = '.left('x',"'pad'")'
           o[n+1] = '      outp = outp" "data'conv
           n = n+1
-	end
-	when t.abbrev('next') & t.pos('.')>0 then do
+        end
+        when t.abbrev('next') & t.pos('.')>0 then do
           parse t '.' x
           if \x.datatype('W') then
             signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
@@ -494,32 +509,32 @@ class specs extends stage
             conv = '.left('x',"'pad'")'
           o[n+1] = '      outp = outp||data'conv
           n = n+1
-	end
-	when t.abbrev('nextw') then do
+        end
+        when (t.abbrev('nextw') | t.abbrev('nw')) then do
           if conv<>'' then
             signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
         o[n+1] = '      outp = outp" "data'
         n = n+1
-	end
-	when t.abbrev('next') then do
+        end
+        when t.abbrev('next') then do
           if conv<>'' then
             signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
         o[n+1] = '      outp = outp||data'
         n = n+1
-	end
-	when t='1' then do
+        end
+        when t='1' then do
           if conv<>'' then
             signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
         o[n+1] = '      outp = data'
         n = n+1
-	end
-	when t.datatype('W') then do
+        end
+        when t.datatype('W') then do
           if conv<>'' then
             signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
         o[n+1] = '      outp = outp.left('t-1')||data'
         n = n+1
-	end
-	when t.pos('.')>0 then do
+        end
+        when t.pos('.')>0 then do
           parse t x '.' y
           if \x.datatype('W') | \y.datatype('W') then
             signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
@@ -529,8 +544,8 @@ class specs extends stage
             conv = conv||y',"'pad'")'
           o[n+1] = '      outp = outp.overlay(data'conv','x','y',"'pad'")'
           n = n+1
-	end
-	when t.pos(';')>0 then do
+        end
+        when t.pos(';')>0 then do
           parse t x ';' y
           if \x.datatype('W') | \y.datatype('W') then
             signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
@@ -540,8 +555,8 @@ class specs extends stage
             conv = conv||x.abs()+y+1',"'pad'")'
           o[n+1] = '      outp = outp.overlay(data'conv',outp.length()'x+1','x.abs()+y+1',"'pad'")'
           n = n+1
-	end
-	when t.pos('-')>0 then do
+        end
+        when t.pos('-')>0 then do
           parse t x '-' y
           if \x.datatype('W') | \y.datatype('W') then
             signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
@@ -551,14 +566,14 @@ class specs extends stage
             conv = conv||y-x-1',"'pad'")'
           o[n+1] = '      outp = outp.overlay(data'conv','x','y-x+1',"'pad'")'
           n = n+1
-	end
-	otherwise
+        end
+        otherwise
           signal StageError(13,'Error (specs) - 'pInfo' - Missing target selector at 't)
       end
-      
+
       ob = b
       parse b t b
-      
+
 end
 
 if pr then
