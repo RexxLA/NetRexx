@@ -1,0 +1,205 @@
+
+/** spec
+            +-STOP--ALLEOF----+ (3)  v----------------------------------------+
+ >>--SPECs--+-----------------+------+--+-| Group |-------------------------+-+-----------><
+            +-STOP-+-ANYEOF-+-+ (3)     +-READ------------------------------+ (5)
+                   +-n------+   (3)     +-READSTOP--------------------------+
+                                        +-WRITE-----------------------------+
+                                        +-SELECT-+-streamnum-+--------------+
+                                        |        +-streamid--+              |  (3)
+                                        |        +-FIRST-----+              |
+                                        |        +-SECOND----+              |
+                                        +-PAD--+-char----+------------------+
+                                        |      +-hexchar-+                  |
+                                        |      +-BLANK---+                  |
+                                        |      +-SPACE---+                  |
+                                        +-+-WORDSEParator---+--+--char---+--+  (3)
+                                          +-WS------------- +  +-hexchar-+     (3)
+                                          +-FIELDSEparator- +  +-BLANK---+     (3)
+                                          +-FS------------- +  +-SPACE---+     (3)
+
+Group:
+ |--| Input |--| Conversion |--| Output |--| Alignment |--|
+
+Input:
+ |--+-Words-(1)-wnumberrange----------------------+-------|
+    +-Fields-(1)-fnumberrange---------------------+  (3)
+    +-cnumberrange--------------------------------+
+    +-/string/------------------------------------+
+    +-Xhexstring----------------------------------+
+    +-Hhexstring----------------------------------+
+    +-Bbinstring----------------------------------+
+    |            +-FROM--1-------+ +-BY--1-----+  |
+    +-+-RECNO--+-+---------------+-+-----------+--+
+    | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |
+    +-TODclock------------------------------------+
+
+Conversion:
+ |-+-------+--+--------------------+------|
+   +-STRIP-+  +-B2C----------------+
+              +-B2D----------------+ (4)
+              +-B2X----------------+ (4)
+              +-C2B----------------+
+              +-C2D----------------+
+              +-C2F----------------+ (3)
+              +-C2I----------------+ (3)
+              +-C2P-+------------+-+ (3)
+              |     +-(2)(scale)-+ | (3)
+              +-C2V----------------+ (3)
+              +-C2X----------------+
+              +-D2C----------------+
+              +-D2X----------------+ (4)
+              +-F2C----------------+ (3)
+              +-I2C----------------+ (3)
+              +-P2C-+------------+-+ (3)
+              |     +-(2)(scale)-+ | (3)
+              +-V2C----------------+ (3)
+              +-X2B----------------+ (4)
+              +-X2C----------------+
+              +-X2D----------------+ (4)
+              +-f2t----------------+
+              +-LOWER--------------+ (4)
+              +-UPPER--------------+ (4)
+              +-STRING-------------+ (4)
+
+Output:
+ |--+-Next-+-------+-------+--|
+    |      +-(2).n-+       |
+    +-NEXTWord-+-+-------+-+
+    +-NWord----+ +-(2).n-+ |
+    +-collumnrange---------+
+
+Alignment:
+ |--+--------+--|
+    +-Left---+
+    +-Center-+
+    +-Centre-+
+    +-Right--+
+
+Ranges (cnumberrange, fnumberrange (3), wnumberrange):
+ |--+-snumber-+--(2)--+-------------------------+--|
+    +---*-----+       +--.-----(2)----number----+
+                      +- - -+--(2)--+-snumber-+-+
+                      +--;--+       +---*-----+
+
+Notes:
+ (1) Blanks are optional in this position.
+ (2) Blanks are not allowed here.
+ (3) CMS only. Not yet implemented in njpipes
+ (4) Njpipes only. Not yet implemented in CMS
+ (5) READ is giving the same output as READSTOP when the streams are different length.
+ [6] This senses if it is the first stage, but comment stages will fool it into not
+     producing any output.
+
+**/
+
+/*
+  20/ 3/28 Jeff Hennick
+*/
+
+pipe (specs_tests8)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+-- specs simple ?
+   literal one;two;three;four |
+   split ; |
+   specs /Pipes GOOD / 1 1-*  next |
+   c1: compare any ~2# 1 specs simple ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Pipes GOOD one;Pipes GOOD two;Pipes GOOD three;Pipes GOOD four |
+   split ; |
+   c1: ?
+   literal 1;2;3;4 |
+   split ; |
+   c1: ?
+
+-- specs select second ?
+   literal one;two;three;four |
+   split ; |
+   s2: specs 1-*  next select 1 1-* nextword select second 1-* nw |
+   c2: compare any ~2# 2 specs select second~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal one 1;two 2 one;three 3 two;four 4 three |
+   split ; |
+   c2: ?
+   literal 1;2;3;4 |
+   split ; |
+   s2: ?
+
+-- specs select first ?
+   literal one;two;three;four |
+   split ; |
+   s3: specs 1-*  next select 1 1-* nextword select second 1-* nw select first 1-* nw|
+   c3: compare any ~2# 3 specs select first~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal one 1  one;two 2 one two;three 3 two three;four 4 three four |
+   split ; |
+   c3: ?
+   literal 1;2;3;4 |
+   split ; |
+   s3: ?
+
+-- specs right ?
+   literal one;two;three;four |
+   split ; |
+   specs /Pipes GOOD / 1 1-*  12.10 right |
+   c4: compare any ~2# 4 specs right ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Pipes GOOD        one;Pipes GOOD        two;Pipes GOOD      three;Pipes GOOD       four |
+   split ; |
+   c4: ?
+
+-- specs center ?
+   literal one;two;three;four |
+   split ; |
+   specs /Pipes GOOD / 1 1-*  12.10 center /!/ next |
+   c5: compare any ~2# 5 specs center ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Pipes GOOD    one    !;Pipes GOOD    two    !;Pipes GOOD   three   !;Pipes GOOD    four   ! |
+   split ; |
+   c5: ?
+
+-- specs centre ?
+   literal one;two;three;four |
+   split ; |
+   specs /Pipes GOOD / 1 1-*  12.10 centre /!/ next |
+   c6: compare any ~2# 6 specs centre ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Pipes GOOD    one    !;Pipes GOOD    two    !;Pipes GOOD   three   !;Pipes GOOD    four   ! |
+   split ; |
+   c6: ?
+
+-- specs left ?
+   literal one;two;three;four |
+   split ; |
+   specs /Pipes GOOD / 1 pad # 1-*  12.10 left /!/ next |
+   c7: compare any ~2# 7 specs left ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Pipes GOOD one#######!;Pipes GOOD two#######!;Pipes GOOD three#####!;Pipes GOOD four######! |
+   split ; |
+   c7: ?
+
+-- specs pad (leading hex & spaces) ?
+   specs pad 3a /Test   1/ 1-20 |
+   c8: compare any ~2# 8 specs pad (leading hex & spaces) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Test   1:::::::::::: |
+   c8: ?
+
+-- specs pad (mid hex & spaces) ?
+   specs /lead/ 1-9 pad 3a /Test   1/ 6-20 |
+   c9: compare any ~2# 9 specs pad (mid hex & spaces) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal lead Test   1::::::: |
+   c9: ?
+
+-- specs 1-* range ?
+   specs /lead/ 1-* |
+   c10: compare any ~2#10 specs 1-* range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal lead |
+   c10: ?
