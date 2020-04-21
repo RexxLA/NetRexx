@@ -1,0 +1,280 @@
+/** DEAL
+
+            +-STOP--ALLEOF--------------------+
+  >>--DEAL--+---------------------------------+--------------------------><
+            +-STOP--+-ALLEOF-+----------------+
+            |       +-ANYEOF-+                |
+            |       +-number-+                |
+            +-SECONDARY--+-----------+--------+
+            |            +-RELEASE---+        |
+            |            +-LATCH-(1)-+        |
+            +-KEY--inputRange--+-------+------+
+            |                  +-STRIP-+      |
+            +-STREAMid--inputRange--+-------+-+
+                                    +-STRIP-+
+
+  (1) Not yet in njpipes
+
+  Since java dispatches the stage threads.  Deal may not see a sever immediatly,
+  as the severing thread can get multitasked.  This can make options like 'ANYEOF'
+  work in unexpected ways.
+
+*/
+/*
+ 20/ 4/20 Jeff Hennick
+*/
+
+pipe (deal_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+-- IBM example 1 p363 ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   d1: deal |
+   c1-1: compare any ~2# 1-1 IBM example 1 p363 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;fourth one;seventh one; |
+   split ; |
+   c1-1: ?
+   d1: |
+   c1-2: compare any ~2# 1-2 IBM example 1 p363 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal second one;fifth one;eighth one; |
+   split ; |
+   c1-2: ?
+   d1: |
+   c1-3: compare any ~2# 1-3 IBM example 1 p363 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;sixth one |
+   split ; |
+   c1-3: ?
+
+-- SECONDARY ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   d2: deal SECONDARY |
+   c2-1: compare any ~2# 2-1 SECONDARY ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;seventh one;eighth one |
+   split ; |
+   c2-1: ?
+   literal 0;0;1;1;2;2;0;0;1;1;2;2|
+   split ; |
+   d2: |
+   c2-2: compare any ~2# 2-2 SECONDARY ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c2-2: ?
+   d2: |
+   c2-3: compare any ~2# 2-3 SECONDARY ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fifth one;sixth one |
+   split ; |
+   c2-3: ?
+
+-- SECONDARY RELEASE ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   d3: deal SECONDARY RELEASE |
+   c3-1: compare any ~2# 3-1 SECONDARY RELEASE ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;seventh one;eighth one |
+   split ; |
+   c3-1: ?
+   literal 0;0;1;1;2;2;0;0;1;1;2;2|
+   split ; |
+   d3: |
+   c3-2: compare any ~2# 3-2 SECONDARY RELEASE ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c3-2: ?
+   d3: |
+   c3-3: compare any ~2# 3-3 SECONDARY RELEASE ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fifth one;sixth one |
+   split ; |
+   c3-3: ?
+
+-- KEY ?
+   literal @@@first one,@@@second one,###third one,###fourth one,$$$fifth one,$$$sixth one,%%%seventh one,%%%eighth one  |
+   split , |
+   d4: deal KEY 1-3 |
+   c4-1: compare any ~2# 4-1 KEY ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal @@@first one;@@@second one;%%%seventh one;%%%eighth one |
+   split ; |
+   c4-1: ?
+   d4: |
+   c4-2: compare any ~2# 4-2 KEY ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal ###third one;###fourth one; |
+   split ; |
+   c4-2: ?
+   d4: |
+   c4-3: compare any ~2# 4-3 KEY ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal $$$fifth one;$$$sixth one |
+   split ; |
+   c4-3: ?
+
+-- KEY STRIP (Start) ?
+   literal @@@first one,@@@second one,###third one,###fourth one,$$$fifth one,$$$sixth one,%%%seventh one,%%%eighth one  |
+   split , |
+   d5: deal KEY 1-3 STRIP |
+   c5-1: compare any ~2# 5-1 KEY STRIP (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;seventh one;eighth one |
+   split ; |
+   c5-1: ?
+   d5: |
+   c5-2: compare any ~2# 5-2 KEY STRIP (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c5-2: ?
+   d5: |
+   c5-3: compare any ~2# 5-3 KEY STRIP (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fifth one;sixth one |
+   split ; |
+   c5-3: ?
+
+-- KEY STRIP (End) ?
+   literal first one  @@@,second one @@@,third one  ###,fourth one ###,fifth one  $$$,sixth one  $$$,seventh one%%%,eighth one %%%  |
+   split , |
+   d6: deal KEY 12.3 STRIP |
+   c6-1: compare any ~2# 6-1 KEY STRIP (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;seventh one;eighth one |
+   split ; |
+   c6-1: ?
+   d6: |
+   c6-2: compare any ~2# 6-2 KEY STRIP (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c6-2: ?
+   d6: |
+   c6-3: compare any ~2# 6-3 KEY STRIP (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fifth one;sixth one |
+   split ; |
+   c6-3: ?
+
+-- STREAM STRIP (End) ?
+   literal first one  0,second one 0,third one  1,fourth one 1,fifth one  2,sixth one  2,seventh one0,eighth one 0  |
+   split , |
+   d7: deal STREAM 12.1 STRIP |
+   c7-1: compare any ~2# 7-1 STREAM STRIP (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;seventh one;eighth one |
+   split ; |
+   c7-1: ?
+   d7: |
+   c7-2: compare any ~2# 7-2 STREAM STRIP (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c7-2: ?
+   d7: |
+   c7-3: compare any ~2# 7-3 STREAM STRIP (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fifth one;sixth one |
+   split ; |
+   c7-3: ?
+
+-- STREAM (End) ?
+   literal first one  0,second one 0,third one  1,fourth one 1,fifth one  2,sixth one  2,seventh one0,eighth one 0  |
+   split , |
+   d8: deal STREAM 12.1 |
+   c8-1: compare any ~2# 8-1 STREAM (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one  0;second one 0;seventh one0;eighth one 0 |
+   split ; |
+   c8-1: ?
+   d8: |
+   c8-2: compare any ~2# 8-2 STREAM (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one  1;fourth one 1; |
+   split ; |
+   c8-2: ?
+   d8: |
+   c8-3: compare any ~2# 8-3 STREAM (End) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fifth one  2;sixth one  2 |
+   split ; |
+   c8-3: ?
+
+-- STREAM STRIP (Start) ?
+   literal 0first one,0second one,1third one,1fourth one,2fifth one,2sixth one,0seventh one,0eighth one  |
+   split , |
+   d9: deal STREAM 1.1 STRIP |
+   c9-1: compare any ~2# 9-1 STREAM STRIP (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;seventh one;eighth one |
+   split ; |
+   c9-1: ?
+   d9: |
+   c9-2: compare any ~2# 9-2 STREAM STRIP (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c9-2: ?
+   d9: |
+   c9-3: compare any ~2# 9-3 STREAM STRIP (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fifth one;sixth one |
+   split ; |
+   c9-3: ?
+
+-- STREAM (Start) ?
+   literal 0first one,0second one,1third one,1fourth one,2fifth one,2sixth one,0seventh one,0eighth one  |
+   split , |
+   d10: deal STREAM 1.1 |
+   c10-1: compare any ~2#10-1 STREAM (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 0first one;0second one;0seventh one;0eighth one |
+   split ; |
+   c10-1: ?
+   d10: |
+   c10-2: compare any ~2#10-2 STREAM (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1third one;1fourth one; |
+   split ; |
+   c10-2: ?
+   d10: |
+   c10-3: compare any ~2#10-3 STREAM (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2fifth one;2sixth one |
+   split ; |
+   c10-3: ?
+
+-- STREAMID (Start) ?
+   literal 0first one,0second one,1third one,1fourth one,2fifth one,2sixth one,0seventh one,0eighth one  |
+   split , |
+   d11: deal STREAMID 1.1 |
+   c11-1: compare any ~2#11-1 STREAMID (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 0first one;0second one;0seventh one;0eighth one |
+   split ; |
+   c11-1: ?
+   d11: |
+   c11-2: compare any ~2#11-2 STREAMID (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1third one;1fourth one; |
+   split ; |
+   c11-2: ?
+   d11: |
+   c11-3: compare any ~2#11-3 STREAMID (Start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2fifth one;2sixth one |
+   split ; |
+   c11-3: ?
+   literal 3The STOP option has not been tested because I do not know how to stop a stage mid stream. 4/20 JH |
+   o: ?

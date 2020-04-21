@@ -3,31 +3,37 @@
  *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program. 
+ *  and distributing this program.
  */
 
--- 98/ 6/11 IRange.  Up to CMS documentation.  JHennick
+/*
+   20/ 4/20 Fix KEY logic; KEY STRIP (first & last); STREAMID STRIP (first & last); Documentation;
+   98/ 6/11 IRange.  Up to CMS documentation.  JHennick
+*/
 
 /** DEAL
-
 
             +-STOP--ALLEOF--------------------+
   >>--DEAL--+---------------------------------+--------------------------><
             +-STOP--+-ALLEOF-+----------------+
             |       +-ANYEOF-+                |
             |       +-number-+                |
-            +-SECONDARY--+---------+----------+
-            |            +-RELEASE-+          |
+            +-SECONDARY--+-----------+--------+
+            |            +-RELEASE---+        |
+            |            +-LATCH-(1)-+        |
             +-KEY--inputRange--+-------+------+
             |                  +-STRIP-+      |
             +-STREAMid--inputRange--+-------+-+
                                     +-STRIP-+
 
+  (1) Not yet in njpipes
+
   Since java dispatches the stage threads.  Deal may not see a sever immediatly,
-  as the severing thread can get multitasked.  This can make options like 'ANYEOF' 
-  work in unexpected ways. 
+  as the severing thread can get multitasked.  This can make options like 'ANYEOF'
+  work in unexpected ways.
 
 */
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -55,7 +61,7 @@ method run()
             Emsg(11,'Error -' getName() 'option' a a2 'is not recognized')
          end
       end
-      when a2 = 'ALLEOF' then 
+      when a2 = 'ALLEOF' then
          minstm = maxOutputStream()
       otherwise
          Emsg(11,'Error -' getName() 'option' a a2 'is not recognized')
@@ -81,6 +87,8 @@ method run()
       if \r.StartCol().datatype('W') then do
          Emsg(11,'Error - 'getName()' startrange 's' must be numeric or "*"')
       end
+
+      s = r.StartCol()
 
       e = r.EndCol()
 
@@ -131,7 +139,8 @@ method run()
             loop i=0 to maxOutputStream()
                line = rexx peekto()
                selectOutput(r.SelIRange(line))
-               output(line.substr(r.EndChar()))
+               output(line.substr(r.EndChar() + 1))
+ --              outl = line.substr(r.EndChar() + 1)
                readto()
             end i
          catch StageError
@@ -166,15 +175,20 @@ method run()
          key = rexx ''
          keyp = rexx ''
          loop forever
-            loop i=0 to maxOutputStream()
+            i = 0
+            loop
                line = rexx peekto()
                key = r.SelIRange(line)
-               outl = line.substr(r.EndChar())
-               if key \= keyp then selectOutput(i)
+               outl = line.substr(r.EndChar() + 1)
+               if key \= keyp then do
+                 selectOutput(i)
+                 i = i + 1
+                 if i > maxOutputStream() then i = 0
+               end
                output(outl)
                readto()
                keyp = key
-            end i
+            end
          catch StageError
             rc = rc()
          end
@@ -183,14 +197,19 @@ method run()
          key = rexx ''
          keyp = rexx ''
          loop forever
-            loop i=0 to maxOutputStream()
+            i = 0
+            loop
                line = rexx peekto()
                key = r.SelIRange(line)
-               if key \= keyp then selectOutput(i)
+               if key \= keyp then do
+                 selectOutput(i)
+                 i = i + 1
+                 if i > maxOutputStream() then i = 0
+               end
                output(line.left(r.StartChar - 1))
                readto()
                keyp = key
-            end i
+            end
          catch StageError
             rc = rc()
          end
@@ -199,14 +218,19 @@ method run()
          key = rexx ''
          keyp = rexx ''
          loop forever
-            loop i=0 to maxOutputStream()
+            i = 0
+            loop
                line = rexx peekto()
                key = r.SelIRange(line)
-               if key \= keyp then selectOutput(i)
+               if key \= keyp then do
+                 selectOutput(i)
+                 i = i + 1
+                 if i > maxOutputStream() then i = 0
+               end
                output(line)
                readto()
                keyp = key
-            end i
+            end
          catch StageError
             rc = rc()
          end
@@ -214,7 +238,7 @@ method run()
       when a a2 = 'STOP ANYEOF' then do                            -- stop anyeof
          eofReport('any')
          loop while maxOutputStream() = startstr
-            loop i=0 to maxOutputStream() 
+            loop i=0 to maxOutputStream()
                do
                   selectOutput(i)
                catch StageError
@@ -278,4 +302,3 @@ method run()
    end
 
 exit(rc*(rc<>12))
-
