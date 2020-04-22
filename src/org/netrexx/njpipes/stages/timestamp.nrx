@@ -27,7 +27,7 @@ Syntax Description:  The arguments are optional.  The default is 8.
 
 Operation:  A 16-character timestamp is developed whenever  a  record  has been  read.
 It consists of the year (including the century), the month, day, hour, minute, second,
-and hundredth  of  a  second.  Unlike CMS, the java interface reports hundredths of a
+and hundredth  of  a  second.  As in CMS, the java interface reports hundredths of a
 second.  The  specified number of characters are taken from the right-hand side of this
 number and prefixed to the input record.
 */
@@ -38,27 +38,41 @@ import org.netrexx.njpipes.pipes.
 import java.text.
 
 class timestamp extends stage
+  
+  method run()
 
-method run()
-   length=arg()
-   if length = '' then length=8
-   if (length < 1) | (length > 16) then
+    /* handle options */
+
+
+    /* arg1 is optional
+     * it is one of
+     * SHOrtdate
+     * ISOdate
+     * FULdate
+     * STAndard
+     * STRing
+     */
+
+    -- if arg1 is numeric and not string, it is arg2 (length)
+    a = arg()
+    parse a arg1 arg2 arg3    
+    
+    length=arg()
+    if length = '' then length=8
+    if (length < 1) | (length > 16) then
       say "Error --" getName() "syntax error"
-
-   loop forever
+    
+    loop forever
       line = Rexx peekto()
       output(prefixtimestamp(length,line))
       readto()
-   catch StageError
+    catch StageError
       rc = rc()
-   end
- Exit(rc*(rc<>12))
-
-method prefixtimestamp(length=int, line=Rexx)
-  today = Date()
-  df = SimpleDateFormat("yyyyMMddHHmmssSSS")
-  longdate = rexx(df.format(today))
-  return longdate.substr(17-length,length) line
-
-
-
+    end
+    Exit(rc*(rc<>12))
+    
+  method prefixtimestamp(length=int, line=Rexx)
+    today = Date()
+    df = SimpleDateFormat("yyyyMMddHHmmssSSS")
+    longdate = rexx(df.format(today))
+    return longdate.substr(17-length,length) line
