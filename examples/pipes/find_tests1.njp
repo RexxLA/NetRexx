@@ -1,9 +1,15 @@
 /** find
->>--FIND-+--------+-----><
-         +-string-+
+
+   >>--+-FIND--+--------+----------------------+--------------------------><
+       |       +-string-+                      |
+       +-STRFIND--+---------+--delimitedString-+
+                  +-ANYcase-+
+
+  NOTE: njPipes *strips off* leading and trailing spaces from string.  Use STRFIND in this case.
+
 */
 /*
-  19/11/22
+  20/ 4/30
 */
 
 pipe (find_tests1)
@@ -58,8 +64,9 @@ pipe (find_tests1)
    c4: ?
 
 -- find string (secondary, null input) ?
-   literal a1cx;b2dx; ;a dx; b5cx;b6xx  |
+   literal a1cx;b2dx;_;a dx; b5cx;b6xx  |
    split ; |
+   change /_// |
    a5: find a |
    hole ?
    a5: |
@@ -74,13 +81,22 @@ pipe (find_tests1)
    literal a1cx;b2dx;_;a dx; b5cx;b6xx  |
    split ; |
    change /_// |
-   a6: find_new  |
+   a6: find |
    hole ?
    a6: |
-   console |
-   c6: compare_new any ~2# 6 find string (secondary: strip nulls to primary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   c6: compare any ~2# 6 find string (secondary: strip nulls to primary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal a1cx;b2dx;a dx; b5cx;b6xx |
+   literal _ |
    split ; |
    change /_// |
    c6: ?
+
+-- find  ?
+   literal a1 2 a3 4 5 |
+   split  |
+   find |
+   c7: compare any ~2# 7 find [null] ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1 2 a3 4 5 |
+   split  |
+   c7: ?

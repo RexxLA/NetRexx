@@ -6,6 +6,7 @@
  *  and distributing this program.
  */
 /*
+  20/ 4/30 fixed handling of no argument.  Added note about leading/trailing spaces
   19/11/23 added handling of no argument to be as though it is a single space: match any non-null, non-blank record
   98/09/20 improved outstream logic.  ejt
   98/08/28 use mrc method to get correct rc.  ejt
@@ -14,13 +15,15 @@
 */
 /** find
 
-
    >>--+-FIND--+--------+----------------------+--------------------------><
        |       +-string-+                      |
        +-STRFIND--+---------+--delimitedString-+
                   +-ANYcase-+
 
+  NOTE: njPipes *strips off* leading and trailing spaces from string.  Use STRFIND in this case.
+
 */
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -31,7 +34,6 @@ class find extends stage binary
 method run()
 
    f_str = rexx arg()
-   if f_str = '' then f_str = ' '
    len = rexx f_str.length()
    robj = rexx
    key = rexx
@@ -45,13 +47,13 @@ method run()
    s1 = boolean 1
 
    if f_str.verify('_ ', 'M') > 0 then do  -- with Magic chars
-      start = f_str.verify(' ')  -- jump leading spaces
+      start = f_str.verify(' ')  -- jump leading spaces  -- not going to happen due to arg()
       loop forever
          yes = 1
          aobj = peekto()
          robj = rexx aobj
          if f_str = '' then do
-            yes = (robj = '') -- match null records
+            yes = (robj == '') -- match null records
          end
          else do
             key = robj.left(len)
@@ -84,6 +86,31 @@ method run()
       end
    catch StageError
    end
+   else if f_str = '' then        -- null search, match all but null
+      loop forever
+         aobj = peekto()
+         robj = rexx aobj
+         if robj \== '' then
+            do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end
+         else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
    else                            -- no Magic chars
    loop forever
       aobj = peekto()
