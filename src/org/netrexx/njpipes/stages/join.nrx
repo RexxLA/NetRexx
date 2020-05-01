@@ -1,23 +1,31 @@
 -- join.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998, 2019  Jeffrey Hennick, Jeff @ Jeff-H . Com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 98/ 6/29  The first number is the number of records to be ADDED. JHennick
--- 98/ 6/12  DString.  Up to CMS Documentation. JHennick
+
+/*
+  19/11/25  COUNT, TERMINATE. Up to CMS. Refactored. JHennick
+  98/ 6/29  The first number is the number of records to be ADDED. JHennick
+  98/ 6/12  DString.  Up to CMS Documentation. JHennick
+*/
 
 /** join
 
+                   +-1-----------------+
+>>--JOIN-+-------+-+-------------------+-->
+         +-COUNT-+ +-number------------+
+                   +-*-----------------+
+                   +-KEYLENgth--number-+
 
-             +-1-----------------+
-   >>--JOIN--+-------------------+--+-----------------+--+--------+-------><
-             +-number------------+  +-delimitedString-+  +-number-+
-             +-*-----------------+
-             +-KEYLENgth--number-+
+>--+-------------------------------+-+--------+---><
+   +-delimitedString-+-----------+-+ +-number-+
+                     +-TERMinate-+
 
 */
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -25,22 +33,33 @@ import org.netrexx.njpipes.pipes.
 
 class join extends stage
 
+properties public
+   show_count = rexx 0
+   terminate = rexx 0
+   lcount = rexx 1
+   between = rexx ''
+
 method run() public
 
    count   = rexx 1
-   between = rexx ''
-
-   parse arg() count pattern
 
    key    = rexx    0
    keyl   = rexx    0
    maxlen = rexx    ''
 
+   parse arg() fw rest
+
+   if fw.upper() = 'COUNT' then do
+       show_count = 1
+   end
+   else rest = arg()
+
+   parse rest count pattern
    select
       when 'KEYLENGTH'.abbrev(count.upper(), 6) then do
          key = 1
          count = 1
-         parse arg() . keyl pattern
+         parse rest . keyl pattern
       end
 
       when \count.datatype('W') then do
@@ -55,7 +74,15 @@ method run() public
 
    d = DString(pattern)
    between = d.String
-   maxlen = d.Residue
+
+   if between = '' then parse pattern nw rest
+   else parse d.Residue nw rest
+
+   if 'TERMINATE'.abbrev(nw.upper(), 4) then do
+      terminate = 1
+      nw = rest
+   end
+   maxlen = nw
 
    ml   = rexx    (maxlen \= '')
    kv   = rexx    ''
@@ -64,154 +91,91 @@ method run() public
    data = rexx    ''
    blen = rexx    between.length()
 
-   if blen = 0 then
-      select                -- NO "between"
-         when key & ml then        -- key & maxlength
+   select
+      when key & ml then        -- key & maxlength
+         loop forever
+            line = Rexx readto()
+            lcount = 1
             loop forever
-               line = Rexx readto()
-               loop forever
-                  work = Rexx peekto()
-                  parse work kv +(keyl) data
-                  if kv \= kvp then leave
-                  if line.length() + work.length() > maxlen then leave
-                  line = line || data
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line)
-                  signal StageError
-               end
-               output(line)
+               work = Rexx peekto()
+               parse work kv +(keyl) data
+               if kv \= kvp then leave
+               if line.length() + blen + work.length() > maxlen then leave
+               line = line || between || data
+               readto()
+               lcount = lcount + 1
             catch StageError
                rc = rc()
+               out(line)
+               signal StageError
             end
-         when key then                   -- key & \maxlength
+            out(line)
+         catch StageError
+            rc = rc()
+         end
+      when key then                   -- key & \maxlength
+         loop forever
+            line = Rexx readto()
+            lcount = 1
+            kvp = line.left(keyl)
             loop forever
-               line = Rexx readto()
-               kvp = line.left(keyl)
-               loop forever
-                  work = Rexx peekto()
-                  parse work kv +(keyl) data
-                  if kv \= kvp then leave
-                  line = line || data
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line)
-                  signal StageError
-               end
-               output(line)
+               work = Rexx peekto()
+               parse work kv +(keyl) data
+               if kv \= kvp then leave
+               line = line || between || data
+               readto()
+               lcount = lcount + 1
             catch StageError
                rc = rc()
+               out(line)
+               signal StageError
             end
-         when ml then                     -- \key & maxlength
-            loop forever
-               line = Rexx readto()
-               loop for count
-                  work = Rexx peekto()
-                  if line.length() + work.length() > maxlen then leave
-                  line = line || work
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line)
-                  signal StageError
-               end
-               output(line)
+            out(line)
+         catch StageError
+            rc = rc()
+         end
+      when ml then                     -- \key & maxlength
+         loop forever
+            line = Rexx readto()
+            lcount = 1
+            loop for count
+               work = Rexx peekto()
+               if line.length() + blen + work.length() > maxlen then leave
+               line = line || between || work
+               readto()
+               lcount = lcount + 1
             catch StageError
                rc = rc()
+               out(line)
+               signal StageError
             end
-         otherwise                          -- \key & \maxlength
-            loop forever
-               line = Rexx readto()
-               loop for count
-                  work = Rexx peekto()
-                  line = line || work
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line)
-                  signal StageError
-               end
-               output(line)
+            out(line)
+         catch StageError
+            rc = rc()
+         end
+      otherwise                          -- \key & \maxlength
+         loop forever
+            line = Rexx readto()
+            lcount = 1
+            loop for count
+               work = Rexx peekto()
+               line = line || between || work
+               readto()
+               lcount = lcount + 1
             catch StageError
                rc = rc()
+               out(line)
+               signal StageError
             end
-      end
-   else
-      select               -- have some "between"
-         when key & ml then        -- key & maxlength
-            loop forever
-               line = Rexx readto()
-               loop forever
-                  work = Rexx peekto()
-                  parse work kv +(keyl) data
-                  if kv \= kvp then leave
-                  if line.length() + blen + work.length() > maxlen then leave
-                  line = line || between || data
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line || between)
-                  signal StageError
-               end
-               output(line || between)
-            catch StageError
-               rc = rc()
-            end
-         when key then                   -- key & \maxlength
-            loop forever
-               line = Rexx readto()
-               kvp = line.left(keyl)
-               loop forever
-                  work = Rexx peekto()
-                  parse work kv +(keyl) data
-                  if kv \= kvp then leave
-                  line = line || between || data
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line || between)
-                  signal StageError
-               end
-               output(line || between)
-            catch StageError
-               rc = rc()
-            end
-         when ml then                     -- \key & maxlength
-            loop forever
-               line = Rexx readto()
-               loop for count
-                  work = Rexx peekto()
-                  if line.length() + blen + work.length() > maxlen then leave
-                  line = line || between || work
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line || between)
-                  signal StageError
-               end
-               output(line || between)
-            catch StageError
-               rc = rc()
-            end
-         otherwise                          -- \key & \maxlength
-            loop forever
-               line = Rexx readto()
-               loop for count
-                  work = Rexx peekto()
-                  line = line || between || work
-                  readto()
-               catch StageError
-                  rc = rc()
-                  output(line || between)
-                  signal StageError
-               end
-               output(line || between)
-            catch StageError
-               rc = rc()
-            end
-      end
+            out(line)
+         catch StageError
+            rc = rc()
+         end
+   end
 
 exit(rc*(rc<>12))
 
+method out(line) private signals StageError, ThreadQ
+   if show_count then line = lcount.right(10) || line
+   if terminate then line = line || between
+   output(line)
