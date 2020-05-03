@@ -1,21 +1,24 @@
--- between.nrx | inside.nrx | notinside.nrx | outside.nrx NJPipe Stage
+-- notinside.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998 - 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/06/22  aobj; binary; outside New; derived from BETWEEN.  JHennick
+
+/*
+ 20/ 5/ 3  Fix CASEANY logic to > 0 for NetRexx update; documentation. JHennick
+ 99/05/09  use mrc() instead of rc().  ejt
+ 98/06/22  aobj; binary; outside New; derived from BETWEEN.  JHennick
+*/
 
 /** notinside
 
-
-   >>-+-BETWEEN----+--+---------+--delimitedString--+-number----------+---------><
-      +-INSIDE-----+  +-ANYcase-+                   +-delimitedString-+
-      +-NOTINSIDE--+
-      +-OUTSIDE----+
-
+   >>-+-NOTINSIDE--+--+------------+--delimitedString--+-number----------+---------><
+      +-NINSIDE----+  +-ANYcase----+                   +-delimitedString-+
+                      +-CASEANY----+
+                      +-IGNORECASE-+
+                      +-CASEIGNORE-+
 
   FRLABLE Contributed by Chuck Moore.
 
@@ -41,7 +44,7 @@ method run()
 
    parse arg() args
    parse args.upper() w1 .
-   anycase = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1)
+   anycase = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1) > 0
    if anycase then parse args . args
 
    ds = DString(args)
@@ -68,7 +71,6 @@ method run()
    if number > 0 then number = number + 1 -- inside  -- notinside
 
    _Label_len = Label.length()               -- handy to have around for speed
---q='';q=q;trace results -- nrt test line
 
    select
        when _Label_len > 0 & anycase then                   -- real label, ANYCASE
@@ -96,7 +98,6 @@ method run()
                         output(readto())
                      end
                      else loop until toLabel = _record.left(_toLabel_len)
---q=ask'111111111111111111111111111111' -- nrt test line
                         aobj = peekto()
                         _record = Rexx aobj
                         selectOutput(0)   -- notinside
@@ -126,7 +127,6 @@ method run()
             end
        when _Label_len <> 0 then                                    -- real label \anycase
             loop forever
---q=ask'000000000000000000000000000000' -- nrt test line
                aobj = peekto()          -- look at the next record
                _record = Rexx aobj          -- look at the next record
                if Label == _record.left(_Label_len) then
@@ -150,7 +150,6 @@ method run()
                         output(readto())
                      end
                      else loop until toLabel == _record.left(_toLabel_len)
---q=ask'111111111111111111111111111111' -- nrt test line
                         aobj = peekto()
                         _record = Rexx aobj
                         selectOutput(0)   -- notinside
