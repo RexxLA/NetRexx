@@ -1,2 +1,2 @@
 /* Run all diagnostics */
-'@java COM.ibm.netrexx.diag.DiagAll'
+'@java org.netrexx.diag.DiagAll'
