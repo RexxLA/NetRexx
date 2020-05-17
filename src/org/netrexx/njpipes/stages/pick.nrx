@@ -1,5 +1,6 @@
+-- pick.nrx NJPipe Stage
 /*
- *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 1997-2020 Ed Tomlinson
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -7,25 +8,88 @@
  *
  */
 
--- pick.nrx NJPipe Stage
--- 99/05/15  use Emsg.  ejt
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/07/30  use SelIRange.  ejt
--- 98/07/11  initial release. EJT
+/*
+ 20/ 5/16  NOPAD, CASELESS
+ 20/ 5/15  add \== and /==. Jeff Hennick
+ 99/05/15  use Emsg.  ejt
+ 99/05/09  use mrc() instead of rc().  ejt
+ 98/07/30  use SelIRange.  ejt
+ 98/07/11  initial release. EJT
+*/
 
 /** pick
 
- >>--PICK--+---------+--+----------+--+-------------+--+-==--+--+-----------------+-->
-           +-ANYcase-+  +-PAD xorc-+  +-inputRanges-+  +-^==-+  +-inputRanges-----+
-                                                       +-<<--+  +-delimitedString-+
-                                                       +-<<=-+
-                                                       +->>--+
-                                                       +->>=-+
+           +-NOPAD----+
+ >>--PICK--+----------+--+------------+--+------------+--+-==--+--+-----------------+-->
+           +-PAD xorc-+  +-ANYcase-(1)+  +-inputRange-+  +-^==-+  +-inputRange------+
+                         +-CASEANY----+                  +-<<--+  +-delimitedString-+
+                         +-CASEIGNORE-+                  +-<<=-+
+                         +-CASELESS---+                  +->>--+
+                         +-IGNORECASE-+                  +->>=-+
+                                                         +-\==-+(2)
+                                                         +-/==-+
+                                                         +-=---+
+                                                         +-^=--+
+                                                         +-<---+
+                                                         +-<=--+
+                                                         +->---+
+                                                         +->=--+
+                                                         +-\=--+(2)
+                                                         +-/=--+
 
-  The performance of Pick can be enhanced by reordering the compares in the
-  comp method to put your compare first.
+
+ Notes:
+  (1) Can be before PAD/NOPAD. Depreciated.
+  (2) The backslash (\) may need to be escaped, doubled, in some systems shells.
 
 */
+/** pick CMS
+
+            +-NOPAD-----+
+ >>--PICK---+-----------+--+------------+---->
+            +-PAD--xorc-+  +-ANYcase----+
+                           +-CASEANY----+
+                           +-CASEIGNORE-+
+                           +-CASELESS---+
+                           +-IGNORECASE-+
+
+ >--+--+---------------------+---| List |-+--><
+    |  +-+-FROM-+--+-------+-+            |
+    |  | +-TO---+  +-AFTER-+ |            |
+    |  +-WHILE---------------+            |
+    +-| Fromto |--------------------------+
+
+ Fromto:
+ |--FROM--+-------+--| List |--+-TO-+-------+--| List |-+--|
+          +-AFTER-+            |    +-AFTER-+           |
+                               +-COUNT--number----------+
+
+ List:
+ |--+-------------------+--| Test |--|
+    +-| List |--+-AND-+-+
+                +-OR--+
+
+ Test:
+ |--| RangeString |--+--| NonEqualOp |--| RangeString |--+--|
+                     +--| EqualOp |----| CommaList |-----+
+
+ CommaList:
+    +---,---------------+
+ |--v--| RangeString |--+--|
+
+ RangeString:
+ |--+-inputRange-------+--|
+    +-delimitedString--+
+    +-number+----------+
+
+ Character Operators:
+  == ^== \== /== << <<= >> >>= IN NOTIN
+
+ Numeric Operators
+  = ^= < <= > >=
+
+*/
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -54,6 +118,11 @@ method run()
 
    args = arg()
 
+   w = args.upper().wordpos('NOPAD')
+   if w>0 then do
+      args = args.delword(w,1)
+   end
+
    w = args.upper().wordpos('PAD')
    if w>0 then do
       pad = GetXorc(args.word(w+1))
@@ -63,7 +132,7 @@ method run()
    parse args w1 rest
    w1 = w1.upper()
 
-   anycase = rexx 'ANYCASE'.abbrev(w1, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1) > 0
+   anycase = rexx 'ANYCASE'.abbrev(w1, 3) | 'CASEANY IGNORECASE CASEIGNORE CASELESS'.wordpos(w1) > 0
    if anycase then args = rest
 
    r1 = GetIRanges(args)
@@ -71,12 +140,17 @@ method run()
    args = r1[0].Residue()
 
    if n1=0 then
-      Emsg(11,'Error - Range expected but none found')
+      Emsg(11,'Error -' getName() 'Range expected but none found')
 
    parse args comp args
-   cc = '== ^== << <<= >> >>='.wordpos(comp)
+   cc = '== ^== << <<= >> >>= \\== /=='.wordpos(comp)
+   if cc > 6 then cc = 2
+   if cc=0 then do
+     cc = '. . . . . . = ^= < <= > >= \\= /='.wordpos(comp)
+     if cc > 12 then cc = 8
+   end
    if cc=0 then
-      Emsg(11,'Error - compare operator expected found: 'comp)
+      Emsg(11,'Error -' getName() 'Compare operator expected found: 'comp)
 
    r2 = GetIRanges(args)
    n2 = r2[0].Number()
@@ -102,7 +176,7 @@ method run()
             loop i=2 to n1
                x = x||r1[i].SelIRange(robj,pad)
                if r1[j].endcol()>=r1[i].startcol() then
-                  Emsg(8,'Error - Invalid range (end before start)')
+                  Emsg(8,'Error -' getName() 'Invalid range (end before start)')
                j = i
             end
             if n2>0 then do
@@ -111,7 +185,7 @@ method run()
                loop i=2 to n2
                   y = y||r2[i].SelIRange(robj,pad)
                   if r2[j].endcol()>=r2[i].startcol() then
-                     Emsg(8,'Error - Invalid range (end before start)')
+                     Emsg(8,'Error -' getName() 'Invalid range (end before start)')
                   j = i
                end
             end
@@ -137,7 +211,7 @@ method run()
             loop i=2 to n1
                x = x||r1[i].SelIRange(robj,pad)
                if r1[j].endcol()>=r1[i].startcol() then
-                  Emsg(8,'Error - Invalid range (end before start)')
+                  Emsg(8,'Error -' getName() 'Invalid range (end before start)')
                j = i
             end
             if n2>0 then do
@@ -146,7 +220,7 @@ method run()
                loop i=2 to n2
                   y = y||r2[i].SelIRange(robj,pad)
                   if r2[j].endcol()>=r2[i].startcol() then
-                     Emsg(8,'Error - Invalid range (end before start)')
+                     Emsg(8,'Error -' getName() 'Invalid range (end before start)')
                   j = i
                end
             end
@@ -165,7 +239,7 @@ method run()
          loop i=2 to n1
             x = x||r1[i].SelIRange(robj,pad)
             if r1[j].endcol()>=r1[i].startcol() then
-               Emsg(8,'Error - Invalid range (end before start)')
+               Emsg(8,'Error -' getName() 'Invalid range (end before start)')
             j = i
          end
          if n2>0 then do
@@ -174,7 +248,7 @@ method run()
             loop i=2 to n2
                y = y||r2[i].SelIRange(robj,pad)
                if r2[j].endcol()>=r2[i].startcol() then
-                  Emsg(8,'Error - Invalid range (end before start)')
+                  Emsg(8,'Error -' getName() 'Invalid range (end before start)')
                j = i
             end
          end
@@ -199,6 +273,12 @@ method comp(x=rexx,y=rexx) returns boolean
          when cc=4 then return x.upper()<<=y.upper()
          when cc=5 then return x.upper()>>y.upper()
          when cc=6 then return x.upper()>>=y.upper()
+         when cc=7 then return x.upper()=y.upper()
+         when cc=8 then return x.upper()\=y.upper()
+         when cc=9 then return x.upper()<y.upper()
+         when cc=10 then return x.upper()<=y.upper()
+         when cc=11 then return x.upper()>y.upper()
+         when cc=12 then return x.upper()>=y.upper()
          otherwise
             return 0
       end
@@ -210,6 +290,12 @@ method comp(x=rexx,y=rexx) returns boolean
          when cc=4 then return x<<=y
          when cc=5 then return x>>y
          when cc=6 then return x>>=y
+         when cc=7 then return x=y
+         when cc=8 then return x\=y
+         when cc=9 then return x<y
+         when cc=10 then return x<=y
+         when cc=11 then return x>y
+         when cc=12 then return x>=y
          otherwise
             return 0
       end

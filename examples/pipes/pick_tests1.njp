@@ -1,0 +1,150 @@
+/** pick
+
+           +-NOPAD----+
+ >>--PICK--+----------+--+------------+--+------------+--+-==--+--+-----------------+-->
+           +-PAD xorc-+  +-ANYcase-(1)+  +-inputRange-+  +-^==-+  +-inputRange------+
+                         +-CASEANY----+                  +-<<--+  +-delimitedString-+
+                         +-CASEIGNORE-+                  +-<<=-+
+                         +-CASELESS---+                  +->>--+
+                         +-IGNORECASE-+                  +->>=-+
+                                                         +-\==-+
+                                                         +-/==-+(2)
+                                                         +-=---+
+                                                         +-^=--+
+                                                         +-<---+
+                                                         +-<=--+
+                                                         +->---+
+                                                         +->=--+
+                                                         +-\=--+(2)
+                                                         +-/=--+
+
+
+ Notes:
+  (1) Can be before PAD/NOPAD. Depreciated.
+  (2) The backslash (\) may need to be escaped, doubled, in some systems shells.
+
+*/
+/*
+  20/ 5/17 Jeff Hennick
+*/
+
+pipe (pick_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+   literal line 1.1;line 1.2 last;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   d: fanout ?
+
+-- pick range == range ?
+   d: |
+   pick 6.1 == 8.1 |
+   c1: compare any ~2# 1 pick range == range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;Line 2.2 |
+   split ; |
+   c1: ?
+
+-- pick range == dstring ?
+   d: |
+   pick 10.4 == /last/ |
+   c2: compare any ~2# 2 pick range == dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.2 last;LINE 3.1 last |
+   split ; |
+   c2: ?
+
+-- pick anycase range == dstring ?
+   d: |
+   pick anycase 10.4 == /last/ |
+   c3: compare any ~2# 3 pick anycase range == dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.2 last;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   c3: ?
+
+-- pick not range == dstring ?
+   d: |
+   not pick 1.4 == /line/ |
+   c4: compare any ~2# 4 not pick range == dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   c4: ?
+
+-- pick pad number range == range ?
+   d: |
+   pick pad 2 6.1 == 8.1 |
+   c5: compare any ~2# 5 pick pad number range == range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2;Line 2.2 |
+   split ; |
+   c5: ?
+
+-- pick range == dstring (secondary) ?
+   d: |
+   p6: pick 10.4 == /last/ |
+   hole ?
+   p6: |
+   c6: compare any ~2# 6 pick range == dstring (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2.1;line 2;Line 2.2;LIne 2.3 LAST |
+   split ; |
+   c6: ?
+
+-- pick range ^== dstring ?
+   d: |
+   pick 10.4 ^== /last/ |
+   c7: compare any ~2# 7 pick range ^== dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2.1;line 2;Line 2.2;LIne 2.3 LAST |
+   split ; |
+   c7: ?
+
+-- pick range \\== dstring ?
+   d: |
+   pick 10.4 \\== /last/ |
+   c8: compare any ~2# 8 pick range \\== dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2.1;line 2;Line 2.2;LIne 2.3 LAST |
+   split ; |
+   c8: ?
+
+-- pick range /== dstring ?
+   d: |
+   pick 10.4 /== /last/ |
+   c9: compare any ~2# 9 pick range /== dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2.1;line 2;Line 2.2;LIne 2.3 LAST |
+   split ; |
+   c9: ?
+
+-- pick nopad range /== dstring ?
+   d: |
+   pick nopad 10.4 /== /last/ |
+   c10: compare any ~2#10 pick nopad range /== dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2.1;line 2;Line 2.2;LIne 2.3 LAST |
+   split ; |
+   c10: ?
+
+-- pick range /= dstring ?
+   d: |
+   pick 10.4 /= /last/ |
+   c11: compare any ~2#11 pick range /= dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2.1;line 2;Line 2.2 |
+   split ; |
+   c11: ?
+
+-- pick range \\= dstring ?
+   d: |
+   pick 10.4 \\= /last/ |
+   c12: compare any ~2#12 pick range \\= dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 2.1;line 2;Line 2.2 |
+   split ; |
+   c12: ?
