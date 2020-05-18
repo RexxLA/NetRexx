@@ -3,8 +3,28 @@
  *  Copyright (C) 2019 René Jansen
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program. 
+ *  and distributing this program.
  */
+
+/*
+  20/ 5/18 Documentation; error tests. Jeff Hennick
+  19/  /   René Jansen
+*/
+
+/** query
+            +-VERSION------+
+ >>--Query--+--------------+-----------><
+            +-LEVEL--------+
+            +-SOURCE-(1)---+
+            +-MSGLEVEL-(2)-+
+            +-MSGLIST-(2)--+
+
+   Notes:
+   (1) Not CMS
+   (2) Not njPipes
+*/
+
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
@@ -15,12 +35,12 @@ class query extends stage
   method run() public
     do
       w1 = rexx ''
-      args = rexx ''
-      eoff = rexx ''
-      eof = rexx 1
-      
+ --     args = rexx ''
+ --     eoff = rexx ''
+ --     eof = rexx 1
+
       parse arg() w1 args
-      
+
       w1 = w1.upper()
 
       vv=''
@@ -28,26 +48,37 @@ class query extends stage
       parse vv 'build' vv
       parse vv '-' vv
 
-      select
-	when w1='VERSION',w1='' then do
-	a = NrVersion().getPipesVersion() '(Version.Release/Mod) - Generated' vv
-	end
-	when w1='LEVEL' then do
-	a = NrVersion().getPipesVersion()
-	end
-	when w1='SOURCE' then do
-	  a ="NetRexx"
-	end
-
-	otherwise
+      select case w1
+        when '' then do
+           a = NrVersion().getPipesVersion() '(Version.Release/Mod) - Generated' vv
+        end
+        when 'VERSION' then do
+           a = NrVersion().getPipesVersion() '(Version.Release/Mod) - Generated' vv
+        end
+        when 'LEVEL' then do
+           a = NrVersion().getPipesVersion()
+        end
+        when 'SOURCE' then do
+           a ="NetRexx"
+        end
+        when 'MSGLEVEL' then do
+           Emsg(11,'Error - 'getName()' MSGLEVEL is not implemented in njPipes')
+        end
+        when 'MSGLIST' then do
+           Emsg(11,'Error - 'getName()' MSGLIST is not implemented in njPipes')
+        end
+        otherwise
+           Emsg(11,'Error - 'getName()' option 'w1' is not recognized')
       end
-      
+      if args <> '' then
+        Emsg(11,'Error - 'getName()' option 'args' is not recognized')
+
       output(a)
       select
         when outStreamNumber()=-99 then do
           if w1 <> 'SOURCE' then say a
           shortStreams()                  -- get out of the picture
-	end
+        end
         when inStreamNumber()=-99 then
           exit(0)                         -- just exit
         otherwise
