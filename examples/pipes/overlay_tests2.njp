@@ -1,0 +1,74 @@
+/** OVERLAY  njPipes
+
+                 +-NOHOLD-(1)-+ +-PAD-(1)+ +-BLANK----+
+ >>--OVERlay-(1)-+------------+-+--------+-+----------+-+--------------------------+-+-----------------------+--><
+                 +-HOLD-(1)---+            +-xorc-----+ +-TRANSparent-+-xorc--+-(1)+ +-STRING--dstring-(1)(2)+
+                                           +-SPACE-(1)+               +-BLANK-+
+                                                                      +-SPACE-+
+
+   HOLD keeps the last record from each stream, except primary, and uses it if the stream ends.
+   TRANSPARENT means that character can be different from the PAD character.
+     If omitted, it is the same as PAD character.
+   dstream can be used instead of a non-primary stream.
+
+   (1) njPipes only
+   (2) same as highest (+1) stream; implies HOLD
+
+*/
+/*
+  20/ 5/18 Jeff Hennick
+*/
+
+pipe (overlay_tests2)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+-- multi line ?
+   literal abc;def;ghi;jkl;mno;pqr;stu;vwx |
+   split ; |
+   fold1: overlay |
+   c1: compare any ~2# 1 multi line ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1 22 333 4444 |
+   split |
+   fold1: ?
+   literal # |
+   split |
+   fold1: ?
+   literal #bc;22f;333;4444;mno;pqr;stu;vwx |
+   split ; |
+   c1: ?
+
+-- IBM manual p506 ?
+   strliteral /abc  fgh/  |
+   o2: overlay |
+   c2: compare any ~2# 2 IBM manual p506 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /1 34  789/  |
+   o2: ?
+   literal 1b34 f789 |
+   c2: ?
+
+-- overla ?
+   strliteral /abc  fgh/  |
+   o3: overla |
+   c3: compare any ~2# 3 overla ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /1 34  789/  |
+   o3: ?
+   literal 1b34 f789 |
+   c3: ?
+
+-- overl ?
+   strliteral /abc  fgh/  |
+   o4: overl |
+   c4: compare any ~2# 4 overl ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /1 34  789/  |
+   o4: ?
+   literal 1b34 f789 |
+   c4: ?
+

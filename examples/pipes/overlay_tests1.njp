@@ -1,13 +1,22 @@
-/** OVERLAY
+/** OVERLAY  njPipes
 
-              +-BLANK-+
- >>--OVERlay--+-------+----------------------------------------------><
-              +-xorc--+
+                 +-NOHOLD-(1)-+ +-PAD-(1)+ +-BLANK----+
+ >>--OVERlay-(1)-+------------+-+--------+-+----------+-+--------------------------+-+-----------------------+--><
+                 +-HOLD-(1)---+            +-xorc-----+ +-TRANSparent-+-xorc--+-(1)+ +-STRING--dstring-(1)(2)+
+                                           +-SPACE-(1)+               +-BLANK-+
+                                                                      +-SPACE-+
+
+   HOLD keeps the last record from each stream, except primary, and uses it if the stream ends.
+   TRANSPARENT means that character can be different from the PAD character.
+     If omitted, it is the same as PAD character.
+   dstream can be used instead of a non-primary stream.
+
+   (1) njPipes only
+   (2) same as highest (+1) stream; implies HOLD
 
 */
-
 /*
-  20/ 5/ 5 Jeff Hennick
+  20/ 5/18 Jeff Hennick
 */
 
 pipe (overlay_tests1)
@@ -92,3 +101,15 @@ pipe (overlay_tests1)
    o7: ?
    literal 1bx4yf789 z |
    c7: ?
+
+-- 2 records ?
+   strliteral /abc  fgh;xyz/  |
+   split ; |
+   o8: overlay blank |
+   c8: compare any ~2# 8 2 records~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /1 34  789/  |
+   o8: ?
+   literal 1b34 f789;xyz |
+   split ; |
+   c8: ?
