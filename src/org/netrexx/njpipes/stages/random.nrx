@@ -1,3 +1,27 @@
+-- random.nrx NJPipe Stage
+/*
+ *  Copyright (C) 1997 Ed Tomlinson
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/** random
+
+ >>--RANDOM--+---------------------------------+----><
+             | +-*----------+  +-*-----------+ |
+             +-+-max_number-+--+-------------+-+
+                               +-seed_number-+
+
+  Note: njPipes will be a different sequence than CMS gives with the same seed.
+
+*/
+
+/*
+  20/ 5/18  Added *s; nanoTime was currentTimeMills; documentation.  Jeff Hennick
+  97/  /    Ed Tomlinson
+*/
+
 options binary nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
@@ -9,15 +33,26 @@ method run() public
    mask = java.lang.Integer.MAX_VALUE
 
    n = arg()
-   if \n.datatype('W') then
-      exit(16)
+   parse n max seed .
+   if seed = '' then seed = '*'
+   if seed = '*' then seed = nanoTime()
+   if max = '' then max = '*'
 
-   x = java.util.Random(currentTimeMillis())
+   if \max.datatype('W') & max \= '*' then
+      Emsg(11,'Error - 'getName()' option 'max' must be positive number or *.')
 
-   loop for (int n)
-      output(rexx(x.nextInt&mask))
+   if max = '*' then max = mask
+   else max = max + 1
+
+   if max < 0 then
+      Emsg(11,'Error - 'getName()' option 'max' must be positive number or *.')
+
+   x = java.util.Random(seed)
+
+   loop
+      output(rexx(x.nextInt(max)))
    catch StageError
       rc = rc()
    end
 
-   exit(rc)
+   exit(rc * (rc<>12))
