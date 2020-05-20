@@ -8,6 +8,31 @@
  */
 
 /** sort
+  njPipes
+                                                       +-Ascending-(1)-+
+ >>--SORT--+-----------------------------+--+-------+--+---------------+--><
+           |   +-REXX-----+  +-10000-+   |  +-range-+  +-Descending-(1)+
+           +-(-+----------+--+-------+-)-+
+               +-class-(2)+  +-size--+
+
+    Note:
+     (1) May come before range, for backwards compatability.
+     (2) requires that you implement another sortClass with a name begining with 'sort'
+
+  CMS
+                       +-NOPAD----+
+  >>--SORT-+--------+--+----------+--+---------+--->
+           +-COUNT--+  +-PAD-xorc-+  +-ANYcase-+
+           +-UNIQue-+
+
+     +-Ascending------------------------------------+
+  >--+----------------------------------------------+---><
+     +-Descending-----------------------------------+
+     | +-----------------------------------------+  |
+     | |            +-Ascending--+               |  |
+     +-v-inputRange-+------------+--+----------+-+--+
+                    +-Descending-+  +-NOPAD----+
+                                    +-PAD-xorc-+
 
 This sort routine is very basic.  It uses sortRexx class, which implements
 the sortClass interface.  To sort objects of classes other than Rexx requires
@@ -16,17 +41,19 @@ that you implement another sortClass with a name begining with 'sort'.
 I implemented this class using an Java array for the objects to be sorted as
 opposed to a Rexx stem.  Using an array is about 50% faster.  I choose a quick/
 Bose Norman sort since I had the code, in Rexx, for it from a time before I
-had pipes on CMS!
+had pipes on CMS! EJT
 
 */
-
--- 99/10/07 fixed order of args.  ejt
--- 99/05/19 reversed range and direction to match CMS.  ejt
--- 98/07/30 use StageError(13,... in stageExit.  ejt
--- 98/07/29 sortExit was not prefixing generated method with the pipe name. ejt
--- 98/07/23 split into sort and qsort classes
--- 98/07/20 exploit IRange.  ejt
--- 98/07/17 fix alg. problems when long strings of the same key. EJT
+/*
+  20/ 5/20 expanded Ascending/Descending; documentation. Jeff Hennick
+  99/10/07 fixed order of args.  ejt
+  99/05/19 reversed range and direction to match CMS.  ejt
+  98/07/30 use StageError(13,... in stageExit.  ejt
+  98/07/29 sortExit was not prefixing generated method with the pipe name. ejt
+  98/07/23 split into sort and qsort classes
+  98/07/20 exploit IRange.  ejt
+  98/07/17 fix alg. problems when long strings of the same key. EJT
+*/
 
 package org.netrexx.njpipes.stages
 
@@ -88,10 +115,19 @@ end
 
 parse args ad range
 
+if range = '' then do
+  if ad \= '' then do
+    if ad.upper().left(1)\='A' & ad.upper().left(1)\='D' then do
+      range = ad
+      ad = 'A'
+    end
+  end
+end
+
 if ad='' then
    ad = 'A'
 else do
-   if range.upper()='A' | range.upper()='D' then do
+   if range.upper().left(1)='A' | range.upper().left(1)='D' then do
       temp = ad
       ad = range
       range = temp
@@ -99,9 +135,13 @@ else do
 end
 
 ad = ad.upper()
+if 'ASCENDING'.abbrev(ad,1) then ad = 'A'
+if 'DESCENDING'.abbrev(ad,1) then ad = 'D'
 
 if ad<>'' & ad<>'A' & ad<>'D' then
-   signal StageError(13,'Error - expected A or D, found: 'args)
+   signal StageError(13, getName() 'Error - expected Ascending or Descending, found: 'args)
+
+args = ad range
 
 if range='' then
    nr= -1
