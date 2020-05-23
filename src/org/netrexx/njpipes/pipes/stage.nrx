@@ -1,12 +1,13 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *  Copyright (C) 2011-2019 Rexx Language Association
+ *  Copyright (C) 2011-2020 Rexx Language Association
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  *
  */
 
+-- 2020/05/23 added isFirstStage(). Jeff Hennick
 -- 2019/08/02 remove all jitcache references. rvj
 -- 2001/05/12 fix Emsg to iterrupt the stage too - we cannot let the stage run...  ejt
 -- 2001/05/11 fix exit logic to commit to -1 and report init errors.  ejt
@@ -61,7 +62,7 @@ stage implementations.  One would work like the current class, the other
 would use method calls.  Not all stages could exploit the second type of
 stage.  A pipe would use stages of both types and would allocate threads only
 when necessary.  Note this implies that all data sources must be threaded
-stages. 
+stages.
 
 I think that a pipe dispatcher could be used to allow stages, at least threaded
 ones, to keept the same syntax.  The dispatcher would know when to call methods
@@ -87,7 +88,7 @@ properties public
 
 T     = Thread            -- the thread for this stage
 
-properties public 
+properties public
 
 p      = pipe             -- main pipe of this stage
 top    = pipe             -- top pipe in this pipeline
@@ -135,7 +136,7 @@ INCREMENT    = int  256
 
 -- Build an unconnected stage
 
-method stage() 
+method stage()
 
    isPipe = 0             -- can be viewed as a pipe object
 
@@ -271,10 +272,10 @@ method Emsg(n=int,s=String) signals ThreadQ
       _mrc = n
 
    _err = StageError(n,s)
- 
+
    p.T.Interrupt()   -- kill the pipe
 
-   Exit(n) 
+   Exit(n)
 
 
 -- set Priority
@@ -298,11 +299,16 @@ method setName(n=String)
 
 -- get the thread name
 
-
 method getName() returns String
 
    return _name
 
+-- get if this stage is first working stage in pipe fragment.  Ignores precedding COMMENT stage(s)
+--  added 2020/ 5/23 Jeff Hennick
+
+method isFirstStage() returns boolean
+
+   return (this.sin = -99) -- means the input stream is not connected to any other stage
 
 -- set stall time
 
@@ -1293,9 +1299,9 @@ do protect this
 
 end
 
-if severed<>-99 then 
+if severed<>-99 then
    work.outs.severCallback(0,severed)
-   
+
 
 -- exit a stage severing all output streams
 
@@ -1303,7 +1309,7 @@ if severed<>-99 then
 
     if (p._debug&8)<>0 then
       say 'Preparing to stop' _name p c p._active
-    
+
     loop while super.in<>null         -- sever inputs
       do
         inn = findin(super.in.sout)
@@ -1312,7 +1318,7 @@ if severed<>-99 then
       catch StageError
       end
     end
-    
+
     loop while super.out<>null       -- sever outputs
       do
         outn = findout(super.out.sin)
@@ -1321,18 +1327,18 @@ if severed<>-99 then
       catch StageError
       end
     end
-    
+
     _rc = c
-    
+
     do protect this          -- wakeup anyone waiting on us
       commit(-1)
       notifyAll()
     end
-    
+
     do protect p             -- let pipe know stage is ending
       if _rc>p._rc then do
 	p._rc = rc
-	p._err = _err 
+	p._err = _err
       end
       do
 	p._active = p._active-going       -- just incase exit called twice
@@ -1345,18 +1351,18 @@ if severed<>-99 then
 	say 'Stopping' _name p c p._active
       p.notifyAll()
     end
-    
+
     signal ThreadQ                       -- make sure exit is always safe...
-    
-    
-    
+
+
+
     -- replace output of stage with link
-    
+
   method inStream(nn=int,l=link,s=boolean) protect signals StageError
-    
+
     if nn<0 then
       Error(13,'inStream no stream selected')
-    
+
     n = findin(nn)                      -- does this stream exist?
     if l.input() then
       do                    -- *in: !
@@ -1406,12 +1412,12 @@ if severed<>-99 then
       --       in either case sent outn null to show sever...???
     end
     notifyAll()                         -- allow pending outputs to switch outs
-    
-    
+
+
     -- replace input of a stage with link
-    
+
   method outStream(nn=int,l=link,s=boolean) protect signals StageError
-    
+
    if nn<0 then
       Error(13,'outStream no stream selected')
 
@@ -1507,7 +1513,7 @@ method getPipeName()
 
    return p.getName()
 
-method pipStop signals ThreadQ 
+method pipStop signals ThreadQ
 
    p.T.Interrupt()
-   exit(12)  
+   exit(12)
