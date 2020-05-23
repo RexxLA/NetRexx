@@ -1,0 +1,159 @@
+/** space
+
+                                (1)
+           +-1------+  +-BLANK--------------+
+ >>--SPACE-+--------+--+--------------------+--->
+           +-number-+  +-xorc---------------+
+                       +-+--------+-dstring-+
+                         +-STRing-+
+
+           (2)
+    +-BLANK-----------------+
+ >--+-----------------------+--><
+    +-xorc------------------+
+    | +-ANYof-----+         |
+    +-+-----------+-dstring-+
+      +-ALLof-(3)-+
+
+ Notes:
+  (1) the replacement char/string -- must be there if (2) is specified
+  (2) the char/chars that will be stripped and replaced
+  (3) njPipes only, not CMS.  The dstring is treated as a single unit for stripping or replacing
+
+*/
+/*
+ 20/ 5/22 Jeff Hennick
+*/
+
+pipe (space_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+-- the straightforward version, multiple spaces to one ?
+   literal a       b       c      d   e |
+   space |
+   c1: compare any ~2# 1 space ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a b c d e |
+   c1: ?
+
+-- space; IBM ex 1 p565 ?
+   literal   a   b   b    |
+   space |
+   insert /*/ after |
+   c2: compare any ~2# 2 space; IBM ex 1 p565~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a b b* |
+   c2: ?
+
+-- space BLANK; IBM ex 2 p565 ?
+   literal   a   b   b    |
+   space BLANK |
+   insert /*/ after |
+   c3: compare any ~2# 3 space BLANK; IBM ex 2 p565~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a b b* |
+   c3: ?
+
+-- space 0 char dstring; IBM ex 3 p565 ?
+   literal 3.6=7,3 |
+   space 0 ! /,.=/ |
+   c4: compare any ~2# 4 space 0 char dstring; IBM ex 3 p565~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3673 |
+   c4: ?
+   literal 2# 4 NOTE: IBM Book has it wrong. They are missing the middle value, so what they want as the last is read as the middle. |
+   o: ?
+
+-- space number ?
+   literal a       b       c      d   e |
+   space 3 |
+   c5: compare any ~2# 5 space number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a   b   c   d   e |
+   c5: ?
+
+-- space number char ?
+   literal a       b       c      d   e |
+   space 3 z |
+   c6: compare any ~2# 6 space number char ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal azzzbzzzczzzdzzze |
+   c6: ?
+
+-- space char ?
+   literal a       b       c      d   e |
+   space z |
+   c7: compare any ~2# 7 space char ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal azbzczdze |
+   c7: ?
+
+-- space string; IBM ex 4 p565 ?
+   literal a  b   c      d  |
+   space /(*)/ |
+   c8: compare any ~2# 8 space string; IBM ex 4 p565 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a(*)b(*)c(*)d  |
+   c8: ?
+
+-- space number string; IBM ex 5 p565 ?
+   literal a  b   c      d  |
+   space 2 /(*)/ |
+   c9: compare any ~2# 9 space number string; IBM ex 4 p565 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a(*)(*)b(*)(*)c(*)(*)d  |
+   c9: ?
+
+-- space 0 char ANYOF dstring; IBM ex 3 p565 ?
+   literal 3.6=7,3 |
+   space 0 ! ANYOF /,.=/ |
+   c10: compare any ~2#10 space 0 char ANYOF dstring; IBM ex 3 p565~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3673 |
+   c10: ?
+   literal 2#10 NOTE: IBM Book has it wrong. They are missing the middle value, so what they want as the last is read as the middle. |
+   o: ?
+
+-- space 0 ANYOF dstring; IBM ex 3 p565 ?
+   literal 3.6=7,3 |
+   space 0 ANYOF /,.=/ |
+   c11: compare any ~2#11 space 0 ANYOF dstring; IBM ex 3 p565~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3673 |
+   c11: ?
+
+-- space 0 ALLOF dstring (leading) ?
+   literal ,.=,.=3.6=7,3 |
+   space 0 ALLOF /,.=/ |
+   c12: compare any ~2#12 space 0 ALLOF dstring (leading)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3.6=7,3 |
+   c12: ?
+
+-- space 0 ALLOF dstring (trailing) ?
+   literal 3.6=7,3,.=,.= |
+   space 0 ALLOF /,.=/ |
+   c13: compare any ~2#13 space 0 ALLOF dstring (trailing)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3.6=7,3 |
+   c13: ?
+
+-- space 0 ALLOF dstring (mid) ?
+   literal 3.6=,.=7,3 |
+   space 0 ALLOF /,.=/ |
+   c14: compare any ~2#14 space 0 ALLOF dstring (mid)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3.6=7,3 |
+   c14: ?
+
+-- space 0 ALL dstring (mid) ?
+   literal 3.6=,.=7,3 |
+   space 0 ALL /,.=/ |
+   c15: compare any ~2#15 space 0 ALL dstring (mid)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3.6=7,3 |
+   c15: ?
