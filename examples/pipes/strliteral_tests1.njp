@@ -1,0 +1,134 @@
+/** strliteral
+
+   >>--STRLITeral--+------------------------------+--->
+                   | +-PREFACE-+                  |
+                   +-+---------+--+-------------+-+
+                   | +-APPEND--+  +-CONDitional-+ |
+                   +-IFEMPTY----------------------+
+
+   >-+-----------------+-----------><
+     +-delimitedString-+
+*/
+
+/*
+  20/ 5/23 Jeff Hennick
+*/
+
+pipe (strliteral_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- dstring  ?
+   strliteral  /  Some stuff with  spaces.  /|
+   c1: compare any ~2# 1 strliteral dstring  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff with  spaces.  / |
+   c1: ?
+
+-- dstring (preface) ?
+   literal xyz |
+   strliteral  /  Some stuff with  spaces.  / |
+   c2: compare any ~2# 2 strliteral dstring (preface)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral  /  Some stuff with  spaces.  ;xyz/ |
+   split ; |
+   c2: ?
+
+-- APPEND dstring (w/ control char) ?
+   literal xyz |
+   strliteral  append /  Some stuff\n with  spaces.  / |
+   c3: compare any ~2# 3 strliteral APPEND dstring (w/ control char)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /xyz;  Some stuff\n with  spaces.  / |
+   split ; |
+   c3: ?
+
+-- PREFACE dstring (w/ control char, preface) ?
+   literal xyz |
+   strliteral  preface /  Some stuff\n with  spaces.  / |
+   c4: compare any ~2# 4 strliteral PREFACE dstring (w/ control char, preface)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff\n with  spaces.  ;xyz/ |
+   split ; |
+   c4: ?
+
+-- APPEND dstring (w/ control char, preface) ?
+   literal xyz |
+   strliteral  append /  Some stuff\n with  spaces.  / |
+   c5: compare any ~2# 5 strliteral APPEND dstring (w/ control char, preface)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /xyz;  Some stuff\n with  spaces.  / |
+   split ; |
+   c5: ?
+
+-- CONDITIONAL dstring (w/ control char, preface) ?
+   literal xyz |
+   strliteral  conditional /  Some stuff\n with  spaces.  / |
+   c6: compare any ~2# 6 strliteral CONDITIONAL dstring (w/ control char, preface)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff\n with  spaces.  ;xyz/ |
+   split ; |
+   c6: ?
+
+-- CONDITIONAL dstring (no data; w/ control char, preface) ?
+   strliteral  conditional /  Some stuff\n with  spaces.  / |
+   c7: compare any ~2# 7 strliteral CONDITIONAL dstring (no data; w/ control char, preface)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   c7: ?
+
+-- IFEMPTY dstring (w/ control char, preface) ?
+   literal xyz |
+   strliteral  ifempty /  Some stuff\n with  spaces.  / |
+   c8: compare any ~2# 8 strliteral IFEMPTY dstring (w/ control char, preface)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /xyz/ |
+   split ; |
+   c8: ?
+
+-- IFEMPTY dstring (no data; w/ control char, preface) ?
+   strliteral  ifempty /  Some stuff\n with  spaces.  / |
+   c10: compare any ~2#10 strliteral IFEMPTY dstring (no data; w/ control char, preface)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff\n with  spaces.  / |
+   c10: ?
+
+-- IFEMPTY (blank) ?
+   literal xyz |
+   strliteral  / |
+   c11: compare any ~2#11 strliteral (blank)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /_;xyz/ |
+   split ; |
+   change /_// |
+   c11: ?
+
+-- strlitera dstring  ?
+   strlitera  /  Some stuff with  spaces.  /|
+   c12: compare any ~2#12 strlitera dstring  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff with  spaces.  / |
+   c12: ?
+
+-- strliter dstring  ?
+   strliter  /  Some stuff with  spaces.  /|
+   c13: compare any ~2#13 strliter dstring  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff with  spaces.  / |
+   c13: ?
+
+-- strlite dstring  ?
+   strlite  /  Some stuff with  spaces.  /|
+   c14: compare any ~2#14 strlite dstring  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff with  spaces.  / |
+   c14: ?
+
+-- strlit dstring  ?
+   strlit  /  Some stuff with  spaces.  /|
+   c15: compare any ~2#15 strlit dstring  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /  Some stuff with  spaces.  / |
+   c15: ?
