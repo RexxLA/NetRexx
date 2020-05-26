@@ -1,0 +1,142 @@
+/** timestamp
+
+                         (1)          (2)
+  >>--TIMEstamp--+--+--------------------------+--+-------><
+                 |  |  +-8------+              |  |
+                 |  +--+-number-+--+--------+--+  |
+                 |                 +-number-+     |
+                 +-SHOrtdate----------------------+  ( 3/09/46 23:59:59)
+                 +-ISOdate------------------------+  (1946-03-09 23:59:59)
+                 +-FULLdate-----------------------+  ( 3/09/1946 23:59:59)
+                 +-STAndard-----------------------+  (19460309235959)
+                 +-STRing--dstring--(3)-----------+
+  Notes:
+   (1) First character, from right, to include, <= 16
+   (2) Count of characters to include. <= 16 - (1). Default = (1)
+   (3)
+       %% A single %.
+       %Y Four digits year including century (0000-9999).
+       %y Two-digit year of century (00-99).
+       %m Two-digit month (01-12).
+       %n Two-digit month with initial zero changed to blank ( 1-12).
+       %d Two-digit day of month (01-31).
+       %e Two-digit day of month with initial zero changed to blank ( 1-31).
+       %j Julian day of year (001-366).
+       %H Hour, 24-hour clock (00-23).
+       %k Hour, 24-hour clock with leading zero blank ( 0-23).
+       %M Minute (00-59).
+       %S Second (00-60).
+       %F Equivalent to %Y-%m-%d (the ISO 8601 date format).
+       %T Short for %H:%M:%S.
+       %t Tens and hundredth of a second (00-99).
+*/
+
+/*
+  20/ 5/25 Jeff Hennick
+*/
+
+pipe (timestamp_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- timestamp  ?
+   literal abc;def;ghi |
+   split ; |
+   timestamp |
+   overlay string /!!!!!!!!/ |
+   c1: compare any ~2# 1 timestamp  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!!!!!!! abc;!!!!!!!! def;!!!!!!!! ghi;|
+   split ; |
+   c1: ?
+
+-- timestamp number (1)?
+   literal abc;def;ghi |
+   split ; |
+   timestamp 1 |
+   overlay string /!/ |
+   c2: compare any ~2# 2 timestamp number (1)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal ! abc;! def;! ghi;|
+   split ; |
+   c2: ?
+
+-- timestamp number (16)?
+   literal abc;def;ghi |
+   split ; |
+   timestamp 16 |
+   overlay string /!!!!!!!!!!!!!!!!/ |
+   c3: compare any ~2# 3 timestamp number (16)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!!!!!!!!!!!!!!! abc;!!!!!!!!!!!!!!!! def;!!!!!!!!!!!!!!!! ghi;|
+   split ; |
+   c3: ?
+
+-- timestamp ISO ?
+   literal abc;def;ghi |
+   split ; |
+   timestamp ISO |
+   overlay string /!!!! !! !! !! !! !!/ |
+   c4: compare any ~2# 4 timestamp ISO ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!!!-!!-!! !!:!!:!! abc;!!!!-!!-!! !!:!!:!! def;!!!!-!!-!! !!:!!:!! ghi;|
+   split ; |
+   c4: ?
+
+-- timestamp FULL ?
+   literal abc;def;ghi |
+   split ; |
+   timestamp FULL |
+   overlay string /!! !! !!!! !! !! !!/ |
+   c5: compare any ~2# 5 timestamp FULL ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!/!!/!!!! !!:!!:!! abc;!!/!!/!!!! !!:!!:!! def;!!/!!/!!!! !!:!!:!! ghi;|
+   split ; |
+   c5: ?
+
+-- timestamp SHORT ?
+   literal abc;def;ghi |
+   split ; |
+   timestamp SHORT |
+   overlay string /!! !! !! !! !! !!/ |
+   c6: compare any ~2# 6 timestamp SHORT ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!/!!/!! !!:!!:!! abc;!!/!!/!! !!:!!:!! def;!!/!!/!! !!:!!:!! ghi;|
+   split ; |
+   c6: ?
+
+-- timestamp STANDARD ?
+   literal abc;def;ghi |
+   split ; |
+   timestamp STANDARD |
+   overlay string /!!!!!!!!!!!!!!/ |
+   c7: compare any ~2# 7 timestamp STANDARD ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!!!!!!!!!!!!! abc;!!!!!!!!!!!!!! def;!!!!!!!!!!!!!! ghi;|
+   split ; |
+   c7: ?
+
+-- timestamp number number ?
+   literal abc;def;ghi |
+   split ; |
+   timestamp 8 4 |
+   overlay string /!!!!/ |
+   c8: compare any ~2# 8 timestamp number number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!!! abc;!!!! def;!!!! ghi;|
+   split ; |
+   c8: ?
+
+-- timestamp STRING (all!) ?
+   literal abc;def;ghi |
+   split ; |
+   timestamp STRING %Y*%y*%m*%n*%d*%e*%j*%H*%k*%M*%S*%F*%T*%t*%%* |
+   overlay string /!!!! !! !! !! !! !! !!! !! !! !! !! !!!! !! !! !! !! !! !!   / |
+   c9: compare any ~2# 9 timestamp STRING (all!) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal !!!!*!!*!!*!!*!!*!!*!!!*!!*!!*!!*!!*!!!!-!!-!!*!!:!!:!!*!!*%* abc;!!!!*!!*!!*!!*!!*!!*!!!*!!*!!*!!*!!*!!!!-!!-!!*!!:!!:!!*!!*%* def;!!!!*!!*!!*!!*!!*!!*!!!*!!*!!*!!*!!*!!!!-!!-!!*!!:!!:!!*!!*%* ghi;|
+   split ; |
+   c9: ?
