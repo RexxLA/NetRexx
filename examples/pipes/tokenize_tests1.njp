@@ -1,0 +1,58 @@
+/** tokenize
+
+   >>--+-TOKENIZE-+--+---------------------+--+-----------------+--><
+       +-TOKENISE-+  +-delimitedString-(1)-+  +-delimitedString-+
+
+  Note:
+   (1) In CMS, the first delimited string is required.
+       In njPipes, it defaults to //.
+
+*/
+
+/*
+  20/ 5/26 Jeff Hennick
+*/
+
+pipe (tokenize_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- tokenize // ?
+   literal abc def ghi |
+   tokenize // |
+   c1: compare any ~2# 1 tokenize //~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc;def;ghi |
+   split ; |
+   c1: ?
+
+-- tokenize /chars/ /separator line/ ?
+   literal near[1]= just gone; near[2]= just after |
+   literal apples = bananas(cherries+dates) |
+   tokenize /()=+[];/ @between lines.@ |
+   c2: compare any ~2# 2 tokenize /chars/ /separator line/~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal apples@=@bananas@(@cherries@+@dates@)@between lines.@near@[@1@]@=@just@gone@;@near@[@2@]@=@just@after@between lines. |
+   split @ |
+   c2: ?
+
+-- tokenise // ?
+   literal abc def ghi |
+   tokenise // |
+   c3: compare any ~2# 3 tokenise //~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc;def;ghi |
+   split ; |
+   c3: ?
+
+-- tokenize (null) ?
+   literal abc def ghi |
+   tokenize |
+   c4: compare any ~2# 4 tokenize (null)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc;def;ghi |
+   split ; |
+   c4: ?
