@@ -5,112 +5,112 @@ import java.net.
 
 package org.netrexx.njpipes.stages
 
-class hostbyname extends stage 
-  
+class hostbyname extends stage
+
   /*
    *  HOSTBYNAME - Resolve a Domain Name into an IP Address
    *
    *  The input to HOSTBYNAME is a list of hostnames (possibly qualified by their domain
-   *  name).  For each hostname it determines the corresponding IP address; this information 
+   *  name).  For each hostname it determines the corresponding IP address; this information
    *  is written to the output stream.  Where multiple IP addresses exist for a given
-   *  name they are written with a 'space' separator.  When the domain or host name cannot be 
+   *  name they are written with a 'space' separator.  When the domain or host name cannot be
    *  resolved, the input hostname and additional information are written to the output
-   *  stream.   
-   *                                           
+   *  stream.
+   *
    *  HOSTBYNAME --------------+---------------+-------->
-   *                           |               |    
-   *                           +--INCLUDENAME--+  (1)   
+   *                           |               |
+   *                           +--INCLUDENAME--+  (1)
    *
    *
    *  (1) Optional parameter not present in VM/CMS version
    *
    *  Arguments:  INCLUDENAME        - Also include the name of the host on output.
-   *                                   Output:   <hostname>/<ip address>
+   *                                   Output:   &lt;hostname&gt;/&lt;ip address&gt;
    *                                   Example:  dns.google/8.8.8.8
    *
    *  Examples:
    *
    *   pipe "literal dns.google | hostbyname | console"
    *   8.8.4.4 8.8.8.8
-   *	  
+   *	
    *   pipe "literal dns.google | hostbyname includename | console"
    *   dns.google/8.8.4.4 dns.google/8.8.8.8
-   *	  
+   *	
    *   pipe "literal www.shaw.ca | hostbyname | console"
    *   23.6.246.208
-   *	  
+   *	
    *   pipe "literal bogus.bogus | hostbyname | console"
    *   # Input record 1: Unable to determine IP address for bogus.bogus #
    *
    *
    *  Known issues:  The underlying Java getAllByName does not appear to handle names that return
-   *                 IPv6 addresses in any known and consistent manner.   
+   *                 IPv6 addresses in any known and consistent manner.
    *
    *  Change History:
-   *        
+   *
    *      2020-04-05   CK        - Initial kick
-   *                                   
+   *
    *
    *
    */
 
-  method run() signals ThreadQ 
-    
+  method run() signals ThreadQ
+
     a           = Rexx             /* arguments passed to filter                               */
     addr_all    = InetAddress[]    /* holds all IP addresses returned by Java getAllByName     */
     data        = Rexx             /* Rexxified output from stringified output of getAllByName */
     addr_out    = ""               /* output string passed on to next filter                   */
     rec_num     = 0                /* current record number being processed                    */
     includename = 0                /* flag for optional inclusion of hostname on output        */
-    
-    /* -- Process any arguments -- */                               
-    
+
+    /* -- Process any arguments -- */
+
     a = Rexx (arg(null))
-    
+
     if a \= null then do
-      
-      a = a.upper()       
+
+      a = a.upper()
       if a.pos("INCLUDENAME") > 0 then includename = 1
-      
-    end   
-    
-    /* -- Main loop -- */   
-    
+
+    end
+
+    /* -- Main loop -- */
+
     do
-      loop label siempre    forever   
+      loop label siempre    forever
 	
 	host = Rexx peekto()
 	rec_num = rec_num + 1
 	
-	do 
+	do
 	  if host = null   then do
-	    
+	
 	    output("# Input record "rec_num": Missing hostname to evaluate #")
 	    readto()
 	    iterate siempre
-	    
+	
 	  end
-	  
+	
 	  addr_all = InetAddress.getAllByName(host)
-	  
+	
 	catch java.net.UnknownHostException
 	  do
-	    
+	
 	    output("# Input record "rec_num": Unable to determine IP address for "host" #")
-	    readto()			  
+	    readto()			
 	    iterate siempre
-	    
+	
 	  end   /* catch Unknown Host */
-	  
+	
 	end /* do if host null */
 	
 	loop i = 0 to ( addr_all.length - 1 )
-	  
+	
 	  data = addr_all[i].toString()
 	  parse data ."/"ipaddr
 	  if includename then addr_out = addr_out" "host"/"ipaddr
 	  else addr_out = addr_out" "ipaddr
-	  
+	
 	end  /* loop i = 0 ... */
 	
 	addr_out = (Rexx addr_out).strip("B"," ")  /* strip the leading blank  */
@@ -119,10 +119,10 @@ class hostbyname extends stage
 	readto()                            /* get next record         */
 	
       end /* loop forever */
-      
+
     catch StageError
       rc = rc()
-      
+
     end /* do (loop forever) */
-    
+
     exit(rc*(rc \= 12))
