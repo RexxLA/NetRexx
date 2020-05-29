@@ -9,9 +9,17 @@
 
 /** pad
 
-pad a rexx record
-
+       +-Right-+                                 +-BLANK-+
+>>-PAD-+-------+--+-------------------+--number--+-------+--><
+       +-Left--+  +-+--------+-MODULO-+          +-xorc--+
+                    +-number-+
 */
+
+/*
+  20/ 5/28 Documentation. Jeff Hennick
+  97/  /   New. Ed Tomlinson
+*/
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -20,24 +28,44 @@ import org.netrexx.njpipes.pipes.
 class pad extends stage
 
 method run()
+   offset = 0
+   mod = 0
 
    a = arg()
 
-   left = boolean 1
+   left = boolean 0
 
-   if a.word(1).upper='RIGHT' then do
-      left = 0
+   if 'RIGHT'.abbrev(a.word(1).upper,1) then do
       a = a.subword(2)
    end
 
-   if a.word(1).upper='LEFT' then
+   if 'LEFT'.abbrev(a.word(1).upper,1) then do
+      left = 1
       a = a.subword(2)
+   end
 
-   if \a.word(1).datatype('W') then
-      Emsg(11,'Error - 'a.word(1)' should be a whole number')
+   if a.word(1).datatype('W') then do
+      if a.word(2).upper = 'MODULO' then do
+        offset = a.word(1)
+        mod = a.word(3)
+        a = a.subword(4)
+      end
+      else do
+        len = a.word(1)
+        a = a.subword(2)
+      end
+   end
+   else if a.word(1).upper = 'MODULO' then do
+     mod = a.word(2)
+     a = a.subword(3)
+   end
    else do
-      len = a.word(1)
-      a = a.subword(2)
+     if \a.word(1).datatype('W') | a.word(1) < 0 then
+        Emsg(11,'Error - 'getName() a.word(1)' should be a whole non-negative number')
+     else do
+        len = a.word(1)
+        a = a.subword(2)
+     end
    end
 
    if a<>'' then
@@ -45,12 +73,20 @@ method run()
    else
       ch = ' '
 
+   if mod \= 0 then if offset \< mod then
+      Emsg(11, 'Error - 'getName()' number1,' offset', must be less than number2,' mod'.')
+
    do
       if left then
          loop forever
             line = rexx peekto()
+            if mod > 0 then do
+              len1 = line.length - offset
+              n = (len1 % mod + 1) * (len1 // mod > 0)
+              len = n * mod + offset
+            end
             if line.length()<len then
-               output(line.left(len,ch))
+               output(line.right(len,ch))
             else
                output(line)
             readto()
@@ -58,8 +94,13 @@ method run()
       else
          loop forever
             line = rexx peekto()
+            if mod > 0 then do
+              len1 = line.length - offset
+              n = (len1 % mod + 1) * (len1 // mod > 0)
+              len = n * mod + offset
+            end
             if line.length()<len then
-               output(line.right(len,ch))
+               output(line.left(len,ch))
             else
                output(line)
             readto()
@@ -68,6 +109,4 @@ method run()
       rc = rc()
    end
 
-
 exit(rc*(rc<>12))
-
