@@ -1,0 +1,98 @@
+options decimal
+options binary
+
+import org.netrexx.njpipes.pipes.
+import java.net.
+
+/*  package org.netrexx.njpipes.stages  */
+
+class hostname extends stage 
+  
+  /*
+   *  HOSTNAME - Write default IP host name of the system
+   *
+   *  hostname writes a single output record which contains the TCP/IP name of the system. 
+   *   
+   *  hostname must be in the first stage of a pipe.  It does not consume any records.  
+   *                                           
+   *  HOSTNAME -------+-----------------+-------------->   (2)
+   *                  +--- INCLUDEIP ---+ (1)
+   *
+   *  (1) Optional parameter not present in VM/CMS version
+   *  (2) The USERid option available under CMS is not applicable and not implemented
+   *
+   *  Arguments:  INCLUDEIP - include the IP address of the system in the response
+   *                          in the form <hostname>/<ip address>
+   *
+   *  Examples:
+   *
+   *  Z:\>pipe "hostname | console"
+   *  DESKTOP-C91GVBB
+   *
+   *  Z:\>pipe "hostname includeip | console"
+   *  DESKTOP-C91GVBB/10.0.2.15
+   *
+   *  Z:\>pipe "literal def | hostname includeip | console"
+   *  PIPE Error: hostname_2 stage must be the first stage of a pipeline.
+   *  RC=83
+   *
+   *  Change History:
+   *        
+   *      2020-06-01   CK        - Initial kick
+   *                                   
+   *
+   *
+   */
+
+  method run() signals ThreadQ 
+  
+    a                = Rexx             /* arguments passed to filter                                           */  
+    localhost        = Rexx             /* Rexxified output of Java getLocalHost                                */
+	hostname         = Rexx             /* hostname of system                                                   */
+	ipaddress        = Rexx             /* IP address of system                                                 */
+    includeip        = 0                /* flag for optional inclusion of hosts ip address on output            */
+
+    if \isFirstStage() then do
+       say "PIPE Error: "this.getName()" stage must be the first stage of a pipeline."
+       rc = 83
+       exit( rc )
+	end
+ 
+    /* -- Process any arguments -- */
+
+        a = Rexx (arg(null))
+
+        if a \= null then do
+
+           a = a.upper()
+           if a.pos("INCLUDEIP") > 0 then includeip = 1
+
+        end
+  
+    /* -- Main loop -- */   
+    
+    do
+       loop label siempre    forever   
+	  
+	     localhost = Rexx InetAddress.getLocalHost();  /* returns hostname/ipaddress */
+		 parse localhost hostname "/" ipaddress
+		 if includeip then output(hostname"/"ipaddress)
+                      else output(hostname)
+		 exit( rc() )
+		
+	     catch java.net.UnknownHostException
+	        do
+	    
+	          output("# Unable to determine hostname for this system #")		
+	          exit( rc() )			  
+	    
+	        end   /* catch Unknown Host */
+
+       end /* loop forever */
+      
+       catch StageError
+         rc = rc()
+      
+    end /* do (loop forever) */
+    
+    exit(rc*(rc \= 12))
