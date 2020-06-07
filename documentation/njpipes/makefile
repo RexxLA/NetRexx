@@ -21,7 +21,7 @@ DOCNAME         := "NetRexx $(RELEASE) Pipelines Quick Start Guide.pdf"
 all:	$(NRX_OBJS) $(PDFTARGET)
 
 $(TARGET).pdf: $(TEX_SRC)
-	wkhtmltopdf --minimum-font-size 25 --no-outline --page-width 10 -R 20 stages.html stages.pdf
+	wkhtmltopdf --minimum-font-size 25 --no-outline --page-width 10 -R 0 -L 3 stages.html stages.pdf
 	$(MAKE) -k $(TARGET).bbl
 	$(LATEX_EXE) $(TARGET).tex
 	$(RAIL_EXE) $(TARGET)
