@@ -1,0 +1,186 @@
+/** unique.nrx
+
+                          +-NOPAD-----+
+   >>--UNIQue--+-------+--+-----------+--+---------+----------------------->
+               +-COUNT-+  +-PAD--xorc-+  +-ANYcase-+
+
+                            +-LAST-----+
+   >--+------------------+--+----------+----------------------------------><
+      +-+ uniqueRanges +-+  +-SINGLEs--+
+                            +-FIRST----+
+                            +-MULTiple-+
+                            +-PAIRwise-+
+
+   uniqueRanges:
+   +--+-inputRange--------------------------+------------------------------+
+      |    <---------------------------+    |
+      +-(----inputRange--+-----------+-+--)-+
+                         +-NOPAD-----+
+                         +-PAD--xorc-+
+
+*/
+
+/*
+  20/ 6/ 6 Jeff Hennick
+*/
+
+pipe (unique_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+    literal a1a b2b b2b c3c d4d d4d d4d D4D e5e e5a e5b f6f g7g |
+    split |
+    f: fanout ?
+
+-- null ?
+   f: |
+   unique |
+   c1: compare any ~2# 1 null ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a b2b c3c d4d D4D e5e e5a e5b f6f g7g |
+   split  |
+   c1: ?
+
+-- count ?
+   f: |
+   unique count |
+   c2: compare any ~2# 2 count ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal          1a1a;         2b2b;         1c3c;         3d4d;         1D4D;         1e5e;         1e5a;         1e5b;         1f6f;         1g7g |
+   split ; |
+   c2: ?
+
+-- count anycase ?
+   f: |
+   unique count anycase |
+   c3: compare any ~2# 3 count anycase ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal          1a1a;         2b2b;         1c3c;         4D4D;         1e5e;         1e5a;         1e5b;         1f6f;         1g7g |
+   split ; |
+   c3: ?
+
+-- count first ?
+   f: |
+   unique count first |
+   c4: compare any ~2# 4 count first ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal          1a1a;         2b2b;         1c3c;         3d4d;         1D4D;         1e5e;         1e5a;         1e5b;         1f6f;         1g7g |
+   split ; |
+   c4: ?
+
+-- count anycase first ?
+   f: |
+   unique count anycase first |
+   c5: compare any ~2# 5 count anycase first ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal          1a1a;         2b2b;         1c3c;         4d4d;         1e5e;         1e5a;         1e5b;         1f6f;         1g7g |
+   split ; |
+   c5: ?
+
+-- singles ?
+   f: |
+   unique singles |
+   c6: compare any ~2# 6 singles ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a c3c D4D e5e e5a e5b f6f g7g |
+   split  |
+   c6: ?
+
+-- anycase singles ?
+   f: |
+   unique anycase singles |
+   c7: compare any ~2# 7 anycase singles ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a c3c e5e e5a e5b f6f g7g |
+   split  |
+   c7: ?
+
+-- multiple ?
+   f: |
+   unique multiple  |
+   c8: compare any ~2# 8 multiple  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2b d4d |
+   split  |
+   c8: ?
+
+-- anycase multiple ?
+   f: |
+   unique anycase multiple  |
+   c9: compare any ~2# 9 anycase multiple ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2b D4D |
+   split  |
+   c9: ?
+
+-- pairwise ?
+   f: |
+   strliteral append /g7g/ |
+   unique pairwise |
+   c10: compare any ~2#10 pairwise ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a b2b b2b c3c d4d D4D e5e e5a e5b f6f |
+   split  |
+   c10: ?
+
+-- range ?
+   f: |
+   unique 3.1 |
+   c11: compare any ~2#11 range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a b2b c3c d4d D4D e5e e5a e5b f6f g7g |
+   split  |
+   c11: ?
+
+-- ranges ?
+   f: |
+   unique (1.1 , 3.1) |
+   c12: compare any ~2#12 ranges ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a b2b c3c d4d D4D e5e e5a e5b f6f g7g |
+   split  |
+   c12: ?
+
+-- null (secondary) ?
+   f: |
+   u13: unique |
+   hole ?
+   u13: |
+   c13: compare any ~2#13 null (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2b d4d d4d |
+   split  |
+   c13: ?
+
+-- nopad (implied) ?
+   literal a1a;b2b;b2b;c3c;d4d-;d4d;d4d;D4D;e5e;e5a;e5b;f6f;g7g |
+   split ; |
+   unique |
+   c14: compare any ~2#14 nopad (implied) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a;b2b;c3c;d4d-;d4d;D4D;e5e;e5a;e5b;f6f;g7g |
+   split ; |
+   c14: ?
+
+-- nopad ?
+   literal a1a;b2b;b2b;c3c;d4d-;d4d;d4d;D4D;e5e;e5a;e5b;f6f;g7g |
+   split ; |
+   unique nopad |
+   c15: compare any ~2#15 nopad ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a;b2b;c3c;d4d-;d4d;D4D;e5e;e5a;e5b;f6f;g7g |
+   split ; |
+   c15: ?
+
+-- pad char?
+   literal a1a;b2b;b2b;c3c;d4d+;d4d;d4d++;d4d;e5e;e5a;e5b;f6f;g7g |
+   split ; |
+   unique pad + |
+   c16: compare any ~2#16 pad char ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a;b2b;c3c;d4d;e5e;e5a;e5b;f6f;g7g |
+   split ; |
+   c16: ?
