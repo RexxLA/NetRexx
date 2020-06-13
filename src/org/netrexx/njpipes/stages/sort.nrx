@@ -1,5 +1,6 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 2020 Jeff Hennick  Jeff (at) Jeff (dash) H (dot) com
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -8,16 +9,22 @@
  */
 
 /** sort
-  njPipes
-                                                       +-Ascending-(1)-+
- >>--SORT--+-----------------------------+--+-------+--+---------------+--><
-           |   +-REXX-----+  +-10000-+   |  +-range-+  +-Descending-(1)+
+  NetRexx
+
+ >>--SORT--+-----------------------------+--+------------+-->
+           |   +-REXX-----+  +-10000-+   |  +-inputRange-+
            +-(-+----------+--+-------+-)-+
                +-class-(2)+  +-size--+
 
+     +-Ascending-(1)-+
+  >--+---------------+--+-------------+--><
+     +-Descending-(1)+  +-SINGLEOK-(3)+
+
     Note:
      (1) May come before range, for backwards compatability.
-     (2) requires that you implement another sortClass with a name begining with 'sort'
+     (2) Requires that you implement another sortClass with a name begining with 'sort'
+     (3) Suppresses error message if only one record to sort for Rexx objects.
+
 
   CMS
                        +-NOPAD----+
@@ -45,6 +52,7 @@ had pipes on CMS! EJT
 
 */
 /*
+  20/ 6/13 added SINGLEOK option. Jeff Hennick
   20/ 5/20 expanded Ascending/Descending; documentation. Jeff Hennick
   99/10/07 fixed order of args.  ejt
   99/05/19 reversed range and direction to match CMS.  ejt
@@ -106,12 +114,19 @@ parms = rexx ''
 stg   = pInfo[3]         -- stage name
 args  = pInfo[4]
 
-type = 'Rexx'
+type = Rexx 'Rexx'
 if args.strip('L').left(1)='(' & args.pos(')')>1 then do
    parse args '(' parms ')' args
    if \parms.word(1).datatype('W') then
       type = parms.word(1)
 end
+
+single = args.upper.wordpos('SINGLEOK')
+if single > 0 then do
+  args = args.delword(single)
+  single = "SINGLEOK"
+end
+if type.upper \= 'REXX' then single = ''
 
 parse args ad range
 
@@ -199,8 +214,6 @@ end
 
 o[0] = n
 pInfo[3] = pInfo'_'sr         -- use this stage call
-pInfo[4] = args               -- use these args instead
+pInfo[4] = args single        -- use these args instead
 
 return 1
-
-
