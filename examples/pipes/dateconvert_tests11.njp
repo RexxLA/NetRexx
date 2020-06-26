@@ -1,0 +1,148 @@
+/** dateconvert
+                              (3)
+                 +-- 1-* ------------------------+
+>>--DATECONVert--+-------------------------------+--------------------------->
+                 +-| Separator |--| Inputrange |-+
+
+    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
+>---+---------------------------------------+--+-----------------------+------>
+    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
+    +-| Inputformat |----+------------------+  +-BASEYEAR--yearnumber--+
+                         +-| Outputformat |-+
+
+                  +--MIDNIGHT--(4)-+
+>--+-----------+--+----------------+---------------------------------------->>
+   +--TIMEOUT--+  +--NOON--(4)-----+
+
+*/
+
+/*
+  20/ 6/26 Jeff Hennick
+*/
+
+pipe (dateconvert_tests11)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- EUR TIMEOUT ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate EUR TIMEOUT |
+   c1: compare any ~2# 1 EUR TIMEOUT out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 31.07.2044 04:55:22.123;31.07.2044 04:55:22.999888;31.07.1944 04:55:22.999888 |
+   split ; |
+   c1: ?
+
+-- EUR ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate EUR |
+   c2: compare any ~2# 2 EUR out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 31.07.2044;31.07.2044;31.07.1944 |
+   split ; |
+   c2: ?
+
+-- EUR_SHORT TIMEOUT ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate EUR_SHORT TIMEOUT |
+   c3: compare any ~2# 3 EUR_SHORT TIMEOUT out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 31.07.44 04:55:22.123;31.07.44 04:55:22.999888;31.07.44 04:55:22.999888 |
+   split ; |
+   c3: ?
+
+-- EUR_SHORT ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate EUR_SHORT |
+   c4: compare any ~2# 4 EUR_SHORT out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 31.07.44;31.07.44;31.07.44 |
+   split ; |
+   c4: ?
+
+-- JULIAN TIMEOUT ?
+   literal 07/31/45 04:55:22.123000; 07/31/45 04:55:22.999888; 07/31/1945 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN TIMEOUT |
+   c5: compare any ~2# 5 JULIAN TIMEOUT out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2045.212 04:55:22.123;2045.212 04:55:22.999888;1945.212 04:55:22.999888 |
+   split ; |
+   c5: ?
+
+-- JULIAN ?
+   literal 07/31/45 04:55:22.123000; 07/31/45 04:55:22.999888; 07/31/1945 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN |
+   c6: compare any ~2# 6 JULIAN out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2045.212;2045.212;1945.212 |
+   split ; |
+   c6: ?
+
+-- JULIAN_SHORT TIMEOUT ?
+   literal 07/31/45 04:55:22.123000; 07/31/45 04:55:22.999888; 07/31/1945 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN_SHORT TIMEOUT |
+   c7: compare any ~2# 7 JULIAN_SHORT TIMEOUT out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 45.212 04:55:22.123;45.212 04:55:22.999888;45.212 04:55:22.999888 |
+   split ; |
+   c7: ?
+
+-- JULIAN_SHORT ?
+   literal 07/31/45 04:55:22.123000; 07/31/45 04:55:22.999888; 07/31/1945 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN_SHORT |
+   c8: compare any ~2# 8 JULIAN_SHORT out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 45.212;45.212;45.212 |
+   split ; |
+   c8: ?
+
+-- JULIAN TIMEOUT (leap year) ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN TIMEOUT |
+   c9: compare any ~2# 9 JULIAN TIMEOUT (leap year) out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044.213 04:55:22.123;2044.213 04:55:22.999888;1944.213 04:55:22.999888 |
+   split ; |
+   c9: ?
+
+-- JULIAN (leap year) ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN |
+   c10: compare any ~2#10 JULIAN (leap year) out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044.213;2044.213;1944.213 |
+   split ; |
+   c10: ?
+
+-- JULIAN_SHORT TIMEOUT (leap year) ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN_SHORT TIMEOUT |
+   c11: compare any ~2#11 JULIAN_SHORT TIMEOUT (leap year) out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 44.213 04:55:22.123;44.213 04:55:22.999888;44.213 04:55:22.999888 |
+   split ; |
+   c11: ?
+
+-- JULIAN_SHORT (leap year) ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate JULIAN_SHORT |
+   c12: compare any ~2#12 JULIAN_SHORT (leap year) out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 44.213;44.213;44.213 |
+   split ; |
+   c12: ?

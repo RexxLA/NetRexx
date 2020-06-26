@@ -1,0 +1,128 @@
+/** dateconvert
+                              (3)
+                 +-- 1-* ------------------------+
+>>--DATECONVert--+-------------------------------+--------------------------->
+                 +-| Separator |--| Inputrange |-+
+
+    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
+>---+---------------------------------------+--+-----------------------+------>
+    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
+    +-| Inputformat |----+------------------+  +-BASEYEAR--yearnumber--+
+                         +-| Outputformat |-+
+
+                  +--MIDNIGHT--(4)-+
+>--+-----------+--+----------------+---------------------------------------->>
+   +--TIMEOUT--+  +--NOON--(4)-----+
+
+*/
+
+/*
+  20/ 6/26 Jeff Hennick
+*/
+
+pipe (dateconvert_tests12)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- REXX_DATE_D timeout ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888; 07/31/1945 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate REXX_DATE_D timeout |
+   c1: compare any ~2# 1 REXX_DATE_D timeout out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 213 04:55:22.123;213 04:55:22.999888;213 04:55:22.999888;212 04:55:22.999888 |
+   split ; |
+   c1: ?
+
+-- RD timeout ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate RD timeout |
+   c2: compare any ~2# 2 RD timeout out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 213 04:55:22.123;213 04:55:22.999888;213 04:55:22.999888 |
+   split ; |
+   c2: ?
+
+-- REXX_DATE_D ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate REXX_DATE_D |
+   c3: compare any ~2# 3 REXX_DATE_D out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 213;213;213 |
+   split ; |
+   c3: ?
+
+-- RD ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888; 1/1/44 |
+   split ; |
+   dateconvert shortdate RD |
+   c4: compare any ~2# 4 RD out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 213;213;213;1 |
+   split ; |
+   c4: ?
+
+-- JULIAN ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888; 1/1/44 |
+   split ; |
+   dateconvert shortdate JULIAN |
+   c5: compare any ~2# 5 JULIAN out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044.213;2044.213;1944.213;2044.001 |
+   split ; |
+   c5: ?
+
+-- JULIAN timeout ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888; 1/1/44 |
+   split ; |
+   dateconvert shortdate JULIAN timeout |
+   c6: compare any ~2# 6 JULIAN timeout out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044.213 04:55:22.123;2044.213 04:55:22.999888;1944.213 04:55:22.999888;2044.001 00:00:00 |
+   split ; |
+   c6: ?
+
+-- JULIAN timeout NOON ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888; 1/1/44 |
+   split ; |
+   dateconvert shortdate JULIAN timeout NOON |
+   c7: compare any ~2# 7 JULIAN timeout NOON out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044.213 04:55:22.123;2044.213 04:55:22.999888;1944.213 04:55:22.999888;2044.001 12:00:00 |
+   split ; |
+   c7: ?
+
+-- JULIAN_SHORT ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/44 04:55:22.999888; 1/1/44 |
+   split ; |
+   dateconvert shortdate JULIAN_SHORT |
+   c8: compare any ~2# 8 JULIAN_SHORT out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 44.213;44.213;44.213;44.001 |
+   split ; |
+   c8: ?
+
+-- JULIAN_SHORT timeout ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/44 04:55:22.999888; 1/1/44 |
+   split ; |
+   dateconvert shortdate JULIAN_SHORT timeout |
+   c9: compare any ~2# 9 JULIAN_SHORT timeout out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 44.213 04:55:22.123;44.213 04:55:22.999888;44.213 04:55:22.999888;44.001 00:00:00 |
+   split ; |
+   c9: ?
+
+-- JULIAN_SHORT timeout NOON ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888; 07/31/44 04:55:22.999888; 1/1/44 |
+   split ; |
+   dateconvert shortdate JULIAN_SHORT timeout NOON |
+   c10: compare any ~2#10 JULIAN_SHORT timeout NOON out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 44.213 04:55:22.123;44.213 04:55:22.999888;44.213 04:55:22.999888;44.001 12:00:00 |
+   split ; |
+   c10: ?
