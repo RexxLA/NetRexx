@@ -1,0 +1,119 @@
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** regex
+
+>>--REGEX--+--------------------------+--regex_string-(1)---><
+           +-(--| options_string |--)-+
+
+options_string:
+|--+---------+--|
+   +-NUMBERS-+ (2)
+
+
+ Records matching the RegEx are put out on primary output
+ Records not matching are put out on secondary, if connected, or discarded.
+
+(1) string is a Java RegEx expresion. null string passes all records.
+(2) lines are prefaced with line number, 10 characters, right justified
+
+[Possible future options: BEFORE and AFTER, etc., to give context, ala GREP.]
+
+*/
+
+/*
+ 20/ 6/28 Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.util.regex.
+
+class regex extends stage
+
+options = Rexx
+optionsup = Rexx
+
+method run()
+
+     /* Do we have options?  What Regular Expresion are we looking for? */
+
+  parse arg() '(' options ')' regex
+  if options = '' then regex = arg()
+  regex = regex.strip
+
+    /* Process options */
+  optionsup = options.upper
+  numbers = getOpt('numbers')
+
+  if options <> '' then
+    Emsg(11, 'Regex -- Unknown option:' options)
+
+     /* One time compile */
+  pat = Pattern.compile(regex);
+
+    /* do we have a secondary output connection? */
+  do
+    sec = 1
+    selectOutput(1)
+  catch StageError
+    sec = 0
+  end
+  do
+    pri = 1
+    selectOutput(0)
+  catch StageError
+    pri = 0
+  end
+
+  if \sec & \pri then
+    Emsg(11, 'No output is connected.')
+
+  li = Rexx ''  -- line number
+  loop i = 1
+    if numbers then do
+      li = i
+      li = li.right(10)
+    end
+       /* See what input we have. */
+    line = peekto().toString
+
+        /* Do we have a match? */
+    match = pat.matcher(line)
+
+    if  match.find() then
+      output(li''line)
+    else if sec then
+      do
+        selectOutput(1)
+        output(li''line)
+      catch StageError
+        sec = 0
+      finally
+        selectOutput(0)
+      end
+
+       /* Go on to the next one. */
+    readto()
+  catch StageError  /* Most likely end of input */
+    rc = rc()
+  end
+
+  exit(rc*(rc<>12))
+
+method getOpt(opt)
+  wp = optionsup.wordpos(opt.upper)
+  ret = wp > 0
+  if ret then do
+    options = options.delword(wp)
+    optionsup = optionsup.delword(wp)
+  end
+  return ret
