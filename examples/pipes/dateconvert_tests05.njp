@@ -1,0 +1,148 @@
+/** dateconvert
+                              (3)
+                 +-- 1-* ------------------------+
+>>--DATECONVert--+-------------------------------+--------------------------->
+                 +-| Separator |--| Inputrange |-+
+
+    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
+>---+---------------------------------------+--+-----------------------+------>
+    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
+    +-| Inputformat |----+------------------+  +-BASEYEAR--yearnumber--+
+                         +-| Outputformat |-+
+
+                  +--MIDNIGHT--(4)-+
+>--+-----------+--+----------------+---------------------------------------->>
+   +--TIMEOUT--+  +--NOON--(4)-----+
+
+*/
+
+/*
+  20/ 6/26 Jeff Hennick
+*/
+
+pipe (dateconvert_tests05)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- ISO ?
+   literal 44-07-31 04:55:22.123000; 44-07-31 04:55:22.999888; 1944-07-31 04:55:22.999888;  |
+   split ; |
+   dateconvert ISO |
+   c1: compare any ~2# 1 ISO in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c1: ?
+
+-- ISODATE ?
+   literal 44-07-31 04:55:22.123000; 44-07-31 04:55:22.999888;  |
+   split ; |
+   dateconvert ISODATE |
+   c2: compare any ~2# 2 ISODATE in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c2: ?
+
+-- ISO_SHORT ?
+   literal 44-07-31 04:55:22.123000;44-07-31 04:55:22.999888;  |
+   split ; |
+   dateconvert ISO_SHORT |
+   c3: compare any ~2# 3 ISO_SHORT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c3: ?
+
+-- DB2 ?
+   literal 44-07-31-04.55.22.123000; 44-07-31-04.55.22.999888; 1944-07-31-04.55.22.999888;  |
+   split ; |
+   dateconvert DB2 |
+   c4: compare any ~2# 4 DB2 in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c4: ?
+
+-- REXX_DATE_E ?
+   literal 31/07/44 04:55:22.123000; 31/07/44 04:55:22.999888;31/07/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert REXX_DATE_E |
+   c5: compare any ~2# 5 REXX_DATE_E in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c5: ?
+
+-- RE ?
+   literal 31/07/44 04:55:22.123000; 31/07/44 04:55:22.999888;31/07/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert RE |
+   c6: compare any ~2# 6 RE in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c6: ?
+
+-- REXX_DATE_E_LONG ?
+   literal 31/07/44 04:55:22.123000; 31/07/44 04:55:22.999888;31/07/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert REXX_DATE_E_LONG |
+   c7: compare any ~2# 7 REXX_DATE_E_LONG in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c7: ?
+
+-- REXX_DATE_N ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert REXX_DATE_N |
+   c8: compare any ~2# 8 REXX_DATE_N in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c8: ?
+
+-- RN ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert RN |
+   c9: compare any ~2# 9 RN in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c9: ?
+
+-- NORMAL ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert NORMAL |
+   c10: compare any ~2#10 NORMAL in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c10: ?
+
+-- REXX_DATE_N_SHORT ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert REXX_DATE_N_SHORT |
+   c11: compare any ~2#11 REXX_DATE_N_SHORT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c11: ?
+
+-- RN_SHORT ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert RN_SHORT |
+   c12: compare any ~2#12 RN_SHORT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31;1944-07-31 |
+   split ; |
+   c12: ?

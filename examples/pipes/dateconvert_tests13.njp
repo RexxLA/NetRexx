@@ -1,0 +1,120 @@
+/** dateconvert
+                              (3)
+                 +-- 1-* ------------------------+
+>>--DATECONVert--+-------------------------------+--------------------------->
+                 +-| Separator |--| Inputrange |-+
+
+    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
+>---+---------------------------------------+--+-----------------------+------>
+    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
+    +-| Inputformat |----+------------------+  +-BASEYEAR--yearnumber--+
+                         +-| Outputformat |-+
+
+                  +--MIDNIGHT--(4)-+
+>--+-----------+--+----------------+---------------------------------------->>
+   +--TIMEOUT--+  +--NOON--(4)-----+
+
+*/
+
+/*
+  20/ 6/26 Jeff Hennick
+*/
+
+pipe (dateconvert_tests13)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- REXX_DATE_C ?
+   literal 01/01/00; 07/31/00; 07/31/2044 |
+   split ; |
+   dateconvert shortdate REXX_DATE_C |
+   c1: compare any ~2# 1 REXX_DATE_C out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;213;16284 |
+   split ; |
+   c1: ?
+
+-- REXX_DATE_C timeout ?
+   literal 01/01/00 04:55:22.123000; 07/31/00 04:55:22.999888; 07/31/2044 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate REXX_DATE_C timeout |
+   c2: compare any ~2# 2 REXX_DATE_C timeout out~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1/04:55:22.123;213/04:55:22.999888;16284/04:55:22.999888 |
+   split ; |
+   c2: ?
+
+-- RANGE ?
+   literal The date is 01/01/00 04:55:22.123000 OK!; The date is 07/31/00 04:55:22.999888 OK!; The date is 07/31/44 04:55:22.999888 OK!; The date is 07/31/1944 04:55:22.999888 OK! |
+   split ; |
+   dateconvert w4.2 shortdate  |
+   c3: compare any ~2# 3 RANGE~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The date is 2000-01-01 OK!; The date is 2000-07-31 OK!; The date is 2044-07-31 OK!; The date is 1944-07-31 OK! |
+   split ; |
+   c3: ?
+
+-- BASEYEAR ?
+   literal 01/01/00 04:55:22.123000; 07/31/00 04:55:22.999888; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate baseyear 1940 |
+   c4: compare any ~2# 4 BASEYEAR~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2000-01-01;2000-07-31;1944-07-31;1944-07-31 |
+   split ; |
+   c4: ?
+
+-- WINDOW ?
+   literal 01/01/00 04:55:22.123000; 07/31/00 04:55:22.999888; 07/31/44 04:55:22.999888; 07/31/1944 04:55:22.999888 |
+   split ; |
+   dateconvert shortdate window -80 |
+   c5: compare any ~2# 5 WINDOW~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2000-01-01;2000-07-31;1944-07-31;1944-07-31 |
+   split ; |
+   c5: ?
+
+-- bad date (secondary out)  ?
+   literal date is 07/zz/44 04:55:22.123000; date is 07/31/44 04:55:22.999888;  |
+   split ; |
+   d6: dateconvert w3.1 SHORTDATE |
+   hole ?
+   d6: |
+   c6: compare any ~2# 6 bad date (secondary out) in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal date is 07/zz/44 04:55:22.123000 |
+   split ; |
+   c6: ?
+
+-- DATECONVER ?
+   literal 01/01/00; 07/31/00; 07/31/2044 |
+   split ; |
+   dateconver shortdate REXX_DATE_C |
+   c7: compare any ~2# 7 DATECONVER~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;213;16284 |
+   split ; |
+   c7: ?
+
+-- DATECONVE ?
+   literal 01/01/00; 07/31/00; 07/31/2044 |
+   split ; |
+   dateconve shortdate REXX_DATE_C |
+   c8: compare any ~2# 8 DATECONVE~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;213;16284 |
+   split ; |
+   c8: ?
+
+-- DATECONV ?
+   literal 01/01/00; 07/31/00; 07/31/2044 |
+   split ; |
+   dateconv shortdate REXX_DATE_C |
+   c9: compare any ~2# 9 DATECONV~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;213;16284 |
+   split ; |
+   c9: ?
