@@ -13,21 +13,33 @@
            +-(--| options_string |--)-+
 
 options_string:
-|--+---------+--|
-   +-NUMBERS-+ (2)
-
+   +----------------------------+
+|--v-+------------------------+-+--|
+     +-NUMBERS----------------+ (2)
+     +-BEFORE-+-0------+------+ (3)
+     |        +-number-+      |
+     +-AFTER-+-0------+-------+ (3)
+     |       +-number-+       |
+     +-CONTEXT-+-0------+-----+ (4)
+     |         +-number-+     |
+     +-NOSEPARATOR------------+
+     +-SEPARATOR-+- -- ----+--+
+     |           +-DString-+  |
 
  Records matching the RegEx are put out on primary output
  Records not matching are put out on secondary, if connected, or discarded.
 
 (1) string is a Java RegEx expresion. null string passes all records.
 (2) lines are prefaced with line number, 10 characters, right justified
+(3) number of records put out after a matching record
+(4) number of records put out before and after a matching record
 
 [Possible future options: BEFORE and AFTER, etc., to give context, ala GREP.]
 
 */
 
 /*
+ 20/ 6/30 BEFORE, AFTER, CONTEXT, SEPARATOR, NOSEPARATOR added. Jeff Hennick
  20/ 6/28 Jeff Hennick
 */
 
@@ -38,9 +50,18 @@ import org.netrexx.njpipes.pipes.
 import java.util.regex.
 
 class regex extends stage
+--trace results
 
 options = Rexx
 optionsup = Rexx
+before = Rexx 0
+before_ring = Rexx 1.d2c
+before_count = Rexx -1
+before_count_set = Rexx 0
+after = Rexx 0
+aftercount = Rexx 0
+sepdefault = "--"
+usesep = 0
 
 method run()
 
@@ -51,8 +72,34 @@ method run()
   regex = regex.strip
 
     /* Process options */
+                          /* NUMBERS */
   optionsup = options.upper
   numbers = getOpt('numbers')
+
+                             /* BEFORE n */
+  before_count_set = getOpt('before', 1)
+  before = before_count_set > 0
+
+                              /* AFTER n */
+  after = getOpt('after', 1)
+
+                               /* CONTEXT */
+  context_set = getOpt('context', 1)
+  if context_set > 0 then do
+    before = 1
+    before_count_set = context_set
+    after = context_set
+  end
+
+                         /* SEPARATOR string */
+  separator = getOpt('separator', 2)
+  if separator <> '' then do
+    sep = separator
+    usesep = 1
+  end
+                        /* NOSEPARATOR */
+  noseparator = getOpt('noseparator')
+  if noseparator = 1 then usesep = 0
 
   if options <> '' then
     Emsg(11, 'Regex -- Unknown option:' options)
@@ -78,6 +125,8 @@ method run()
     Emsg(11, 'No output is connected.')
 
   li = Rexx ''  -- line number
+  aftercount = 0
+
   loop i = 1
     if numbers then do
       li = i
@@ -86,20 +135,47 @@ method run()
        /* See what input we have. */
     line = peekto().toString
 
+    if before > 0 then beforeAdd(line)
+
         /* Do we have a match? */
     match = pat.matcher(line)
 
-    if  match.find() then
-      output(li''line)
-    else if sec then
-      do
-        selectOutput(1)
-        output(li''line)
-      catch StageError
-        sec = 0
-      finally
-        selectOutput(0)
+    if  match.find() then do       /* We have a match */
+      if usesep & aftercount = 0 then
+        output(sep)
+      if before then do
+        st = before_count + 1
+        if st > before_count_set then st = st - before_count_set - 1
+        if numbers then lim = i - before_count_set + 1
+        else lim = ''
+        one = 1.d2c
+        loop j = st for before_count_set
+          if before_ring[j] <> one then do
+            if numbers then lim = lim.right(10)
+            output(lim'-'before_ring[j])
+          end
+          if j = before_count_set then j = -1
+          if numbers then lim = lim + 1
+        end
       end
+      output(li':'line)
+      aftercount = after
+    end
+    else do
+       if aftercount > 0 then do
+         output(li'-'line)
+         aftercount = aftercount - 1
+       end
+       if sec then
+         do
+           selectOutput(1)
+           output(li':'line)
+         catch StageError
+           sec = 0
+         finally
+           selectOutput(0)
+         end
+       end
 
        /* Go on to the next one. */
     readto()
@@ -109,11 +185,36 @@ method run()
 
   exit(rc*(rc<>12))
 
-method getOpt(opt)
+method getOpt(opt, val = 0)
+  ret = Rexx
+  retw = ''
   wp = optionsup.wordpos(opt.upper)
   ret = wp > 0
-  if ret then do
-    options = options.delword(wp)
-    optionsup = optionsup.delword(wp)
+  if val = 1 & ret then retw = options.word(wp + 1)
+  select
+  when val = 2 & ret then do
+    opt = options.subword(wp + 1)
+    ds = DString(opt)
+    retw = ds.String()
+    if retw = '' then retw = sepdefault
+    options = options.subword(1, wp - 1) ds.Residue
+    optionsup = options.upper
   end
+  when val = 2 then
+    ret = ''
+  when ret > 0 then do
+    w = 1
+    if val then w = 2
+    options = options.delword(wp,w)
+    optionsup = optionsup.delword(wp,w)
+  end
+  otherwise
+    nop
+  end
+  if val > 0 & retw <> '' then ret = retw
   return ret
+
+method beforeAdd(line)
+  before_count = before_count + 1
+  if before_count >= before_count_set + 1 then before_count = 0
+  before_ring[before_count] = line
