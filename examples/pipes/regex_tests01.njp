@@ -1,3 +1,22 @@
+/** regex
+
+>>--REGEX--+--------------------------+--regex_string-(1)---><
+           +-(--| options_string |--)-+
+
+options_string:
+|--+---------+--|
+   +-NUMBERS-+ (2)
+
+
+ Records matching the RegEx are put out on primary output
+ Records not matching are put out on secondary, if connected, or discarded.
+
+(1) string is a Java RegEx expresion. null string passes all records.
+(2) lines are prefaced with line number, 10 characters, right justified
+
+[Possible future options: BEFORE and AFTER, etc., to give context, ala GREP.]
+
+*/
 
 /*
   20/ 6/28 Jeff Hennick
@@ -16,7 +35,7 @@ pipe (regex_tests01)
    regex c$ |
    c1: compare any ~2# 1 regex ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal a3c |
+   literal :a3c |
    split ; |
    c1: ?
 
@@ -26,7 +45,7 @@ pipe (regex_tests01)
    regex (numbers) c$ |
    c2: compare any ~2# 2 numbers regex ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal          3a3c |
+   literal          3:a3c |
    split ; |
    c2: ?
 
@@ -38,6 +57,106 @@ pipe (regex_tests01)
    t3: |
    c3: compare any ~2# 3 numbers (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal          1a1a;         2a2b;         4d4d;         5e5e;         6f6f;         7g7g |
+   literal          1:a1a;         2:a2b;         4:d4d;         5:e5e;         6:f6f;         7:g7g |
    split ; |
    c3: ?
+
+-- after number  ?
+   literal a1a a2b a3c d4d e5e f6f g7g|
+   split |
+   regex (after 2) c$ |
+   c4: compare any ~2# 4 after number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal :a3c;-d4d;-e5e |
+   split ; |
+   c4: ?
+
+-- after number (reset) ?
+   literal a1a a2b a3c d4c e5e f6f g7g|
+   split |
+   regex (after 2) c$ |
+   c5: compare any ~2# 5 after number (reset)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal :a3c;:d4c;-e5e;-f6f |
+   split ; |
+   c5: ?
+
+-- separator ?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (after 2 separator) c$ |
+   c6: compare any ~2# 6 separator ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /--;:a3c;-d4d;-e5e;--;:g7c/ |
+   split ; |
+   c6: ?
+
+-- separator dstring?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (after 2 separator /% %/) c$ |
+   c7: compare any ~2# 7 separator dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal % %;:a3c;-d4d;-e5e;% %;:g7c |
+   split ; |
+   c7: ?
+
+-- noseparator ?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (noseparator after 2 separator /% %/) c$ |
+   c8: compare any ~2# 8 noseparator ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal :a3c;-d4d;-e5e;:g7c |
+   split ; |
+   c8: ?
+
+-- before number ?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (before 2 separator ) c$ |
+   c9: compare any ~2# 9 before number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /--;-a1a;-a2b;:a3c;--;-e5e;-f6f;:g7c/ |
+   split ; |
+   c9: ?
+
+-- before 1 ?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (before 1 separator ) c$ |
+   c10: compare any ~2#10 before 1 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /--;-a2b;:a3c;--;-f6f;:g7c/ |
+   split ; |
+   c10: ?
+
+-- before 0 ?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (before 0 separator ) c$ |
+   c11: compare any ~2#11 before 0 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /--;:a3c;--;:g7c/ |
+   split ; |
+   c11: ?
+
+-- before 5 ?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (before 5 separator ) c$ |
+   c12: compare any ~2#12 before 5 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /--;-a1a;-a2b;:a3c;--;-a2b;-a3c;-d4d;-e5e;-f6f;:g7c/ |
+   split ; |
+   c12: ?
+
+-- context 2 ?
+   literal a1a a2b a3c d4d e5e f6f g7c|
+   split |
+   regex (context 2 separator ) c$ |
+   c13: compare any ~2#13 context 2 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /--;-a1a;-a2b;:a3c;-d4d;-e5e;--;-e5e;-f6f;:g7c/ |
+   split ; |
+   c13: ?
