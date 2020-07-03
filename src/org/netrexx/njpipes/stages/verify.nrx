@@ -1,0 +1,149 @@
+/*
+ *  Copyright (C) 2020 Jeffrey Hennick Jeff (at) Jeff (dash) H (dot) com
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** verify
+
+>>--VERIFY--+------------+-+------------+--delimitedString--><
+            +-ANYCASE----+ +-inputRange-+
+            +-CASEANY----+
+            +-CASEIGNORE-+
+            +-IGNORECASE-+
+            +-CASELESS---+
+
+*/
+
+/*
+  20/ 7/ 2 Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class verify extends stage uses IRange
+
+method run()
+
+  args = arg()
+
+  anycase = 0                          /* ANYCASE */
+  if 'ANYCASE CASEANY CASEIGNORE IGNORECASE CASELESS'.wordpos(arg.word(1).upper) > 0 then do
+    anycase = 1
+    args = args.subword(2)
+  end
+
+                                       /* input RANGE */
+  r = GetIRanges(args)
+  args = r[0].Residue
+  isRange = r[0].Number > 0
+
+                                      /* delimited string */
+  ds = DString(args)
+  chars = ds.String()
+
+                                    /* extra */
+  if ds.Residue() <> '' then
+    Emsg(11, 'Extra:' ds.Residue)
+
+                                    /* secondary output? */
+  sec = 0
+  do
+    selectOutput(1)
+    sec = 1
+  catch stageError
+  finally
+    do
+      selectOutput(0)
+    catch stageError
+      Emsg(11, 'No output stream connected')
+    end
+  end
+
+                               /* copying the loop saves option testing inside the loop */
+  select
+    when isRange & anycase then do
+      chars = chars.upper
+      loop forever
+        line = Rexx peekto()
+        lc = r[1].SelIRange(line," ")
+        lc = lc.upper
+        if lc.verify(chars) = 0 then  /* Verifies */
+          output(line)
+        else if sec then do         /* No verify */
+          selectOutput(1)
+          output(line)
+        catch stageError
+          sec = 0
+        finally
+          selectOutput(0)
+        end
+        readto()
+      catch StageError
+        rc = rc()
+      end
+    end
+    when isRange then
+      loop forever
+        line = Rexx peekto()
+        lc = r[1].SelIRange(line," ")
+        if lc.verify(chars) = 0 then  /* Verifies */
+          output(line)
+        else if sec then do         /* No verify */
+          selectOutput(1)
+          output(line)
+        catch stageError
+          sec = 0
+        finally
+          selectOutput(0)
+        end
+        readto()
+      catch StageError
+        rc = rc()
+      end
+    when anycase then do
+      chars = chars.upper
+      loop forever
+        line = Rexx peekto()
+        lc = line.upper
+        if lc.verify(chars) = 0 then  /* Verifies */
+          output(line)
+        else if sec then do         /* No verify */
+          selectOutput(1)
+          output(line)
+        catch stageError
+          sec = 0
+        finally
+          selectOutput(0)
+        end
+        readto()
+      catch StageError
+        rc = rc()
+      end
+    end
+    otherwise
+      loop forever
+        line = Rexx peekto()
+        if line.verify(chars) = 0 then  /* Verifies */
+          output(line)
+        else if sec then do         /* No verify */
+          selectOutput(1)
+          output(line)
+        catch stageError
+          sec = 0
+        finally
+          selectOutput(0)
+        end
+        readto()
+      catch StageError
+        rc = rc()
+      end
+  end
+
+exit(rc*(rc<>12))
