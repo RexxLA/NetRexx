@@ -8,17 +8,22 @@
  */
 
 /** verify
-
->>--VERIFY--+------------+-+------------+--delimitedString--><
-            +-ANYCASE----+ +-inputRange-+
+                                           v-------------------------+ (1)
+>>--VERIFY--+------------+-+------------+--+--+--delimitedString--+--+--><
+            +-ANYCASE----+ +-inputRange-+     +--character-range--+ (1)
             +-CASEANY----+
             +-CASEIGNORE-+
             +-IGNORECASE-+
             +-CASELESS---+
 
+  (1) NetRexx Pipelines only
+  (1) Examples:  A-Z 0-9 c-g ; 16-bit Unicode characters
+  (1) Any number greater than zero, any order, of delimitdStrings and character-ranges are allowed.
+
 */
 
 /*
+  20/ 7/ 3 Broke into 4 loops for speed; Added character-range and multiples. Jeff Hennick
   20/ 7/ 2 Jeff Hennick
 */
 
@@ -44,13 +49,45 @@ method run()
   args = r[0].Residue
   isRange = r[0].Number > 0
 
-                                      /* delimited string */
-  ds = DString(args)
-  chars = ds.String()
+                                      /* delimited string / character-range loop */
+  if args = '' then
+    Emsg(11, 'No characters specified.')
+
+  chars = Rexx ''
+
+  loop while args <> ''
+    loop while args <> ''
+                          /* look for character-range */
+      w1 = args.word(1)
+      parse w1 fc '-' lc
+      if lc = '' then leave
+                               /* hex translate and validity checks */
+      if fc.length > 1 then
+        if fc.datatype('X') then fc = fc.x2c
+        else
+          Emsg(11, 'Bad character "'fc'" in' args)
+      if lc.length > 1 then
+        if lc.datatype('X') then lc = lc.x2c
+        else
+          Emsg(11, 'Bad character "'lc'" in' args)
+      if lc < fc then
+        Emsg(11, 'Bad character range:' args)
+
+      loop i = fc.c2d to lc.c2d
+        chars = chars || i.d2c
+      end
+      args = args.subword(2)
+    end
+
+    ds = DString(args)
+    if ds.String() = '' then leave
+    chars = chars || ds.String()
+    args = ds.Residue()
+  end
 
                                     /* extra */
-  if ds.Residue() <> '' then
-    Emsg(11, 'Extra:' ds.Residue)
+  if args <> '' then
+    Emsg(11, 'Unrecognized as character-range or deliminted string:' ds.Residue())
 
                                     /* secondary output? */
   sec = 0
