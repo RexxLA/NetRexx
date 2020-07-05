@@ -9,36 +9,40 @@
 
 /** regex
 
->>--REGEX--+--------------------------+--regex_string-(1)---><
-           +-(--| options_string |--)-+
+>>--+--REGEX--+--+--------------------------+--regex_string-(1)---><
+    +--GREP---+  +-(--| options_string |--)-+
 
 options_string:
    +----------------------------+
 |--v-+------------------------+-+--|
-     +-NUMBERS----------------+ (2)
-     +-BEFORE-+-0------+------+ (3)
+     +-Numbers----------------+ (2)
+     +-Before-+-1------+------+ (3)
      |        +-number-+      |
-     +-AFTER-+-0------+-------+ (3)
+     +-After-+-1------+-------+ (3)
      |       +-number-+       |
-     +-CONTEXT-+-0------+-----+ (4)
+     +-Context-+-1------+-----+ (4)
      |         +-number-+     |
-     +-NOSEPARATOR------------+
-     +-SEPARATOR-+- -- ----+--+
+     +-NOSeparator------------+ (5)
+     +-Separator-+-/--/----+--+ (5)
      |           +-DString-+  |
+     +-Tertiary---------------+ (6)
 
- Records matching the RegEx are put out on primary output
+ NetRexx Pipelines only.
+ Records matching the RegEx are put out on primary output.
  Records not matching are put out on secondary, if connected, or discarded.
 
-(1) string is a Java RegEx expresion. null string passes all records.
-(2) lines are prefaced with line number, 10 characters, right justified
-(3) number of records put out after a matching record
-(4) number of records put out before and after a matching record
-
-[Possible future options: BEFORE and AFTER, etc., to give context, ala GREP.]
+(1) Regex_string is a Java RegEx expresion. Null string passes all records.
+(2) Records are prefaced with records number, 10 characters, right justified.
+(3) Number of records put out after a matching record.
+(4) Number of records put out before and after a matching record.
+(5) Inserted before a group of "before records" or the found record with "after records."
+(6) Send all matching records (no numbers) to tertiary output stream, if connected.
 
 */
 
 /*
+ 20/ 7/ 1 Fix default number proc; change default from 0 to 1; abbreviations for options;
+          before number fix; Tertiary. Jeff Hennick
  20/ 6/30 BEFORE, AFTER, CONTEXT, SEPARATOR, NOSEPARATOR added. Jeff Hennick
  20/ 6/28 Jeff Hennick
 */
@@ -61,7 +65,7 @@ before_count_set = Rexx 0
 after = Rexx 0
 aftercount = Rexx 0
 sepdefault = "--"
-usesep = 0
+usesep = 1 /* by default there is a separator before groups */
 
 method run()
 
@@ -74,17 +78,17 @@ method run()
     /* Process options */
                           /* NUMBERS */
   optionsup = options.upper
-  numbers = getOpt('numbers')
+  numbers = getOpt('numbers', 1)
 
                              /* BEFORE n */
-  before_count_set = getOpt('before', 1)
+  before_count_set = getOpt('before', 1, 1)
   before = before_count_set > 0
 
                               /* AFTER n */
-  after = getOpt('after', 1)
+  after = getOpt('after', 1, 1)
 
                                /* CONTEXT */
-  context_set = getOpt('context', 1)
+  context_set = getOpt('context', 1, 1)
   if context_set > 0 then do
     before = 1
     before_count_set = context_set
@@ -92,17 +96,22 @@ method run()
   end
 
                          /* SEPARATOR string */
-  separator = getOpt('separator', 2)
+  separator = getOpt('separator', 1, 2)
   if separator <> '' then do
     sep = separator
     usesep = 1
   end
+  else sep = sepdefault
+
                         /* NOSEPARATOR */
-  noseparator = getOpt('noseparator')
+  noseparator = getOpt('noseparator', 3)
   if noseparator = 1 then usesep = 0
 
+                        /* Tertiary  */
+  tertiary  = getOpt('tertiary', 1)
+
   if options <> '' then
-    Emsg(11, 'Regex -- Unknown option:' options)
+    Emsg(11, 'Regex -- Unknown or duplicate option:' options)
 
      /* One time compile */
   pat = Pattern.compile(regex);
@@ -114,6 +123,17 @@ method run()
   catch StageError
     sec = 0
   end
+
+    /* do we want and have a tertiary output connection? */
+  if tertiary then do
+    tri = 1
+    selectOutput(2)
+  catch StageError
+    tri = 0
+  end
+  else tri = 0
+
+     /* back to the primary output */
   do
     pri = 1
     selectOutput(0)
@@ -121,7 +141,7 @@ method run()
     pri = 0
   end
 
-  if \sec & \pri then
+  if \sec & \pri & \tri then
     Emsg(11, 'No output is connected.')
 
   li = Rexx ''  -- line number
@@ -141,12 +161,13 @@ method run()
     match = pat.matcher(line)
 
     if  match.find() then do       /* We have a match */
-      if usesep & aftercount = 0 then
+       usesep  =usesep  ; aftercount =aftercount ; before =before ; after = after
+      if usesep & aftercount = 0 & (before > 0 | after > 0) then
         output(sep)
       if before then do
         st = before_count + 1
         if st > before_count_set then st = st - before_count_set - 1
-        if numbers then lim = i - before_count_set + 1
+        if numbers then lim = i - before_count_set
         else lim = ''
         one = 1.d2c
         loop j = st for before_count_set
@@ -159,6 +180,14 @@ method run()
         end
       end
       output(li':'line)
+      if tri then do
+        selectOutput(2)
+        output(line)
+      catch StageError
+        tri = 0
+      finally
+        selectOutput(0)
+      end
       aftercount = after
     end
     else do
@@ -185,12 +214,28 @@ method run()
 
   exit(rc*(rc<>12))
 
-method getOpt(opt, val = 0)
+method getOpt(opt, len, val = 0)
+ /* val: 0: boolean exists; 1: return next word; 2: return DString */
   ret = Rexx
-  retw = ''
-  wp = optionsup.wordpos(opt.upper)
+  retw = Rexx ''
+  del2 = 1
+ -- wp = optionsup.wordpos(opt.upper)
+
+  optup = opt.upper
+  loop wp = 1 to optionsup.words()
+    if optup.abbrev(optionsup.word(wp), len) then leave
+  end
+  if wp > optionsup.words() then wp = 0
+
   ret = wp > 0
-  if val = 1 & ret then retw = options.word(wp + 1)
+  if val = 1 & ret then do
+    retw = options.word(wp + 1)
+    if \ retw.datatype('N') then
+      do
+        retw = 1 /* Default number */
+        del2 = 0
+      end
+  end
   select
   when val = 2 & ret then do
     opt = options.subword(wp + 1)
@@ -204,7 +249,7 @@ method getOpt(opt, val = 0)
     ret = ''
   when ret > 0 then do
     w = 1
-    if val then w = 2
+    if val > 0 & del2 then w = 2
     options = options.delword(wp,w)
     optionsup = optionsup.delword(wp,w)
   end
