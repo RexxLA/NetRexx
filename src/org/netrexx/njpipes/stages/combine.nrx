@@ -1,0 +1,400 @@
+-- combine.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 20/ 7/14 New.   Jeff Hennick
+*/
+
+/** combine
+
+  >>--COMBINE--+-----------------------+--+-Or----------+---><
+               | +-1-----------------+ |  +-aNd---------+
+               +-+-------------------+-+  +-AND---------+
+               | +-number------------+ |  +-eXclusiveor-+
+               | +-*-----------------+ |  +-EXClusiveor-+
+               | +-KEYLENgth--number-+ |  +-FIRST-(2)---+
+               |          +-ALLOF-(1)+ |  +-LAST-(2)----+
+               +-STOP-(1) +          +-+
+                          +-ANYOF-(1)+
+ Notes:
+ (1) Only for use with secondary input streams.
+     Only options from this column usable with
+     any secondary input streams.
+     (This is poorly documented in CMS Pipelines.
+     This is a best guess of their intentions.)
+  (2) Not usable with STOP and secondary streams.
+
+*/
+
+options nostrictcase nostrictargs nostrictsignal nobinary
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class combine extends stage uses IRange
+
+method run() public
+
+   args = Rexx ''
+   rest = Rexx ''
+   num = 1
+   keylen = '*'
+   key = 0
+   anyof = 0
+
+   args = arg()
+
+   parse args w1 rest
+
+   select
+     when w1.datatype('W') then
+       num = w1
+     when w1 = '*' then
+       num = '*'
+     when 'KEYLENGTH'.abbrev(w1.upper,6) then do
+       parse rest keylen rest
+       key = 1
+       keylen = keylen + 1
+     end
+     when w1.upper = 'STOP' then do
+       parse rest w2 rest2
+       select
+         when w2.upper = 'ALLOF' then rest = rest2
+         when w2.upper = 'ANYOF' then do
+            anyof = 1
+            rest = rest2
+         end
+         otherwise
+           nop
+       end
+     end
+     otherwise
+       rest = args
+   end
+
+   if num = '*' then num = 9.copies(digits)
+
+   parse rest w2 extra
+
+   if extra <> '' then
+     Emsg(11, 'COMBINE extra in arguments:' extra)
+
+   w2 = w2.upper
+
+         /* do we have a secondary input stream? */
+   do
+     selectInput(1)
+     secin = 1
+   catch stageError
+     secin = 0
+   end
+   do
+     selectInput(0)
+     firstin = 1
+   catch stageError
+     firstin = 0
+   end
+
+
+   if \secin then select case w2   /* only a single input stream is active */
+
+   when 'FIRST' then do
+     loop forever
+       first = peekto()
+       output(first)
+       readto()
+
+       if key then do
+         parse first k =(keylen) .
+         loop
+           line = peekto()
+           parse line lk = (keylen) .
+           if lk <> k then leave
+           readto()
+         end
+       end
+
+       else loop for num
+         readto()
+       end
+     end
+   catch StageError
+   end
+
+   when 'LAST' then do
+       first = peekto()
+       readto()
+       lline = first
+     loop forever
+
+       if key then do
+         parse first k =(keylen) .
+         loop
+           line = peekto()
+           parse line lk = (keylen) .
+           if lk <> k then leave
+           lline = readto()
+         end
+       end
+
+       else loop for num
+         lline = readto()
+       end
+       output(lline)
+       first = readto()
+     end
+   catch StageError
+     if key then do
+       output(lline)
+     catch StageError
+     end
+   end
+
+   when '', 'O', 'OR' then do
+     k = ''
+     loop forever
+     first = peekto()
+     readto()
+     firstb = c2b(Rexx first)
+
+       if key then do
+         parse first k =(keylen) d
+         firstb = c2b(d)
+         loop
+           line = peekto()
+           parse line lk = (keylen) ld
+           if lk <> k then leave
+           lineb = c2b(ld)
+           firstb = mo(firstb, lineb)
+           lline = readto()
+         end
+         catch StageError
+       end
+
+       else do
+         loop for num
+           lineb = c2b(Rexx peekto())
+           firstb = mo(firstb, lineb)
+         end
+       end
+
+       output(k || b2c(firstb))
+       readto()
+     end
+   catch StageError
+   end
+
+   when 'N', 'AND' then do
+     k = ''
+     loop forever
+     first = peekto()
+     readto()
+     firstb = c2b(Rexx first)
+
+       if key then do
+         parse first k =(keylen) d
+         firstb = c2b(d)
+         loop
+           line = peekto()
+           parse line lk = (keylen) ld
+           if lk <> k then leave
+           lineb = c2b(ld)
+           firstb = ma(firstb, lineb)
+           lline = readto()
+         end
+         catch StageError
+       end
+
+       else do
+         loop for num
+           lineb = c2b(Rexx peekto())
+           firstb = ma(firstb, lineb)
+         end
+       end
+
+       output(k || b2c(firstb))
+       readto()
+     end
+   catch StageError
+   end
+
+   when 'X', 'EXCLUSIVEOR' then do
+     k = ''
+     loop forever
+     first = peekto()
+     readto()
+     firstb = c2b(Rexx first)
+
+       if key then do
+         parse first k =(keylen) d
+         firstb = c2b(d)
+         loop
+           line = peekto()
+           parse line lk = (keylen) ld
+           if lk <> k then leave
+           lineb = c2b(ld)
+           firstb = mx(firstb, lineb)
+           lline = readto()
+         end
+         catch StageError
+       end
+
+       else do
+         loop for num
+           lineb = c2b(Rexx peekto())
+           firstb = mx(firstb, lineb)
+         end
+       end
+
+       output(k || b2c(firstb))
+       readto()
+     end
+   catch StageError
+   end
+
+   otherwise
+     Emsg(11, 'COMBINE unrecognised option:' rest)
+   end
+
+   if secin then select case w2   /* have two input streams active */
+
+   when '', 'O', 'OR' then loop label record
+     atleastone = 0
+     loop i=0 to maxInputStream()
+        do
+           if i=0 then firstb = ''
+           selectInput(i)
+           second = peekto()
+           if second == '' then lineb = ''
+           else lineb = c2b(Rexx second)
+           firstb = mo(firstb, lineb)
+           atleastone = 1
+           readto()
+        catch StageError
+           second = ''
+           if anyof then leave record
+        end
+     end i
+     if \atleastone then leave
+
+     do
+       output(b2c(firstb))
+     catch stageError
+       leave
+     end
+   end
+
+   when 'N', 'AND' then loop label record
+     atleastone = 0
+     loop i=0 to maxInputStream()
+        do
+           if i=0 then firstb = ''
+           selectInput(i)
+           second = peekto()
+           if second == '' then lineb = ''
+           else lineb = c2b(Rexx second)
+           firstb = ma(firstb, lineb)
+           atleastone = 1
+           readto()
+        catch StageError
+           second = ''
+           if anyof then leave record
+        end
+     end i
+     if \atleastone then leave
+
+     do
+       output(b2c(firstb))
+     catch stageError
+       leave
+     end
+   end
+
+   when 'X', 'EXCLUSIVEOR' then loop label record
+     atleastone = 0
+     loop i=0 to maxInputStream()
+        do
+           if i=0 then firstb = ''
+           selectInput(i)
+           second = peekto()
+           if second == '' then lineb = ''
+           else lineb = c2b(Rexx second)
+           firstb = mx(firstb, lineb)
+           atleastone = 1
+           readto()
+        catch StageError
+           second = ''
+           if anyof then leave record
+        end
+     end i
+     if \atleastone then leave
+
+     do
+       output(b2c(firstb))
+     catch stageError
+       leave
+     end
+   end
+
+
+   otherwise
+     Emsg(11, 'COMBINE unrecognised option:' rest)
+   end
+
+   rc = mrc()
+
+exit(rc*(rc<>12))
+
+method c2b(str)
+  b = ''
+  loop i = 1 for str.length()
+    b = b || str.substr(i,1).c2d.d2b(16)
+  end
+  return b
+
+method b2c(bstr)
+  c = ''
+  len = bstr.length
+  loop i = 1 to len by 16
+    c = c || bstr.substr(i,16).b2d.d2c
+  end
+  return c
+
+method mo(f, s)
+--trace results
+  len = f.length
+  lenp = len +1
+  parse s fp =(lenp) sp
+  o = ''
+  loop i = 1 for len
+    o = o || (f.substr(i,1) | fp.substr(i,1))
+  end
+  return o || sp
+
+method ma(f, s)
+--trace results
+  len = f.length
+  lenp = len +1
+  parse s fp =(lenp) sp
+  o = ''
+  loop i = 1 for f.length
+    o = o || (f.substr(i,1) & fp.substr(i,1))
+  end
+  return o || sp
+
+method mx(f, s)
+--trace results
+  len = f.length
+  lenp = len +1
+  parse s fp =(lenp) sp
+  o = ''
+  loop i = 1 for f.length
+    o = o || (f.substr(i,1) && fp.substr(i,1))
+  end
+  return o || sp
