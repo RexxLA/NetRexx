@@ -1,24 +1,38 @@
 /** regex
 
->>--REGEX--+--------------------------+--regex_string-(1)---><
-           +-(--| options_string |--)-+
+>>--+--REGEX--+--+--------------------------+--regex_string-(1)---><
+    +--GREP---+  +-(--| options_string |--)-+
 
 options_string:
-|--+---------+--|
-   +-NUMBERS-+ (2)
+   +----------------------------+
+|--v-+------------------------+-+--|
+     +-Numbers----------------+ (2)
+     +-Before-+-1------+------+ (3)
+     |        +-number-+      |
+     +-After-+-1------+-------+ (3)
+     |       +-number-+       |
+     +-Context-+-1------+-----+ (4)
+     |         +-number-+     |
+     +-NOSeparator------------+ (5)
+     +-Separator-+-/--/----+--+ (5)
+     |           +-DString-+  |
+     +-Tertiary---------------+ (6)
 
-
- Records matching the RegEx are put out on primary output
+ NetRexx Pipelines only.
+ Records matching the RegEx are put out on primary output.
  Records not matching are put out on secondary, if connected, or discarded.
 
-(1) string is a Java RegEx expresion. null string passes all records.
-(2) lines are prefaced with line number, 10 characters, right justified
-
-[Possible future options: BEFORE and AFTER, etc., to give context, ala GREP.]
+(1) Regex_string is a Java RegEx expresion. Null string passes all records.
+(2) Records are prefaced with records number, 10 characters, right justified.
+(3) Number of records put out after a matching record.
+(4) Number of records put out before and after a matching record.
+(5) Inserted before a group of "before records" or the found record with "after records."
+(6) Send all matching records (no numbers) to tertiary output stream, if connected.
 
 */
 
 /*
+  20/ 7/18 Additional Options beyond NUMBERS.  Jeff Hennick
   20/ 6/28 Jeff Hennick
 */
 
@@ -67,7 +81,7 @@ pipe (regex_tests01)
    regex (after 2) c$ |
    c4: compare any ~2# 4 after number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal :a3c;-d4d;-e5e |
+   strliteral /--;:a3c;-d4d;-e5e/ |
    split ; |
    c4: ?
 
@@ -77,7 +91,7 @@ pipe (regex_tests01)
    regex (after 2) c$ |
    c5: compare any ~2# 5 after number (reset)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal :a3c;:d4c;-e5e;-f6f |
+   strliteral /--;:a3c;:d4c;-e5e;-f6f/ |
    split ; |
    c5: ?
 
@@ -137,7 +151,7 @@ pipe (regex_tests01)
    regex (before 0 separator ) c$ |
    c11: compare any ~2#11 before 0 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   strliteral /--;:a3c;--;:g7c/ |
+   strliteral /:a3c;:g7c/ |
    split ; |
    c11: ?
 
