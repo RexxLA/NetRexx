@@ -1,4 +1,4 @@
--- specs
+-- spec
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
  *
@@ -9,13 +9,13 @@
  */
 
 /*
-
+ 20/ 7/18 Fix for partial extra output with multiple input streams.
  20/03/28 Added FIRST and SECOND; CENTRE
  20/03/26 various range specifiers; major fix for backward ABBREVs
  20/03/17 B2c, D2c, TODclock added.
  20/02/20 Hexidecimal & Binary handling.
  20/02/19 NUMBER, Alignment abbreviations; space optional on words & fields; additional tests on option names. Jeff Hennick
- 2020/02/18 rename to spec for abbreviated name
+ 20/02/18 rename to spec for abbreviated name
  20/02/18 Can be used as a Driver stage, first in pipe. C2D, C2X, X2C, RECNO added. Jeff Hennick
  20/02/17 X,H, & Bstrings; Fix PAD; Documentation. Jeff Hennick
  20/02/14 Added NW for Nextword; pad: hexchar, BLANK, SPACE. Jeff Hennick
@@ -216,7 +216,8 @@ class spec extends stage
     o[n+5]='   read = boolean 1'
     o[n+7]='   loop label body while read'
     o[n+9] = '      read = 0'
-    n = n+10
+    o[n+10] = '      noread = 0'
+    n = n+11
 
     if b.word(b.words())<>'write' then     -- and end with a write
       b = b' write'
@@ -283,12 +284,13 @@ class spec extends stage
                 o[n+7] = '         eoff['s'] = 0'
                 o[n+8] = '         if eofc>='all' then do'
                   o[n+9] = '            if outp<>"" then'
-                  o[n+10]= '               output(outp)'
+                  o[n+10]= '               if \\noread then output(outp)'
                   o[n+11]= '            leave body'
                   o[n+12]= '         end'
                   o[n+13]= '         l's' = ""'
-                  o[n+14]= '      end'
-                  n = n+15
+                  o[n+14]= '         noread = 1'
+                  o[n+15]= '      end'
+                  n = n+16
                   p[s] = 1
                   pr = 0
               end
@@ -296,8 +298,9 @@ class spec extends stage
               o[n+2] = '         selectInput('t')'
               o[n+3] = '      catch StageError'
               o[n+4] = '         rc = rc()'
-              o[n+5] = '      end'
-              n = n+6
+              o[n+5] = '         noread = 1'
+              o[n+6] = '      end'
+              n = n+7
               pr = 1
               s = t
             end
@@ -324,12 +327,13 @@ class spec extends stage
             o[n+6] = '         eoff['s'] = 0'
             o[n+7] = '         if eofc>='all' then do'
             o[n+8] = '            if outp<>"" then'
-            o[n+9] = '               output(outp)'
+            o[n+9] = '               if \\noread then output(outp)'
             o[n+10]= '            leave body'
             o[n+11]= '         end'
             o[n+12]= '         l's' = ""'
-            o[n+13]= '      end'
-            n = n+14
+            o[n+13]= '         noread = 1'
+            o[n+14]= '      end'
+            n = n+15
             pr = 0
             p[s] = 1
           end
@@ -351,7 +355,7 @@ class spec extends stage
             o[n+3] = '      catch StageError'
             o[n+4] = '         rc = rc()'
             o[n+5] = '         if outp<>"" then'
-            o[n+6] = '            output(outp)'
+            o[n+6] = '            if \\noread then output(outp)'
             o[n+7] = '         leave body'
             o[n+8] = '      end'
             n = n+8
@@ -360,7 +364,7 @@ class spec extends stage
           end
 
           when t='write' then do                 -- write if its required
-            o[n+1] = '      output(outp)'
+            o[n+1] = '      if \\noread then output(outp)'
             o[n+2] = '      outp = ""'
             n = n+3
           end
@@ -390,10 +394,11 @@ class spec extends stage
         o[n+7] = '         eoff['s'] = 0'
         o[n+8] = '         if eofc>='all' then do'
           o[n+9] = '            if outp<>"" then'
-          o[n+10]= '               output(outp)'
+          o[n+10]= '               if \\noread then output(outp)'
           o[n+11]= '            leave body'
           o[n+12]= '         end'
           o[n+13]= '         l's' = ""'
+          o[n+14]= '         noread = 1'
           o[n+14]= '      end'
         n = n+15
         pr = 0
@@ -1022,5 +1027,12 @@ class spec extends stage
 
   pInfo[3] = cname
   pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
+
+  ss = 1 -- show generated source
+  ss = 0 -- comment out to show generated source
+
+  if ss then loop i = 1 for o[0]
+    say o[i]
+  end
 
   return 1
