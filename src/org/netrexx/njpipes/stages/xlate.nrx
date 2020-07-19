@@ -4,7 +4,7 @@ options nostrictcase nostrictargs nostrictsignal nobinary
  *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
 -- 98/ 6/10 IRange.  Added inputrange processing, CMS documentation,  JHennick
 
@@ -29,9 +29,11 @@ options nostrictcase nostrictargs nostrictsignal nobinary
    {    +-FROM-+  +-CODEPAGE-+            }
    {                                      }
    { Not yet in njPipes                   }
+*/
 
-  XLATE Contributed by Rene Jansen
-
+/*
+  20/ 7/19 Reverse tables for non-range. Jeff Hennick
+  original XLATE Contributed by Rene Jansen
 */
 
 package org.netrexx.njpipes.stages
@@ -56,9 +58,9 @@ import org.netrexx.njpipes.pipes.
 -- translate table via input file
 
 class xlate extends stage uses IRange
-  
+
   method run()
-    
+
     toTable = '00'.x2c().sequence('FF'.x2c())
     ebctable = -
 	       '000'.x2c()||'001'.x2c()||'002'.x2c()||'003'.x2c()||'0DC'.x2c()||'009'.x2c()||'0C3'.x2c()||'07F'.x2c()||-
@@ -93,7 +95,7 @@ class xlate extends stage uses IRange
 	       '059'.x2c()||'05A'.x2c()||'0FD'.x2c()||'0E2'.x2c()||'099'.x2c()||'0E3'.x2c()||'0E0'.x2c()||'0E5'.x2c()||-
 	       '030'.x2c()||'031'.x2c()||'032'.x2c()||'033'.x2c()||'034'.x2c()||'035'.x2c()||'036'.x2c()||'037'.x2c()||-
 	       '038'.x2c()||'039'.x2c()||'0FC'.x2c()||'0EA'.x2c()||'09A'.x2c()||'0EB'.x2c()||'0E9'.x2c()||'09F'.x2c()
-    
+
     asctable = -
 	       '000'.x2c()||'001'.x2c()||'002'.x2c()||'003'.x2c()||'037'.x2c()||'02D'.x2c()||'02E'.x2c()||'02F'.x2c()||-
 	       '016'.x2c()||'005'.x2c()||'025'.x2c()||'00B'.x2c()||'00C'.x2c()||'00D'.x2c()||'00E'.x2c()||'00F'.x2c()||-
@@ -127,24 +129,24 @@ class xlate extends stage uses IRange
 	       '0AE'.x2c()||'0FE'.x2c()||'0FB'.x2c()||'0FD'.x2c()||'08D'.x2c()||'0AD'.x2c()||'0BC'.x2c()||'0BE'.x2c()||-
 	       '0CA'.x2c()||'08F'.x2c()||'01B'.x2c()||'0B9'.x2c()||'0B6'.x2c()||'0B5'.x2c()||'0E1'.x2c()||'09D'.x2c()||-
 	       '090'.x2c()||'0BD'.x2c()||'0B3'.x2c()||'0DA'.x2c()||'0FA'.x2c()||'0EA'.x2c()||'03E'.x2c()||'041'.x2c()
-    
-    
+
+
     -- first select clause selects the options and does preprocessing of tables when needed
-    
+
     line = rexx
-    
+
     a = arg()
-    
+
     ri = GetIRanges(a)
     input_ranges = ri[0].Number()
-    
+
     noir = boolean (input_ranges = 0)
-    
+
     option = ''
-    
+
     a = ri[0].Residue()
     al = a.lower()
-    
+
     select
       when al.words() = 0 then option = 'upper'
       when al.wordpos('lower') then option = 'lower'
@@ -164,7 +166,7 @@ class xlate extends stage uses IRange
 	  fromTable = ebctable
 	  option = 'xlate'
 	end
-      
+
       when (option <> 'upper') & (option <> 'lower') & (a.words() //2 = 0)
 	then
 	  do
@@ -177,14 +179,19 @@ class xlate extends stage uses IRange
 		toTable = tables['a']
 		fromTable = tables['b']
               end
+            else
+              do
+                fromTable = fromTable.reverse() -- standard rexx xlate function uses leftmost duplicate first
+                toTable = toTable.reverse() -- so reverse to make overrides possible;
+              end
 	  end
 	
       otherwise
 	Emsg(11,"Error --" getName() "syntax error")
     end
-    
+
     helpline = Rexx
-    
+
     -- second select does the work as determined by first select clause
     select
       when option='upper' | a.words() = 0 then
@@ -212,7 +219,7 @@ class xlate extends stage uses IRange
 	  catch StageError
 	    rc = rc()
 	  end
-      
+
       when option='lower' then
         if noir then
 	  do
@@ -238,7 +245,7 @@ class xlate extends stage uses IRange
 	  catch StageError
 	    rc = rc()
 	  end
-      
+
       when option='xlate' then
         if noir then
 	  do
@@ -247,7 +254,7 @@ class xlate extends stage uses IRange
               output(line.translate(fromTable,toTable))
               readto()
 	    end
-	    
+	
 	  catch StageError
 	    rc = rc()
 	  end
@@ -262,19 +269,19 @@ class xlate extends stage uses IRange
               output(line)
               readto()
 	    end
-	    
+	
 	  catch StageError
 	    rc = rc()
 	  end
-      
+
       otherwise say "not implemented"
 	
     end
-    
+
     exit(rc*(rc<>12))
-    
+
   method concatenateEvensAndOdds(a=rexx, j)
-    
+
     outstr = ''
     buf = ''
     i=0
@@ -287,11 +294,11 @@ class xlate extends stage uses IRange
       end
     end
     return outstr
-    
-    
+
+
   method processRanges(a=rexx, b=rexx)
     c = ''; d= ''; buf = ''
-    
+
     wordcnt = a.words()
     loop i=1 until i=wordcnt
       j = a.word(i).pos('-')
@@ -335,24 +342,24 @@ class xlate extends stage uses IRange
       else buf = b.word(i)
       d = (d||buf).strip()
     end
-    
+
     -- look if both tables are the same length
     -- when tocharrange is shorter than fromcharrange, the last part of fromcharrange is
     -- translated to the last character of tocharrange
-    
+
     if (c.length() > d.length()) then d = d||d.right(1).copies(c.length()-d.length())
 
     -- when fromcharrange is shorter than tocharrange only the part of fromcharrange
     -- that tocharrange specifies is translated
-    
+
     if (d.length() > c.length()) then d = d.substr(1,c.length())
-    
-    
+
+
     tables = "tables"
     tables['a'] = c.reverse() -- standard rexx xlate function uses leftmost duplicate first
     tables['b'] = d.reverse() -- so reverse to make overrides possible;
-    
+
     return tables
-    
-    
-    
+
+
+
