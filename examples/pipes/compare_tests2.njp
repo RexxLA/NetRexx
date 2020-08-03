@@ -3,8 +3,8 @@
 /** compare (6)
 
                +-TRINARY-+  (1)           +-PAD SPACE-+
-  >>--COMPARE--+---------+------------+---+-----------+----------------------><
-               +-BINARY--+  (2)       |   +-PAD-Xorc--+
+  >>--COMPARE--+---------+------------+---+-----------+---+------+---------><
+               +-BINARY--+  (2)       |   +-PAD-Xorc--+   +-ECHO-+  (8)
                |                      |
                | <-----------------+  |
                +--ANY DString------+--+   (4) (5)
@@ -20,16 +20,33 @@
          the unequal situation: (Your shell program may require doubled backslashes.)
                  \C (count) for the record number,
                  \B (byte) for column number
-                 \P (primary) for the primary stream record
-                 \S (secondary) for the secondary stream record
+                 \P (primary) for the primary stream record (7)
+                 \S (secondary) for the secondary stream record (7)
                  \L (Least) for then stream number that is shortest, -1 if equal
                  \M (Most) for the stream number that is longest, -1 if equal
-     (5) Equal or not, this DString precedes any of the others.
-     (6) This is njpipes only, not included in CMS.
+                 \N (New line) Line break
+     (5) Equal or not, this DString precedes any of the others
+     (6) This is njpipes only, not included in CMS
+     (7) In reporting \P & \S, control charactors, except new line, \n, are transliterated to [blob, 219.d2c()]
+     (8) Without ECHO, this stops and reports at first non-compare. With ECHO, each primary input is reported;
+         after first non-compare primary input stream records continue to be read and reported, but no testing is done.
+     (9) Options work in any order
+
+     Input streams:
+        0: Data 1
+        1: Data 2
+
+     Output streams:
+        0: Result (single record, possibly multiple lines
+        1: Last primary record read at first no match, or end of stream
+        2: Last secondary record read at first no match, or end of stream
 
 */
 
--- 19/09/24
+/*
+  20/ 8/ 3 Documentation. Jeff Hennick
+  19/09/24
+*/
 
 pipe (compare_tests2)
 
@@ -113,7 +130,7 @@ pipe (compare_tests2)
 -- compare (shorter) ?
    literal str |
    split ; |
-   c7: compare any ~rec \\c col \\b Actual: \\p Expected: \\s |
+   c7: compare any ~rec \\c col \\b Actual: \\p Expected: \\s~ |
    c7a: compare any ~2# 7 compare (Shorter) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
    literal str;sTring |

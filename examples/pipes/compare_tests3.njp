@@ -1,0 +1,220 @@
+--  compare_tests3
+
+/** compare (6)
+
+               +-TRINARY-+  (1)           +-PAD SPACE-+
+  >>--COMPARE--+---------+------------+---+-----------+---+------+---------><
+               +-BINARY--+  (2)       |   +-PAD-Xorc--+   +-ECHO-+  (8)
+               |                      |
+               | <-----------------+  |
+               +--ANY DString------+--+   (4) (5)
+               +--EQUAL DString----+      (4)
+               +--LESS DString-----+  (3) (4)
+               +--MORE DString-----+  (3) (4)
+               +--NOTEQUAL DString-+      (4)
+
+     (1) -1 = Primary is shorter/less, 0 = equal, 1 = Secondary is shorter/less
+     (2) 0 = equal, 1 = not equal
+     (3) Primary is LESS/shorter (or MORE/longer) than secondary
+     (4) DStrings can use any of the following escapes (or the lowercase) for
+         the unequal situation: (Your shell program may require doubled backslashes.)
+                 \C (count) for the record number,
+                 \B (byte) for column number
+                 \P (primary) for the primary stream record (7)
+                 \S (secondary) for the secondary stream record (7)
+                 \L (Least) for then stream number that is shortest, -1 if equal
+                 \M (Most) for the stream number that is longest, -1 if equal
+                 \N (New line) Line break
+     (5) Equal or not, this DString precedes any of the others
+     (6) This is njpipes only, not included in CMS
+     (7) In reporting \P & \S, control charactors are transliterated to [blob, 219.d2c()]
+     (8) Without ECHO, this stops and reports at first non-compare. With ECHO, each primary input is reported;
+         after first non-compare primary input stream records continue to be read and reported, but no testing is done.
+     (9) Options work in any order
+
+     Input streams:
+        0: Data 1
+        1: Data 2
+
+     Output streams:
+        0: Result (single record, possibly multiple lines
+        1: Last primary record read at first no match, or end of stream
+        2: Last secondary record read at first no match, or end of stream
+
+**/
+
+/*
+ 20/ 8/ 3 Documentation. Jeff Hennick
+ 20/ 2/12  Jeff Hennick
+*/
+
+pipe (compare_tests3)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- compare echo equal /Same/ less /Less/ more /More/ (shorter) ?
+   literal 1;2;3 |
+   split ; |
+   c1: compare echo equal /Same/ less /Less/ more /More/ |       -- testing stage |
+   c1a: compare any ~2# 1 compare echo equal /Same/ less /Less/ more /More/ (shorter)  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;2;3;4 |   -- test data |
+   split ; |
+   c1: ?
+   literal     1 1\n     2 2\n     3 3\n Less |          -- expected out |
+   c1a: |
+
+-- compare echo equal /Same/ less /Less/ more /More/ (Less) ?
+   literal 1;2;3;4 |
+   split ; |
+   c2: compare echo equal /Same/ less /Less/ more /More/|       -- testing stage |
+   c2a: compare any ~2# 2 compare echo equal /Same/ less /Less/ more /More/ (Less)  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;5;3;4 |   -- test data |
+   split ; |
+   c2: ?
+   literal     1 1\n     2 2\n Less   3 3\n   4 4\n |          -- expected out |
+   c2a: |
+
+-- compare echo equal /Same/ less /Less/ more /More/ (Secondary output) ?
+   literal one;two;three;four |
+   split ; |
+   a3: compare echo equal /Same/ less /Less/ more /More/|       -- testing stage |
+   hole ?
+   literal oneA;twoA;threeA;fourA |   -- test data |
+   split ; |
+   a3: | -- secondary |
+   c3: compare any ~2# 3 compare echo equal /Same/ less /Less/ more /More/ (Secondary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal one |          -- expected out |
+   c3: ?
+
+-- compare echo equal /Same/ less /Less/ more /More/ (Tertiary output) ?
+   literal one;two;three;four |
+   split ; |
+   a4: compare echo equal /Same/ less /Less/ more /More/|       -- testing stage |
+   hole ?
+   literal oneA;twoA;threeA;fourA |   -- test data |
+   split ; |
+   a4: | -- secondary |
+   hole ?
+   a4: | -- tertiary
+   c4: compare any ~2# 4 compare echo equal /Same/ less /Less/ more /More/ (Tertiary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal oneA |          -- expected out |
+   c4: ?
+
+-- compare (Equal: Secondary output) ?
+   literal one;two;three;four |
+   split ; |
+   a5: compare |       -- testing stage |
+   hole ?
+   literal one;two;three;four |   -- test data |
+   split ; |
+   a5: | -- secondary |
+   c5: compare any ~2# 5 compare (Equal: Secondary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |          -- expected out |
+   c5: ?
+
+-- compare (Equal: Tertiary output) ?
+   literal one;two;three;four |
+   split ; |
+   a6: compare |       -- testing stage |
+   hole ?
+   literal one;two;three;four |   -- test data |
+   split ; |
+   a6: | -- secondary |
+   hole ?
+   a6: | -- tertiary |
+   c6: compare any ~2# 6 compare (Equal: Tertiary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |          -- expected out |
+   c6: ?
+
+-- compare (Middle: Secondary output) ?
+   literal one;two;three;four |
+   split ; |
+   a7: compare |       -- testing stage |
+   hole ?
+   literal one;two bad;three;four |   -- test data |
+   split ; |
+   a7: | -- secondary |
+   c7: compare any ~2# 7 compare (Middle: Secondary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |          -- expected out |
+   c7: ?
+
+-- compare (Middle: Tertiary output) ?
+   literal one;two;three;four |
+   split ; |
+   a8: compare |       -- testing stage |
+   hole ?
+   literal one;two_bad;three;four |   -- test data |
+   split ; |
+   a8: | -- secondary |
+   hole ?
+   a8: | -- tertiary |
+   c8: compare any ~2# 8 compare (Middle: Tertiary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two_bad |          -- expected out |
+   c8: ?
+
+-- compare (Short: Secondary output) ?
+   literal one;two;three |
+   split ; |
+   a9: compare |       -- testing stage |
+   hole ?
+   literal one;two;three;four |   -- test data |
+   split ; |
+   a9: | -- secondary |
+   c9: compare any ~2# 9 compare (Short: Secondary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |          -- expected out |
+   c9: ?
+
+-- compare (Short: Tertiary output) ?
+   literal one;two;three |
+   split ; |
+   a10: compare |       -- testing stage |
+   hole ?
+   literal one;two;three;four |   -- test data |
+   split ; |
+   a10: | -- secondary |
+   hole ?
+   a10: | -- tertiary |
+   c10: compare any ~2#10 compare (Short: Tertiary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal four |          -- expected out |
+   c10: ?
+
+-- compare (Long: Secondary output) ?
+   literal one;two;three;four |
+   split ; |
+   a11: compare |       -- testing stage |
+   hole ?
+   literal one;two;three |   -- test data |
+   split ; |
+   a11: | -- secondary |
+   c11: compare any ~2#11 compare (Long: Secondary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal four |          -- expected out |
+   c11: ?
+
+-- compare (Long: Tertiary output) ?
+   literal one;two;three;four |
+   split ; |
+   a12: compare |       -- testing stage |
+   hole ?
+   literal one;two;three |   -- test data |
+   split ; |
+   a12: | -- secondary |
+   hole ?
+   a12: | -- tertiary |
+   c12: compare any ~2#12 compare (Long: Tertiary output) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |          -- expected out |
+   c12: ?

@@ -6,6 +6,8 @@
  *  and distributing this program.
  */
 /*
+   20/ 8/ 3  Add ECHO. Jeff Hennick
+   20/ 8/ 1  Fix for blanks on both.  Jeff Hennick
    20/ 7/13  Fix reporting for null input.  Jeff Hennick
    19/11/22  Fix for null input.
              Add toString() on inputs.
@@ -18,8 +20,8 @@
 /** compare (6)
 
                +-TRINARY-+  (1)           +-PAD SPACE-+
-  >>--COMPARE--+---------+------------+---+-----------+----------------------><
-               +-BINARY--+  (2)       |   +-PAD-Xorc--+
+  >>--COMPARE--+---------+------------+---+-----------+---+------+---------><
+               +-BINARY--+  (2)       |   +-PAD-Xorc--+   +-ECHO-+  (8)
                |                      |
                | <-----------------+  |
                +--ANY DString------+--+   (4) (5)
@@ -39,9 +41,22 @@
                  \S (secondary) for the secondary stream record (7)
                  \L (Least) for then stream number that is shortest, -1 if equal
                  \M (Most) for the stream number that is longest, -1 if equal
+                 \N (New line) Line break
      (5) Equal or not, this DString precedes any of the others
      (6) This is njpipes only, not included in CMS
-     (7) In reporting \P & \S, control charactors are transliterated to [blob, 219.d2c()]
+     (7) In reporting \P & \S, control charactors, except new line, \n, are transliterated to [blob, 219.d2c()]
+     (8) Without ECHO, this stops and reports at first non-compare. With ECHO, each primary input is reported;
+         after first non-compare primary input stream records continue to be read and reported, but no testing is done.
+     (9) Options work in any order
+
+     Input streams:
+        0: Data 1
+        1: Data 2
+
+     Output streams:
+        0: Result (single record, possibly multiple lines
+        1: Last primary record read at first no match, or end of stream
+        2: Last secondary record read at first no match, or end of stream
 
 */
 
@@ -52,10 +67,6 @@ import org.netrexx.njpipes.pipes.
 
 class compare extends stage
 
-method run()
-
-   arg = arg()
-
    aany = boolean 0
    atrinary = boolean 0
    abinary = boolean 0
@@ -63,7 +74,19 @@ method run()
    aless = boolean 0
    amore = boolean 0
    anotequal = boolean 0
-   apad = ' '
+   apad = rexx ' '
+   echo = boolean 0
+
+   o = rexx ''  -- output
+   sany = rexx ''
+   sless = rexx ''
+   smore = rexx ''
+   sequal = rexx ''
+   snotequal = rexx ''
+
+method run()
+
+   arg = arg()
 
    if arg = '' then arg = 'TRINARY'
 
@@ -113,19 +136,34 @@ method run()
             parse arg . ds arg
             apad = GetXorc(ds)
          end
+         when key = 'ECHO' then do
+            parse arg . arg
+            echo = 1
+         end
          otherwise
             arg = ds
             leave
       end
    end
 
+diff()
+
+rc = mrc()
+if rc=4 then rc=12
+
+exit(rc*(rc<>12))
+
+method diff() Signals ThreadQ
    r0 = rexx ''
    r1 = rexx ''
+   echofirst = rexx ''
+   o = rexx ''  -- prepare output record
 
    less = -1 -- short stream
 
    colno = 0 -- nonequal column number
 
+   recno = Rexx 1
    loop recno = 1  -- non-equal record number
       do
          do
@@ -133,6 +171,7 @@ method run()
          catch nullPointerException
             o0 = ''
          end
+         if echo then o = o recno.right(5) o0'\n'
       catch StageError
          less = 0
          r0 = ''
@@ -201,6 +240,8 @@ method run()
 
    eq = 0
 
+   if r0 = r1 then eq = 1
+
    leastStream = Rexx less
    mostStream = Rexx
 
@@ -218,11 +259,8 @@ method run()
 
    if eq then less = 0
 
-   -- prepare output record
 
-   o = rexx ''
-
-   if aany then o = o sany
+   if aany then o = sany''o
 
    select
       when atrinary then o = less
@@ -232,11 +270,23 @@ method run()
          if \eq & anotequal then o = o snotequal
          if less < 0 & aless then o = o sless
          if less > 0 & amore then o = o smore
-         o = o.substr(2)
+         if o.left(1) = '\n' then o = o.substr(2)
    end
 
    if o = '' then o = less
 
+   if echo then do
+      o = echofirst''o
+      selectInput(0)
+      readto()
+      loop recno = recno + 1
+         o0 = peekto()
+         o = o recno.right(3) o0'\n'
+         readto()
+      catch StageError
+      end
+   catch StageError
+   end
        -- clean up control chars
    nona = '\0'.sequence('\x1f')
    if r0 \= '' then r0 = r0.translate('',nona,219.d2c())
@@ -256,11 +306,17 @@ method run()
    o = o.changestr('\\m',mostStream)
 
    do
+      selectOutput(0)
       output(o)
    catch StageError
    end
-
-rc = mrc()
-if rc=4 then rc=12
-
-exit(rc*(rc<>12))
+   do
+      selectOutput(1)
+      output(r0)
+   catch StageError
+   end
+   do
+      selectOutput(2)
+      output(r1)
+   catch StageError
+   end

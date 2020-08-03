@@ -1367,8 +1367,8 @@ Author's help
 <div><div class=p-ddiv><p-diag class=box>
 <div class=p-dt> NetRexx </div>
               +-TRINARY-+  (1)                   +-PAD SPACE-+
-&#x25B6;&#x25B6;--COMPARE--+-----------------+------------+---+-----------+----&#x25B6;&#x25C4;
-              +-BINARY--+  (2)               |   +-PAD-<span class='var sxorc'>xorc</span>--+
+&#x25B6;&#x25B6;--COMPARE--+---------+--------------------+---+-----------+--+------+--&#x25B6;&#x25C4;
+              +-BINARY--+  (2)               |   +-PAD-<span class='var sxorc'>xorc</span>--+  +-ECHO-+
               |                              |
               | &#x2B10;-------------------------+  |
               +--ANY <span class='var sdstring'>delimitedString</span>------+--+   (4) (5)
@@ -1377,8 +1377,8 @@ Author's help
               +--MORE <span class='var sdstring'>delimitedString</span>-----+  (3) (4)
               +--NOTEQUAL <span class='var sdstring'>delimitedString</span>-+      (4)
 </p-diag></div></div>
-<div class=p-note><ul><li>
-         (1) 1 = Primary is shorter/less, 0 = equal, 1 = Secondary is
+<div class=p-note><ul>
+       <li>  (1) 1 = Primary is shorter/less, 0 = equal, 1 = Secondary is
       shorter/less
        <li>  (2) 0 = equal, 1 = not equal
        <li>  (3) Primary is LESS/shorter (or MORE/longer) than secondary
@@ -1393,7 +1393,24 @@ Author's help
         <li>\M (Most) for the stream number that is longer, -1 if equal
       </ul>
        <li>  (5) Equal or not, this DString precedes any of the others.
-      <li>Pipes for NetRexx only.
+     <li>  (6) This is njpipes only, not included in CMS
+     <li>  (7) In reporting \P & \S, control charactors, except new line, \n, are transliterated to [blob, 219.d2c()]
+     <li>  (8) Without ECHO, this stops and reports at first non-compare. With ECHO, each primary input is reported;
+         after first non-compare primary input stream records continue to be read and reported, but no testing is done.
+     <li>  (9) Options work in any order
+
+     <li>  Input streams:
+       <ul>
+        <li>0: Data 1
+        <li>1: Data 2
+       </ul>
+
+     <li>  Output streams:
+       <ul>
+        <li>0: Result (single record, possibly multiple lines
+        <li>1: Last primary record read at first no match, or end of stream
+        <li>2: Last secondary record read at first no match, or end of stream
+       </ul>
        </li></ul></div>
     </TD>
   </tr>
@@ -1741,9 +1758,6 @@ As in CMS, equivalent to diskr (Pipes for NetRexx Only) or <b>&lt;</b>.
 <div class=p-dt> NetRexx </div>
 &#x25B6;&#x25B6;--DISKA--<span class=var>string</span>--&#x25B6;&#x25C4;
 </p-diag></div></div>
-<div class=p-note><ul><li>
-delegates to <b>diska</b>.
-</li></ul></div>
     </TD>
   </tr>
   <tr class='cms'>
@@ -1836,9 +1850,6 @@ As in CMS, equivalent to diskr (Pipes for NetRexx Only) or <b>&lt;</b>.
 <div class=p-dt> NetRexx </div>
 &#x25B6;&#x25B6;--DISKW--<span class=var>string</span>--&#x25B6;&#x25C4;
 </p-diag></div></div>
-<div class=p-note><ul><li>
-delegates to <b>diskw</b>.
-</li></ul></div>
     </TD>
   </tr>
   <tr class='njp cms'>
@@ -2557,7 +2568,7 @@ stem object will cause the stage to exit with return code 13.
 
 <li>Known issues:  The underlying Java method getByName/getHostName does not appear to handle IPv6 addresses
                in any known and consistent manner.  Could be related to a host configuration
-               issue but googling shows odd and inconsistent results for getting around this.
+               issue but googling shows odd and inconsistent results for getting around this.</li></ul></div>
     </TD>
   </tr>
   <tr class='njp cms'>
@@ -2748,7 +2759,7 @@ stem object will cause the stage to exit with return code 13.
 <p-title>Join Records</p-title>
 
 <div><div class=p-ddiv><p-diag class=box>
-                    +-1-----------------+
+                    +-<span class=var>1</span>-----------------+
 &#x25B6;&#x25B6;--JOIN-+-------+-+-------------------+--&#x25B6;
           +-COUNT-+ +-<span class=var>number</span>------------+
                     +-*-----------------+
@@ -3477,6 +3488,8 @@ Pipes for NetRexx only.
                     +-&gt;=--+
                     +-\=--+(2)
                     +-/=--+
+<div><div class='p-ddiv njponly'><p-diag class=box>
+</p-diag></div></div>
 </p-diag></div></div>
 
 <div class=p-note><ul><li>
@@ -3531,6 +3544,46 @@ Pipes for NetRexx only.
 </p-diag></div></div>
     </TD>
   </tr>
+
+  <tr class='njp'>
+    <td class=name>
+      <span id='pickparse'></span>
+      pickparse
+    </TD>
+    <td class=desc>
+<p-title>Select Lines that Satisfy Relations using Rexx Parse</p-title>
+<div><div class='p-ddiv njponly'><p-diag class=box>
+
+                +--ONE--+                          &#x2B10;--(2)--------------------------+
+&#x25B6;&#x25B6;--PICKPARSE--+-------+--<span class='var sdstring'>parse_template_Dstring</span>-----+--------------------------+--+--&#x25B6;&#x25C4;
+                +--ALL--+                             +--<span class='var sdstring'>logic_template_Dstring</span>--+
+                                                      +--ELSE-(1)----------------+
+
+</p-diag></div></div>
+<div class=p-note><ul>
+
+ <li>Records are parsed via the parse_template_delimited_string.
+ <li>Variables are named $n, where n is 1 to 9.
+ <li>The values of the variables are put into the logic_template_delimited_string
+ replacing $n and evaluated.  If TRUE, the record is put out on the stream
+ numbered by the dstring's position.
+ <li>The stream for a Dstring of ELSE is
+ used if no previous logic Dstring is TRUE.
+ <li>If there is no specific ELSE,
+ there is an implied one at the end; if that stream is not connected, the
+ record is discarded.
+ <li>If ONE then the record is put out on, at most, one stream: the first one
+ matched.
+ <li>If ALL then the record is put out on all streams matched.
+ <li>The parse_template and logic_template(s) follow normal NetRexx rules.
+ <li>(1) Implied ELSE after last specified dstring.
+ <li>(2) Up to 10 logic_Dstrings may be specified to go to up to 11 ouput streams
+     (including an implied ELSE).
+
+<li>Not implemented in CMS Pipelines.</li></ul></div>
+    </TD>
+  </tr>
+
   <tr class='cms'>
     <td class=name>
       <span id='pipcmd'></span>
@@ -3541,6 +3594,7 @@ Pipes for NetRexx only.
 <div class=p-note><ul><li>Not implemented in Netrexx Pipelines.</li></ul></div>
     </TD>
   </tr>
+
   <tr class='cms'>
     <td class=name>
       <span id='pipestop'></span>
@@ -3828,6 +3882,7 @@ compete the primary input is shorted.
 <div class=p-note><ul><li>Not implemented in Netrexx Pipelines.</li></ul></div>
     </td>
   </tr>
+
   <tr class='njp'>
     <td class=name>
       <span id='serialize'></span>
@@ -3835,6 +3890,9 @@ compete the primary input is shorted.
     </TD>
     <td class=desc>
 <p-title>Convert Objects to a Single Text String</p-title>
+<div><div class=p-ddiv><p-diag class=box>
+&#x25B6;&#x25B6;--SERIALIZE--------------------&#x25B6;&#x25C4;
+</p-diag></div></div>
 <div class=p-note><ul><li>
  {class} if class is specified deserialize input to objects of this type
  otherwise serialize input objects.
