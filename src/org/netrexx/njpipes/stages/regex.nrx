@@ -9,7 +9,7 @@
 
 /** regex
 
->>--+--REGEX--+--+--------------------------+--regex_string-(1)---><
+>>--+--REGEX--+--+--------------------------+--regex_Dstring-(1)---><
     +--GREP---+  +-(--| options_string |--)-+
 
 options_string:
@@ -26,21 +26,25 @@ options_string:
      +-Separator-+-/--/----+--+ (5)
      |           +-DString-+  |
      +-Tertiary---------------+ (6)
+     +-COUnt------------------+ (7)
 
  NetRexx Pipelines only.
  Records matching the RegEx are put out on primary output.
  Records not matching are put out on secondary, if connected, or discarded.
 
-(1) Regex_string is a Java RegEx expresion. Null string passes all records.
+(1) Regex_Dstring is a Java RegEx expresion. Null string passes all records.
 (2) Records are prefaced with records number, 10 characters, right justified.
 (3) Number of records put out after a matching record.
 (4) Number of records put out before and after a matching record.
 (5) Inserted before a group of "before records" or the found record with "after records."
 (6) Send all matching records (no numbers) to tertiary output stream, if connected.
+(7) Only a count of matches is put out on the primary output stream. (Other options
+    probably should not be used with this.)
 
 */
 
 /*
+ 20/ 8/ 3 Changed to Dstring for regex string. Add COUNT option. Jeff Hennick
  20/ 7/ 1 Fix default number proc; change default from 0 to 1; abbreviations for options;
           before number fix; Tertiary. Jeff Hennick
  20/ 6/30 BEFORE, AFTER, CONTEXT, SEPARATOR, NOSEPARATOR added. Jeff Hennick
@@ -110,9 +114,18 @@ method run()
                         /* Tertiary  */
   tertiary  = getOpt('tertiary', 1)
 
+                        /* Count  */
+  countopt  = getOpt('count', 3)
+
   if options <> '' then
     Emsg(11, 'Regex -- Unknown or duplicate option:' options)
 
+  rx = Dstring(regex)
+
+  if rx.Residue() <> '' then
+    Emsg(11, 'Regex -- Unrecognized:' regex)
+
+  regex = rx.String()
      /* One time compile */
   pat = Pattern.compile(regex);
 
@@ -147,6 +160,8 @@ method run()
   li = Rexx ''  -- line number
   aftercount = 0
 
+  matchcount = 0
+
   loop i = 1
     if numbers then do
       li = i
@@ -179,7 +194,10 @@ method run()
           if numbers then lim = lim + 1
         end
       end
-      output(li':'line)
+      if countopt then
+        matchcount = matchcount + 1
+      else
+        output(li':'line)
       if tri then do
         selectOutput(2)
         output(line)
@@ -189,8 +207,8 @@ method run()
         selectOutput(0)
       end
       aftercount = after
-    end
-    else do
+    end -- match
+    else do -- no match
        if aftercount > 0 then do
          output(li'-'line)
          aftercount = aftercount - 1
@@ -209,6 +227,13 @@ method run()
        /* Go on to the next one. */
     readto()
   catch StageError  /* Most likely end of input */
+    rc = rc()
+  end
+
+  if countopt then do
+    selectOutput(0)
+    output(Rexx matchcount)
+  catch StageError
     rc = rc()
   end
 
