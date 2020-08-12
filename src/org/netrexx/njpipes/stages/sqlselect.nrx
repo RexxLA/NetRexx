@@ -1,45 +1,90 @@
 /*
- *  Copyright (C) 1997,1998,1999  R.V. Jansen
+ *  Copyright (C) 1997,1998,1999  R.V. Jansen. 2020 Jeff Hennick
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  *
  */
+
+/** sqlselect
+
+                                   +-SELECT-+                                 +-;-+
+>>--SQLSELECT--+-----------------+-+--------+-+-----------------------------+-+---+--><
+               +-(-| options |-)-+            +-sql_select_statement_string-+
+
+OPTIONS:
+   +---------------------------------------------+
+ |-v-+-----------------------------------------+-+-|
+     |            +-/sqlselect.properties/-+   |
+     +-PROPERTIES-+-filename_Dstring-------+-+-+
+     | +-HEADERS---+                         |
+     +-+-----------+-------------------------+
+       +-NOHEADERS-+
+
+ uses jdbc to select from any jdbc enabled dbms
+
+ properties file sqlselect.properties is read to find jdbcdriver name and url
+ sample properties file:
+
+ #JDBC driver name
+ #Tue Feb 03 23:29:43 GMT+01:00 1998
+ jdbcdriver=com.imaginary.sql.msql.MsqlDriver
+ url=jdbc:msql://localhost:1114/TESTDB
+
+ if this file is not found default (compiled in) values are used
+ note 1) when using a sqlselect * (all columns) from the commandline, quote the query
+ as in java pipes.compiler (query) "sqlselect * from dept | console"
+ note 2) the netrexx/jdbc combination is extremely case sensitive for column and table names
+*/
+
+/*
+  /  /97 New Rene V Jansen
+ 8/12/20 Added PROPERTIES, HEADERS, NOHEADERS, SELECT; documentation. Jeff Hennick
+*/
+
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
 import java.sql.
 import java.util.
 
--- sqlselect by rvjansen
--- uses jdbc to select from any jdbc enabled dbms
-
--- properties file sqlselect.properties is read to find jdbcdriver name and url
--- sample properties file:
-
--- #JDBC driver name
--- #Tue Feb 03 23:29:43 GMT+01:00 1998
--- jdbcdriver=com.imaginary.sql.msql.MsqlDriver
--- url=jdbc:msql://localhost:1114/TESTDB
-
--- if this file is not found default (compiled in) values are used
--- note 1) when using a sqlselect * (all columns) from the commandline, quote the query
--- as in java pipes.compiler (query) "sqlselect * from dept | console"
--- note 2) the netrexx/jdbc combination is extremely case sensitive for column and table names
-
 class sqlselect extends stage
 --trace results
+
+options = Rexx
+optionsup = Rexx
+default_properties = "sqlselect.properties"
+
 method run()
 
   a = arg()
+
+  parse a '(' options ')' selstatement
+                                              /* SELECT Statement */
+  if options = '' then selstatement = a
   do
-    if a = '' then a = Rexx readto()
+    if selstatement = '' then selstatement = Rexx readto()
   catch StageError
     say 'sqlstage error'
   end
+  if selstatement.word(1) = 'select' then
+    selstatement = selstatement.subword(2)
+                                         /* OPTIONS ? */
+  optionsup = options.upper
+                                          /* headers or noheaders ? */
+  headers = \getOpt('noheaders', 9)
+  if getOpt('headers', 7) then headers = 1
+                                          /* properties file ? */
+  prop_file = getOpt('properties', 10, 2)
+  if prop_file = '' | prop_file = 1 then prop_file = default_properties
+
+                                           /* extra options ? */
+  if options \= '' then
+    Emsg(11, 'sqlselect: extra options:' options)
+
 -- read from properties file and get url and jdbcdriver values
 do
-fi = BufferedReader(FileReader("sqlselect.properties"))
+fi = BufferedReader(FileReader(prop_file))
 
 loop forever
     textLine = Rexx fi.readLine()
@@ -61,7 +106,7 @@ do
   Class.forName(jdbcdriver).newInstance()
 
 catch e1 = Exception
-  say 'JDBC driver could not be loaded.'
+  say 'JDBC driver' prop_file 'could not be loaded.'
   say 'Exception (' e1 ') caught : \n' e1.getMessage()
   exit 1
 end
@@ -84,31 +129,33 @@ end
 
 do
 -- the query
-  query = 'Select ' a.space()
+  query = 'Select ' selstatement.space()
   stmt = Statement jdbcCon.createStatement()
   rs = ResultSet stmt.executeQuery(query)
   meta = ResultSetMetaData rs.getMetaData();
   cols = meta.getColumnCount();
   helpline=Rexx
 -- get the column names
-  outputline = ''
-  width = ''
-  loop i=1 to cols
-    if meta.getColumnDisplaySize(int i) > meta.getColumnName(int i).length()
-      then width[i] = meta.getColumnDisplaySize(int i)
-    else width[i] = meta.getColumnName(int i).length()+2
-    if width[i] > 9999 then width[i] = meta.getColumnName(int i).length()+2
-    columnline = meta.getColumnName(int i).toUppercase()
-    helpline = columnline
-    helpline = helpline.left(width[i], '-')
-    outputline = outputline||helpline
-  catch NullPointerException
-  end
-  do
-    output(outputline)
-  catch StageError
-    rc = rc()
-  end
+--  if headers then do
+    outputline = ''
+    width = ''
+    loop i=1 to cols
+      if meta.getColumnDisplaySize(int i) > meta.getColumnName(int i).length()
+        then width[i] = meta.getColumnDisplaySize(int i)
+      else width[i] = meta.getColumnName(int i).length()+2
+      if width[i] > 9999 then width[i] = meta.getColumnName(int i).length()+2
+      columnline = meta.getColumnName(int i).toUppercase()
+      helpline = columnline
+      helpline = helpline.left(width[i], '-')
+      outputline = outputline||helpline
+    catch NullPointerException
+    end
+    if headers then do
+      output(outputline)
+    catch StageError
+      rc = rc()
+    end
+--  end
   -- get the data rows
   loop i=1 while rs.next()
     outputline = ''
@@ -124,16 +171,18 @@ do
   catch StageError
     rc = rc()
   end
-  
+
   rs.close()
   stmt.close()
   jdbcCon.close()
-  
+
 catch e3 = SQLException
+--trace results
+--say e3
   say 'SQLException(s) caught !'
   loop while (e3 \= null)
-    say 'SQLState:' e3.getSQLState()
-    say 'Message: ' e3.getMessage()
+    if e3.getSQLState() \= null then say 'SQLState:' e3.getSQLState()
+    if e3.getMessage() \= null then say 'Message: ' e3.getMessage()
     say 'Vendor:  ' e3.getErrorCode()
     say
     e3 = e3.getNextException()
@@ -143,3 +192,47 @@ end
 
 exit(rc*(rc<>12))
 
+method getOpt(opt, len, val = 0)
+trace off
+ /* val: 0: boolean exists; 1: return next word; 2: return DString */
+  ret = Rexx
+  retw = Rexx ''
+  del2 = 1
+ -- wp = optionsup.wordpos(opt.upper)
+
+  optup = opt.upper
+  loop wp = 1 to optionsup.words()
+    if optup.abbrev(optionsup.word(wp), len) then leave
+  end
+  if wp > optionsup.words() then wp = 0
+
+  ret = wp > 0
+  if val = 1 & ret then do
+    retw = options.word(wp + 1)
+    if \ retw.datatype('N') then
+      do
+        retw = 1 /* Default number */
+        del2 = 0
+      end
+  end
+  select
+  when val = 2 & ret then do
+    opt = options.subword(wp + 1)
+    ds = DString(opt)
+    retw = ds.String()
+    options = options.subword(1, wp - 1) ds.Residue
+    optionsup = options.upper
+  end
+  when val = 2 then
+    ret = ''
+  when ret > 0 then do
+    w = 1
+    if val > 0 & del2 then w = 2
+    options = options.delword(wp,w)
+    optionsup = optionsup.delword(wp,w)
+  end
+  otherwise
+    nop
+  end
+  if val > 0 & retw <> '' then ret = retw
+  return ret
