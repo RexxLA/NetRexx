@@ -55,7 +55,7 @@ OPTIONS:
  (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
  (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
      DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
-     SQLite is the only one tested as of 8/15/20.
+     SQLite is the only one tested as of 8/15/20. MySQL may also work.
  (9) the SQLSELECT stage uses HEADERS as the default.
  (10) USER & PASS are needed for some DBMSs and not others, ex. SQLite.
 
@@ -68,11 +68,12 @@ OPTIONS:
 */
 
 /*
- 8/15/20 New from sqlselect. Jeff Hennick
+ 20/ 8/16 MySQL test. Jeff Hennick
+ 20/ 8/15 New from sqlselect. Jeff Hennick
 */
 
 options nostrictcase nostrictargs nostrictsignal nobinary
---package org.netrexx.njpipes.stages
+package org.netrexx.njpipes.stages
 
 import org.netrexx.njpipes.pipes.
 import java.sql.
@@ -114,10 +115,21 @@ method run()
 
                                          /* DBMS & File DB_NAME */
   dbms = getOpt('dbms', 4, 3)
-  if dbms \= '' then jdbcdrivercmd = "org."dbms".JDBC"
+  select case dbms.lower
+    when '' then nop
+    when 'sqlite' then  jdbcdrivercmd = "org.sqlite.JDBC"
+    when 'mysql' then   jdbcdrivercmd = "com.mysql.jdbc.Driver"
+    otherwise jdbcdrivercmd = "org."dbms".JDBC"  -- might work
+  end
 
   db_name = getOpt('db_name', 7, 3)
-  if dbms db_name \= '' then urlcmd = "jdbc:"dbms":"db_name
+  if db_name \= '' then
+    select  case dbms.lower
+      when '' then nop
+      when 'sqlite' then  urlcmd = "jdbc:sqlite:"db_name
+      when 'mysql' then   urlcmd = "jdbc:mysql:"db_name
+      otherwise urlcmd = "jdbc:"dbms":"db_name  -- might work
+    end
 
                                           /* User & Password */
   usercmd = getOpt('user', 4, 3)
@@ -168,6 +180,7 @@ method run()
   if usercmd \= '' then user = usercmd
   if passcmd \= '' then pass = passcmd
 
+                                         /* Connect to the database */
   -- force loading of jdbc driver
   do
     Class.forName(jdbcdriver).newInstance()
