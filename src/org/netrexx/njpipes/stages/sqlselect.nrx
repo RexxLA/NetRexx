@@ -8,28 +8,37 @@
 
 /** sqlselect
 
-                                   +-SELECT-+                                    +-;-+
->>--SQLSELECT--+-----------------+-+--------+-+--------------------------------+-+---+--><
-               +-(-| options |-)-+            +-sql_select_statement_string-(3)+
+                                   +-SELECT-(5)+                                    +-;-+
+>>--SQLSELECT--+-----------------+-+-----------+-+--------------------------------+-+---+--><
+               +-(-| options |-)-+               +-sql_select_statement_string-(3)+
 
 OPTIONS:
-   +---------------------------------------------+
- |-v-+-----------------------------------------+-+-|
-     |            +-/sqlselect.properties/-+   |
-     +-PROPERTIES-+-filename_Dstring-------+-+-+
-     | +-HEADERS---+                         |
-     +-+-----------+-------------------------+
-       +-NOHEADERS-+
+   +------------------------------------------------+
+ |-v-+--------------------------------------------+-+-|
+     |            +-/sqlselect.properties/-+      |
+     +-PROPERTIES-+-filename_Dstring-------+-(5)+-+
+     | +-HEADERS---+                            |
+     +-+-----------+-(5)(6)---------------------+
+     | +-NOHEADERS-+                            |
+     +-URL-Qword-(7)----------------------------+
+     +-JDBCDRIVER-Qword-(7)---------------------+
+     +-DBMS-Qword-(7)(8)------------------------+
+     +-DB_NAME-Qword-(7)(8)---------------------+
+     +-USER-Qword-(7)(8)(10)--------------------+
+     +-PASS-Qword-(7)(8)(10)--------------------+
 
  uses jdbc to select from any jdbc enabled dbms
 
- properties file sqlselect.properties is read to find jdbcdriver name and url
+ properties file ("sqlselect.properties" default) is read to find jdbcdriver name and url
  sample properties file:
 
  #JDBC driver name
  #Tue Feb 03 23:29:43 GMT+01:00 1998
  jdbcdriver=com.imaginary.sql.msql.MsqlDriver
  url=jdbc:msql://localhost:1114/TESTDB
+ # the following are not needed for some DBMS, ex: SQLite
+ user=db_user_name
+ pass=password_for_db
 
  if this file is not found default (compiled in) values are used
 
@@ -37,10 +46,27 @@ OPTIONS:
  as in java pipes.compiler (query) "sqlselect * from dept | console"
  (2) the netrexx/jdbc combination is extremely case sensitive for column and table names
  (3) if no sql_select_string is specified, it is read from the primary input stream.
+ <br> this is optional in NetRexx Pipelines only. CMS does not use the stream input.
  (4) a maximum of only one record is ever read from the primary input stream.
+ (5) NetRexx Pipelines only
+ (6) CMS Pipelines is implyed HEADERS only.
+ (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
+ (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
+     DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
+     SQLite is the only one tested as of 8/15/20.
+ (9) the SQL stage uses NOHEADERS as the default.
+ (10) USER & PASS are needed for some DBMSs and not others, ex. SQLite.
+
+ Priority order for URL, JDBCDRIVER, DBMS, DB_NAME, USER, & PASS (first one found rules):
+   1. option in the SQL command string
+   2. from secondary input stream
+   3. from "sqlselect.properties" file
+      or from file specified by PROPERTIES option
+   4. Builtin
 */
 
 /*
+ 8/15/20 Added URL, JDBCDRIVER, DBMS, & DB_NAME, USER & PASS; documentation. Jeff Hennick
  8/13/20 Added PROPERTIES, HEADERS, NOHEADERS, SELECT; documentation. Jeff Hennick
   /  /97 New Rene V Jansen
 */
@@ -73,62 +99,106 @@ method run()
   if selstatement.word(1) = 'select' then
     selstatement = selstatement.subword(2)
                                          /* OPTIONS ? */
+                                         /* user & password defaults */
+  user = ''
+  pass = ''
+
   optionsup = options.upper
                                           /* headers or noheaders ? */
   headers = \getOpt('noheaders', 9)
   if getOpt('headers', 7) then headers = 1
                                           /* properties file ? */
-  prop_file = getOpt('properties', 10, 2)
+  prop_file = getOpt('properties', 10, 3)
   if prop_file = '' | prop_file = 1 then prop_file = default_properties
+
+                                         /* URL & JDBCdriver */
+  urlcmd = getOpt('url', 3, 3)
+
+  jdbcdrivercmd = getOpt('jdbcdriver ', 10, 3)
+
+                                         /* DBMS & File DB_NAME */
+  dbms = getOpt('dbms', 4, 3)
+  if dbms \= '' then jdbcdrivercmd = "org."dbms".JDBC"
+
+  db_name = getOpt('db_name', 7, 3)
+  if dbms db_name \= '' then urlcmd = "jdbc:"dbms":"db_name
+
+                                          /* User & Password */
+  usercmd = getOpt('user', 4, 3)
+  passcmd = getOpt('pass', 4, 3)
 
                                            /* extra options ? */
   if options \= '' then
     Emsg(11, 'sqlselect: extra options:' options)
 
--- read from properties file and get url and jdbcdriver values
-do
-fi = BufferedReader(FileReader(prop_file))
-
-loop forever
-    textLine = Rexx fi.readLine()
-    if textline = null then leave
-    if textline.left(3) = 'url' then parse textline name '=' url
-    if textline.left(10) = 'jdbcdriver' then parse textline name '=' jdbcdriver
-    name = name -- dummy clause to lose compiler warning
-end
-
-catch IOException
--- if the properties file is not found, these are the DEFAULT jdbc driver name and url
-jdbcdriver = "COM.ibm.db2.jdbc.app.DB2Driver"
-url = "jdbc:db2:sample"
-end
 
 
--- force loading of jdbc driver
-do
-  Class.forName(jdbcdriver).newInstance()
+      /* read from properties file and get url and jdbcdriver values */
+  name = Rexx ''
+  if prop_file \= '' then do
+    fi = BufferedReader(FileReader(prop_file))
 
-catch e1 = Exception
-  say 'JDBC driver' prop_file 'could not be loaded.'
-  say 'Exception (' e1 ') caught : \n' e1.getMessage()
-  exit 1
-end
+    loop forever
+      textLine = Rexx fi.readLine()
+      if textline = null then leave
+      if textline.left(3).lower = 'url' then parse textline name '=' url
+      if textline.left(10).lower = 'jdbcdriver' then parse textline name '=' jdbcdriver
+    end
 
-do
--- make the connection
-  jdbcCon = Connection DriverManager.getConnection(url, '', '')
+    catch IOException
+      -- if the properties file is not found, these are the DEFAULT jdbc driver name and url
+      jdbcdriver = "COM.ibm.db2.jdbc.app.DB2Driver"
+      url = "jdbc:db2:sample"
+  end
 
-catch e2 = SQLException
-  say 'SQLException(s) caught while connecting !'
-  loop while (e2 \= null)
-     say 'SQLState:' e2.getSQLState()
-     say 'Message: ' e2.getMessage()
-     say 'Vendor:  ' e2.getErrorCode()
-     say
-     e2 = e2.getNextException()
-   end
-   exit 1
-end
+                                /* check and process secondary input stream */
+  do
+    selectInput(1)
+    loop
+      textLine = Rexx peekto()
+      if textline.left(3).lower = 'url' then parse textline name '=' url
+      if textline.left(10).lower = 'jdbcdriver' then parse textline name '=' jdbcdriver
+      readto()
+    end
+  catch stageError
+  end
+  do
+    selectInput(0)
+  catch stageError
+  end
+  name = name -- dummy clause to lose compiler warning
+
+                                  /* command line options are king */
+  if urlcmd \= '' then url = urlcmd
+  if jdbcdrivercmd \= '' then jdbcdriver = jdbcdrivercmd
+  if usercmd \= '' then user = usercmd
+  if passcmd \= '' then pass = passcmd
+
+  -- force loading of jdbc driver
+  do
+    Class.forName(jdbcdriver).newInstance()
+
+  catch e1 = Exception
+    say 'JDBC driver' prop_file 'could not be loaded.'
+    say 'aException (' e1 ') caught : \n' e1.getMessage()
+    exit 1
+  end
+
+  do
+  -- make the connection
+    jdbcCon = Connection DriverManager.getConnection(url, user, pass)
+
+  catch e2 = SQLException
+    say 'bSQLException(s) caught while connecting !'
+    loop while (e2 \= null)
+       say 'SQLState:' e2.getSQLState()
+       say 'Message: ' e2.getMessage()
+       say 'Vendor:  ' e2.getErrorCode()
+       say
+       e2 = e2.getNextException()
+     end
+     exit 1
+  end
 
 do
 -- the query
@@ -180,8 +250,6 @@ do
   jdbcCon.close()
 
 catch e3 = SQLException
---trace results
---say e3
   say 'SQLException(s) caught !'
   loop while (e3 \= null)
     if e3.getSQLState() \= null then say 'SQLState:' e3.getSQLState()
@@ -195,13 +263,15 @@ end
 
 exit(rc*(rc<>12))
 
-method getOpt(opt, len, val = 0)
+method getOpt(opt, len, kind = 0)
 trace off
- /* val: 0: boolean exists; 1: return next word; 2: return DString */
+ /* searches for the opt's abbriviation at len.  Returns depending on kind:
+    kind: 0: boolean exists; 1: return next word; 2: return DString 3: return QWord
+    removes opt and Dstring/QWord from options
+    QWord has optional single or double quotes, must have quotes for multi-word */
   ret = Rexx
   retw = Rexx ''
   del2 = 1
- -- wp = optionsup.wordpos(opt.upper)
 
   optup = opt.upper
   loop wp = 1 to optionsup.words()
@@ -210,7 +280,7 @@ trace off
   if wp > optionsup.words() then wp = 0
 
   ret = wp > 0
-  if val = 1 & ret then do
+  if kind = 1 & ret then do
     retw = options.word(wp + 1)
     if \ retw.datatype('N') then
       do
@@ -218,24 +288,39 @@ trace off
         del2 = 0
       end
   end
+
   select
-  when val = 2 & ret then do
+  when kind = 2 & ret then do
     opt = options.subword(wp + 1)
     ds = DString(opt)
     retw = ds.String()
     options = options.subword(1, wp - 1) ds.Residue
     optionsup = options.upper
   end
-  when val = 2 then
+  when kind = 3 & ret then do  /* possibly quoted "word" */
+    opt = options.subword(wp + 1)
+    fc = opt.left(1)
+    if fc = '"' | fc = "'" then do
+      ds = DString(opt)
+      retw = ds.String()
+      options = options.subword(1, wp - 1) ds.Residue
+    end
+    else do
+      retw = options.word(wp + 1)
+      options = options.delword(wp, 2)
+    end
+    optionsup = options.upper
+  end
+  when kind = 2 | kind = 3 then
     ret = ''
   when ret > 0 then do
     w = 1
-    if val > 0 & del2 then w = 2
+    if kind > 0 & del2 then w = 2
     options = options.delword(wp,w)
     optionsup = optionsup.delword(wp,w)
   end
   otherwise
     nop
   end
-  if val > 0 & retw <> '' then ret = retw
+  if kind > 0 & retw <> '' then ret = retw
   return ret

@@ -4286,6 +4286,7 @@ options:
  <br>#Tue Feb 03 23:29:43 GMT+01:00 1998
  <br>jdbcdriver=com.imaginary.sql.msql.MsqlDriver
  <br>url=jdbc:msql://localhost:1114/TESTDB
+ <br># the following are not needed for some DBMS, ex: SQLite
  <br>user=db_user_name
  <br>pass=password_for_db
  </span>
@@ -4342,7 +4343,7 @@ CMS version has considerably different options.
 <p-title>Query a Database and Format Result</p-title>
 <div><div class=p-ddiv><p-diag class=box>
 <div class=p-dt> NetRexx </div>
-&#x25B6;&#x25B6;--SQLSELECT--+-----------------+&#x25B6;
+&#x25B6;&#x25B6;--SQLSELECT--+-----------------+--&#x25B6;
                 +-(-| options |-)-+
 
     +-SELECT-+                                     +-;-+
@@ -4354,27 +4355,40 @@ CMS version has considerably different options.
  |---+-----------------------------------------+-+-|
      |            +-<span class='var sdstring'>/sqlselect.properties/</span>-+   |
      +-PROPERTIES-+-<span class='var sdstring'>filename_Dstring</span>-------+-+-+
-     | +-HEADERS---+                         |
-     +-+-----------+-------------------------+
-       +-NOHEADERS-+
+     | +-HEADERS---+                         | |
+     +-+-----------+-------------------------+ |
+     | +-NOHEADERS-+                           |
+     +-URL-<span class=var>Qword</span>-(7)---------------------------+
+     +-JDBCDRIVER-<span class=var>Qword</span>-(7)--------------------+
+     +-DBMS-<span class=var>Qword</span>-(7)(8)-----------------------+
+     +-DB_NAME-<span class=var>Qword</span>-(7)(8)--------------------+
+     +-USER-<span class=var>Qword</span>-(7)(8)(10)-------------------+
+     +-PASS-<span class=var>Qword</span>-(7)(8)(10)-------------------+
 </p-diag></div></div>
 <div class=p-note><ul>
- <li>uses jdbc to select from any jdbc enabled dbms
- <li>properties file sqlselect.properties is read to find jdbcdriver name and url
- <li>sample properties file:
- <span class=examp><br>#JDBC driver name
- <br>#Tue Feb 03 23:29:43 GMT+01:00 1998
- <br>jdbcdriver=com.imaginary.sql.msql.MsqlDriver
- <br>url=jdbc:msql://localhost:1114/TESTDB
- </span>
- <li>if this file is not found default (compiled in) values are used
  <li>(1) when using a sqlselect * (all columns) from the commandline, quote the query
- as in
- <br><span class=examp>java pipes.compiler (query) "sqlselect * from dept | console"</span>
+ as in java pipes.compiler (query) "sqlselect * from dept | console"
  <li>(2) the netrexx/jdbc combination is extremely case sensitive for column and table names
  <li>(3) if no sql_select_string is specified, it is read from the primary input stream.
+ <br> this is optional in NetRexx Pipelines only. CMS does not use the stream input.
  <li>(4) a maximum of only one record is ever read from the primary input stream.
-<li>Pipes for NetRexx only.
+ <li>(5) NetRexx Pipelines only
+ <li>(6) CMS Pipelines is implyed HEADERS only.
+ <li>(7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
+ <li>(8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
+     DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
+     SQLite is the only one tested as of 8/15/20.
+ <li>(9) the SQL stage uses NOHEADERS as the default.
+ <li>(10) USER &amp; PASS are needed for some DBMSs and not others, ex. SQLite.
+
+ <li>Priority order for URL, JDBCDRIVER, DBMS, DB_NAME, USER, &amp; PASS (first one found rules):
+   <ol>
+   <li> option in the SQL command string
+   <li> from secondary input stream
+   <li> from "sqlselect.properties" file
+      or from file specified by PROPERTIES option
+   <li> Builtin
+   </ol>
 </li></ul></div>
     </TD>
   </tr>
