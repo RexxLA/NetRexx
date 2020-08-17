@@ -1,3 +1,4 @@
+
 /** sql
 
                                                           +-;-+
@@ -12,7 +13,6 @@ OPTIONS:
      | +-NOHEADERS-+                            |
      +-+           +-(5)(6)(9)------------------+
      | +-HEADERS---+                            |
-     +-COUNT2SECondary-(5)(11)------------------+
      +-URL-Qword-(7)----------------------------+
      +-JDBCDRIVER-Qword-(7)---------------------+
      +-DBMS-Qword-(7)(8)------------------------+
@@ -40,18 +40,16 @@ OPTIONS:
  as in java pipes.compiler (query) "sql select * from dept | console"
  (2) the netrexx/jdbc combination is extremely case sensitive for column and table names
  (3) this sql_select_string executed, then statements are read from the primary input stream.
-     this is optional in NetRexx Pipelines only.
+ <br> this is optional in NetRexx Pipelines only.
  (4) CMS does not use the stream input
  (5) NetRexx Pipelines only
- (6) CMS Pipelines is implied HEADERS only.
+ (6) CMS Pipelines is implyed HEADERS only.
  (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
  (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
      DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
      SQLite is the only one tested as of 8/15/20. MySQL might work too.
  (9) the SQLSELECT stage uses HEADERS as the default.
  (10) USER & PASS are needed for some DBMSs and not others, ex. SQLite.
- (11) the count or other output from non-select statements goes to the secondary
-      output stream if connected, or is discarded.  Otherwise it goes to the primary.
 
  Priority order for URL, JDBCDRIVER, DBMS, DB_NAME, USER, & PASS (first one found rules):
    1. option in the SQL command string
@@ -60,48 +58,49 @@ OPTIONS:
       or from file specified by PROPERTIES option
    4. Builtin
 */
-
 /*
-  20/ 8/15 Jeff Hennick
+  20/ 8/17 Jeff Hennick
 */
 
-pipe (sql_tests02)
+pipe (sql_tests03)
 
  o: faninany |
     sort singleok |
     specs 2-* 1 |
     cons ?
 
--- from named file options ?
+-- count2sec (primary) ?
    literal ,
-     drop table if exists person4; ,
-     create table person4 (id integer, name string); ,
-     insert into person4 values(1, 'leo-rexx'); ,
-     insert into person4 values(2, 'yui-rexx'); ,
-     update person4 set id = 3 where name = 'yui-rexx'; ,
-     select * from person4; ,
-     drop table person4 |
+     drop table if exists person6; ,
+     create table person6 (id integer, name string); ,
+     insert into person6 values(1, 'leo-rexx'); ,
+     insert into person6 values(2, 'yui-rexx'); ,
+     update person6 set id = 3 where name = 'yui-rexx'; ,
+     select * from person6; ,
+     drop table person6 |
    split ; |
-   sql (properties sql.properties )|
-   c4: compare any ~2#4 sql from named file options ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   sql (count2sec dbms sqlite db_name temp.sqlite) |
+   c6: compare any ~2#6 count2sec (primary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal 0;0;1;1;1;1   leo-rexx;3   yui-rexx; 0 |
+   literal 1   leo-rexx;3   yui-rexx |
    split ; |
-   c4: ?
+   c6: ?
 
--- headers ?
+-- count2sec (secondary) ?
    literal ,
-     drop table if exists person5; ,
-     create table person5 (id integer, name string); ,
-     insert into person5 values(1, 'leo-rexx'); ,
-     insert into person5 values(2, 'yui-rexx'); ,
-     update person5 set id = 3 where name = 'yui-rexx'; ,
-     select * from person5; ,
-     drop table person5 |
+     drop table if exists person7; ,
+     create table person7 (id integer, name string); ,
+     insert into person7 values(1, 'leo-rexx'); ,
+     insert into person7 values(2, 'yui-rexx'); ,
+     update person7 set id = 3 where name = 'yui-rexx'; ,
+     select * from person7; ,
+     drop table person7 |
    split ; |
-   sql ( dbms sqlite db_name flightroute-iata.sqb headers ) |
-   c5: compare any ~2#5 sql headers ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   s7: sql (count2sec dbms sqlite db_name temp.sqlite) |
+   hole ?
+   s7: |
+   c7: compare any ~2#7 count2sec (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal 0;0;1;1;1;ID--NAME--;1   leo-rexx;3   yui-rexx; 0 |
+   literal 0;0;1;1;1;0 |
    split ; |
-   c5: ?
+   c7: ?
