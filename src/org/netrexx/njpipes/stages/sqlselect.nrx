@@ -46,10 +46,10 @@ OPTIONS:
  as in java pipes.compiler (query) "sqlselect * from dept | console"
  (2) the netrexx/jdbc combination is extremely case sensitive for column and table names
  (3) if no sql_select_string is specified, it is read from the primary input stream.
- <br> this is optional in NetRexx Pipelines only. CMS does not use the stream input.
+     this is optional in NetRexx Pipelines only. CMS does not use the stream input.
  (4) a maximum of only one record is ever read from the primary input stream.
  (5) NetRexx Pipelines only
- (6) CMS Pipelines is implyed HEADERS only.
+ (6) CMS Pipelines is implied HEADERS only.
  (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
  (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
      DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
@@ -66,6 +66,7 @@ OPTIONS:
 */
 
 /*
+ 8/17/20 Added MySQL as dbms.  Jeff Hennick
  8/15/20 Added URL, JDBCDRIVER, DBMS, & DB_NAME, USER & PASS; documentation. Jeff Hennick
  8/13/20 Added PROPERTIES, HEADERS, NOHEADERS, SELECT; documentation. Jeff Hennick
   /  /97 New Rene V Jansen
@@ -118,10 +119,21 @@ method run()
 
                                          /* DBMS & File DB_NAME */
   dbms = getOpt('dbms', 4, 3)
-  if dbms \= '' then jdbcdrivercmd = "org."dbms".JDBC"
+  select case dbms.lower
+    when '' then nop
+    when 'sqlite' then  jdbcdrivercmd = "org.sqlite.JDBC"
+    when 'mysql' then   jdbcdrivercmd = "com.mysql.jdbc.Driver"
+    otherwise jdbcdrivercmd = "org."dbms".JDBC"  -- might work
+  end
 
   db_name = getOpt('db_name', 7, 3)
-  if dbms db_name \= '' then urlcmd = "jdbc:"dbms":"db_name
+  if db_name \= '' then
+    select  case dbms.lower
+      when '' then nop
+      when 'sqlite' then  urlcmd = "jdbc:sqlite:"db_name
+      when 'mysql' then   urlcmd = "jdbc:mysql:"db_name
+      otherwise urlcmd = "jdbc:"dbms":"db_name  -- might work
+    end
 
                                           /* User & Password */
   usercmd = getOpt('user', 4, 3)
