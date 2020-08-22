@@ -1,0 +1,126 @@
+/*
+ *  Copyright (C) 2020 Jeffrey Hennick
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** snake
+  >>--SNAKE--number_cols--+------------------------------------------------+--><
+                          +--number_rows--+-----------------------------+--+
+                                          +--page_seperator_DString-(1)-+
+
+  (1) NetRexx Pipelines only. Appears first, last, and between pages.
+      Avoid \ as escape terms maybe added in the future. \n for newline is OK.
+      Your system may require \\n .
+*/
+
+/*
+  20/ 8/22 New.  Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class snake extends stage
+
+o = Rexx '' -- output lines
+
+method run()
+
+  parse arg() cols lines rest
+
+  s = DString(rest)
+  sepline = s.String()
+
+
+  if s.Residue <> '' then
+    Emsg(11, 'SNAKE: unknown option:' s.Residue'.')
+
+  if \cols.datatype('W') | cols < 1 then
+    Emsg(11, 'SNAKE: columns must be a whole positive number. Found:' cols'.')
+
+  if lines <> '' & (\lines.datatype('W') | lines < 1) then
+    Emsg(11, 'SNAKE: lines must be a whole positive number. Found:' lines'.')
+
+  done = 0
+  if lines > 0 then do
+    loop label page forever until done   -- cols & rows
+      clear(lines)
+      if sepline <> '' then sepline(sepline)
+
+      loop label col col = 1 to cols
+        col = col
+        loop label line line = 1 to lines
+          dl = peekto()
+          o[line] = o[line] || dl
+          readto()
+        end line
+        catch stageError
+          rc = rc()
+          if rc <> 12 & rc <> 4 then exit(rc)
+          done = 1
+      end col
+      loop i = 1 to lines while o[i] <> ''
+        if o[i] <> '' then output(o[i])
+      catch stageError
+        rc = rc()
+        exit(rc * (rc <> 12))
+      end
+    end page  -- lines
+
+    if sepline <> '' & (i > 1) then sepline(sepline)
+
+  end   -- no lines specified
+
+  else do                            -- cols only
+    dli = Rexx ''
+
+    loop li = 1
+      dli[li] = Rexx peekto()
+      readto()
+    catch stageError
+      rc = rc()
+      if rc <> 12 then exit(rc * (rc <> 4))
+    end
+
+    lines = li % cols
+
+    il = 1
+    loop label col col = 1 to cols
+      col = col
+      loop label line line = 1 to lines
+        o[line] = o[line] || dli[il]
+        il = il + 1
+      end line
+    end col
+    loop i = 1 to lines
+      output(o[i])
+    catch stageError
+    end
+  end   -- no lines specified
+
+  rc = rc()
+  exit(rc * (rc <> 12))
+
+
+method clear(lines)
+  loop i = 1 to lines
+    o[i] = ''
+  end
+
+method sepline(sepline) signals ThreadQ
+  do
+    if sepline.pos('\\n') > 0 then do
+      sl = sepline
+      loop while sl <> ''
+        parse sl fl '\\n' sl
+        output(fl)
+      end
+    end
+    else output(sepline)
+  catch stageError
+  end
