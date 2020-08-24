@@ -1,4 +1,4 @@
-/* dc */
+/* dateconvert */
 /*
  *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *Distributed under the ICU 1.8.1 License with NO WARRANTIES of ANY kind.
@@ -7,6 +7,7 @@
  */
 
 /*
+ 20/ 8/22 Added NOW; fixed POSIX in and out.  Jeff Hennick
  20/ 6/26 Added NOON & MIDNIGHT options. Jeff Hennick
 */
 
@@ -19,8 +20,8 @@
     +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
 >---+---------------------------------------+--+-----------------------+------>
     |                    +-ISOdate----------+  +-WINDOW--signednumber--+
-    +-| Inputformat |----+------------------+  +-BASEYEAR--yearnumber--+
-                         +-| Outputformat |-+
+    +-| Inputformat |-+--+------------------+  +-BASEYEAR--yearnumber--+
+    +--NOW--(5)-------+  +-| Outputformat |-+
 
                   +--MIDNIGHT--(4)-+
 >--+-----------+--+----------------+---------------------------------------->>
@@ -43,6 +44,8 @@ Inputrange:  (3)
 (1): SPACE is optional here.
 (3): NetRexx Pipelines uses IRange which gives a superset of range options.
 (4): NetRexx Pipelines only. What time to assume if blank time on input.
+(5): NetRexx Pipelines only. Do NOT read input stream. Use current local date time.
+     Any Inputrange is ignored.
 
 Inputformat, Outputformat:
 SHOrtdate     }   mm/dd/yy hh:mm:ss.uuuuuu
@@ -102,6 +105,7 @@ Bad date records out on secondary, NetRexx Pipelines is more forgiving on input 
 
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.stages
+--trace results
 
 import org.netrexx.njpipes.pipes.
 import java.text.SimpleDateFormat
@@ -228,6 +232,7 @@ do
   n=n+1;o[n]= 'day = Rexx 0'
   n=n+1;o[n]= 'doc = Rexx 0'
   n=n+1;o[n]= 'doy = Rexx 0'
+  n=n+1;o[n]= 'dow = Rexx ""'
   n=n+1;o[n]= 'dzero = Rexx 0'
   n=n+1;o[n]= 'hour = Rexx 0'
   n=n+1;o[n]= 'min = Rexx 0'
@@ -248,7 +253,6 @@ do
   n=n+1;o[n]= ''
   n=n+1;o[n]= 'method run()'
 
---trace results
   /* process arguments */
 
   if procJul then do
@@ -262,29 +266,40 @@ end
   /* Main Loop */
 
   n=n+1;o[n]= 'loop forever'
-  n=n+1;o[n]= '  aobj = peekto()'
-  n=n+1;o[n]= '  robj = Rexx aobj'
+
+  if typei = 'NOW' then do
+    n=n+1;o[n]= '  robj = Rexx "' java.time.LocalDateTime.now() '"'
+  end
+  else do
+    n=n+1;o[n]= '  aobj = peekto()'
+    n=n+1;o[n]= '  robj = Rexx aobj'
+  end
+
   /* process line */
 
-if isRange then do
-  n=n+1;o[n]='  robj = r[1].SelIRange(robj," ")'
-end
+  if isRange then do
+    n=n+1;o[n]='  robj = r[1].SelIRange(robj," ")'
+  end
 
-  n=n+1;o[n]= '  parse robj' inFormat
+  if typei.left(3) = 'ISO' | typei = 'NOW' then do
+    n=n+1;o[n]='  robj = robj.changestr("T", " ")'
+  end
 
---if winYear then do
+  n=n+1;o[n]= '  parse robj' inFormat   /* this is where the input gets broken into its pieces */
+
   n=n+1;o[n]= '  if year.length = 2 then do'
   n=n+1;o[n]= '    if year <' lowY 'then year =' highC'""year'
   n=n+1;o[n]= '    else year =' lowC'""year'
   n=n+1;o[n]= '  end'
---end
 
   n=n+1;o[n]= '  if sec <> "" then sec = sec / 1'
 
-  n=n+1;o[n]= '  if \\(year""month""day).datatype("D") then do'
-  n=n+1;o[n]= '    unknown(aobj)'
-  n=n+1;o[n]= '    iterate'
-  n=n+1;o[n]= '  end'
+  if typei \= 'NOW' then do
+    n=n+1;o[n]= '  if \\(year""month""day).datatype("D") then do'
+    n=n+1;o[n]= '    unknown(aobj)'
+    n=n+1;o[n]= '    iterate'
+    n=n+1;o[n]= '  end'
+  end
 
   if 'PIPE PIPE_SHORT'.wordpos(typei) > 0 then do
     n=n+1;o[n]= "  sec = (sec'.'secf) / 1"
@@ -304,11 +319,16 @@ end
     n=n+1;o[n]='  parse MDFromJulianDay(doy, isLeapYear(year)) month day'
   end
 
+  if 'POSIX' = typei then do
+    n=n+1;o[n]=' rd = Date(long psec)'
+    n=n+1;o[n]=' parse rd . mname day hour ":" min ":" sec . year'   -- Fri Jan 02 05:17:36 EST 1970
+  end
+
   if 'ISO_SHORT RO'.wordpos(typeo) > 0 then do
     n=n+1;o[n]= '  year = (pad""year).right(2)'
   end
 
-  if typei = 'RN' then do
+  if 'RN POSIX'.wordpos(typei) > 0  then do
     n=n+1;o[n]= "  month = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.wordpos(mname)"
   end
 
@@ -344,28 +364,32 @@ end
   end
 
   if typeo = 'RC' then do
---n=n+1;o[n]='trace results'
     n=n+1;o[n]='doy = dayOfYear(day, month, year)'
     n=n+1;o[n]='ld = year.right(2) % 4'
---    n=n+1;o[n]='if (year % 100 = 20) & month < 3 then ld = ld - 1'
     n=n+1;o[n]='doc = year.right(2) * 365 + ld + doy'
---n=n+1;o[n]='trace off'
   end
 
   n=n+1;o[n]= '  oline =' outFormat
 
-if isRange then do
-  n=n+1;o[n]='  line = Rexx aobj'
-  n=n+1;o[n]='  parse getPrePostRange(r[1], line) left "," right'
-  n=n+1;o[n]='  oline = left""oline""right'
-end
+  if isRange then do
+    n=n+1;o[n]='  line = Rexx aobj'
+    n=n+1;o[n]='  parse getPrePostRange(r[1], line) left "," right'
+    n=n+1;o[n]='  oline = left""oline""right'
+  end
 
   n=n+1;o[n]= '  output(oline)'
-  n=n+1;o[n]= '  readto()'
+
+  if typei = 'NOW' then do
+    n=n+1;o[n]= '  leave' -- no looping
+  end
+  else do
+    n=n+1;o[n]= '  readto()'
+  end
+
   n=n+1;o[n]= 'catch StageError'
   n=n+1;o[n]= '  rc = rc()'
   n=n+1;o[n]= 'end'
-  n=n+1;o[n]= 'exit(rc*(rc<>12))'
+  n=n+1;o[n]= 'exit(rc*(rc<>12))'  -- ****** end of main loop and exit
 
   n=n+1;o[n]= 'method unknown(aobj = java.lang.Object) signals ThreadQ'
   n=n+1;o[n]= '  do'
@@ -378,14 +402,14 @@ end
   n=n+1;o[n]= '    exit 11'
   n=n+1;o[n]= '  end'
 
-if isRange then do
-  /* this method should/will be incorporated into IRange, but for now has to be here */
-  n=n+1;o[n]= 'method getPrePostRange(ro=IRange, line)'
-  n=n+1;o[n]= '  sc = ro.startChar()'
-  n=n+1;o[n]= '  ec = ro.endChar() + 1'
-  n=n+1;o[n]= '  parse line left =(sc) . =(ec) right'
-  n=n+1;o[n]= '  return left","right'
-end
+  if isRange then do
+    /* this method should/will be incorporated into IRange, but for now has to be here */
+    n=n+1;o[n]= 'method getPrePostRange(ro=IRange, line)'
+    n=n+1;o[n]= '  sc = ro.startChar()'
+    n=n+1;o[n]= '  ec = ro.endChar() + 1'
+    n=n+1;o[n]= '  parse line left =(sc) . =(ec) right'
+    n=n+1;o[n]= '  return left","right'
+  end
 
   if procJul then do
     n=n+1;o[n]= 'method gregDayNumber(d, m, y)'
@@ -402,28 +426,16 @@ end
     n=n+1;o[n]='  loop i = 3 to 12'
     n=n+1;o[n]='    daysInMonthCum[i,1] = daysInMonthCum[i,1] + 1'
     n=n+1;o[n]='  end'
---    n=n+1;o[n]='  daysInMonthCumLeap[3] = 29'
---n=n+1;o[n]=''
 
     n=n+1;o[n]='method dayOfYear(daya, montha, yeara)'
---    n=n+1;o[n]='  doy = daysInMonthCum[montha / 1]'
---    n=n+1;o[n]='  la = 0'
---    if 'RC RD'.wordpos(typeo) > 0 then do
---      n=n+1;o[n]='  la = -\\isLeapYear(yeara) --rcrd'
---    end
---    else do
---      n=n+1;o[n]='  la = isLeapYear(yeara) --^rcrd'
---    end
---    n=n+1;o[n]='  doy = daysInMonthCum[montha / 1, isLeapYear(yeara)] + daya + la'
     n=n+1;o[n]='  doy = daysInMonthCum[montha / 1, isLeapYear(yeara)] + daya'
+
     if typeo = 'RD' then do
       n=n+1;o[n]='  doy = doy / 1'
     end
     else do
       n=n+1;o[n]='  doy = ("000"doy).right(3)'
     end
---n=n+1;o[n]='doy=doy'
---n=n+1;o[n]='trace off'
     n=n+1;o[n]='  return doy'
 
     n=n+1;o[n]='method isLeapYear(yeara)'
@@ -435,7 +447,6 @@ end
     n=n+1;o[n]='  return ((yeara-1)%4 - (yeara-1)%100 + (yeara-1)%400);'
 
     n=n+1;o[n]='method JulianAdjDays(years, days)'
---n=n+1;o[n]='trace results;days=days'
     n=n+1;o[n]='  loop'
     n=n+1;o[n]='    diy = 365'
     n=n+1;o[n]='    if isLeapYear(years) then diy = 366'
@@ -450,11 +461,9 @@ end
     n=n+1;o[n]='    days = days + diy'
     n=n+1;o[n]='    years = years - 1'
     n=n+1;o[n]='  end'
---n=n+1;o[n]='years=years;days=days'
     n=n+1;o[n]='  return years"."days'
 
     n=n+1;o[n]='method JulianFromDays(days = Rexx)'
---n=n+1;o[n]='trace results;days=days'
     n=n+1;o[n]='  DAYS_IN_400_YEARS = (400*365) + 97'
     n=n+1;o[n]='  years4 = (days % DAYS_IN_400_YEARS) * 400;'
     n=n+1;o[n]='  days = days // DAYS_IN_400_YEARS'
@@ -462,7 +471,6 @@ end
     n=n+1;o[n]='  if days < DAYS_IN_100_YEARS then short = 1'
     n=n+1;o[n]='  else short = 0'
     n=n+1;o[n]='  years = years4 + 100 * (days % DAYS_IN_100_YEARS) + short'
---n=n+1;o[n]='years=years;days=days'
     n=n+1;o[n]='  return years"."days'
 
     n=n+1;o[n]='method MDFromJulianDay(jd,isleap)'
@@ -476,6 +484,11 @@ end
     n=n+1;o[n]='  list[2] = 28'
     n=n+1;o[n]='  return m jd'
 
+    n=n+1;o[n]='getDayofWeek(ymd)'
+    n=n+1;o[n]='  date = date.getDayOfWeek()'
+    n=n+1;o[n]='  day = date.getDayOfWeek()'
+    n=n+1;o[n]='  return "Mon Tue Wed Thu Fri Sat Sun".word(day)'
+
   end
 
 
@@ -487,7 +500,7 @@ end
   pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
 
   /* show off the generated code */
---  trace off
+  trace off
   sc = 0
 --  sc = 1 -- comment out to not show the code
   sn = 0
@@ -556,10 +569,9 @@ method getInFormat(name) --signals ThreadQ
     when 'JULIAN', 'JULIAN_SHORT'
       then p = "year . '.' doy hour . ':' min . ':' sec ." -- yy.dayd hh . ':' mm . ':' ss.uuuuuu
     when 'POSIX'
-      then do
-        p = "psec"
-        type = 'POSIX'
-      end
+      then p = "psec"
+    when 'NOW'
+      then p = "year '-' month '-' day hour ':' min ':' sec ."  -- 2020-08-23T11:32:16.417 -- T will be removed above
     otherwise
       say 'DateConvert Input format' name 'is not recognized.'
       exit 11
@@ -567,7 +579,6 @@ method getInFormat(name) --signals ThreadQ
   return p','type
 
 method getOutFormat(name)
---trace results
   type = name.upper
   select case type
     when 'SHORTDATE', 'SHORTDAT', 'SHORTDA', 'SHORTD', 'SHORT', 'SHOR', 'SHO', 'USA_SHORT', 'REXX_DATE_U', 'REXXU', 'RU', 'FULLDATE', 'USA'
@@ -679,6 +690,8 @@ method getOutFormat(name)
         else
           p = "year'.'doy" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
       end
+    when 'POSIX'
+      then p = "psec"
     otherwise
       say 'DateConvert Output format' name 'is not recognized.'
       exit 11
