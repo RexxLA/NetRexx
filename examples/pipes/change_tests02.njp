@@ -1,0 +1,159 @@
+/** change
+
+  >>--CHANGE--+---------+--+-----------------+---------------------------->
+              +-ANYcase-+  +-inputRange------+
+                           |    <-------+    |
+                           +-(----range-+--)-+
+
+  >--+-+ changeString +-----------------+--+-----------+-----------------><
+     +-delimitedString--delimitedString-+  +-numorstar-+
+
+  changeString:
+  +--delimiter--string--delimiter--string--delimiter----------------------+
+
+*/
+/*
+  20/ 8/26 Jeff Hennick
+*/
+
+pipe (change_tests02)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- change range /old/new/ (word range) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |        -- generate a null record |
+   change w-1 /l/z/ |   -- real test |
+   c9: compare any ~2# 9 change range /old/new/ (word range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 zast;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 zast |
+   split ; |
+   change /_// |
+   c9: ?
+
+-- change any /olD/new/ (keep case) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |                  -- generate a null record |
+   change any /linE/record/  |    -- real test |
+   c10: compare any ~2#10 change any /olD/new/ (keep case)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal record 1.1;record 1.2 last;_;record 2.1;record 2;record 2.2;record 2.3 LAST;_;record 3.1 last |
+   split ; |
+   change /_// |
+   c10: ?
+
+-- change /old// ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |          -- generate a null record |
+   change /line//  |      -- real test |
+   c11: compare any ~2#11 change /old//~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal  1.1; 1.2 last;_; 2.1; 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |
+   c11: ?
+
+-- change any /old// ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |            -- generate a null record |
+   change any /line//  |    -- real test |
+   c12: compare any ~2#12 change any /old//~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal  1.1; 1.2 last;_; 2.1; 2; 2.2; 2.3 LAST;_; 3.1 last; |
+   split ; |
+   change /_// |
+   c12: ?
+
+-- change //new/ ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |            -- generate a null record |
+   change //Changed: /  |   -- real test |
+   c13: compare any ~2#13 change //new/~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Changed: line 1.1;Changed: line 1.2 last;Changed:;Changed: line 2.1;Changed: line 2;Changed: Line 2.2;Changed: LIne 2.3 LAST;Changed:;Changed: LINE 3.1 last; |
+   split ; |
+   change /_// |
+   c13: ?
+
+-- change range //new/ (single column range) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |               -- generate a null record |
+   change 5 //Changed: /  |    -- real test |
+   c14: compare any ~2#14 change range //new/ (single column range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal lineChanged:  1.1;lineChanged:  1.2 last;_;lineChanged:  2.1;lineChanged:  2;LineChanged:  2.2;LIneChanged:  2.3 LAST;_;LINEChanged:  3.1 last; |
+   split ; |
+   change /_// |
+   c14: ?
+
+-- change range //new/ (word range) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |                -- generate a null record |
+   change w2.1 //Changed: /  |  -- real test |
+   c15: compare any ~2#15 change range //new/ (word range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line Changed: 1.1;line Changed: 1.2 last;_;line Changed: 2.1;line Changed: 2;Line Changed: 2.2;LIne Changed: 2.3 LAST;_;LINE Changed: 3.1 last; |
+   split ; |
+   change /_// |
+   c15: ?
+
+-- change /old/new/ (primary w/secondary connected) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |
+   ca16: change  /last/final/  |
+   c16: compare any ~2#16 change /old/new/ (primary w/secondary connected)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.2 final;LINE 3.1 final |
+   split ; |
+   c16:  ?
+   ca16: |
+   hole ?
+
+-- change /old/new/ (secondary) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |
+   ca17: change  /last/final/  |
+   hole ?
+   ca17: |
+   c17: compare any ~2#17 change /old/new/ (secondary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_; |
+   split ; |
+   change /_// |
+   c17:  ?
+
+-- change range /old/new/ (column range) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |
+   change 2.1 /i/ZZ/  |
+   c18: compare any ~2#18 change range /old/new/ (column range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal lZZne 1.1;lZZne 1.2 last;_;lZZne 2.1;lZZne 2;LZZne 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |
+   c18: ?
+
+-- change any /old/new/ (keep existing case) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |                  -- generate a null record |
+   change any /line/record/  |    -- real test |
+   c19: compare any ~2#19 change any /old/new/ (keep existing case)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal record 1.1;record 1.2 last;_;record 2.1;record 2;Record 2.2;RECORD 2.3 LAST;_;RECORD 3.1 last |
+   split ; |
+   change /_// |
+   c19: ?
