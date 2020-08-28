@@ -1,0 +1,140 @@
+  /*
+   *  HOSTBYADDR - Resolve a IP Address into an IP Hostname
+   *
+   *  The input to HOSTBYADDR is a list of IP addresses (IPv4 or IPv6).
+   *  For each IP address the corresponding hostname is determined using the system's name
+   *  resolution method.  The resulting hostname is written to the output stream.
+   *
+   *  >>-------HOSTBYADDR --------------+---------------+--------><
+   *                                    |               |
+   *                                    +--INCLUDEIP----+  (1)
+   *
+   *
+   *  (1) Optional parameter not present in VM/CMS version
+   *
+   *      INCLUDEIP          - Also include the IP address along with the hostname.
+   *                                Output:   <hostname>/<ip address>
+   *                                Example:  dns.google/8.8.8.8
+   *
+   *  Known issues:  The underlying Java method getByName/getHostName does not appear to handle IPv6 addresses
+   *                 in any known and consistent manner.  Could be related to a host configuration
+   *                 issue but googling shows odd and inconsistent results for getting around this.
+   *
+   *  Examples:
+   *
+   *   pipe "literal 1.1.1.1 | hostbyaddr | console"
+   *   one.one.one.one
+   *	
+   *   pipe "literal 8.8.8.8 | hostbyaddr includeip | console"
+   *   dns.google/8.8.8.8
+   *
+   *   pipe "literal 1.1.1.255 | hostbyaddr | console"
+   *   # Input record 1: Unable to determine host name for IP address 1.1.1.255 #
+   *
+   *   pipe "literal 999 | hostbyaddr | console"
+   *   # Input record 1: 999 is not a valid IP address #
+   *	
+   *   pipe "literal 2001:4860:4860::8888 | hostbyaddr | console"
+   *   # Input record 1: Unable to determine host name for IP address 2001:4860:4860::8888 #
+   *
+   *   pipe "literal 999.999.999.999 | hostbyaddr | console"
+   *   # Input record 1: Unable to determine host name for 999.999.999.999 . Check format of IP address provided. #
+   *
+   *
+   *  Change History:
+   *
+   *      2020-06-10   CK        - Initial kick
+   *
+   */
+/*
+  20/ 8/26 Jeff Hennick
+*/
+
+pipe (hostbyaddr_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- hostbyaddr test 1 - valid input ?
+   literal 1.1.1.1 |
+	  hostbyaddr |
+   c1: compare any ~2# 1 hostbyaddr (single address) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal one.one.one.one |
+	 c1: ?
+
+-- hostbyaddr test 2 - valid input with includeip ?
+   literal 8.8.8.8 |
+	  hostbyaddr includeip |
+   c2: compare any ~2# 2 hostbyaddr includeip (single address) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal dns.google/8.8.8.8 |
+	 c2: ?
+
+-- hostbyaddr test 3 - invalid input (pure integer) ?
+   literal 999 |
+	  hostbyaddr |
+   c3: compare any ~2# 3 hostbyaddr (invalid input (pure integer)) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal # Input record 1: 999 is not a valid IP address # |
+	 c3: ?
+
+-- hostbyaddr test 4 - invalid input (partial IPv4 a) ?
+   literal 4.5 |
+	  hostbyaddr |
+   c4: compare any ~2# 4 hostbyaddr (invalid input (partial IPv4 a)) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal # Input record 1: 4.5 is not a valid IP address # |
+	 c4: ?
+
+-- hostbyaddr test 5 - invalid input (partial IPv4 b) ?
+   literal 4.5.. |
+	  hostbyaddr |
+   c5: compare any ~2# 5 hostbyaddr (invalid input (partial IPv4 a)) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal # Input record 1: Unable to determine host name for 4.5.. . Check format of IP address provided. # |
+	 c5: ?
+
+-- hostbyaddr test 6 - valid input with no reverse ?
+   literal 1.1.1.255 |
+	  hostbyaddr |
+   c6: compare any ~2# 6 hostbyaddr (valid input with no reverse) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal # Input record 1: Unable to determine host name for IP address 1.1.1.255 # |
+	 c6: ?
+
+-- hostbyaddr test 7 - invalid IPv4 c ?
+   literal 999.999.999.999 |
+	  hostbyaddr |
+   c7: compare any ~2# 7 hostbyaddr (invalid IPv4 c) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal # Input record 1: Unable to determine host name for 999.999.999.999 . Check format of IP address provided. # |
+	 c7: ?
+
+-- hostbyaddr test 8 - valid IPv6 ?
+   literal 2001:4860:4860::8888 |
+	  hostbyaddr |
+   c8: compare any ~2# 8 hostbyaddr (valid IPv6) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal # Input record 1: Unable to determine host name for IP address 2001:4860:4860::8888 # |
+	 c8: ?
+
+-- hostbyaddr test 9 - invalid IPv6 ?
+   literal 1:2:3:4:5:6:7:8:9 |
+	  hostbyaddr |
+   c9: compare any ~2# 9 hostbyaddr (invalid IPv6) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal # Input record 1: Unable to determine host name for 1:2:3:4:5:6:7:8:9 . Check format of IP address provided. # |
+	 c9: ?
+
+-- hostbyaddr test 10 - multi input ?
+   literal 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 9.9.9.9 0.0.0.255 256.256.256.256 |
+	  split string / / |
+	  hostbyaddr |
+   c10: compare any ~2#10 hostbyaddr (multi input) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+	 literal one.one.one.one%one.one.one.one%dns.google%dns.google%dns9.quad9.net%# Input record 6: Unable to determine host name for IP address 0.0.0.255 #%# Input record 7: Unable to determine host name for 256.256.256.256 . Check format of IP address provided. # |
+	 split string /%/ |
+	 c10: ?
