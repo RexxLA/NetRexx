@@ -1,0 +1,167 @@
+
+/*
+   getKeyWord(argString, keyword, minKeyLength = 0, type = 'K')
+
+This searches a string for a word or its abbreviation.  It is for
+searching argument strings for key words.  A minKeyLength of '' or 0
+means the full length is needed.  The search is case independent.  What
+it returns depends on the type.
+
+ Type values (Only the first character is used):
+  -- Key: return boolean exists;
+  -- Subword: return next word;
+  -- Dstring: return DString
+  -- Qword: return QWord
+
+It returns a Rexx Indexed string of what it found including the original
+string with the keyword (and Subword, Dstring, or Qword) removed.  If
+the key word is not found the original string is returned.
+
+A key of "" and type of "DString" will search for a Dstring at the
+beginning of the argString.
+
+Note:  This version, when searching for a keyword, does not respect
+quoted strings or delimited strings.  It simply finds the first word
+that matches.
+
+ returns:
+ [0] 5 -- number of return strings
+ [1] the argString without the keyword & subkeyword(s)
+ [2] the subkeyword(s) value
+     (or for type Key 1: keyword found | 0: keyword not found)
+ [3] the actual keyword found, this may be an abbreviation or mixed case
+ [4] the delimiter for types Dstring and Qword
+ [5] the word number of the keyword, 0 for not found
+*/
+
+/*
+  20/ 9/ 3 New. Jeff Hennick
+*/
+
+pipe (getKeyWord_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- getKeyWord (word, number, Key) ?
+   literal This is the quotation "Hi there" : is, 2, Key |
+   getkeyword_tester |
+   c1: compare any ~2# 1 getKeyWord (word, number, Key)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  is,  2,  Key) :0: 5 1: This the quotation "Hi there"  2: 1 3: is 4:  5: 2 |
+   c1: ?
+
+-- getKeyWord (word, number, Subword) ?
+   literal This is the quotation "Hi there" : is, 2, Subword |
+   getkeyword_tester |
+   c2: compare any ~2# 2 getKeyWord (word, number, Subword)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  is,  2,  Subword) :0: 5 1: This quotation "Hi there"  2: the 3: is 4:  5: 2 |
+   c2: ?
+
+-- getKeyWord (quotation, '', QWord) ?
+   literal This is the quotation "Hi there" : quotation, '', QWord |
+   getkeyword_tester |
+   c3: compare any ~2# 3 getKeyWord (quotation, '', QWord)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  quotation,  '',  QWord) :0: 5 1: This is the  2: Hi there 3: quotation 4: " 5: 4 |
+   c3: ?
+
+-- getKeyWord (the, '', QWord) ?
+   literal This is the quotation "Hi there" : the, '', QWord |
+   getkeyword_tester |
+   c4: compare any ~2# 4 getKeyWord (the, '', QWord)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  the,  '',  QWord) :0: 5 1: This is "Hi there"  2: quotation 3: the 4:  5: 3 |
+   c4: ?
+
+-- getKeyWord (quotation, '', DStr) ?
+   literal This is the quotation "Hi there" : quotation, '', DStr |
+   getkeyword_tester |
+   c5: compare any ~2# 5 getKeyWord (quotation, '', DStr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  quotation,  '',  DStr) :0: 5 1: This is the  2: Hi there 3: quotation 4: " 5: 4 |
+   c5: ?
+
+-- getKeyWord (where, '', DStr) ?
+   literal This is the quotation "Hi there" : where, '', DStr |
+   getkeyword_tester |
+   c6: compare any ~2# 6 getKeyWord (where, '', DStr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  where,  '',  DStr) :0: 5 1: This is the quotation "Hi there"  2:  3:  4:  5: 0 |
+   c6: ?
+
+-- getKeyWord (where, '', Key) ?
+   literal This is the quotation "Hi there" : where, '', Key |
+   getkeyword_tester |
+   c7: compare any ~2# 7 getKeyWord (where, '', Key)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  where,  '',  Key) :0: 5 1: This is the quotation "Hi there"  2: 0 3:  4:  5: 0 |
+   c7: ?
+
+-- getKeyWord (this) ?
+   literal This is the quotation "Hi there" : this |
+   getkeyword_tester |
+   c8: compare any ~2# 8 getKeyWord (this)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(This is the quotation "Hi there" ,  this, , ) :0: 5 1: the quotation "Hi there"  2: 1 3: This 4:  5: 1 |
+   c8: ?
+
+-- getKeyWord (quotation, 3, DStr) ?
+   literal 'This is the quot "Hi there"' : quotation, 3, DStr |
+   getkeyword_tester |
+   c9: compare any ~2# 9 getKeyWord (quotation, 3, DStr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord('This is the quot "Hi there"' ,  quotation,  3,  DStr) :0: 5 1: 'This is the ' 2: Hi there 3: quot 4: " 5: 4 |
+   c9: ?
+
+-- getKeyWord (there", 0, DStr) ?
+   literal 'This is the quot "Hi there"' : there", 0, DStr |
+   getkeyword_tester |
+   c10: compare any ~2#10 getKeyWord (there", 0, DStr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord('This is the quot "Hi there"' ,  there",  0,  DStr) :0: 5 1: 'This is the quot "Hi there"'  2:  3:  4:  5: 0 |
+   c10: ?
+
+-- getKeyWord (there", 0, QWord) ?
+   literal 'This is the quot "Hi there"' : there", 0, QWord |
+   getkeyword_tester |
+   c11: compare any ~2#11 getKeyWord (there", 0, QWord)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord('This is the quot "Hi there"' ,  there",  0,  QWord) :0: 5 1: 'This is the quot "Hi there"'  2:  3:  4:  5: 0 |
+   c11: ?
+
+-- getKeyWord ('', 0, Dstr) ?
+   literal 'This is the quot "Hi there"' : '', 0, Dstr |
+   getkeyword_tester |
+   c12: compare any ~2#12 getKeyWord ('', 0, Dstr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord('This is the quot "Hi there"' ,  '',  0,  Dstr) :0: 5 1:   2: This is the quot "Hi there" 3:  4: ' 5: 0 |
+   c12: ?
+
+-- getKeyWord ('', 0, Dstr) ?
+   literal /This is the quot/ "Hi there" : '', 0, Dstr |
+   getkeyword_tester |
+   c13: compare any ~2#13 getKeyWord ('', 0, Dstr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(/This is the quot/ "Hi there" ,  '',  0,  Dstr) :0: 5 1:  "Hi there" 2: This is the quot 3:  4: / 5: 0 |
+   c13: ?
+
+-- getKeyWord ( , 0, Dstr) ?
+   literal /This is the quot/ "Hi there" : , 0, Dstr |
+   getkeyword_tester |
+   c14: compare any ~2#14 getKeyWord ( , 0, Dstr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(/This is the quot/ "Hi there" ,  ,  0,  Dstr) :0: 5 1:  "Hi there" 2: This is the quot 3:  4: / 5: 0 |
+   c14: ?
+
+-- getKeyWord ( , , Dstr) ?
+   literal /This is the quot/ "Hi there" : , , Dstr |
+   getkeyword_tester |
+   c15: compare any ~2#15 getKeyWord ( , , Dstr)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal getKeyWord(/This is the quot/ "Hi there" ,  ,  ,  Dstr) :0: 5 1:  "Hi there" 2: This is the quot 3:  4: / 5: 0 |
+   c15: ?
+

@@ -1,6 +1,7 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *  Copyright (C) 1998  Jeffrey Hennick 
+ *  Copyright (C) 1998  Jeffrey Hennick
+ *  Copyright (C) 2020  Jeffrey Hennick
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -8,7 +9,10 @@
  *
  */
 
--- 98/07/23 added the unprotected methods _findin and _findout.  ejt
+/*
+ 20/ 9/ 3 added getKeyWord. Jeff Hennick
+ 98/07/23 added the unprotected methods _findin and _findout.  ejt
+*/
 
 package org.netrexx.njpipes.pipes
 
@@ -19,7 +23,7 @@ options binary nostrictargs nostrictmethods nostrictcase
 class utils private extends Object
 
   properties constant
-  
+
   WAIT_OUT     = int     1
   CLEAR_OUT    = int   (-2)
   WAIT_READ    = int     2
@@ -35,30 +39,30 @@ class utils private extends Object
   CLEAR_AUTO   = int  (-33)
   RUNNING      = int  (-16)
   WAITING      = int    15
-  
+
   INCREMENT    = int  256
-  
+
   properties shared
-  
+
   in   = pnode              -- input stream pnodes
   out  = pnode              -- output stream pnodes
-  
-  
+
+
   -- build the basic object
-  
+
   method utils()
-    
+
     in  = null
     out = null
-    
-    
+
+
     -- find input stream by number
-    
+
   method findin(stream=int) returns pnode protect shared
 
     curr = pnode
     prev = pnode
-    
+
     do                                        -- move to front search
       if in.sout<>stream then do
 	prev = in
@@ -78,14 +82,14 @@ class utils private extends Object
     catch NullPointerException
       return null
     end
-    
-    
+
+
     -- find output stream by number
-    
+
   method findout(stream=int) returns pnode protect shared
     curr = pnode
     prev = pnode
-    
+
     do
       if out.sin<>stream then do
 	prev = out
@@ -105,10 +109,10 @@ class utils private extends Object
     catch NullPointerException
       return null
     end
-    
-    
+
+
     -- find input stream by number (unprotected, no move to front)
-    
+
   method _findin(stream=int) returns pnode shared
     curr = pnode
     do                                        -- move to front search
@@ -124,10 +128,10 @@ class utils private extends Object
     catch NullPointerException
       return null
     end
-    
-    
+
+
     -- find output stream by number (unprotected, no move to front)
-    
+
   method _findout(stream=int) returns pnode shared
     curr = pnode
     do
@@ -143,8 +147,8 @@ class utils private extends Object
     catch NullPointerException
       return null
     end
-    
-    
+
+
     /*
      * This method is an exit called by the compiler.  With it you can change
      * the unprocessed pipe definition, the definition of the current stage,
@@ -185,13 +189,13 @@ class utils private extends Object
      * code[n]   = line n of generated code
      *
      */
-    
+
   method stageExit(pInfo=Rexx,code=Rexx) returns boolean signals StageError
-    
+
     if pInfo='' then
       signal StageError('Error - pipes must be named')   -- to avoid warning
     return 0
-    
+
   /**
    * The compiler needs to know when the argument of a stage is a rexx object.
    * The rexxArg() method returns the number of rexx object arguments.  See
@@ -199,11 +203,11 @@ class utils private extends Object
    *
    */
     -- 98/07/15 definition changed. ejt
-    
+
   method rexxArg(a=Rexx) returns Rexx
     return ''
-    
-    
+
+
   /**
    * The compiler needs to know when the argument of a stage is a stage(s).
    * The stageArg() method returns the position where the stages start.  See
@@ -211,35 +215,35 @@ class utils private extends Object
    *
    */
     -- 98/07/15 definition changed. ejt
-    
+
   method stageArg(a=Rexx) returns Rexx
     return ''
-    
-    
+
+
   /**
    *
    * Insert static shared methods after this comment please
    *
    **/
-    
-    
+
+
     -- create an intelligent class name for a stageExit
     -- 98/08/25  initial.  ejt
-    
+
   method stageName(a=Rexx,pid=Rexx,n=Rexx) returns Rexx static
     w = a.changestr(pid,'').changestr(n,'')
     w = pid'_'w'_'n
     w = w.changestr('__','_')
     return w
-    
-    
+
+
   method GetXorc(xorc) returns Rexx static
     --  GetXorc NJPipe Method
     -- 98/06/17 JHennick
-    
+
   /** GetXorc(xorc)
      Returns a Rexx character
-     
+
      A character specified as itself (a one-character word) or its
      hexadecimal representation (a two-character word).  The blank is
      represented by the keyword BLANK, which has the synonym SPACE, or with
@@ -247,9 +251,9 @@ class utils private extends Object
      is represented by the keyword TABULATE, which can be abbreviated down to
      TAB.
    */
-    
+
     xl = xorc.length()
-    
+
     select
       when xl = 1 then s = xorc
       when xl = 2 then s = xorc.x2c()
@@ -259,18 +263,18 @@ class utils private extends Object
       otherwise s = null
     end
     return s
-    
-    
+
+
   method GetXRange(xr) returns Rexx signals StageError static
     --  GetXRange NJPipe Method
     -- 98/06/17 JHennick
-    
+
   /** GetXRrange
-     
+
      returns Rexx string of characters in the xrange
      signals Error:  BadXRange
-     
-     
+
+
      xrange:
      +--+-xorc--------+-------------------------+
      +-xorc-xorc---+
@@ -281,14 +285,14 @@ class utils private extends Object
     r = GetXorc(xr)
     if r = null then do
       parse xr x1 '-' x2
-      
+
       c = 1
       if x2 \= '' then c = 0
       else parse xr x1 '.' e
-      
+
       s = GetXorc(x1)
       if s = null then signal StageError('BadXrange')
-      
+
       if c then do
 	e = s.c2d + e - 1
 	if e > 255 then e = e - 256
@@ -298,22 +302,22 @@ class utils private extends Object
 	e = GetXorc(x2)
 	if s = null then signal StageError('BadXrange')
       end
-      
+
       if e > s then r = s.sequence(e)
       else r = s.sequence('\xff') || '\0'.sequence(e)
     end
-    
+
     return r -- GetXRange
-    
-    
+
+
     -- convert an object to Rexx if possible
     -- 99/05/28  fix array logic tests.  eht
     -- 98/09/07  add byte[] logic.  eht
     -- 98/08/23  add toSting to otherwise logic.  ejt
     -- 98/08/13  initial.  ejt
-    
+
   method object2rexx(a=java.lang.Object) returns Rexx static signals StageError
-    
+
     select
       when a=null then             -- encapsulated classes from
         return Rexx('')           -- java.lang can be added
@@ -332,15 +336,15 @@ class utils private extends Object
     catch NoSuchMethodError
       signal StageError(8,'Error - cannot convert object to rexx')
     end
-    
-    
+
+
     -- convert an object to a string if possible
     -- 99/05/28  fix array logic tests.  eht
     -- 99/05/25  added byte[].  ejt
     -- 98/08/13  initial.  ejt
-    
+
   method object2string(a=java.lang.Object) returns String static signals StageError
-    
+
     select
       when a<=String then            -- encapsulated classes from
         return (String a)           -- java.lang can be added
@@ -351,16 +355,16 @@ class utils private extends Object
     catch NoSuchMethodError
       signal StageError(8,'Error - no toString method, cannot convert object')
     end
-    
-    
+
+
   method pos(h=byte[],n=byte[]) returns int static
-    
+
     if h=null | n=null then
       return -1
-    
+
     if n.length>h.length then
       return -1
-    
+
     loop i=0 to h.length-n.length
       if h[i]=n[0] then do
 	loop j=1 to n.length-1
@@ -371,7 +375,153 @@ class utils private extends Object
       return i
       end
     end i
-    
+
     return -1
 
-    
+
+/*
+   getKeyWord(argString, keyword, minKeyLength = 0, type = 'K')
+
+This searches a string for a word or its abbreviation.  It is for
+searching argument strings for key words.  A minKeyLength of '' or 0
+means the full length is needed.  The search is case independent.  What
+it returns depends on the type.
+
+ Type values (Only the first character is used):
+  -- Key: return boolean exists;
+  -- Subword: return next word;
+  -- Dstring: return DString
+  -- Qword: return QWord
+
+It returns a Rexx Indexed string of what it found including the original
+string with the keyword (and Subword, Dstring, or Qword) removed.  If
+the key word is not found the original string is returned.
+
+A key of "" and type of "DString" will search for a Dstring at the
+beginning of the argString.
+
+Note:  This version, when searching for a keyword, does not respect
+quoted strings or delimited strings.  It simply finds the first word
+that matches.
+
+ returns:
+ [0] 5 -- number of return strings
+ [1] the argString without the keyword & subkeyword(s)
+ [2] the subkeyword(s) value
+     (or for type Key 1: keyword found | 0: keyword not found)
+ [3] the actual keyword found, this may be an abbreviation or mixed case
+ [4] the delimiter for types Dstring and Qword
+ [5] the word number of the keyword, 0 for not found
+*/
+
+/*
+  20/ 9/ 3 New. Jeff Hennick
+*/
+
+method getKeyWord(argString = Rexx, keyword = Rexx, minKeyLength = Rexx 0, type = Rexx 'K') static returns Rexx
+
+retindex = Rexx ''
+retindex[4] = '' -- delimiter
+ret = Rexx  -- subkeyword value
+retw = Rexx ''
+del2 = 1
+
+argStringUp = argString.upper
+keyword = keyword.strip
+if keyword = "''" | keyword = '""' then keyword = ''
+keywordUp = keyword.upper
+minKeyLength = minKeyLength.strip
+if \minKeyLength.datatype('W') | minKeyLength = 0 then minKeyLength = keyword.length
+
+type = type.strip.left(1).upper
+
+if keyword = '' then do
+  wp = 0
+end
+else if minKeyLength = keyword.length then
+  loop wp = 1 to argStringUp.words()
+    if keywordUp = argStringUp.word(wp) then leave
+  end
+else
+  loop wp = 1 to argStringUp.words()
+    if keywordUp.abbrev(argStringUp.word(wp), minKeyLength) then leave
+  end
+if wp > argString.words() then wp = 0
+
+retindex[5] = wp
+
+ret = wp > 0      -- key word found
+
+if ret then retindex[3] = argString.word(wp)
+else retindex[3] = ''
+
+select
+when type = 'S' & ret then do       -- Suboption word
+  retw = argString.word(wp + 1)
+  del2 = 1
+  argString = argString.delword(wp, 2)
+end
+when type = 'D' & (ret | keyword = '') then do        -- DString
+  if keyword = '' then do
+    opt = argString
+    first = ''
+  end
+  else do
+    opt = argString.subword(wp + 1)
+    first = argString.subword(1, wp - 1)
+  end
+  ds = DString(opt)
+  if ds.String() =  '' & ds.Delimiter() = '' then do -- not found
+    ret = ''
+    retindex[4] = ''
+  end
+  else do
+    retw = ds.String()
+    argString = first ds.Residue
+    argStringUp = argString.upper
+    retindex[4] = ds.Delimiter()
+  end
+end
+when type = 'Q' & ret then do        -- possibly quoted "word"
+  opt = argString.subword(wp + 1)
+  if opt = '' then do
+    ret = ''
+  end
+  else do
+    fc = opt.left(1)
+    if fc = '"' | fc = "'" then do
+      ds = DString(opt)
+      retw = ds.String()
+      argString = argString.subword(1, wp - 1) ds.Residue
+    end
+    else do
+      fc = ''
+      retw = argString.word(wp + 1)
+      argString = argString.delword(wp, 2)
+    end
+    argStringUp = argString.upper
+    retindex[4] = fc
+  end
+end
+when type = 'D' | type = 'Q' then   -- no keyword found
+  ret = ''
+when ret > 0 then do
+  w = 1
+  if type \= 'K' & del2 then w = 2     -- Keyword alone
+  argString = argString.delword(wp,w)
+  argStringUp = argStringUp.delword(wp,w)
+end
+otherwise
+  nop
+end
+
+if type \= 'K' & retw <> '' then ret = retw
+
+retindex[0] = 5 -- number of returned indexed strings
+retindex[1] = argString   -- without what we found
+retindex[2] = ret         -- what we were looking for
+-- 3 actual keyword found
+-- 4 delimiter
+-- 5 word position
+return retindex  -- getKeyWord
+
