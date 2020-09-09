@@ -7,6 +7,7 @@
  */
 
 /*
+ 20/ 8/29 Added PREFACE & APPEND for NOW. Jeff Hennick
  20/ 8/22 Added NOW; fixed POSIX in and out.  Jeff Hennick
  20/ 6/26 Added NOON & MIDNIGHT options. Jeff Hennick
 */
@@ -21,8 +22,9 @@
 >---+---------------------------------------+--+-----------------------+------>
     |                    +-ISOdate----------+  +-WINDOW--signednumber--+
     +-| Inputformat |-+--+------------------+  +-BASEYEAR--yearnumber--+
-    +--NOW--(5)-------+  +-| Outputformat |-+
-
+    |     +-PREFACE-+ |  +-| Outputformat |-+
+    +-NOW-+-(5)-----+-+
+          +-APPEND--+
                   +--MIDNIGHT--(4)-+
 >--+-----------+--+----------------+---------------------------------------->>
    +--TIMEOUT--+  +--NOON--(4)-----+
@@ -41,18 +43,6 @@ Inputrange:  (3)
    +--Fields-(1)-fnumberrange--+
    +--cnumberrange-------------+
 
-(1): SPACE is optional here.
-(3): NetRexx Pipelines uses IRange which gives a superset of range options.
-(4): NetRexx Pipelines only. What time to assume if blank time on input.
-(5): NetRexx Pipelines only. Do NOT read input stream. Use current local date time.
-     Any Inputrange is ignored. Any output format can be used.
-
- Bad date records out on secondary. Or error if not connected.
- NetRexx Pipelines is more forgiving on input format:
-
- -_LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the
- format;
- - leading zeros/blanks can be ignored except where there is no punctuation.
 
 Inputformat, Outputformat:
 SHOrtdate     }   mm/dd/yy hh:mm:ss.uuuuuu
@@ -102,7 +92,23 @@ REXX_DATE_N_SHORT dd mmm yy hh:mm:ss.uuuuuu
 REXX_DATE_N       dd mmm yyyy hh:mm:ss.uuuuuu
 REXX_DATE_W       wwwwwwwww (output only)
 
+(1): SPACE is optional here.
 (2) Not implemented in NetRexx Pipelines at this time; mainly mainframe useful only.
+(3): NetRexx Pipelines uses IRange which gives a superset of range options.
+(4): NetRexx Pipelines only. What time to assume if blank time on input.
+(5): - NetRexx Pipelines only.
+     - Use current local date time.
+     - Any Inputrange is ignored.
+     - Any output format can be used.
+     - PREFACE Write the date record before passing the input to the output.
+     - APPEND Write the output record after passing the input to the output.
+
+ Bad date records out on secondary. Or error if not connected.
+ NetRexx Pipelines is more forgiving on input format:
+
+ -_LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the
+ format;
+ - leading zeros/blanks can be ignored except where there is no punctuation.
 
 Bad date records out on secondary, NetRexx Pipelines is more forgiving on input format:
  _LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the
@@ -214,6 +220,23 @@ do
     args = args.delword(npw,1)
   end
 
+                                                     /* PREFACE / APPEND */
+  nowpref = 0
+  nowappend = 0
+  nowpw = args.upper.wordpos('NOW')
+  if nowpw > 0 then do
+    nowopt = args.upper.word(nowpw + 1)
+    if nowopt = 'APPEND' then do
+      nowappend = 1
+      args = args.delword(nowpw + 1)
+    end
+    else if nowopt = 'PREFACE' then do
+      nowpref = 1
+      args = args.delword(nowpw + 1)
+    end
+    else nowpref = 1
+  end
+
                                                          /* INPUT and OUTPUT DATE FORMATS */
   parse args inF outf .
   parse getInFormat(inF) inFormat ',' typei
@@ -231,7 +254,7 @@ do
   else uIR = ""
 
   n=n+1;o[n]= 'class 'cname' extends stage private' uIR
-  n=n+1;o[n]= '--trace results'
+--  n=n+1;o[n]= 'trace results'
   n=n+1;o[n]= 'properties public'
   n=n+1;o[n]= 'year = Rexx 0'
   n=n+1;o[n]= 'month = Rexx 0'
@@ -260,15 +283,19 @@ do
   n=n+1;o[n]= ''
   n=n+1;o[n]= 'method run()'
 
+  if nowappend then do
+    n=n+1;o[n]= 'append_line = ""'
+  end
+
   /* process arguments */
 
   if procJul then do
     n=n+1;o[n]= 'getDaysInMonthCum()'
   end
 
-if isRange then do
-  n=n+1;o[n]='r = GetIRanges("'pInfo[4]'")'
-end
+  if isRange then do
+    n=n+1;o[n]='r = GetIRanges("'pInfo[4]'")'
+  end
 
   /* Main Loop */
 
@@ -384,19 +411,51 @@ end
     n=n+1;o[n]='  oline = left""oline""right'
   end
 
-  n=n+1;o[n]= '  output(oline)'
-
-  if typei = 'NOW' then do
-    n=n+1;o[n]= '  leave' -- no looping
+  if nowappend then do
+    n=n+1;o[n]= '  append_line = oline'
+    n=n+1;o[n]= '  leave -- no looping nowappend'
+  end
+  else if nowpref then do
+    n=n+1;o[n]= '  do'
+    n=n+1;o[n]= '    output(oline)'
+    n=n+1;o[n]= '  catch StageError'
+    n=n+1;o[n]= '    rc = rc()'
+    n=n+1;o[n]= '  end'
+    n=n+1;o[n]= '  leave -- no looping nowpref'
   end
   else do
+    n=n+1;o[n]= '  output(oline)'
     n=n+1;o[n]= '  readto()'
+    n=n+1;o[n]= 'catch StageError'
+    n=n+1;o[n]= '  rc = rc()'
   end
 
-  n=n+1;o[n]= 'catch StageError'
-  n=n+1;o[n]= '  rc = rc()'
   n=n+1;o[n]= 'end'
-  n=n+1;o[n]= 'exit(rc*(rc<>12))'  -- ****** end of main loop and exit
+
+  if nowpref then do          -- get out of the picture
+    n=n+1;o[n]= '  do'
+    n=n+1;o[n]= '    shortStreams()'
+    n=n+1;o[n]= '  catch StageError'
+    n=n+1;o[n]= '    rc = rc()'
+    n=n+1;o[n]= '  end'
+  end
+
+  if nowappend then do       -- append after stream
+    n=n+1;o[n]= 'loop'
+    n=n+1;o[n]= '  d = peekto()'
+    n=n+1;o[n]= '  output(d)'
+    n=n+1;o[n]= '  readto()'
+    n=n+1;o[n]= 'catch StageError'
+    n=n+1;o[n]= 'finally'
+    n=n+1;o[n]= '  do'
+    n=n+1;o[n]= '    output(append_line)'
+    n=n+1;o[n]= '  catch StageError'
+    n=n+1;o[n]= '  end'
+    n=n+1;o[n]= 'rc = rc()'
+    n=n+1;o[n]= 'end'
+  end
+
+  n=n+1;o[n]= 'exit(rc*(rc<>4)*(rc<>12))'  -- ****** end of main loop and exit
 
   n=n+1;o[n]= 'method unknown(aobj = java.lang.Object) signals ThreadQ'
   n=n+1;o[n]= '  do'
@@ -491,10 +550,10 @@ end
     n=n+1;o[n]='  list[2] = 28'
     n=n+1;o[n]='  return m jd'
 
-    n=n+1;o[n]='getDayofWeek(ymd)'
-    n=n+1;o[n]='  date = date.getDayOfWeek()'
-    n=n+1;o[n]='  day = date.getDayOfWeek()'
-    n=n+1;o[n]='  return "Mon Tue Wed Thu Fri Sat Sun".word(day)'
+--    n=n+1;o[n]='method getDayofWeek(ymd)'
+--    n=n+1;o[n]='  date = date.getDayOfWeek()'
+--    n=n+1;o[n]='  day = date.getDayOfWeek()'
+--    n=n+1;o[n]='  return "Mon Tue Wed Thu Fri Sat Sun".word(day)'
 
   end
 
@@ -521,6 +580,7 @@ end
     end
     say '*************************************************************'
   end
+--trace results
 catch ThreadQ
 end
 return 1
