@@ -47,14 +47,18 @@ import org.netrexx.njpipes.pipes.
 
 class pickparse extends stage
 
+trace results
 options = Rexx
 optionsup = Rexx
+
+
 
   -- The run method of this stage should never get called
 
 method run()
   rc = 16
   exit(rc)
+
 
   /*
    * pInfo    = name of pipe,
@@ -83,6 +87,7 @@ method run()
 
 method stageExit(pInfo=Rexx,o=Rexx) returns boolean
 do
+--trace results
   pid  = pInfo
   name = pInfo[3]
 
@@ -107,13 +112,6 @@ do
     say 'Pickparse -- no parse template found in' pInfo[4] 'RC = 11'
     exit 11
   end
-
-                     /* We need a character not in the string */
-  p = -1
-  loop i = Rexx 1 until p = 0
-    p = pt.pos(i.d2c)
-  end
-  real$ = i.d2c
 
                      /* What streams do we have logical expresions for? */
   ltemp = Rexx ''
@@ -153,26 +151,29 @@ do
                    /* Is there an implied ELSE? */
   if ostream > stream then ltemp[ostream - 1] = 'nput'
 
+--loop zi = 0 to 10
+--  say zi ':' connect[zi] '::' ltemp[zi]
+--end
+
+
   /* make the generated stage */
   n=0
   cname = stageName(name,pid,pInfo[1])
 
 
   n=n+1;o[n]= 'class 'cname' extends stage private'
-  n=n+1;o[n]= '--trace results'
-  n=n+1;o[n]= 'real$ = "'real$'"'
+  n=n+1;o[n]= 'trace results'
+  n=n+1;o[n]= 'one = 1.d2c()'
 
   n=n+1;o[n]= ''
   n=n+1;o[n]= 'method run()'
-                        /* initialize and keep the compiler quiet about "unused." */
-  n=n+1;o[n]= '  $1 = "";$2 = "";$3 = "";$4 = "";$5 = "";$6 = "";$7 = "";$8 = "";$9 = "";'
   n=n+1;o[n]= '  $_1 = "";$_2 = "";$_3 = "";$_4 = "";$_5 = "";$_6 = "";$_7 = "";$_8 = "";$_9 = "";'
-  n=n+1;o[n]= '  $_1 = $_1;$_2 = $_2;$_3 = $_3;$_4 = $_4;$_5 = $_5;$_6 = $_6;$_7 = $_7;$_8 = $_8;$_9 = $_9;'
+n=n+1;o[n]= 'say "$_1 :" $_1'
 
   n=n+1;o[n]= 'loop forever'
        /* See what input we have. */
   n=n+1;o[n]= '  line = Rexx peekto()'
-  n=n+1;o[n]= '  line = line.changestr("$",real$)'
+  n=n+1;o[n]= '  line = line.changestr("$",one)'
 
   n=n+1;o[n]= '  parse line' pt
 
@@ -180,13 +181,15 @@ do
   n=n+1;o[n]= '  nskip = 1'
 
   loop i = 0 to ostream - 1
+n=n+1;o[n]= 'say "$_1 :" $_1'
     n=n+1;o[n]= ' if ('ltemp[i]') &' connect[i] ' & nskip then do'
 
   n=n+1;o[n]= '        selectOutput('i')'
-  n=n+1;o[n]= '        output(line.changestr(real$,"$"))'
+  n=n+1;o[n]= '        output(line.changestr(one,"$"))'
   n=n+1;o[n]= '        if' oneonly 'then nskip = 0'
   n=n+1;o[n]= '        nput = 0'
   n=n+1;o[n]= '      catch stageError'
+--  n=n+1;o[n]= '        c[s] = 0'
   n=n+1;o[n]= '      end'
   end
 
@@ -207,7 +210,7 @@ do
   /* show off the generated code */
   trace off
   sc = 0
---  sc = 1 -- comment out to not show the code
+  sc = 1 -- comment out to not show the code
   sn = 0
   sn = 1 -- comment out to not show line numbers
   nn = Rexx
@@ -220,6 +223,8 @@ do
     end
     say "*************************************************************"
   end
-
+--catch ThreadQ
+/*
+*/
 end
 return 1
