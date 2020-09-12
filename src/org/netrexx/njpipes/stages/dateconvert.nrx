@@ -1,4 +1,4 @@
-/* dateconvert */
+/* dc */
 /*
  *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *Distributed under the ICU 1.8.1 License with NO WARRANTIES of ANY kind.
@@ -7,8 +7,8 @@
  */
 
 /*
- 20/ 8/29 Added PREFACE & APPEND for NOW. Jeff Hennick
- 20/ 8/22 Added NOW; fixed POSIX in and out.  Jeff Hennick
+ 20/ 9/12 Fixed NOW. Jeff Hennick
+ 20/ 8/22 Added NOW. Jeff Hennick
  20/ 6/26 Added NOON & MIDNIGHT options. Jeff Hennick
 */
 
@@ -22,9 +22,8 @@
 >---+---------------------------------------+--+-----------------------+------>
     |                    +-ISOdate----------+  +-WINDOW--signednumber--+
     +-| Inputformat |-+--+------------------+  +-BASEYEAR--yearnumber--+
-    |     +-PREFACE-+ |  +-| Outputformat |-+
-    +-NOW-+-(5)-----+-+
-          +-APPEND--+
+    +--NOW--(5)-------+  +-| Outputformat |-+
+
                   +--MIDNIGHT--(4)-+
 >--+-----------+--+----------------+---------------------------------------->>
    +--TIMEOUT--+  +--NOON--(4)-----+
@@ -43,6 +42,11 @@ Inputrange:  (3)
    +--Fields-(1)-fnumberrange--+
    +--cnumberrange-------------+
 
+(1): SPACE is optional here.
+(3): NetRexx Pipelines uses IRange which gives a superset of range options.
+(4): NetRexx Pipelines only. What time to assume if blank time on input.
+(5): NetRexx Pipelines only. Do NOT read input stream. Use current local date time.
+     Any Inputrange is ignored.
 
 Inputformat, Outputformat:
 SHOrtdate     }   mm/dd/yy hh:mm:ss.uuuuuu
@@ -92,23 +96,7 @@ REXX_DATE_N_SHORT dd mmm yy hh:mm:ss.uuuuuu
 REXX_DATE_N       dd mmm yyyy hh:mm:ss.uuuuuu
 REXX_DATE_W       wwwwwwwww (output only)
 
-(1): SPACE is optional here.
 (2) Not implemented in NetRexx Pipelines at this time; mainly mainframe useful only.
-(3): NetRexx Pipelines uses IRange which gives a superset of range options.
-(4): NetRexx Pipelines only. What time to assume if blank time on input.
-(5): - NetRexx Pipelines only.
-     - Use current local date time.
-     - Any Inputrange is ignored.
-     - Any output format can be used.
-     - PREFACE Write the date record before passing the input to the output.
-     - APPEND Write the output record after passing the input to the output.
-
- Bad date records out on secondary. Or error if not connected.
- NetRexx Pipelines is more forgiving on input format:
-
- -_LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the
- format;
- - leading zeros/blanks can be ignored except where there is no punctuation.
 
 Bad date records out on secondary, NetRexx Pipelines is more forgiving on input format:
  _LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the
@@ -118,7 +106,6 @@ Bad date records out on secondary, NetRexx Pipelines is more forgiving on input 
 
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.stages
---trace results
 
 import org.netrexx.njpipes.pipes.
 import java.text.SimpleDateFormat
@@ -167,7 +154,6 @@ do
   args = pInfo[4]
   noon = 0
   isRange = boolean
---  winYear = boolean 0
 
   /* Process stage arguments here for passing to the generated stage */
 
@@ -194,11 +180,9 @@ do
     parse Date() . . . . . nowYr .    -- 2020
     lowYr = nowYr + windowYear   -- 1970
   end
-        lowC = lowYr.left(lowYr.length()-2)
-        highC = lowC + 1         -- 20
-        lowY = lowYr.right(2)    -- 70
---        winYear = 1
---  end
+  lowC = lowYr.left(lowYr.length()-2)
+  highC = lowC + 1         -- 20
+  lowY = lowYr.right(2)    -- 70
 
                                          /* TIMEOUT */
   tpw = args.upper.wordpos('TIMEOUT')
@@ -220,23 +204,6 @@ do
     args = args.delword(npw,1)
   end
 
-                                                     /* PREFACE / APPEND */
-  nowpref = 0
-  nowappend = 0
-  nowpw = args.upper.wordpos('NOW')
-  if nowpw > 0 then do
-    nowopt = args.upper.word(nowpw + 1)
-    if nowopt = 'APPEND' then do
-      nowappend = 1
-      args = args.delword(nowpw + 1)
-    end
-    else if nowopt = 'PREFACE' then do
-      nowpref = 1
-      args = args.delword(nowpw + 1)
-    end
-    else nowpref = 1
-  end
-
                                                          /* INPUT and OUTPUT DATE FORMATS */
   parse args inF outf .
   parse getInFormat(inF) inFormat ',' typei
@@ -254,7 +221,7 @@ do
   else uIR = ""
 
   n=n+1;o[n]= 'class 'cname' extends stage private' uIR
---  n=n+1;o[n]= 'trace results'
+  n=n+1;o[n]= '--trace results'
   n=n+1;o[n]= 'properties public'
   n=n+1;o[n]= 'year = Rexx 0'
   n=n+1;o[n]= 'month = Rexx 0'
@@ -262,7 +229,6 @@ do
   n=n+1;o[n]= 'day = Rexx 0'
   n=n+1;o[n]= 'doc = Rexx 0'
   n=n+1;o[n]= 'doy = Rexx 0'
-  n=n+1;o[n]= 'dow = Rexx ""'
   n=n+1;o[n]= 'dzero = Rexx 0'
   n=n+1;o[n]= 'hour = Rexx 0'
   n=n+1;o[n]= 'min = Rexx 0'
@@ -276,16 +242,11 @@ do
     n=n+1;o[n]= "daysInMonthCumList = Rexx '0 31 59 90 120 151 181 212 243 273 304 334 365'"
     n=n+1;o[n]= 'daysInMonth = Rexx 0'
     n=n+1;o[n]= 'daysInMonthCum = Rexx 0'
---    n=n+1;o[n]= 'daysInMonthCumLeap = Rexx 0'
   end
   n=n+1;o[n]= 'noon =' noon
   n=n+1;o[n]= 'inF = Rexx "'inF'"'
   n=n+1;o[n]= ''
   n=n+1;o[n]= 'method run()'
-
-  if nowappend then do
-    n=n+1;o[n]= 'append_line = ""'
-  end
 
   /* process arguments */
 
@@ -300,26 +261,21 @@ do
   /* Main Loop */
 
   n=n+1;o[n]= 'loop forever'
-
   if typei = 'NOW' then do
-    n=n+1;o[n]= '  robj = Rexx "' java.time.LocalDateTime.now() '"'
+    n=n+1;o[n]= '  formatter= SimpleDateFormat("yyyy-MM-dd HH:mm:ss z")'
+    n=n+1;o[n]= '  aobj =' Date(System.currentTimeMillis())
+    n=n+1;o[n]= '  aobj = formatter.format(aobj)'
   end
-  else do
+  else
     n=n+1;o[n]= '  aobj = peekto()'
-    n=n+1;o[n]= '  robj = Rexx aobj'
-  end
-
+  n=n+1;o[n]= '  robj = Rexx aobj'
   /* process line */
 
   if isRange then do
     n=n+1;o[n]='  robj = r[1].SelIRange(robj," ")'
   end
 
-  if typei.left(3) = 'ISO' | typei = 'NOW' then do
-    n=n+1;o[n]='  robj = robj.changestr("T", " ")'
-  end
-
-  n=n+1;o[n]= '  parse robj' inFormat   /* this is where the input gets broken into its pieces */
+  n=n+1;o[n]= '  parse robj' inFormat
 
   n=n+1;o[n]= '  if year.length = 2 then do'
   n=n+1;o[n]= '    if year <' lowY 'then year =' highC'""year'
@@ -328,12 +284,10 @@ do
 
   n=n+1;o[n]= '  if sec <> "" then sec = sec / 1'
 
-  if typei \= 'NOW' then do
-    n=n+1;o[n]= '  if \\(year""month""day).datatype("D") then do'
-    n=n+1;o[n]= '    unknown(aobj)'
-    n=n+1;o[n]= '    iterate'
-    n=n+1;o[n]= '  end'
-  end
+  n=n+1;o[n]= '  if \\(year""month""day).datatype("D") then do'
+  n=n+1;o[n]= '    unknown(aobj)'
+  n=n+1;o[n]= '    iterate'
+  n=n+1;o[n]= '  end'
 
   if 'PIPE PIPE_SHORT'.wordpos(typei) > 0 then do
     n=n+1;o[n]= "  sec = (sec'.'secf) / 1"
@@ -353,16 +307,11 @@ do
     n=n+1;o[n]='  parse MDFromJulianDay(doy, isLeapYear(year)) month day'
   end
 
-  if 'POSIX' = typei then do
-    n=n+1;o[n]=' rd = Date(long psec)'
-    n=n+1;o[n]=' parse rd . mname day hour ":" min ":" sec . year'   -- Fri Jan 02 05:17:36 EST 1970
-  end
-
   if 'ISO_SHORT RO'.wordpos(typeo) > 0 then do
     n=n+1;o[n]= '  year = (pad""year).right(2)'
   end
 
-  if 'RN POSIX'.wordpos(typei) > 0  then do
+  if typei = 'RN' then do
     n=n+1;o[n]= "  month = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.wordpos(mname)"
   end
 
@@ -411,51 +360,14 @@ do
     n=n+1;o[n]='  oline = left""oline""right'
   end
 
-  if nowappend then do
-    n=n+1;o[n]= '  append_line = oline'
-    n=n+1;o[n]= '  leave -- no looping nowappend'
-  end
-  else if nowpref then do
-    n=n+1;o[n]= '  do'
-    n=n+1;o[n]= '    output(oline)'
-    n=n+1;o[n]= '  catch StageError'
-    n=n+1;o[n]= '    rc = rc()'
-    n=n+1;o[n]= '  end'
-    n=n+1;o[n]= '  leave -- no looping nowpref'
-  end
-  else do
-    n=n+1;o[n]= '  output(oline)'
-    n=n+1;o[n]= '  readto()'
-    n=n+1;o[n]= 'catch StageError'
-    n=n+1;o[n]= '  rc = rc()'
-  end
-
+  n=n+1;o[n]= '  output(oline)'
+  if typei = 'NOW' then
+    n=n+1;o[n]= '  leave'
+  n=n+1;o[n]= '  readto()'
+  n=n+1;o[n]= 'catch StageError'
+  n=n+1;o[n]= '  rc = rc()'
   n=n+1;o[n]= 'end'
-
-  if nowpref then do          -- get out of the picture
-    n=n+1;o[n]= '  do'
-    n=n+1;o[n]= '    shortStreams()'
-    n=n+1;o[n]= '  catch StageError'
-    n=n+1;o[n]= '    rc = rc()'
-    n=n+1;o[n]= '  end'
-  end
-
-  if nowappend then do       -- append after stream
-    n=n+1;o[n]= 'loop'
-    n=n+1;o[n]= '  d = peekto()'
-    n=n+1;o[n]= '  output(d)'
-    n=n+1;o[n]= '  readto()'
-    n=n+1;o[n]= 'catch StageError'
-    n=n+1;o[n]= 'finally'
-    n=n+1;o[n]= '  do'
-    n=n+1;o[n]= '    output(append_line)'
-    n=n+1;o[n]= '  catch StageError'
-    n=n+1;o[n]= '  end'
-    n=n+1;o[n]= 'rc = rc()'
-    n=n+1;o[n]= 'end'
-  end
-
-  n=n+1;o[n]= 'exit(rc*(rc<>4)*(rc<>12))'  -- ****** end of main loop and exit
+  n=n+1;o[n]= 'exit(rc*(rc<>12))'
 
   n=n+1;o[n]= 'method unknown(aobj = java.lang.Object) signals ThreadQ'
   n=n+1;o[n]= '  do'
@@ -495,7 +407,6 @@ do
 
     n=n+1;o[n]='method dayOfYear(daya, montha, yeara)'
     n=n+1;o[n]='  doy = daysInMonthCum[montha / 1, isLeapYear(yeara)] + daya'
-
     if typeo = 'RD' then do
       n=n+1;o[n]='  doy = doy / 1'
     end
@@ -550,11 +461,6 @@ do
     n=n+1;o[n]='  list[2] = 28'
     n=n+1;o[n]='  return m jd'
 
---    n=n+1;o[n]='method getDayofWeek(ymd)'
---    n=n+1;o[n]='  date = date.getDayOfWeek()'
---    n=n+1;o[n]='  day = date.getDayOfWeek()'
---    n=n+1;o[n]='  return "Mon Tue Wed Thu Fri Sat Sun".word(day)'
-
   end
 
 
@@ -580,7 +486,6 @@ do
     end
     say '*************************************************************'
   end
---trace results
 catch ThreadQ
 end
 return 1
@@ -590,7 +495,7 @@ method getInFormat(name) --signals ThreadQ
   select case type
     when '', 'SHORTDATE', 'SHORTDAT', 'SHORTDA', 'SHORTD', 'SHORT', 'SHOR', 'SHO', 'USA_SHORT', 'REXX_DATE_U', 'REXXU', 'RU', 'FULLDATE', 'USA'
       then p = "month . '/' day . '/' year hour . ':' min . ':' sec ." -- mm/dd/yy hh:mm:ss.uuuuuu
-    when 'ISODATE', 'ISODAT', 'ISODA', 'ISOD', 'ISO', 'ISO_SHORT'
+    when 'ISODATE', 'ISODAT', 'ISODA', 'ISOD', 'ISO', 'ISO_SHORT', 'NOW'
       then p = "year . '-' month . '-' day hour . ':' min . ':' sec ."  -- yy . '-' mm . '-' dd hh . ':' mm . ':' ss.uuuuuu
     when 'DB2', 'DB2_SHORT'
       then p = "year . '-' month . '-' day . '-' hour . '.' min . '.' sec ."  -- yy . '-' mm . '-' dd . '-' hh.mm.ss.uuuuuu
@@ -636,9 +541,10 @@ method getInFormat(name) --signals ThreadQ
     when 'JULIAN', 'JULIAN_SHORT'
       then p = "year . '.' doy hour . ':' min . ':' sec ." -- yy.dayd hh . ':' mm . ':' ss.uuuuuu
     when 'POSIX'
-      then p = "psec"
-    when 'NOW'
-      then p = "year '-' month '-' day hour ':' min ':' sec ."  -- 2020-08-23T11:32:16.417 -- T will be removed above
+      then do
+        p = "psec"
+        type = 'POSIX'
+      end
     otherwise
       say 'DateConvert Input format' name 'is not recognized.'
       exit 11
@@ -757,8 +663,6 @@ method getOutFormat(name)
         else
           p = "year'.'doy" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
       end
-    when 'POSIX'
-      then p = "psec"
     otherwise
       say 'DateConvert Output format' name 'is not recognized.'
       exit 11
