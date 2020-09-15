@@ -10,6 +10,7 @@
  */
 
 /*
+ 20/ 9/13 added xrange(); overhauled getXrange().  Jeff Hennick
  20/ 9/ 3 added getKeyWord. Jeff Hennick
  98/07/23 added the unprotected methods _findin and _findout.  ejt
 */
@@ -264,50 +265,114 @@ class utils private extends Object
     end
     return s
 
+method xrange(fc = Rexx '',lc = Rexx '') static returns Rexx
+/* Just like classic Rexx.
+   Returns a string of characters in the collating order
+   inclusive of the first and last.
+   Wraps around 0xFF to 0x00 if needed.
+*/
+/*
+ 20/ 9/13 Jeff Hennick
+*/
+   o = Rexx ''
+   if fc == '' then fc = 0.d2c
+   if lc == '' then lc = 255.d2c
+   if fc > lc then do
+     loop i = fc.c2d() to 0xff
+       o = o''i.d2c()
+     end
+     lc = fc
+     fc = 0.d2c
+   end
+   loop i = fc.c2d() for (lc.c2d() - fc.c2d() + 1)
+     o = o''i.d2c()
+   end
+   return o
 
-  method GetXRange(xr) returns Rexx signals StageError static
-    --  GetXRange NJPipe Method
-    -- 98/06/17 JHennick
+method getXrange(argstr = Rexx '') static returns rexx
+/* Inspects the first word of argstr.
+   Returns a string of characters in the collating order
+   inclusive of the first and last. (xorc can be the word BLANK.)
+   Returns '' if first word is not a valid XRange.
+   xrange:
+   |--+--xorc---------+--|
+      +--xorc-xorc----+
+      +--xorc.number--+
+ */
+ /*
+  20/ 9/13 Major overhaul Jeff Hennick
+  98/06/17 JHennick
+ */
+--trace results
+  startc = Rexx ''
+  endc = Rexx ''
+  ret = Rexx null
 
-  /** GetXRrange
+  xrc = argstr.word(1)
+  parse xrc fc +1 1 dfp '-' dsp 1 pfp '.' psp
+  parse xrc.upper dfpu '-' dspu 1 pfpu '.' pspu
 
-     returns Rexx string of characters in the xrange
-     signals Error:  BadXRange
+  if dfpu = 'BLANK' then dfp = ' '
+  if dspu = 'BLANK' then dsp = ' '
+  if pfpu = 'BLANK' then pfp = ' '
+  if pspu = 'BLANK' then psp = ' '
 
-
-     xrange:
-     +--+-xorc--------+-------------------------+
-     +-xorc-xorc---+
-     +-xorc.number-+
-
-   */
-
-    r = GetXorc(xr)
-    if r = null then do
-      parse xr x1 '-' x2
-
-      c = 1
-      if x2 \= '' then c = 0
-      else parse xr x1 '.' e
-
-      s = GetXorc(x1)
-      if s = null then signal StageError('BadXrange')
-
-      if c then do
-	e = s.c2d + e - 1
-	if e > 255 then e = e - 256
-	e = e.d2c
-      end
-      else do
-	e = GetXorc(x2)
-	if s = null then signal StageError('BadXrange')
-      end
-
-      if e > s then r = s.sequence(e)
-      else r = s.sequence('\xff') || '\0'.sequence(e)
+  if psp <> '' then do        --  start . number
+    if \psp.datatype('W') then do
+      ret = ''
     end
+    else psp = psp // 256
+  end
 
-    return r -- GetXRange
+  if fc = '-' then do  -- literal -
+    if dsp.left(1) = '-' then do  -- literal --
+      dfp = '-'
+      dsp = dsp.substr(2)
+    end
+    else if dsp.left(1) = '.' then do -- literal -.
+      pfp = '-'
+      psp = dsp.substr(2)
+      dsp = ''
+    end
+  end
+
+  select
+    when dsp || psp == '' then do -- single character, no - or .
+      if dfp.length = 1 then  -- single literal character
+        ret = dfp
+      else do               -- single hex number
+        ret = dfp.x2c
+      catch BadArgumentException
+        ret = ''
+      end
+    end
+    when dsp \== '' then do  -- we have a -
+      if dfp.length = 1 then  -- single literal character
+        startc = dfp
+      else                -- single hex number
+        startc = dfp.x2c
+      if dsp.length = 1 then  -- single literal character
+        endc = dsp
+      else                -- single hex number
+        endc = dsp.x2c
+    end
+    when ret \= null then
+      nop
+    when psp \== '' then do  -- start . number
+      if pfp.length = 1 then  -- single literal character
+        startc = pfp
+      else                -- single hex number
+        startc = pfp.x2c
+      endc = (startc.c2d + psp - 1).d2c
+    end
+    otherwise
+      ret = ''
+  end
+
+  if ret = null then
+    ret = xrange(startc, endc)
+
+  return ret
 
 
     -- convert an object to Rexx if possible
