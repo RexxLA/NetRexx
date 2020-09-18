@@ -591,11 +591,13 @@ retindex[2] = ret         -- what we were looking for
 return retindex  -- getKeyWord
 
 
-method sortInsertInto(list = Rexx, new = Rexx) static returns Rexx
+method sortInsertInto(list = Rexx, new = Rexx, strict = Rexx 0) static returns Rexx
 /* Insert a new item into a sorted list in a Rexx indexed variable.
    Returns the list with new inserted.
    Indexed by integers from 1.
    Index 0 is a count of the other values.
+   If strict = 1 or the first charater is 'S' or 's', then strict
+   compare, <<, is used, otherwise normal compare, <, is used.
 
    Example:
 
@@ -619,12 +621,18 @@ method sortInsertInto(list = Rexx, new = Rexx) static returns Rexx
 
 */
 /*
+ 20/ 9/18 Added strict option.  Jeff Hennick
  20/ 9/15 Jeff Hennick
 */
 
 -- find the ones smaller than new
-loop i = 1 to list[0] while list[i] < new
-end
+-- should strict compare be used?
+if strict = 1, strict.left(1) = 's' then
+  loop i = 1 to list[0] while list[i] << new
+  end
+else
+  loop i = 1 to list[0] while list[i] < new
+  end
 
 -- now i points to the first item bigger than the new one
 -- move up all the bigger ones
@@ -637,3 +645,16 @@ list[i] = new
 list[0] = list[0] + 1
 return list    -- sortInsertInto
 
+method getAnycase(argstr = Rexx '') returns rexx
+/* Checks first word of argstr for ANYCASE or alias, uses caseless compare.
+   Returns 1 = found ANYCASE
+           0 = not found
+          -1 = found RESPECTCASE
+
+  20/ 9/18 Jeff Hennick
+*/
+ w1 = argstr.word(1).upper
+ ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+ if ret = 0 then
+   ret = - (w1 = 'RESPECTCASE')
+ return ret
