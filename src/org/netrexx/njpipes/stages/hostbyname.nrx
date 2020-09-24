@@ -49,6 +49,10 @@ class hostbyname extends stage
    *  Change History:
    *
    *      2020-04-05   CK        - Initial kick
+   *      2020-09-16   CK, JeffH - Sort results of getAllByName prior to output.  Because DNS does not guarantee the same order
+   *                               of a multi-homed hostname our unit test results could produce a false negative response.  Forcing
+   *                               the order to be consistent should resolve this issue.
+   *      2020-09-18   CK        - Convert output to be of type Rexx instead of String
    *
    *
    *
@@ -59,9 +63,13 @@ class hostbyname extends stage
     a           = Rexx             /* arguments passed to filter                               */
     addr_all    = InetAddress[]    /* holds all IP addresses returned by Java getAllByName     */
     data        = Rexx             /* Rexxified output from stringified output of getAllByName */
-    addr_out    = ""               /* output string passed on to next filter                   */
+    addr_out    = Rexx ""          /* output string passed on to next filter                   */
     rec_num     = 0                /* current record number being processed                    */
     includename = 0                /* flag for optional inclusion of hostname on output        */
+    i           = Rexx             /* temp var used for insertion sort                         */
+    j           = Rexx             /* temp var used for insertion sort                         */
+    k           = Rexx             /* temp var used for insertion sort                         */
+    list        = Rexx             /* used for holding sorted order of ip addresses returned   */  
 
     /* -- Process any arguments -- */
 
@@ -79,46 +87,71 @@ class hostbyname extends stage
     do
       loop label siempre    forever
 	
-	host = Rexx peekto()
-	rec_num = rec_num + 1
+	  host = Rexx peekto()
+	  rec_num = rec_num + 1
 	
-	do
-	  if host = null   then do
-	
-	    output("# Input record "rec_num": Missing hostname to evaluate #")
-	    readto()
-	    iterate siempre
-	
-	  end
-	
-	  addr_all = InetAddress.getAllByName(host)
-	
-	catch java.net.UnknownHostException
 	  do
+	    if host = null   then do
 	
-	    output("# Input record "rec_num": Unable to determine IP address for "host" #")
-	    readto()			
-	    iterate siempre
+	      output("# Input record "rec_num": Missing hostname to evaluate #")
+	      readto()
+	      iterate siempre
 	
-	  end   /* catch Unknown Host */
+	    end
 	
-	end /* do if host null */
+	    addr_all = InetAddress.getAllByName(host)
 	
-	loop i = 0 to ( addr_all.length - 1 )
+	  catch java.net.UnknownHostException
+	    do
 	
-	  data = addr_all[i].toString()
-	  parse data ."/"ipaddr
-	  if includename then addr_out = addr_out" "host"/"ipaddr
-	  else addr_out = addr_out" "ipaddr
+	      output("# Input record "rec_num": Unable to determine IP address for "host" #")
+	      readto()			
+	      iterate siempre
 	
-	end  /* loop i = 0 ... */
+	    end   /* catch Unknown Host */
 	
-	addr_out = (Rexx addr_out).strip("B"," ")  /* strip the leading blank  */
-	output( addr_out )                  /* write to the output stream */
-	addr_out = ""                       /* prepare for next record */
-	readto()                            /* get next record         */
+	  end /* do if host null */
 	
-      end /* loop forever */
+      list = ''               /* initialize default value for unknown list elements */
+      list[0] = 0             /* initialize count of number of ipaddr encountered   */
+
+	  loop i = 0 to ( addr_all.length - 1 )
+	
+	    data = addr_all[i].toString()
+	    parse data ."/"ipaddr
+      
+        /* Build a sorted list of IP addresses using insertion sort */
+
+           /*  Find the entry which is smaller than ipaddr   */
+
+           loop j = 1 to list[0] while list[j] << ipaddr
+           end
+
+           /* At this point i points to the first IP address bigger than the ipaddr */
+           /* so move up all the bigger ones . . .                                  */
+
+           loop k = list[0]+1 to j by -1
+              list[k] = list[k-1]
+           end
+
+           /* . . . and put ipaddr into its right place (before the bigger ones)     */
+        
+           list[j] = ipaddr
+           list[0] = list[0] + 1
+	
+	  end  /* loop i = 0 ... */
+	
+      loop i = 1 to list[0]
+	    if includename then addr_out = addr_out" "host"/"list[i]
+	    else addr_out = addr_out" "list[i]
+      end /* loop i = 1 */
+
+	  addr_out = (Rexx addr_out).strip("B"," ")  /* strip the leading blank  */
+	  output( addr_out )                         /* write to the output stream */
+	  addr_out = ""                              /* prepare for next record */
+	  readto()                                   /* get next record         */
+	
+    end /* loop forever */
 
     catch StageError
       rc = rc()
