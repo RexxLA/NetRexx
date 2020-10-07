@@ -1,0 +1,124 @@
+/** changeparse
+
+Change the contents of records, using Rexx Parse. Calculations can be done.
+And a final record added.
+
+                 +-FROM-+                        +-TO-+
+>>--CHANGEParse--+------+-parse_template_Dstring-+----+-output_template_Dstring-->
+
+>--+-----------------------+-->
+   +-BY-by_NetRexx_Dstring-+
+
+>--+-----------------------------+--+----------------------------------+--><
+   +-FIRST-first_NetRexx_Dstring-+  +-FINALLY-finally_template_Dstring-+
+
+ Records are parsed via the parse_template_delimited_string.
+ Variables are named $n, where n is 1 to 9.
+ The by_NetRexx_delimited_string is interpreted.  This is 0 or more
+ semicolon separated NetRexx statements, probably using the $n variables,
+ which can have the value altered.
+ Other variables may be used, and are persistent while the stage is active,
+ so can be used as accumulators.
+ The values of the variables are put into the output_template_delimited_string
+ replacing $n.
+ For a literal $n that won't be changed, use $$n.
+ A first_NetRexx_delimited_string, if present, is interpreted before reading
+ any record from the primary input steam.  Any variables used in the
+ by_NetRexx_delimited string must be defined here.
+ A finally_template_delimited_string, if present, is written as a final
+ output record after the primary input stream is finished, using the $n's.
+ Any keyword phrases must, in any order, follow any non-keyworded FROM & TO phrases.
+
+ Examples:
+   changeparse  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./
+   changeparse from / 2 $1 +1/ to /The second letter is "$1". $$1 won't be changed./
+   changeparse from / . $2 . 50 $5 +5 / to /The product is $1/ by /$1 = $2 * $5/
+   changeparse from / . $2 . 50 $5 +5 / ,
+               to /The product is $1/ ,
+               by /$1 = $2 * $5;$3 = $3 + $1/ ,
+               first /$3 = 0/ ,
+               finally /$3 is the total/
+
+*/
+
+/*
+ 20/10/ 6  Jeff Hennick
+*/
+
+pipe (changeparse_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+
+-- changeparse dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   p1: changeparse  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./ |
+   c1: compare any ~2#1 changeparse dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "1". $1 won't be changed.;The second letter is "3". $1 won't be changed.;The second letter is "5". $1 won't be changed.;The second letter is "7". $1 won't be changed.; |
+   split ; |
+   c1: ?
+
+-- changeparse FROM dstring TO dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   p2: changeparse from / 2 $1 +1/ to /The second letter is "$1". $$1 won't be changed./|
+   c2: compare any ~2#2 changeparse FROM dstring TO dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "1". $1 won't be changed.;The second letter is "3". $1 won't be changed.;The second letter is "5". $1 won't be changed.;The second letter is "7". $1 won't be changed.; |
+   split ; |
+   c2: ?
+
+-- changeparse FROM dstring TO dstring BY dstring FIRST dstring FINALLY dstring?
+   literal one 2     3; two 3     4; |
+   split ; |
+   p3: changeparse from / . $2 . 10 $5 +5 / to /The product is $1 sum $9/ by /$1 = $2 * $5;$9 = $9 + $1/ first /$2 = 0; $5 = 0;$9 = 0/ finally /Total $9/ |
+   c3: compare any ~2#3 changeparse FROM dstring TO dstring BY dstring FIRST dstring FINALLY dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The product is 6 sum 6;The product is 12 sum 18;Total 18 |
+   split ; |
+   c3: ?
+
+-- changepars dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   p4: changepars  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./ |
+   c4: compare any ~2#4 changepars dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "1". $1 won't be changed.;The second letter is "3". $1 won't be changed.;The second letter is "5". $1 won't be changed.;The second letter is "7". $1 won't be changed.; |
+   split ; |
+   c4: ?
+
+-- changepar dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   p5: changepar  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./ |
+   c5: compare any ~2#5 changepar dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "1". $1 won't be changed.;The second letter is "3". $1 won't be changed.;The second letter is "5". $1 won't be changed.;The second letter is "7". $1 won't be changed.; |
+   split ; |
+   c5: ?
+
+-- changepa dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   p6: changepa  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./ |
+   c6: compare any ~2#6 changepa dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "1". $1 won't be changed.;The second letter is "3". $1 won't be changed.;The second letter is "5". $1 won't be changed.;The second letter is "7". $1 won't be changed.; |
+   split ; |
+   c6: ?
+
+-- changep dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   p7: changep  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./ |
+   c7: compare any ~2#7 changep dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "1". $1 won't be changed.;The second letter is "3". $1 won't be changed.;The second letter is "5". $1 won't be changed.;The second letter is "7". $1 won't be changed.; |
+   split ; |
+   c7: ?
