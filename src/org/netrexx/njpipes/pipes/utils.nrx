@@ -10,7 +10,11 @@
  */
 
 /*
- 20/ 9/13 added xrange(); overhauled getXrange().  Jeff Hennick
+ 20/10/12 getAnyCase: Added length parameter to accomodate various CMS stages. Jeff Hennick
+ 20/ 9/18 getanyCase. Jeff Hennick
+ 20/ 9/18 sortInsertInto: Added strict option. Jeff Hennick
+ 20/ 9/15 sortInsertInto. Jeff Hennick
+ 20/ 9/13 added xrange(); overhauled getXrange(). Jeff Hennick
  20/ 9/ 3 added getKeyWord. Jeff Hennick
  98/07/23 added the unprotected methods _findin and _findout.  ejt
 */
@@ -480,6 +484,7 @@ that matches.
 */
 
 /*
+  20/ 9/ 3 getKeyWord: New. Jeff Hennick
   20/ 9/ 3 New. Jeff Hennick
 */
 
@@ -645,16 +650,27 @@ list[i] = new
 list[0] = list[0] + 1
 return list    -- sortInsertInto
 
-method getAnycase(argstr = Rexx '') returns rexx
+method getAnyCase(argstr = Rexx '', length = 3) returns rexx
 /* Checks first word of argstr for ANYCASE or alias, uses caseless compare.
+   Optional length is how many characters of ANYCASE are needed to match.
    Returns 1 = found ANYCASE
            0 = not found
           -1 = found RESPECTCASE
 
+  20/10/12 Added length parameter to accomodate various CMS stages. Jeff Hennick
   20/ 9/18 Jeff Hennick
 */
  w1 = argstr.word(1).upper
- ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+ select case length
+   when 3 then
+     ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC ANY CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+   when 4 then
+     ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+   when 7 then
+     ret = Rexx ('ANYCASE CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+   otherwise
+     ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+ end
  if ret = 0 then
    ret = - (w1 = 'RESPECTCASE')
  return ret
