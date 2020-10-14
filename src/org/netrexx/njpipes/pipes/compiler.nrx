@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *  Copyright (C) 2011-2019 Rexx Language Association 
+ *  Copyright (C) 2011-2020 Rexx Language Association
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -11,6 +11,9 @@ options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
+/*
+   2020-10-14 add 64encode & 64decode; remove q, now a stage. Jeff Hennick
+   2020-01    add -- comment stage. rvj
 -- 2019-08-24 fix precompiled pipelines. rvj
 -- 2019-08-13 add support for netrexx workspace pipelines. rvj
 -- 2019-08-05 support NetRexxC compile-load-go for direct pipe execution. rvj
@@ -38,6 +41,7 @@ import org.netrexx.process.
 -- 1998-07-20 ensure stage names do not include stage arguments.  ejt
 -- 1998-07-18 set not[i+1] to pInfo[8] after stageExit so not can be controled.  EJT
 -- 1998-07-18 stageArg must be called before stageExit for each stage.  EJT
+*/
 
 class compiler extends Object public
 
@@ -45,7 +49,7 @@ class compiler extends Object public
   keep	= boolean
   tonrc	= rexx
   JC	= Hashtable
-  
+
   method compile(a = rexx, squelch=boolean 0, pipeClassName=Rexx(''),shouldExit=boolean 1) inheritable returns int
     precomp = boolean 0
     if \squelch then do
@@ -58,40 +62,40 @@ class compiler extends Object public
     pInfo  = rexx
     code   = rexx ''
     tonrc  = ''
-    
+
     stall  = int 2000
-    
+
     lvl	   = rexx 0
-    
+
     -- get pipe to process
-    
+
     if a.pos('(')<a.pos(')') then
       parse a . '(' opts ')' work
     else do
       say 'Error - name of pipe is missing'
       return 16
     end
-    
+
     parse opts pInfo opts
-    
+
     -- standard headers
     o	 = rexx ''
     o[1] = '/* 'pInfo NrVersion().getPipesVersion()' */'
     n	 = 2
-    
+
     -- set gen/nogen status for file
     i	   = opts.wordpos('-gen')
     if i>0 then do
       keep = 1
       opts = opts.delword(i)
     end
-    
+
     i	     = opts.wordpos('-nogen')
     if i>0 then do
       keep   = 0
       opts   = opts.delword(i)
     end
-    
+
     -- set runaway time for pipe
     i	     = opts.wordpos('runaway')
     if i>0 then do
@@ -102,7 +106,7 @@ class compiler extends Object public
     stall    = opts.word(i+1)
     opts     = opts.delword(i,2)
     end
-    
+
     i	     = opts.wordpos('stall')
     if i>0 then do
       if \opts.word(i+1).datatype('W') then do
@@ -112,7 +116,7 @@ class compiler extends Object public
     stall    = opts.word(i+1)
     opts     = opts.delword(i,2)
     end
-    
+
     -- process config statement
     i	     = opts.wordpos('config')
     if i>0 then do
@@ -120,7 +124,7 @@ class compiler extends Object public
       n	     = n+1
       opts   = opts.delword(i,2)
     end
-    
+
     -- set stage separator
     i	     = opts.wordpos('sep')
     if i>0 then do
@@ -128,7 +132,7 @@ class compiler extends Object public
       opts   = opts.delword(i,2)
     end
     pInfo[6] = ssep
-    
+
     -- set end of pipe indicator
     i	     = opts.wordpos('end')
     if i>0 then do
@@ -136,12 +140,12 @@ class compiler extends Object public
       opts   = opts.delword(i,2)
     end
     pInfo[7] = pend
-    
+
     -- set cont indicator
     i	     = opts.wordpos('cont')
     if i>0 then
       opts   = opts.delword(i,2)
-    
+
     -- set debug level
     i	     = opts.wordpos('debug')
     if i>0 then do
@@ -152,9 +156,9 @@ class compiler extends Object public
         return 16
       end
     end
-    
+
     -- extract stages
-    
+
     s	= rexx ''         -- the stages...
     l	= rexx  0         -- find a labeled stage
     c	= rexx  0         -- table used to build connections,
@@ -165,13 +169,13 @@ class compiler extends Object public
     i	= 0
     k	= 0
     m	= 0
-    
+
     if work.strip('T').right(1)<>pend then
       work = work' 'pend
-    
+
     loop p = 1 to 9999 until work=''       -- for each pipe segment
       parse work piece (pend) work
-      
+
       loop j = 1 to 999 until piece=''       -- for each stage/label
         parse piece stg (ssep) piece
 	
@@ -210,7 +214,9 @@ class compiler extends Object public
 	  when stg.word(1) ='>>'  then stg=stg.changestr('>>',' diska ')
 	  when stg.word(1) ='<'   then stg=stg.changestr('<',' diskr ')
 	  when stg.word(1) ='>'   then stg=stg.changestr('>',' diskw ')
-	  when stg.word(1)='q'    then stg=stg.changestr('q',' query ')
+	  when stg.word(1)='64decde' then stg=stg.changestr('64decode',' decode64 ')
+	  when stg.word(1)='64encde' then stg=stg.changestr('64encode',' encode64 ')
+--	  when stg.word(1)='q'    then stg=stg.changestr('q',' query ') -- now a stage
 
 	  otherwise
 	    nop
@@ -232,7 +238,7 @@ class compiler extends Object public
           label					    = ''
 	
         select
-	  
+	
           /* special processing to use pipes as stages */
           when stg.word(1).pos('=')>0 then do
             if piece<>'' then do
@@ -251,7 +257,7 @@ class compiler extends Object public
           r[m] = stg.strip('B')
           iterate j
           end
-	  
+	
           when stg.word(1).pos('.')>0 then do
             if label<>'' then do
               say 'Error - pipe used as stage 'stg' cannot be labeled'
@@ -268,23 +274,23 @@ class compiler extends Object public
             return 16
           end
           end
-	  
+	
           when stg.left(1)			    = '*' then do
             say 'Error - missing : in connector at 'stg
             return 16
           end
-	  
+	
           when label.left(1)			    = '*' then
             if stg<>'' then do
               say 'Error - cannot define connectors as stages labels 'stg
               return 16
             end
-	  
+	
           when stg				    = '' then
             nop
-	  
+	
           otherwise
-	    
+	
 	    -- find stages to call stage arg for
             se					    = rexx ''
             loop cs				    = 1 to 99
@@ -309,7 +315,7 @@ class compiler extends Object public
             finally
               se[cs]				    = stg
             end cs
-	    
+	
 	    -- setup common info for all stageExits
             pInfo[1]	= i+1
             pInfo[2]	= label
@@ -318,17 +324,17 @@ class compiler extends Object public
             pInfo[9]	= (j=1)
             pInfo[10]	= (piece='')
             code[i+1,0]	= 0
-	    
+	
 	    -- call stageExits for all stages in reverse order rebuilding the stg string
             stg		= ''
             loop cs	= cs to 1 by -1
-	      
+	
               stg	= se[cs]||stg               -- restore the stage command
-	      
+	
               pInfo[3]	= stg.word(1)         -- setup Info for it
               pInfo[4]	= stg.subword(2)
               pInfo[11]	= pInfo[3]
-	      
+	
               loop while pInfo[11]<>''
                 do
                   stgc	   = Class.forName(String 'org.netrexx.njpipes.stages.'pInfo[11])
@@ -366,9 +372,9 @@ class compiler extends Object public
                 say err.getMessage()
                 return err.rc()
               end
-	      
+	
             end cs
-	    
+	
         end  -- select
 	
 	-- handle labels here
@@ -428,12 +434,12 @@ class compiler extends Object public
     s[0] = i     -- number of stages
     l[0] = k     -- number of links
     r[0] = m     -- number of pipes
-    
+
     n	 = n+1
-    
+
     -- standard imports
     d	    = rexx ''
-    
+
     if d[0] = '' then
       do
         o[n+1] = 'import org.netrexx.njpipes.pipes.'
@@ -445,7 +451,7 @@ class compiler extends Object public
         o[n+1] = d[i]
         n      = n+1
       end
-    
+
     -- process package statement
     i	     = opts.wordpos('package')
     if i>0 then do
@@ -453,7 +459,7 @@ class compiler extends Object public
       n	     = n+1
       opts   = opts.delword(i,2)
     end
-    
+
     -- process imports
     i	     = opts.wordpos('import')
     loop while i>0
@@ -463,37 +469,37 @@ class compiler extends Object public
       i	     = opts.wordpos('import')
     end
     n	     = n+1
-    
+
     if opts<>'' then
       tonrc  = opts
-    
-    
+
+
     -- build headers
     o[n+1]   = 'options binary'
     o[n+3]   = 'class 'pInfo' extends org.netrexx.njpipes.pipes.pipe final'
     o[n+5]   = 'properties static private'
     o[n+7]   = '   pool = Stack()'
     n	     = n+8
-    
-    
+
+
     -- link variables
     if l[0]>0 then do
-      
+
       o[n+1] = 'properties public'
       n	     = n+1
-      
+
       loop i   = 1 to l[0]
         o[n+1] = l[i]' = link'
         n      = n+1
       end i
       n	       = n+1
-      
+
     end
-    
+
     -- pipe variable
     o[n+1] = 'properties private'
     n	   = n+2
-    
+
     if r[0]>0 then do
       loop i		  = 1 to r[0]
         parse r[i] name ' = ' type '(' .
@@ -502,7 +508,7 @@ class compiler extends Object public
       end i
     n			  = n+1
     end
-    
+
     -- stage variables
     loop i		  = 1 to s[0]
       if r[s[i]] then do
@@ -517,7 +523,7 @@ class compiler extends Object public
     loop i  = 1 to s[0]
       parse s[i] stg work .
 
-      
+
       if r[stg] then do
         parse stg stg '(' .
         stgc = Class.forName(String 'org.netrexx.njpipes.stages.'stg)
@@ -541,7 +547,7 @@ class compiler extends Object public
     end
     x			  = null
     -- generate the context method body
-    
+
     if context<>'' then do
       o[n+2] = 'method setContext('context') returns pipe'
       n	     = n+3
@@ -566,25 +572,25 @@ class compiler extends Object public
         catch IllegalArgumentException
         end
       end i
-      
+
       o[n+2] = 'return (pipe this)'
       n	     = n+3
-      
+
     end
-    
+
     -- constructor method header
-    
+
     o[n+1] = 'method 'pInfo'(a=object null)'
     o[n+2] = '   setup(a)'
     n	   = n+3
-    
+
     -- build reset method
-    
+
     o[n+1] = 'method reset() private'
     o[n+3] = '   stage_reset()'
     o[n+4] = '   pipe_reset()'
     n	   = n+5
-    
+
     if r[0]>0 then do
       loop i = 1 to r[0]
         parse r[i] name ' = ' defn '(' pargs ')'
@@ -594,7 +600,7 @@ class compiler extends Object public
         n = n+3
       end i
     end
-    
+
     loop i		  = 1 to s[0]
       if r[s[i]] then do
         o[n+1]		  = '   _s_'i'.stage_reset()'
@@ -602,10 +608,10 @@ class compiler extends Object public
       end
     end
     n			  = n+1
-    
-    
+
+
     -- build pool constructor
-    
+
     o[n+1]  = 'method get(a=object null) returns 'pInfo' static'
     o[n+3]  = '   do'
     o[n+4]  = '      do protect pool'
@@ -619,17 +625,17 @@ class compiler extends Object public
     o[n+12] = '   e.config()'
     o[n+13] = '   return e'
     n = n+14
-    
+
     -- start of pipe setup method
-    
+
     o[n+1] = 'method setup(a=object) private'
     o[n+3] = '   setArg(a)'
     o[n+4] = '   setName('''pInfo''')'
     o[n+5] = '   setRunaway('stall')'
     n  = n+6
-    
+
     -- build stages definitions
-    
+
     loop i = 1 to s[0]
       if r[s[i]] then do
         parse s[i] stg ' ' args
@@ -648,9 +654,9 @@ class compiler extends Object public
     end i
     o[n+1] = '   setup2()'
     n = n+2
-    
+
     -- add the stages
-    
+
     loop i = 1 to s[0]
       if r[s[i]] then do
         o[n+1] = '   addstage(_s_'i')'
@@ -658,14 +664,14 @@ class compiler extends Object public
       end
     end i
     n = n+1
-    
+
     -- add stages and build connections
-    
+
     o[n+1] = 'method config() private'
     n = n+2
-    
+
     -- build pipe definitions
-    
+
     if r[0]>0 then do
       -- check
       loop i = 1 to r[0]
@@ -675,11 +681,11 @@ class compiler extends Object public
         o[n+2] = '   'name'.setName('''type.strip('B')'_'i''')'
         n = n+3
       end i
-    
+
     end
-    
+
     -- build connections and links
-    
+
     f  = rexx 0                                    -- reference count in stages
     loop i = 1 to p
       if ls[i,1] then                              -- reset stream no
@@ -742,9 +748,9 @@ class compiler extends Object public
 	c[i,0] = j-1
     end i
     n = n+1
-    
+
     -- add links to table
-    
+
     if l[0]>0 then do
       loop i = 1 to l[0]
         o[n+1] = '   putLink("'l[i]'",'l[i]')'
@@ -752,14 +758,14 @@ class compiler extends Object public
       end i
     n = n+1
     end
-    
+
     -- add stages and build connections
-    
+
     o[n+1] = 'method setup2() private'
     n = n+2
-    
+
     -- set priorites to give the JVM hints
-    
+
     ok = rexx 1
     loop i = 1 to p
       j	= c[i,c[i,0]]
@@ -772,9 +778,9 @@ class compiler extends Object public
       end
       n	= n+1
     end i
-    
+
     -- set static arguments
-    
+
     loop i = 1 to s[0]
       parse s[i] stg ' ' args                      -- get filtered argument
       sargs = args.strip('L')                      -- strip leading blanks
@@ -800,14 +806,14 @@ class compiler extends Object public
         end
     end i
     n = n+1
-    
+
     -- run method header
-    
+
     o[n+2] = 'method run()'
     n = n+3
-    
+
     -- set dynamic arguments
-    
+
     loop i					    = 1 to s[0]
       parse s[i] stg ' ' args                      -- get filtered argument
       sargs					    = args.strip('L')                      -- strip leading blanks
@@ -842,9 +848,9 @@ class compiler extends Object public
         end
     end i
     n = n+1
-    
+
     -- start pipes used as stages
-    
+
     if r[0]>0 then do
       loop i	 = 1 to r[0]
         parse r[i] name '			    = ' .
@@ -853,24 +859,24 @@ class compiler extends Object public
       end i
     n = n+1
     end
-    
+
     -- insert debug call
     if lvl>0 then do
       o[n+2] = '   setDebug('lvl')'
       n	= n+2
     end
-    
+
     -- start this pipe
-    
+
     o[n+1] = '   go()'
     o[n+2] = '   do protect pool'
     o[n+3] = '      pool.push(this)'
     o[n+4] = '   end'
     n = n+5
-    
-    
+
+
     -- main method header
-    
+
     o[n+1] = 'method main(a=String[]) static'
     o[n+3] = '   p = 'pInfo'.get(buildArg(a))'
     o[n+4] = '   p.runpipe()'
@@ -881,10 +887,10 @@ class compiler extends Object public
     -- we want this if we precompiled a pipeline
     if precomp then o[n+8] = 'exit p.rc()'
     n = n+9
-    
-    
+
+
     -- add code from stageExit invocations
-    
+
     loop i = 1 to s[0]
       if code[i,0]<>0 then do
         loop j = 1 to code[i,0]
@@ -894,7 +900,7 @@ class compiler extends Object public
       n	= n+2
       end
     end
-    
+
     -- save the pipe's netrexx source or compile from memory
     o[0] = n
     -- when doing a live run of a pipe, do not save the netrexx source
@@ -914,10 +920,10 @@ class compiler extends Object public
 	nc=NetRexxC.clgMain(pipeClassName,nrxsrc)
 	if shouldExit then exit
       end
-    
+
     return rc
-    
-    
+
+
   method compiler(a = rexx,squelch=0,pipeClassName=Rexx(''),shouldExit=1 )
     keep   = boolean 0             -- assume nokeep
     nokeep = Rexx ''               -- generated .nrx files to delete
@@ -925,10 +931,10 @@ class compiler extends Object public
     parms  = Rexx ''               -- pass to netrexx
     jlist  = Rexx ''               -- pass to javac
     jx	   = Rexx ''               -- javac options
-    
+
     verb   = '-verbose0 -nologo'
     xref   = '-nocrossref'
-    
+
     parse a . '(' name compopts ')' text
     if name<>'' then                      -- from command line
       do
@@ -964,14 +970,14 @@ class compiler extends Object public
       end
     else                                     -- from a list of files
     loop while a<>''
-      
+
       parse a w ' ' a                    -- get stripped word
       parse w w '.' .
-      
+
       njp = java.io.file(String w'.njp')
       nrx = java.io.file(String w'.nrx')
       grp = java.io.file(String w'.grp')
-      
+
       select
         when w     = '-gen' then             -- options for pipes
           keep = 1
@@ -987,7 +993,7 @@ class compiler extends Object public
           do
             savekeep   = keep
             if verb    = w then say 'Processing 'w'.njp'
-	    
+	
             aa	       = rexx ''
             aa['fin']  = w'.njp'
             aa['xout'] = w
@@ -1035,13 +1041,13 @@ class compiler extends Object public
           say 'Error - 'w' is unrecognized.  Does the file exist?'
           if 2>rc then
             rc = 2
-	  
+	
       end
-      
+
     end
-    
+
     if work then do
-      
+
       if jlist<>'' then do
 	
 	jx[1] = '-g'                  -- extract javac parms
@@ -1086,7 +1092,7 @@ class compiler extends Object public
 
       p	 = verb' 'xref' 'parms
       r	 = org.netrexx.process.NetRexxC.main(p)
-      
+
       if r>rc then
 	rc = r
 
@@ -1102,7 +1108,7 @@ class compiler extends Object public
           if \jav.exists then
             say j' does not exist!!!'
 	end
-      
+
       args  = String[jlist.words()+3]
       args[0] = '-nowarn'
       args[1] = '-classpath'
@@ -1110,7 +1116,7 @@ class compiler extends Object public
       loop i  = 1 to jlist.words()
 	args[i+2] = jlist.word(i)
       end
-      
+
       javaloader = this.getClass().getClassLoader()
       if javaloader.getParent() = null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
 
@@ -1141,7 +1147,7 @@ class compiler extends Object public
       	  end
       	end
       end
-      
+
     end
 
       if \squelch then do
@@ -1151,7 +1157,7 @@ class compiler extends Object public
             say 'Warning - could not delete 'nokeep.word(i)
 	end i
       end
-    end 
+    end
 
   method compiler(t=HashTable) inheritable
     JC = t
@@ -1159,7 +1165,7 @@ class compiler extends Object public
   method main(a=String[]) static
     p = compiler(org.netrexx.njpipes.pipes.stage.buildArg(a))
     exit p.rc
-    
-    
-    
-    
+
+
+
+
