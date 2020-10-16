@@ -1,0 +1,100 @@
+/** encode64
+
+                     +-MIME--+
+   >>--+-64ENCODE-+--+-------+--><
+       +-ENCODE64-+  +-BASIC-+
+                     +-URL---+
+*/
+
+/* NOTE: CMS is only 64ENCODE.
+*/
+
+/*
+ 20/10/16 New. Jeff Hennick
+*/
+
+pipe (encode64_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+   literal Hello, Base64!;@!*;@!;@|
+   split ; |
+   encode64 |
+   c1: compare any ~2# 1 encode64 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal SGVsbG8sIEJhc2U2NCE=;QCEq;QCE=;QA== |
+   split ; |
+   c1: ?
+
+   literal Hello, Base64!;@!*;@!;@|
+   split ; |
+   64encode |
+   c2: compare any ~2# 2 64encode ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal SGVsbG8sIEJhc2U2NCE=;QCEq;QCE=;QA== |
+   split ; |
+   c2: ?
+
+   literal Hello, Base64!;@!*;@!;@|
+   split ; |
+   encode64 mime |
+   c3: compare any ~2# 3 encode64 mime ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal SGVsbG8sIEJhc2U2NCE=;QCEq;QCE=;QA== |
+   split ; |
+   c3: ?
+
+   literal Hello, Base64!;@!*;@!;@|
+   split ; |
+   encode64 basic |
+   c4: compare any ~2# 4 encode64 basic ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal SGVsbG8sIEJhc2U2NCE=;QCEq;QCE=;QA== |
+   split ; |
+   c4: ?
+
+   literal Hello, Base64!;@!*;@!;@|
+   split ; |
+   encode64 url |
+   c5: compare any ~2# 5 encode64 url ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal SGVsbG8sIEJhc2U2NCE=;QCEq;QCE=;QA== |
+   split ; |
+   c5: ?
+
+   literal Hello, Base64! this is some long text that will have to span ,
+   a couple of lines in MIME but not in BASIC. |
+   encode64 mime |
+   c6: compare any ~2# 6 encode64 mime (multi-line) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal SGVsbG8sIEJhc2U2NCEgdGhpcyBpcyBzb21lIGxvbmcgdGV4dCB0aGF0IHdpbGwgaGF2ZSB0byBz!~cGFuICBhIGNvdXBsZSBvZiBsaW5lcyBpbiBNSU1FIGJ1dCBub3QgaW4gQkFTSUMu |
+   change /~/ x0A |
+   change /!/ x0D |
+   c6: ?
+
+   literal Hello, Base64! this is some long text that will have to span ,
+   a couple of lines in MIME but not in BASIC. |
+   encode64 basic |
+   c7: compare any ~2# 7 encode64 basic (multi-line) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal SGVsbG8sIEJhc2U2NCEgdGhpcyBpcyBzb21lIGxvbmcgdGV4dCB0aGF0IHdpbGwgaGF2ZSB0byBzcGFuICBhIGNvdXBsZSBvZiBsaW5lcyBpbiBNSU1FIGJ1dCBub3QgaW4gQkFTSUMu |
+   c7: ?
+
+   literal TutorialsPoint~java8 |
+   change /~/ x3F |
+   encode64 basic |
+   c8: compare any ~2# 8 encode64 basic (w/ question) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal VHV0b3JpYWxzUG9pbnQ/amF2YTg= |
+   c8: ?
+
+   literal TutorialsPoint~java8 |
+   change /~/ x3F |
+   encode64 url |
+   c9: compare any ~2# 9 encode64 url (w/ question) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal VHV0b3JpYWxzUG9pbnQ_amF2YTg= |
+   c9: ?
