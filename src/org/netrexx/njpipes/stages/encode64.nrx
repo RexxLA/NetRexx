@@ -1,0 +1,68 @@
+-- encode64.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2020 Jeffrey Hennick
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 20/10/16 New. Jeff Hennick
+*/
+
+/** encode64
+                     +-MIME--+
+   >>--+-64ENCODE-+--+-------+--><
+       +-ENCODE64-+  +-BASIC-+
+                     +-URL---+
+*/
+
+/*
+   NOTE: CMS is only 64ENCODE, and does not have the options; it does MIME.
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+--package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.util.Base64
+
+class encode64 extends stage
+
+method run()
+
+  parse arg().upper opt restup
+
+  if restup <> '' then do
+    parse arg() opt rest
+    Emsg(11, 'Extra argument found:' rest'.')
+  end
+
+  select case opt
+    when '', 'MIME' then
+      enc = Base64.getMIMEEncoder()
+    when 'BASIC' then
+      enc = Base64.getEncoder()
+    when 'URL' then
+      enc = Base64.getUrlEncoder()
+    otherwise
+      Emsg(11, 'Unrecognised argument found:' arg()'.')
+  end
+
+  loop label Main forever
+
+    record_in = Rexx peekto()
+
+    ba = record_in.toByteArray()
+
+    opr = Rexx enc.encodeToString(ba)
+
+    output(opr)
+
+    readto()
+
+  catch stageError
+    rc = rc()
+  end Main
+
+  Exit(rc*(rc<>12))
