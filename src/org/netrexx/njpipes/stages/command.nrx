@@ -1,34 +1,45 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *  Copyright (C) 2011- RexxLA 
+ *  Copyright (C) 2011-2020 RexxLA
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  *
  */
-options nostrictcase nostrictargs nostrictsignal
-package org.netrexx.njpipes.stages
--- 2019/09/05 make command output a Rexx. rvj
--- 1999/11/15 wait for the reader threads to start.  ejt
--- 1998/09/20 fixed command.writer exit logic.  ejt
--- 1998/09/20 improved external wait logic.  ejt
--- 1998/08/23 startThread no longer uses a name.  ejt
--- 1998/08/14 used a different object for output serialization.  ejt
--- 1998/07/31 modified for ThreadPool.  ejt
--- 1998/07/29 Threads started correctly...  ejt
--- 1998/07/18 make severs kill the writer threads
+
+ /** command
+
+ >>--+-COMMAND-+--+----------+------------->>
+     +-CMD-----+  +--string--+
+
+  input stream 0 is for commands
+  input stream 1 is stdin
+  output stream 0 is stdout
+  output stream 1 is the return code
+  output stream 2 is stderr
+
+ */
+
+/*
+  2020/10/27 add isWindows and cmd processing; better error message; documentation.  Jeff Hennick
+  2019/09/05 make command output a Rexx. rvj
+  1999/11/15 wait for the reader threads to start.  ejt
+  1998/09/20 fixed command.writer exit logic.  ejt
+  1998/09/20 improved external wait logic.  ejt
+  1998/08/23 startThread no longer uses a name.  ejt
+  1998/08/14 used a different object for output serialization.  ejt
+  1998/07/31 modified for ThreadPool.  ejt
+  1998/07/29 Threads started correctly...  ejt
+  1998/07/18 make severs kill the writer threads
+*/
+
 
 import org.netrexx.njpipes.pipes.
-
--- input stream 0 is for commands
--- input stream 1 is stdin
--- output stream 0 is stdout
--- output stream 1 is the return code
--- output stream 2 is stderr
-
+package org.netrexx.njpipes.stages
 
 options binary
+options nostrictcase nostrictargs nostrictsignal
 
 class command extends stage public
 
@@ -40,31 +51,40 @@ act  = int 0
 
 -- run a command
 
-method runCommand(a=rexx) private signals StageError
-
+method runCommand(a=rexx) private
   do
+    os = Rexx System.getProperty("os.name")
+    isWindows = Rexx os.word(1) = "windows"
+
+    r = Runtime.getRuntime()
+
     do
-      r = Runtime.getRuntime()
-      p = r.exec(a)
-    catch IOException
-      Emsg(11,'Error - Cannot create Runtime process')
-      signal StageError
+      if isWindows then
+        do
+          p = r.exec(a)    -- "external file"
+        catch IOException
+          p = r.exec('cmd.exe /c' a)  -- "builtin command, e.g. dir"
+        end
+      else
+        p = r.exec('sh -c' a)
+    catch e = IOException
+      Emsg(11,'Error - Cannot execute Runtime: ' a ':' e)
     end
-    
+
     act = 0
-    
+
     out = command.writer()    -- logic to ensure thread really starts
     do protect lock
       act = act+1
     end
     out.go(this,BufferedReader(InputStreamReader(p.getInputStream())),0,lock)
-    
+
     err = command.writer()
     do protect lock
       act = act+1
     end
     err.go(this,BufferedReader(InputStreamReader(p.getErrorStream())),2,lock)
-    
+
     in = PrintWriter(p.getOutputStream())
     if in<>null then do
       selectinput(1)                         -- pass stdin to command
@@ -76,7 +96,7 @@ method runCommand(a=rexx) private signals StageError
     finally
       in.close()
     end
-    
+
     do
       p.waitfor()
       --    say p.exitValue()
@@ -90,18 +110,18 @@ method runCommand(a=rexx) private signals StageError
         wait()
       end
     end
-    
+
   catch InterruptedException
     rc = 16
   end
-  
+
   p.destroy()
-  
-  
+
+
   -- process the stage
-  
+
   method run() public
-    
+
     cmd = arg()
     do
       if cmd<>'' then
@@ -117,22 +137,22 @@ method runCommand(a=rexx) private signals StageError
     catch StageError
       rc = rc()
     end
-    
+
     exit(rc*(rc<>12))
-    
-    
+
+
     -- read lines from a command's output
-    
+
 class command.writer private implements RunnablePool uses ThreadPool
-  
+
   l  = object
   r  = command
   s  = int
   f  = BufferedReader
   ok = boolean 1
-  
+
   method run()
-    
+
     do
       if f<>null then
         loop forever
@@ -160,13 +180,13 @@ class command.writer private implements RunnablePool uses ThreadPool
         r.notifyAll()
       end
     end
-    
-  method go(rr=command,ff=BufferedReader,ss=int,ll=object) 
-    
+
+  method go(rr=command,ff=BufferedReader,ss=int,ll=object)
+
     r = rr
     f = ff
     s = ss
     l = ll
     startThread(this)
-    
-    
+
+
