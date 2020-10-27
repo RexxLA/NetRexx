@@ -1,0 +1,79 @@
+/** change
+
+  >>--CHANGE--+-------------+--+-----------------+---------------------------->
+              +-| anycase |-+  +-inputRange------+
+                               |    <-------+    |
+                               +-(----range-+--)-+
+
+        +-FROMTO-(1)+
+  >--+--+-----------+-| changeString |--------------------+-->
+     | +-FROM-(1)+                 +-TO-(1)+                 |
+     +-+---------+-delimitedString-+-------+-delimitedString-+
+
+  >---+----------------------+---><
+      | +-FOR-(1)+           |
+      +-+--------+-numorstar-+
+
+
+  changeString:
+  |--delimiter--string--delimiter--string--delimiter--|
+
+  anycase:
+     +-RESPECTCASE-(1)+
+  |--+----------------+--|
+     +-ANYcase--------+
+     +-CASEANY--------+
+     +-CASEIGNORE-----+
+     +-IGNORECASE-----+
+     +-CASSLESS-------+
+
+  (1) NetRexx Pipelines only
+
+*/
+
+/*
+  20/10/12 Jeff Hennick
+*/
+
+pipe (change_tests03)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- change range FROMTO /old/new/ (word range) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |        -- generate a null record |
+   change w-1 FROMTO /l/z/ |   -- real test |
+   c20: compare any ~2#20 change range FROMTO /old/new/ (word range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 zast;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 zast |
+   split ; |
+   change /_// |
+   c20: ?
+
+-- change any FROM /olD/ TO /new/ (keep case) ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |                  -- generate a null record |
+   change any FROM /linE/ TO /record/  |    -- real test |
+   c21: compare any ~2#21 change any FROM /olD/ TO /new/ (keep case)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal record 1.1;record 1.2 last;_;record 2.1;record 2;record 2.2;record 2.3 LAST;_;record 3.1 last |
+   split ; |
+   change /_// |
+   c21: ?
+
+-- change /old/ /new/ FOR number ?
+   literal line 1.1;line 1.2 last;_;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.1 last |
+   split ; |
+   change /_// |            -- generate a null record |
+   change /1/ /9/ FOR 1 |       -- real test |
+   c22: compare any ~2#22 change /old/ /new/ FOR number~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 9.1;line 9.2 last;_;line 2.9;line 2;Line 2.2;LIne 2.3 LAST;_;LINE 3.9 last |
+   split ; |
+   change /_// |
+   c22: ?
