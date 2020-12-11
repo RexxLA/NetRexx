@@ -131,8 +131,8 @@ class RxClasser
   searchinginterfaces =boolean 0                --      flag is 1 while searching interfaces - KK
 
 --MRE for JDK9 2020-11-27
--- modules containing imports
--- make sure imports from jrt:/modules have module specified in moduleimports
+-- modules containing packages to import
+-- make sure standard packages have their module specified in moduleimports
 -- jrt:/modules/java.base    -> java.lang, java.io, java.net, java.util
 -- jrt:/modules/java.desktop -> java.awt, java.applet, javax.swing
 -- (netrexx.lang is read from jar)
@@ -141,8 +141,10 @@ class RxClasser
 
    moduleimports=[String 'java.base', 'java.desktop']  -- these modules include the standard packages
 
-   isJrt               =boolean 0                --      flag is 1 when running above java 1.1.8 
-   modpacktable        =Hashtable                 -- hashtable mapping package to module
+   isJrt               =boolean 0                -- flag is 1 when running above java 1.1.8 
+   jrtprefix           ='jrt:'                   -- (we'll add fsep later) could be jrt:/modules/$module or jrt:/$module CSR JDK-8227076
+   modpacktable        =Hashtable                -- hashtable mapping package to module
+   
 
  /** Constructor
     Arg1 is the translator object
@@ -196,9 +198,24 @@ class RxClasser
   
 
    -- initialize and import standard classes
+
+   jrtprefix=jrtprefix||fsep
+   
    o=Object.class.getResource('Object.class')   -- check for 1.1.8+
-   if o.toString().startsWith('jrt:/') then isJrt = 1
---   if isJrt then say '## MRE Running JDK9+'
+   os=o.toString()
+   if os.startsWith(jrtprefix) then do 
+     isJrt = 1
+     c=jrtprefix||os.substring(jrtprefix.length())
+     p = Paths.get(URI.create(c))
+
+     if \Files.isReadable(p) then do
+       jrtprefix=jrtprefix||'modules'||fsep               -- CSR JDK-8227076, fix for GraalVM/OpenJDK 11
+     end                                                  -- we assume it's readable, or RxQuit
+     if rxt.superflag.diag then do
+       say '# Running JDK9+ with jrt prefix' jrtprefix
+     end  
+   end
+
    modpacktable=Hashtable(300)      -- stores owning module per package
 
    initclasspath()                  -- get and parse classpath, loading Zips
@@ -473,11 +490,11 @@ return
         end standards
       end 
     end cp
-    -- MRE
+    -- MRE Handle importing from java.lang.module
     if isJrt & ((package \== '' & package.length() \== 1) | import == '*') then do   -- don't look in mod when no package unless startup
       if \startup then do
         mod=String modpacktable.get(package)
-        if mod \== null then do
+        if mod \== null then do                                                       -- actually, we don't expect mod to be null
           found=found+modfind(mod, package, find, nickable, importer, subpacks)
         end  
       end
@@ -487,7 +504,7 @@ return
             say '# PACKMODFIND:' moduleimports[m]
             start=System.currentTimeMillis()
           end
-          packmodfind(moduleimports[m], '/')
+          packmodfind(moduleimports[m], fsep)
           if rxt.superflag.diag then say '# PACKMODFIND loop end after' System.currentTimeMillis()-start'ms'
     
           loop i=0 for standpacks.length     -- standards please
@@ -543,10 +560,9 @@ return
 
   e=Exception
   do
-    p = Paths.get(URI.create('jrt:/'dpath))
---    say '## MRE xxx jrt:/'dpath 
-    if \Files.isDirectory(p, [LinkOption null]) then return
+    p = Paths.get(URI.create(jrtprefix||dpath))
 
+    if \Files.isDirectory(p, [LinkOption null]) then return
 
   /* We have a directory to check */
 --    if rxt.superflag.diag then do
@@ -611,14 +627,10 @@ method modfind(module=String, package=String, find=String,-
                  nickable=boolean, importer=RxProgram,-
                  subpacks=boolean 0) returns int
 
-  if \isJrt then return 0
-
---  say '### MRE modfind ' module '=' package '=' find '=' subpacks
-
---  if package.length() == 1 then return 0     -- don't 
+  if \isJrt then return 0                    -- shouldn't occur
 
   fpack=package.replace('.',fsep)            -- package name with fileseps
-  dirpath=module                             -- 
+  dirpath=module                             
   
   if fpack.length()>0 then dirpath=dirpath||fsep||fpack
 
@@ -630,8 +642,8 @@ method modfind(module=String, package=String, find=String,-
 
   e=Exception
   do
-    p = Paths.get(URI.create('jrt:/'dirpath))
---    say '## MRE x jrt:/'dirpath 
+    p = Paths.get(URI.create(jrtprefix||dirpath))
+
     if Files.isDirectory(p, [LinkOption null]) then do
   /* We have a directory to check */
       if rxt.superflag.diag then do
@@ -692,11 +704,10 @@ method modfind(module=String, package=String, find=String,-
 
             fullfind=find.replace('.','$')'.class'   -- expected file name
 
-      jrt = 'jrt:/'||module||fsep||fpack||fsep||fullfind
---      say '## MRE jrt:/'||module||fsep||fpack||fsep||fullfind
+      jrt = jrtprefix||module||fsep||fpack||fsep||fullfind
 
       if rxt.superflag.diag then do
-        say '# MODFIND to check 'jrt
+        say '# MODFIND checking 'jrt
         start=System.currentTimeMillis()
       end 
 
@@ -1123,7 +1134,7 @@ return count
         signal RxQuit(rxt, tok, 'classes.zip.format.error', e.getMessage())
         signal RxQuit(rxt, tok, 'classes.zip.read.error', e.getMessage())
     end
---MRE 29-11-2020
+--MRE Read class from module
     else if item<=java.nio.file.Path then do
       -- Class is in Module
       pentry=Path item
