@@ -130,22 +130,7 @@ class RxClasser
 
   searchinginterfaces =boolean 0                --      flag is 1 while searching interfaces - KK
 
---MRE for JDK9 2020-11-27
--- modules containing packages to import
--- make sure standard packages have their module specified in moduleimports
--- jrt:/modules/java.base    -> java.lang, java.io, java.net, java.util
--- jrt:/modules/java.desktop -> java.awt, java.applet, javax.swing
--- (netrexx.lang is read from jar)
--- should this be declared in RxTranslator?
--- add more user modules from env RXJAVAMODULES ?
-
-  moduleimports=[String 'java.base', -
-		'java.desktop', -
-		'java.compiler', -
-		'java.sql', -
-		'java.xml', -
-		'javax.xml.crypto' -
-		]  -- these modules include the standard packages
+--MRE for Java 9 2020-12-13
 
    isJrt               =boolean 0                -- flag is 1 when running above java 1.1.8 
    jrtprefix           ='jrt:'                   -- (we'll add fsep later) could be jrt:/modules/$module or jrt:/$module CSR JDK-8227076
@@ -203,11 +188,13 @@ class RxClasser
      end
   
 
-   -- initialize and import standard classes
+   -- check for Java 9+
+   
+   modpacktable=Hashtable(300)      -- stores owning module per package
 
    jrtprefix=jrtprefix||fsep
    
-   o=Object.class.getResource('Object.class')   -- check for 1.1.8+
+   o=Object.class.getResource('Object.class')   -- check for 1.1.8+ 
    os=o.toString()
    if os.startsWith(jrtprefix) then do 
      isJrt = 1
@@ -220,10 +207,19 @@ class RxClasser
      if rxt.superflag.diag then do
        say '# Running JDK9+ with jrt prefix' jrtprefix
      end  
+     if rxt.superflag.diag then do
+        say '# PACKMODFIND: start loop start'
+        start=System.currentTimeMillis()
+     end
+     packmodfind('')                                      -- discover all packages in all modules
+     if rxt.superflag.diag then do
+       say '# PACKMODFIND loop end after' System.currentTimeMillis()-start'ms'
+       say '# PACKMODFIND 'modpacktable.size()' directories found on jrt:/'
+     end  
    end
 
-   modpacktable=Hashtable(300)      -- stores owning module per package
-
+ -- initialize and import standard classes
+  
    initclasspath()                  -- get and parse classpath, loading Zips
    
 
@@ -499,25 +495,28 @@ return
     -- MRE Handle importing from java.lang.module
     if isJrt & ((package \== '' & package.length() \== 1) | import == '*') then do   -- don't look in mod when no package unless startup
       if \startup then do
+        -- normalize package and find
+        if find \== null then do
+          pos = find.lastIndexOf('.')
+          if pos > -1 then do
+            package = package||'.'||find.substring(0, pos)
+            find = find.substring(pos+1)
+          end
+        end     
         mod=String modpacktable.get(package)
-        if mod \== null then do                                                       -- actually, we don't expect mod to be null
+        if mod \== null then do                                   
           found=found+modfind(mod, package, find, nickable, importer, subpacks)
         end  
       end
       else do
-        loop m=0 for moduleimports.length
-          if rxt.superflag.diag then do
-            say '# PACKMODFIND:' moduleimports[m]
-            start=System.currentTimeMillis()
-          end
-          packmodfind(moduleimports[m], fsep)
-          if rxt.superflag.diag then say '# PACKMODFIND loop end after' System.currentTimeMillis()-start'ms'
-    
-          loop i=0 for standpacks.length     -- standards please
-             found=found+modfind(moduleimports[m], standpacks[i], null, nickable,-
+        loop i=0 for standpacks.length     -- standards please
+          mod=String modpacktable.get(standpacks[i])
+ --         say mod
+          if mod \== null then do
+             found=found+modfind(mod, standpacks[i], null, nickable,-
                                 importer, standpacksscope[i])               --      mod per issue #61 -KK-20120916
-          end   
-        end  
+          end 
+        end 
       end 
     end  
 
@@ -547,72 +546,61 @@ return
     if rxt.superflag.diag then say '# Imported' found 'after' System.currentTimeMillis()-start'ms'
     return found
 
+ /** PACKMODFIND -- find packages in a directory
+     Arg1 is directory path into jrt: so far
 
-
-  /** PACKMODFIND -- find packages in a directory
-     Arg1 is directory path so far, or null string for current directory
-     (system-dependent)
-     Arg2 is lookaside dictionary to record packages for this segment
- 
-     Arg1 should not end in a separator.
-     Registers each package found (of form xxx.xxx.yyy)
-     Builds the modpacktable
-     Calls packdirsearch to explore directory tree
+     Walks the jrt: fs tree
+     Builds the modpacktable, so packages can be identified in the module tree
+     Calls itself recursively to explore the complete directory tree
    */
-  method packmodfind(module=String, dirpath=String) private
-
-
-  dpath=module||dirpath
+  method packmodfind(dirpath=String) private 
+  
+  dpath=dirpath
 
   e=Exception
   do
+ --   say 'jrt 'jrtprefix||dpath
     p = Paths.get(URI.create(jrtprefix||dpath))
 
     if \Files.isDirectory(p, [LinkOption null]) then return
 
-  /* We have a directory to check */
---    if rxt.superflag.diag then do
---      say '# PACKMODFIND:' module '=' dirpath
---      start=System.currentTimeMillis()
---    end
-    hasclasses=0
 /* Here for a directory search */
+    registered=0
 
     stream = Files.list(p)
     ap = Object[]
     ap = stream.toArray()
+
     loop i=0 to ap.length-1
       pp=Path ap[i]
       if Files.isDirectory(pp, [LinkOption null]) then do
-          s=pp.toString()
-          newdir=s.substring(8)                     -- strip /modules
-          newdir=newdir.substring(module.length() + 1)
-
-          packmodfind(module, newdir)
-        end
-        else do
-          name = pp.toString()          -- check for class
-          if name.endsWith('.class') then do
-            hasclasses=1
-        end
+        s=pp.toString()
+        subdir=s.substring(9)                        -- strip /modules/
+        packmodfind(subdir)
       end
-      if hasclasses==1 then do
-        regpack=p.toString()
-        regpack=regpack.substring(8+module.length()+1)                -- drop /modules/module/
-        if regpack.length() \==0 then do 
-          regpack=regpack.substring(1)                 -- drop starting /
-          regpack=regpack.replace(fsep, '.')
-          modpacktable.put(regpack, module)
-          addpackage(regpack, null)
-        end  
+      else do
+        if registered == 0 then do
+          regpack=p.toString()
+          mod = regpack.substring(9)                  -- strip /modules/
+          pos=mod.indexOf(fsep)                       -- first /
+          if pos > 0 then do                          
+            mod=mod.substring(0, pos)
+            regpack=regpack.substring(9+mod.length()+1)
+            regpack=regpack.replace(fsep, '.')
+
+            modpacktable.put(regpack, mod)
+            if rxt.superflag.diag then say '# PACKMODFIND registered 'regpack' in 'mod
+            registered = 1
+          end
+        end   
       end
     end
---    if rxt.superflag.diag then say '# PACKDIRFIND loop end after' System.currentTimeMillis()-start'ms'
     
-  catch e=IOException
-    signal RxQuit(rxt, null, 'cannot.read.class', module, e.getMessage())
+  catch e=Exception
+    signal RxQuit(rxt, null, 'cannot.read.class',dirpath, e.getMessage())
     end
   return
+
 
   /** MODFIND -- find classes in the jrt: file system
      Arg1 is module name
@@ -626,8 +614,6 @@ return
      Neither path should end in a file separator.
      Registers each class found (of form xxx.xxx.yyy)
    */
-
-
 
 method modfind(module=String, package=String, find=String,-
                  nickable=boolean, importer=RxProgram,-
@@ -688,7 +674,6 @@ method modfind(module=String, package=String, find=String,-
             package=package.substring(9)          -- drop /modules/
             package=package.substring(module.length()+1)
             package=package.replaceAll(fsep, ".")
---          say 'register 'package class
             info=classpool.register(package, class, item, null, nickable, importer, 0)
             if importer\=null then importclasses.addElement(info) -- discardable
             count=count+1
