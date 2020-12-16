@@ -104,8 +104,8 @@ class NetRexxC
   classpath	   = String                  --	allows classpath to be passed as an argument
   
   properties private static
-  programstrings = String[]		--	allows programs to be passed in memory strings
-  classlist=java.util.List							--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  programstrings = String[]                  --	allows programs to be passed in memory strings
+  classlist=java.util.List		     -- allow return of class files to caller in memory
   
   /** get here when called from java.exe */
   method main(arg=String[]) static
@@ -158,7 +158,7 @@ class NetRexxC
   method main(arg=Rexx, programarray=String[], logfile=PrintWriter null, classfiles=java.util.List null) constant returns int
     
     programstrings=programarray	--	save array of program strings 
-    classlist=classfiles		-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+    classlist=classfiles
     return main(arg,logfile)
     
   /** public call-from-Java entry,
@@ -172,7 +172,7 @@ class NetRexxC
     -- entry point.
     words=Vector(10)
     loop while arg\==''
-      parse arg argword arg               -- get next word
+      parse arg argword arg  -- get next word
       if argword.left(1)=='"' then do     -- handle quoted word(s)
 	arg=argword.substr(2) arg         -- reconstitute without leading '"'
 	if arg.pos('"')=='0' then
@@ -187,15 +187,16 @@ class NetRexxC
     return main2(array, logfile)
     
   /** public call-from-Java entry,
-     Arg1 is array of argument strings (each containing a flag or a file
-     specification, which may have embedded blanks),
-     Arg2 is a array of Strings containing programs in memory (no more than the number of file names passed in Arg1),
-     Arg3 is PrintWriter file (forces -savelog if specified),
-    -- this cannot be called just 'main' as it then clashes with the
-    -- primary entrypoint
+   * Arg1 is array of argument strings (each containing a flag or a file
+   * specification, which may have embedded blanks),
+   * Arg2 is a array of Strings containing programs in memory
+   * (no more than the number of file names passed in Arg1),
+   * Arg3 is PrintWriter file (forces -savelog if specified),
+   *-- this cannot be called just 'main' as it then clashes with the
+   *-- primary entrypoint
    */
   method main2(arg=String[], programarray=String[], logfile=PrintWriter null) constant returns int
-    programstrings=programarray	--	save array of program strings 
+    programstrings=programarray	-- save array of program strings 
     return main2(arg,logfile)
     
   /** public call-from-Java entry,
@@ -215,14 +216,13 @@ class NetRexxC
   /** actual processing is done here, with a private copy of flags, etc. */
   -- arguments as main2
   method process(arg=String[], logfile=PrintWriter null) private returns int
-    -- lastmemuse=long 0                            -- last memory usage
     rt=Runtime.getRuntime()                         -- runtime instance
     
     translator=RxTranslator()                       -- construct translator
     
     parseline(arg)    -- collect initial flags and file specification
     
-    translator.setkeeps(keep,keepasjava,classlist,javac,ecj)			-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+    translator.setkeeps(keep,keepasjava,classlist,javac,ecj)
     
     -- need to set java.class.path property and restore it later
     currentClassPath = System.getProperty("java.class.path")
@@ -234,9 +234,9 @@ class NetRexxC
     
     javacompiler=ToolProvider.getSystemJavaCompiler()
     javaloader=this.getClass().getClassLoader()
-    if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
+    if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()
     do
-      ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')			---			no ecj compiler found?
+      ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')
     catch e=Exception
       ecjclass=null
     end
@@ -249,7 +249,7 @@ class NetRexxC
     
     if (compilerChoice=="javac" & javacompiler=null) | (compilerChoice=="ecj" & ecjclass=null) then
       do
-	lookforit=findjavacompiler()			--		lets look very agressively for a java compiler and add to classpath if needed
+	lookforit=findjavacompiler()
 	if lookforit=="notfound" then 
 	  if javacompiler=null & ecjclass=null then 	say "no java compiler was found" ; else nop
 	  else do 		--		found a possible compiler
@@ -338,14 +338,12 @@ class NetRexxC
         c10=tenth(ctime)
         tot=t10.OpAdd(null, e10).OpAdd(null, c10)
         wid=tot.length()
-	--	compilerChoice = Rexx(System.getProperty("nrx.compiler","javac")).word(1)
-	--	if ecj then compilerChoice="ecj"
-	--	compilerChoice = Rexx(System.getProperty("nrx.compiler","javac"))
         say                           'Translate time:' t10.right(wid)'s'
         if exec & etime>0    then say 'Interpret time:' e10.right(wid)'s'
-        if compile & ctime>0 then say  Rexx(translator.compilerChoice).right(9) 'time:' c10.right(wid)'s'		--	2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
-															--        if compile & ctime>0 then say  compilerChoice.right(9) 'time:' c10.right(wid)'s'
-															if etime>0 | ctime>0 then say '    Total time:' tot.right(wid)'s'
+	-- 2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
+        if compile & ctime>0 then say  Rexx(translator.compilerChoice).right(9) 'time:' c10.right(wid)'s'
+	-- if compile & ctime>0 then say  compilerChoice.right(9) 'time:' c10.right(wid)'s'
+	if etime>0 | ctime>0 then say '    Total time:' tot.right(wid)'s'
       end -- time
     end havefiles
     
@@ -385,7 +383,7 @@ class NetRexxC
     if classpath\=null then
       currentProperties.put("java.class.path", currentClassPath)
     
-    programstrings=null		--		clear memory of any program strings in case we are called again
+    programstrings=null	-- clear memory of any program strings in case we are called again
     
     return translator.getexitvalue()
     
@@ -404,7 +402,7 @@ class NetRexxC
 	else do				-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
 	  if "\\* /*".pos(nextpath.right(2))>>0 | "\\** /**".pos(nextpath.right(3))>>0  then cpr2=cpr2||ps||wildcard(nextpath)	-- 2015.06.05 fix issue #127  -- KK --
 	  else say "Warning: classpath entry does not exist and has been dropped:" nextpath
-	end					-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
+	end -- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
       end
     end
     classpath=cpr2.strip("b",ps).toString()
@@ -473,7 +471,7 @@ class NetRexxC
 	  if can.substr(1,3)=="ecj" then return base||fs||can
 	end
     end
-    if bf.getParent()=null then return "nope"		--		better not to scan whole filesystem			
+    if bf.getParent()=null then return "nope" -- better not to scan whole filesystem			
     loop i=0 for conlist.length
       tf=File(base||fs||conlist[i])
       if tf.isDirectory() then 
@@ -549,8 +547,8 @@ class NetRexxC
 	  keep=1
 	end
 	when arglow=='nokeepasjava' then keepasjava=0
-	when arglow=='javac' then do;javac=1;ecj=0;end	--	can't prefer both javac and ecj compiler -- KK --
-	when arglow=='ecj' then do;javac=0;ecj=1;end	--	can't prefer both javac and ecj compiler -- KK --
+	when arglow=='javac' then do;javac=1;ecj=0;end	-- can't prefer both javac and ecj compiler -- KK --
+	when arglow=='ecj' then do;javac=0;ecj=1;end	-- can't prefer both javac and ecj compiler -- KK --
 	when arglow=='classpath' | arglow=='cp' then do
    	  a=a+1
    	  if a<arg.length then do
@@ -575,7 +573,7 @@ class NetRexxC
           loop i=0 for alen
             argarray[i]=arg[a+1+i]
           end
-          leave a                  -- no more flags or files
+          leave a -- no more flags or files
         end
         otherwise
           if \testflag.setFlag(arglow) then
@@ -595,7 +593,7 @@ return
     if usageone then do
       if this.getClass().getPackage()\=null then vv=this.getClass().getPackage().getImplementationVersion()
       else vv=''
-      if vv=null then vv='' 		/* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fix bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
+      if vv=null then vv='' /* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared -- KK ----Kermit */
       parse vv . . . vv
       nv = NrVersion()
       say nv.getLogo() nv.getFullVersion() vv

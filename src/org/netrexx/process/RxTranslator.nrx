@@ -70,8 +70,7 @@
 
 package org.netrexx.process
 options binary decimal strictcase strictargs
---import com.sun.tools.javac.Main   -- the javac compiler
-import javax.tools.		--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
+import javax.tools.
 
 class RxTranslator
 
@@ -91,22 +90,22 @@ class RxTranslator
  properties shared            -- visible within the package
 
   /* Globals (shared by all programs in the package) */
-  keep    =boolean 0              -- keep the java file	-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-  keepasjava = boolean 0      -- keep java output and do not rename it to .keep		-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-  classlist=java.util.List			  --	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-  javac = boolean 0            	-- prefer javac compiler if available
-  ecj = boolean 0            		-- prefer ecj compiler if available
-  compilerChoice = String		--	2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
+  keep		 = boolean 0
+  keepasjava	 = boolean 0
+  classlist	 = java.util.List
+  javac		 = boolean 0  	-- prefer javac compiler if available
+  ecj		 = boolean 0  	-- prefer ecj compiler if available
+  compilerChoice = String	-- 2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
   	
-  babels      =RxBabel[]      -- language-specific key classes
-  classer     =RxClasser      -- class handler
-  interpreter =RxInterpreter  -- evaluator
-  loader      =RxProxyLoader  -- our loader (null unless executing)
-  localpackages=Hashtable     -- lookup for local packages (ditto)
+  babels      =RxBabel[]        -- language-specific key classes
+  classer     =RxClasser        -- class handler
+  interpreter =RxInterpreter    -- evaluator
+  loader      =RxProxyLoader    -- our loader (null unless executing)
+  localpackages=Hashtable       -- lookup for local packages (ditto)
   -- the next three will one day move to RxProgram [language-specific]
-  converter   =RxConverter    -- spin doctor
-  tparser     =RxTermParser   -- general parser for terms
-  eparser     =RxExprParser   -- general parser for expressions
+  converter   =RxConverter      -- spin doctor
+  tparser     =RxTermParser     -- general parser for terms
+  eparser     =RxExprParser     -- general parser for expressions
   /* Passes:
     Pass 0 is prepass: only prolog and CLASS instructions
     Pass 1 is resolution of properties and methods
@@ -164,8 +163,10 @@ class RxTranslator
   parse Date().toString() . mon day time . year .   -- get date and decompose it
   starttime=day.toint()+0 mon year time             -- timestamp for output
 
-  /* Set up an initial temporary (dummy) program object and flags, to
-     provide a context for errors. */
+  /*
+   * Set up an initial temporary (dummy) program object and flags, to
+   * provide a context for errors.
+   */
   programlist=RxProgram[1]
   program=RxProgram(this, superflag, '')
   programlist[0]=program
@@ -175,23 +176,23 @@ class RxTranslator
   /*            [or shared + per-language]              */
   
 /* this interface did not allow import of a single package -
-			importing a package branch will now require a "." at the end like in the import statement - Kermit          
+   importing a package branch will now require a "." at the end like in the import statement - Kermit          
    this way the base swing package can now be added    --issue #61--Kermit */
-
-    imports=[String 'netrexx.lang.',-
+  
+  imports=[String 'netrexx.lang.',-
           'java.lang.', 'java.io.',   'java.net.',-
           'java.util.', 'java.awt.',  'java.applet.', 'javax.swing']
-
+  
   return
   
-	-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
 	
-	method setkeeps(k1,k2,cl=java.util.List,javac1,ecj1)
-		keep=k1
-		keepasjava=k2
-		classlist=cl
-		javac=javac1
-		ecj=ecj1
+  method setkeeps(k1,k2,cl=java.util.List,javac1,ecj1)
+    keep=k1
+    keepasjava=k2
+    classlist=cl
+    javac=javac1
+    ecj=ecj1
 	
  /** -------------------------------------------------------------- */
  /* SETLANGUAGES -- set language-specific constants                */
@@ -216,16 +217,18 @@ class RxTranslator
   packagename =Rexx           -- where to look for Babels
   ourname=Rexx RxTranslator.class.getName()
   packagename=ourname.left(ourname.length().toint()-13)
-  babels=RxBabel[prefixes.length]
-  loop b=0 for prefixes.length
-    /* Construct an object of the ZzBabel class [where Zz is the
-       prefix for a given language] */
-    bclass=Class.forName(packagename'.'prefixes[b]'Babel')
-    -- find the constructor that takes one of us as an argument
-    bcons=bclass.getConstructor([RxTranslator.class])
-    -- and invoke it, with us as parent
-    babels[b]=RxBabel bcons.newInstance([Object this])
-  catch Exception
+   babels=RxBabel[prefixes.length]
+
+   /* Construct an object of the ZzBabel class [where Zz is the
+    * prefix for a given language]
+    */
+   loop b=0 for prefixes.length
+     bclass=Class.forName(packagename'.'prefixes[b]'Babel')
+     -- find the constructor that takes one of us as an argument
+     bcons=bclass.getConstructor([RxTranslator.class])
+     -- and invoke it, with us as parent
+     babels[b]=RxBabel bcons.newInstance([Object this])
+   catch Exception
     return 0
   end
   return 1
@@ -254,21 +257,22 @@ class RxTranslator
  method translate(flags=Rexx[], files=Rexx[],-
                   con=PrintStream System.out, log=PrintWriter null,-
                   noexec=boolean 0) returns boolean
-  savecon=con                      -- save
-  savelog=log                      -- ..
-  wontexec=noexec                  -- ..
-  ok=checkflags(flags)             -- sets superflag from flags, shows logo
-  if files.length=0 then do
-    -- next message is really an internal error now
-    RxQuit(this, null, 'no.file.specifications')
-    ok=0
-    end
+   savecon=con                      -- save
+   savelog=log                      -- ..
+   wontexec=noexec                  -- ..
+   ok=checkflags(flags)             -- sets superflag from flags, shows logo
+   if files.length=0 then
+     do
+       -- next message is really an internal error now
+       RxQuit(this, null, 'no.file.specifications')
+       ok=0
+     end
    else sources=RxSource[files.length]
-
-  --  make a source for each file
-  if ok then loop f=0 for files.length
-    reader=RxFileReader(this)
-    reader.openfile(files[f])      -- locate and open the file
+   
+--  make a source for each file
+if ok then loop f=0 for files.length
+reader=RxFileReader(this)
+reader.openfile(files[f])      -- locate and open the file
     sources[f]=reader              -- save to pass on
     -- Found the file, check it's not a duplicate file.
     name=reader.getName()
@@ -295,25 +299,25 @@ class RxTranslator
  method translate(flags=Rexx[], sources=RxSource[],-
                   con=PrintStream System.out, log=PrintWriter null,-
                   noexec=boolean 0) returns boolean
-  savecon=con                      -- save
-  savelog=log                      -- ..
-  wontexec=noexec                  -- ..
-  ok=checkflags(flags)             -- sets superflag from flags, shows logo
-  if sources.length=0 then do
-    -- next message is really an internal error now
-    RxQuit(this, null, 'no.sources')
-    ok=0
-    end
-  if \ok then do
-    showpendings()
-    programlist=RxProgram[0]       -- inhibit any compiles
-    return 0
-    end
-  return dotranslate(sources)
-
- /* ----- Common routine to actually translate ----- */
- method dotranslate(sources=RxSource[]) returns boolean private
-
+   savecon=con                      -- save
+   savelog=log                      -- ..
+   wontexec=noexec                  -- ..
+   ok=checkflags(flags)             -- sets superflag from flags, shows logo
+   if sources.length=0 then do
+     -- next message is really an internal error now
+     RxQuit(this, null, 'no.sources')
+     ok=0
+   end
+   if \ok then do
+     showpendings()
+     programlist=RxProgram[0]       -- inhibit any compiles
+     return 0
+   end
+   return dotranslate(sources)
+   
+   /* ----- Common routine to actually translate ----- */
+  method dotranslate(sources=RxSource[]) returns boolean private
+    
   programs=sources.length     -- number of programs we'll need
 
   /* Ready for class process initialization (or reset) */
@@ -991,25 +995,28 @@ class RxTranslator
     /* Find the name stub and extension for the program */
     infile=Rexx prog.source.getName()
     lastdot=infile.lastpos('.').toint()
-    if lastdot\=0 then do -- determine the language for the program
-      inext=infile.substr(lastdot+1)
-      loop b=0 for babels.length
-	babel=babels[b]
-	ext=babel.getExtension()
-	if ext.OpEq(null, inext) then /* extension match */ do
-          program.babel=babel
-          leave b
+    if lastdot\=0 then
+      do -- determine the language for the program
+	inext=infile.substr(lastdot+1)
+	loop b=0 for babels.length
+	  babel=babels[b]
+	  ext=babel.getExtension()
+	  if ext.OpEq(null, inext) then /* extension match */
+	    do
+              program.babel=babel
+              leave b
+	    end
+	end b
       end
-    end b
-end
--- If no extension, or no match found, assume the primary language
-if program.babel=null then program.babel=babels[0]
--- say '#' infile '--is--' program.babel.getName
-return
-
-/* checkflags -- check flags given, and display banner accordingly
-   Arg1 is the array of flag words
- */
+    -- If no extension, or no match found, assume the primary language
+    if program.babel=null then program.babel=babels[0]
+    -- say '#' infile '--is--' program.babel.getName
+    return
+    
+  /*
+   *  checkflags -- check flags given, and display banner accordingly
+   * Arg1 is the array of flag words
+   */
   method checkflags(flags=Rexx[]) returns boolean private
     -- Process any flags, building the prototype flag object
     ok=boolean 1
