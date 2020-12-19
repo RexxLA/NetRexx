@@ -1,0 +1,109 @@
+/** htmlrows
+
+                              +-SEParator ","-----+
+>>--HTMLROWs--+-------------+-+-------------------+-->
+              +-ROW-QString-+ +-SEParator-QString-+
+
+  >--+--------------+-+--------------+--><
+     +-HEAD-QString-+ +-DATA-QString-+
+*/
+/*
+ 20/12/11  Jeff Hennick
+*/
+
+pipe (htmlrows_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- htmlrows ?
+   literal abc,def,ghi |
+   split ; |
+   htmlrows |
+   c1: compare any ~2# 1 htmlrows ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr><td>abc</td><td>def</td><td>ghi</td></tr> |
+   split ; |
+   c1: ?
+
+-- htmlrow ?
+   literal abc,def,ghi;jkl,mno,pqr |
+   split ; |
+   htmlrow |
+   c2: compare any ~2# 2 htmlrow ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr><td>abc</td><td>def</td><td>ghi</td></tr>;<tr><td>jkl</td><td>mno</td><td>pqr</td></tr> |
+   split ; |
+   c2: ?
+
+-- htmlrows rows QString?
+   literal abc,def,ghi;jkl,mno,pqr |
+   split ; |
+   htmlrows row xyz |
+   c3: compare any ~2# 3 htmlrows row QString ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr xyz><td>abc</td><td>def</td><td>ghi</td></tr>;<tr xyz><td>jkl</td><td>mno</td><td>pqr</td></tr> |
+   split ; |
+   c3: ?
+
+-- htmlrows head QString?
+   literal abc,def,ghi;jkl,mno,pqr |
+   split ; |
+   htmlrows head xyz |
+   c4: compare any ~2# 4 htmlrows head QString ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr><th xyz>abc</th><th xyz>def</th><th xyz>ghi</th></tr>;<tr><td>jkl</td><td>mno</td><td>pqr</td></tr> |
+   split ; |
+   c4: ?
+
+-- htmlrows data QString ?
+   literal abc,def,ghi;jkl,mno,pqr |
+   split ; |
+   htmlrows data xyz |
+   c5: compare any ~2# 5 htmlrows data QString ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr><td xyz>abc</td><td xyz>def</td><td xyz>ghi</td></tr>;<tr><td xyz>jkl</td><td xyz>mno</td><td xyz>pqr</td></tr> |
+   split ; |
+   c5: ?
+
+-- htmlrows data QString (long) ?
+   literal abc,def,ghi;jkl,mno,pqr |
+   split ; |
+   htmlrows data 'xyz abc' |
+   c6: compare any ~2# 6 htmlrows data QString (long)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr><td xyz abc>abc</td><td xyz abc>def</td><td xyz abc>ghi</td></tr>;<tr><td xyz abc>jkl</td><td xyz abc>mno</td><td xyz abc>pqr</td></tr> |
+   split ; |
+   c6: ?
+
+-- htmlrows sep QString ?
+   literal abcxyzdefxyzghi |
+   split ; |
+   htmlrows sep xyz |
+   c7: compare any ~2# 7 htmlrows sep QString ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr><td>abc</td><td>def</td><td>ghi</td></tr> |
+   split ; |
+   c7: ?
+
+-- htmlrows sep QString (long) ?
+   literal abcx y xdefx y xghi |
+   split ; |
+   htmlrows sep 'x y x' |
+   c8: compare any ~2# 8 htmlrows sep QString (long) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr><td>abc</td><td>def</td><td>ghi</td></tr> |
+   split ; |
+   c8: ?
+
+-- htmlrows (everything) ?
+   literal abc*def*ghi;jkl*mno*pqr |
+   split ; |
+   htmlrows row $$ head '&&' data 'xyz abc' sep * |
+   c9: compare any ~2# 9 htmlrows (everything)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal <tr $$><th &&>abc</th><th &&>def</th><th &&>ghi</th></tr>;<tr $$><td xyz abc>jkl</td><td xyz abc>mno</td><td xyz abc>pqr</td></tr> |
+   split ; |
+   c9: ?

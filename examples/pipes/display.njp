@@ -1,0 +1,261 @@
+-- display.njp  Display output in an HTML browser tab
+
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+  20/12/10 New. Jeff Hennickk
+*/
+
+/** display
+
+>>--DISPLAY--+--------------------------------------+-->
+             | +-AS-+  +-TEXT--+                    |
+             +-+----+--+-------+--+-----------------+
+                       +-PRE---+  +-OPTIONs-QString-+
+                       +-HTML--+
+                       +-NONE--+
+                       +-TABLE-+
+                       +-NOTAG-+
+
+>--+------------------------+-->
+   +-TITLE--QString-+
+
+>--+----------------+-->
+   +-STYLE--QString-+
+
+>--+----------------------------+-->
+   |          +-.-+ +-html----+ |
+   +-FILETYPE-+---+-+-QString-+-+
+
+>--+------------------------+--><
+   |          +-PipeDisp--+ |
+   +-FILENAME-+-----------+-+
+              +-QString---+
+
+DISPLAY works similar to and as a replacement for CONSOLE for output.
+But instead of going to the terminal window, it goes to a HTML file
+browser tab.  This allows for HTML+CSS tags to control fonts, colors,
+and layout.
+
+To work, these are required outside Pipelines:
+- A working HTML browser program
+- The operating system to associate the filetype "html" with the browser,
+  so the Pipelines stage "COMMAND PipeDisp.html" does call the browser and
+  display the file.
+- The system have a Temp directory,known to Java.
+
+The DISPLAY stage overwrites the named file, by default PipeDisp.html in
+the system Temp directory, then calls the COMMAND stage to display it.
+The file is not erased automatically by this stage.
+
+Each DISPLAY stage invocation opens a new browser tab, which remains open.
+
+The AS option causes the data to be surrounded by html tags.
+- The default TEXT or PRE puts on <pre> and </pre>.  Most browsers use:
+ = Fixed width font
+ = Display all the white spaces: line feeds and multiple spaces
+- HTML uses <html> and </html>.  Most browsers use:
+ = Variable width font
+ = Consolidate strings of white space into a singe space
+ = All the HTML tags
+- TABLE uses <table> and </table>
+ = Expects the data records to begin with <tr><td> (or <tr><th>)
+- NOTAG uses <pre> & </pre>, but first converts all & characters to the
+  entity &amp; and < characters to &lt; so HTML tags are not processed.
+- NONE uses no extra tags.  Most browsers use:
+ = HTML display
+
+OPTIONs QString is included in the opening tag for the AS option.
+
+TITLE QString adds <title>delimitedString</title> to the beginning of the output.
+This should show as the title in the browser's tab.
+Note: This officially should go into a HEAD section; here it won't be there.
+Most modern browsers will honor it anyplace in the file.  If it is not honored
+as a tag, QString will be the top line of the display.
+
+STYLE QString adds <link rel="stylesheet" href="QString"> to the beginning of the output.
+This should include and use the named stylesheet. The name may have relative path names,
+or be an absolute file name.  If there are spaces, enclose it i quotes.
+Note: This officially should go into a HEAD section; here it won't be there.
+Most modern browsers will honor it anyplace in the file.  If it is not honored
+as a tag, it will not show -- except in the NOTAG option.
+The file itself is copied from its stated location into the system Temp directory,
+overwriting any existing file. This file is not erased automatically by this stage.
+QString:  It is optional to enclose the name in quotes, but quotes are required if
+the name includes spaces.
+
+FILETYPE may be used to change the default "html".  This permits use of other
+types that MAY be preprocessed if the system, external to Pipelines, is set up
+to recognize it, for example, "JSP" or "PHP". A "dot" is optional; only one
+will be used. QString:  It is optional to enclose the type in quotes.
+
+FILENAME may be used to write and display another file.  It may include
+a path designation, either absolute or relative.  A relative path is
+based on the working directory.  If no path is specified in the name,
+the system Temp directory, as determined by Java, is used.  QString:  It
+is optional to enclose the name in quotes, but quotes are required if
+the name includes spaces.
+
+Records from the primary input stream are also put out on the primary
+output stream unchanged, if it is connected.
+
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+--package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class display extends stage final
+
+method run() public
+--trace results
+
+args = arg()
+
+asa = getKeyWord(args, 'AS', 0, 'S')
+if asa[5] = 1 then do
+  asname = asa[2]
+  tag = asname
+  if "TEXT PRE HTML TABLE NOTAG NONE".wordpos(tag.upper) = 0 then
+    Emsg(11, 'Unexpected word "'tag'" after "AS":' args)
+  args = asa[1]
+end
+else do
+  tag = Rexx null
+  notag = 0
+  asname = args.word(1).upper
+  select case asname
+    when '', 'TEXT', 'PRE' then
+      tag = 'pre'
+    when 'HTML' then
+      tag = 'html'
+    when 'TABLE' then
+      tag = 'table'
+    when 'NOTAG' then
+      tag = 'pre'
+    when 'NONE' then
+      tag = ''
+    otherwise
+      tag = 'pre'
+      args = arg()
+      notag = 1
+  end
+  if tag <> null & \notag then
+   parse args . args
+end
+
+tagopt = Rexx ''
+tagopta = getKeyWord(args, 'OPTIONS', 6, 'Q')
+if tagopta[2] \= '' then do
+  tagopt = tagopta[2]
+  args = tagopta[1]
+end
+tag = tag tagopt
+
+title = Rexx ''
+titlea = getKeyWord(args, 'TITLE', 0, 'Q')
+if titlea[2] \= '' then do
+  title = '<title>'titlea[2]'</title>'
+  args = titlea[1]
+end
+
+ext = Rexx null
+exta = getKeyWord(args, 'FILETYPE', 0, 'Q')
+if exta[3] \= '' then do
+  ext = exta[2]
+  if ext.left(1) \= '.' then
+    ext = '.' || ext
+  args = exta[1]
+end
+else
+  ext = '.html'
+
+namea = getKeyWord(args, 'FILENAME', 0, 'Q')
+if namea[3] \= '' then do
+  fname = namea[2]
+  if ext \= null then
+    fname = fname || ext
+  args = namea[1]
+end
+else do
+  if ext = null then
+    ext = '.html'
+  fname = 'PipeDisp' || ext
+end
+
+tmpDir = Rexx System.getProperty("java.io.tmpdir")
+if fname.pos(File.separator) = 0 then do
+  fname = tmpDir || fname
+end
+else do
+  tmpDir = 'x'
+end
+
+style = Rexx ''
+stylea = getKeyWord(args, 'STYLE', 0, 'Q')
+if stylea[2] \= '' then do
+  fin = stylea[2]
+  if fin.pos('.\\') > 0 | fin.left(1) = '\\' | fin.substr(2,1) = ':' then
+    fin = fin.changestr("\\","/")         -- fix any Windows spec
+  lp = fin.lastpos('/')
+  if lp = 0 then
+    fn = fin
+  else
+    parse fin . =(lp) +1 fn
+
+  cssfile = tmpDir || fn
+
+  addpipe (temp_css_copy) diskr {fin} | diskw {cssfile}
+
+  style = '<link rel="stylesheet" href="'fn'">'
+
+  args = stylea[1]
+end
+
+if args \= '' then do
+say "Emsg(11, 'unrecoginzed option:'" args")"
+  Emsg(11, 'unrecoginzed option:' args)
+end
+
+if asname \= 'NOTAG' then do
+  callpipe (display_stage debug 0 )
+    *in0: |
+    fo: fanout |
+    tag {tag} |
+    literal {title}|
+    literal {style}|
+    literal <meta http-equiv="pragma" content="no-cache" /> |
+    diskw {fname} ?
+    cmd {fname} |
+    fo: |
+    *out0:
+
+catch StageError
+   rc = rc()
+end  -- \NOTAG
+else do -- NOTAG
+  callpipe (display_stage_notag debug 0 )
+    *in0: |
+    fo: fanout |
+    literal {title} |
+    literal {style} |
+    change fromto /&/&amp;/ |
+    change fromto /</&lt;/ |
+    literal <meta http-equiv="pragma" content="no-cache" /> |
+    tag {tag} |
+    diskw {fname} ?
+    cmd {fname} |
+    fo: |
+    *out0:
+
+catch StageError
+   rc = rc()
+end  -- NOTAG
+
+exit(rc*(rc<>12))
