@@ -73,6 +73,7 @@
 /* can't subclass ConcurrentHashMap in Java 8                         */
 /*  2015.06.03 -- KK -- fix for issue #125 = chg from                 */
 /* jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan */
+/* 2020.12.19 -- MRE -- added support for JPMS on Java 9+             */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -497,11 +498,7 @@ return
       if \startup then do
         -- normalize package and find
         if find \== null then do
-          pos = find.lastIndexOf('.')
-          if pos > -1 then do
-            package = package||'.'||find.substring(0, pos)
-            find = find.substring(pos+1)
-          end
+          find = find.replace('.', '$')                                             -- find minor nested classes
         end     
         mod=String modpacktable.get(package)
         if mod \== null then do                                   
@@ -551,6 +548,7 @@ return
 
      Walks the jrt: fs tree
      Builds the modpacktable, so packages can be identified in the module tree
+     Adds packages found in all modules
      Calls itself recursively to explore the complete directory tree
    */
   method packmodfind(dirpath=String) private 
@@ -644,7 +642,6 @@ method modfind(module=String, package=String, find=String,-
         say '# MODFIND loop start ' dirpath """"module"""" ''''fpack'''' ''''sfind''''
         start=System.currentTimeMillis()
       end
-      hasclasses=0
 /* Here for a directory search */
 
       count=0
@@ -666,8 +663,7 @@ method modfind(module=String, package=String, find=String,-
         else do
           name = pp.toString()
           if name.endsWith('.class') then do
-            hasclasses=1
-          /* here for a .class file [don't worry about erase .. load will detect] */
+            /* here for a .class file [don't worry about erase .. load will detect] */
             item=pp
             class=name.substring(0, name.length()-6)   -- drop .class
             class=class.substring(name.lastIndexOf(fsep)+1)
@@ -684,17 +680,11 @@ method modfind(module=String, package=String, find=String,-
 --        end
         end
       end
-      if hasclasses==1 then do
-        regpack=p.toString()
-        regpack=regpack.substring(9+module.length()+1)                -- drop /modules/module/
-        regpack=regpack.replace(fsep, '.')
-        addpackage(regpack, null)
-      end
     end
     else if find \==null then do
 /* Here for a class search */
 
-            fullfind=find.replace('.','$')'.class'   -- expected file name
+      fullfind=find.replace('.','$')'.class'   -- expected file name
 
       jrt = jrtprefix||module||fsep||fpack||fsep||fullfind
 
@@ -704,23 +694,13 @@ method modfind(module=String, package=String, find=String,-
       end 
 
       p = Paths.get(URI.create(jrt))
-      if Files.isReadable(p) then do           -- .. not found
-                                             -- we should determine exact name spelling here (like RxStreamer),
-                                             -- but maybe 1.1 fixes File().  tbd
-                                             -- This is an explicit class import
+      if Files.isReadable(p) then do           
+                                                 -- This is an explicit class import
         item= p
       
         info=classpool.register(package, find, item, null, nickable, importer, 1)
         if importer\=null then importclasses.addElement(info) -- discardable
-
-        regpack=p.toString()
-        regpack=regpack.substring(9+module.length()+1)                -- drop /modules/module/
-        regpack=regpack.substring(0,regpack.length()-6)
-        regpack=regpack.substring(0,regpack.lastIndexOf(fsep))               -- drop .class
-        regpack=regpack.replace(fsep, '.')
-        
-        addpackage(regpack, null)
-        
+       
         found=1
       end
       else found=0
@@ -729,9 +709,8 @@ method modfind(module=String, package=String, find=String,-
       return found
     end
     
---  if rxt.superflag.diag then
---      say '# MODFIND loop end with ['count'] after' System.currentTimeMillis()-start'ms'
-
+  catch e=IllegalArgumentException          ----catch exception when looking for for arrays of classes,  String[][].class etc
+    found=0
   catch e=IOException
     signal RxQuit(rxt, null, 'cannot.read.class', module, e.getMessage())
   end
