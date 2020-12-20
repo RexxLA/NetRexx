@@ -1,0 +1,79 @@
+-- tags.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2020, Jeffrey Hennick
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 20/11/17 New. [author]
+*/
+
+/** tags
+
+>>--TAGS----delimitedString--+----------------------+---><
+                             |  v-----------------+ |
+                             +--+-delimitedString-+-+
+
+Outputs a record for each delimitedString: <delimitedString>, then passes through all records
+on its primary input, and finally a record for each, in reverse order: </first_word_of_delimitedString>.
+Any delimitedString may be a single word.
+
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class tags extends stage
+
+method run()
+trace results
+
+  parse arg() tag .
+
+  if tag = '' then
+    Emsg(11, 'No tag name given.')
+
+  tag = Rexx ''
+  endtag = Rexx ''
+  args = Rexx arg()
+
+  loop
+    taga = getKeyWord(args, '', 0, 'D')
+    if taga[2] \= '' then do
+      parse taga[2] tagn .
+      tag = tag || '<'  || taga[2] || '>'
+      endtag = '</' || tagn || '>' || endtag
+      args = taga[1]
+    end
+    else leave
+  end
+
+  if args \= '' then
+    Emsg(11, 'unexpected option:' args)
+
+  do
+    output(tag)
+  catch stageError
+  end
+
+  loop label Main forever
+
+    record_in = peekto()
+
+    output(record_in)
+
+    readto()
+
+  catch stageError
+    do
+      output(endtag)
+    catch stageError
+    end
+    rc = rc()
+  end Main
+
+  Exit(rc*(rc<>12))
