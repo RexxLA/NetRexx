@@ -70,7 +70,8 @@
 
 package org.netrexx.process
 options binary decimal strictcase strictargs
-import javax.tools.
+--import com.sun.tools.javac.Main   -- the javac compiler
+import javax.tools.             --      2015.05.02 switch javac use to jsr199 java compiler api -- KK
 
 class RxTranslator
 
@@ -90,22 +91,22 @@ class RxTranslator
  properties shared            -- visible within the package
 
   /* Globals (shared by all programs in the package) */
-  keep		 = boolean 0
-  keepasjava	 = boolean 0
-  classlist	 = java.util.List
-  javac		 = boolean 0  	-- prefer javac compiler if available
-  ecj		 = boolean 0  	-- prefer ecj compiler if available
-  compilerChoice = String	-- 2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
-  	
-  babels      =RxBabel[]        -- language-specific key classes
-  classer     =RxClasser        -- class handler
-  interpreter =RxInterpreter    -- evaluator
-  loader      =RxProxyLoader    -- our loader (null unless executing)
-  localpackages=Hashtable       -- lookup for local packages (ditto)
+  keep    =boolean 0              -- keep the java file -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  keepasjava = boolean 0      -- keep java output and do not rename it to .keep         -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  classlist=java.util.List                        --    allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  javac = boolean 0             -- prefer javac compiler if available
+  ecj = boolean 0                       -- prefer ecj compiler if available
+  compilerChoice = String               --      2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
+
+  babels      =RxBabel[]      -- language-specific key classes
+  classer     =RxClasser      -- class handler
+  interpreter =RxInterpreter  -- evaluator
+  loader      =RxProxyLoader  -- our loader (null unless executing)
+  localpackages=Hashtable     -- lookup for local packages (ditto)
   -- the next three will one day move to RxProgram [language-specific]
-  converter   =RxConverter      -- spin doctor
-  tparser     =RxTermParser     -- general parser for terms
-  eparser     =RxExprParser     -- general parser for expressions
+  converter   =RxConverter    -- spin doctor
+  tparser     =RxTermParser   -- general parser for terms
+  eparser     =RxExprParser   -- general parser for expressions
   /* Passes:
     Pass 0 is prepass: only prolog and CLASS instructions
     Pass 1 is resolution of properties and methods
@@ -140,6 +141,11 @@ class RxTranslator
   imports     =String[]       -- array of package names, e.g., 'java.lang'
                               -- [these will have hierarchies imported]
 
+  /* Standard import moduless */
+-- MRE for JDK9]
+--  moduleimports =String[]     -- array of module names, e.g., 'java.base'
+--                              -- [these will have hierarchies imported]
+
  properties constant shared   -- constants, visible within the package
   convertible     =50              -- conversion possible (e.g., to String)
 
@@ -163,10 +169,8 @@ class RxTranslator
   parse Date().toString() . mon day time . year .   -- get date and decompose it
   starttime=day.toint()+0 mon year time             -- timestamp for output
 
-  /*
-   * Set up an initial temporary (dummy) program object and flags, to
-   * provide a context for errors.
-   */
+  /* Set up an initial temporary (dummy) program object and flags, to
+     provide a context for errors. */
   programlist=RxProgram[1]
   program=RxProgram(this, superflag, '')
   programlist[0]=program
@@ -174,26 +178,26 @@ class RxTranslator
   /* Set up the default imports list */
   /* Temporary: later we will have per-language imports */
   /*            [or shared + per-language]              */
-  
+
 /* this interface did not allow import of a single package -
-   importing a package branch will now require a "." at the end like in the import statement - Kermit          
+                        importing a package branch will now require a "." at the end like in the import statement - Kermit
    this way the base swing package can now be added    --issue #61--Kermit */
-  
-  imports=[String 'netrexx.lang.',-
+
+    imports=[String 'netrexx.lang.',-
           'java.lang.', 'java.io.',   'java.net.',-
           'java.util.', 'java.awt.',  'java.applet.', 'javax.swing']
-  
+
   return
-  
-  -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-	
-  method setkeeps(k1,k2,cl=java.util.List,javac1,ecj1)
-    keep=k1
-    keepasjava=k2
-    classlist=cl
-    javac=javac1
-    ecj=ecj1
-	
+
+        -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+
+        method setkeeps(k1,k2,cl=java.util.List,javac1,ecj1)
+                keep=k1
+                keepasjava=k2
+                classlist=cl
+                javac=javac1
+                ecj=ecj1
+
  /** -------------------------------------------------------------- */
  /* SETLANGUAGES -- set language-specific constants                */
  /* Arg1 is an array of prefixes of known ZzBabel classes          */
@@ -217,18 +221,16 @@ class RxTranslator
   packagename =Rexx           -- where to look for Babels
   ourname=Rexx RxTranslator.class.getName()
   packagename=ourname.left(ourname.length().toint()-13)
-   babels=RxBabel[prefixes.length]
-
-   /* Construct an object of the ZzBabel class [where Zz is the
-    * prefix for a given language]
-    */
-   loop b=0 for prefixes.length
-     bclass=Class.forName(packagename'.'prefixes[b]'Babel')
-     -- find the constructor that takes one of us as an argument
-     bcons=bclass.getConstructor([RxTranslator.class])
-     -- and invoke it, with us as parent
-     babels[b]=RxBabel bcons.newInstance([Object this])
-   catch Exception
+  babels=RxBabel[prefixes.length]
+  loop b=0 for prefixes.length
+    /* Construct an object of the ZzBabel class [where Zz is the
+       prefix for a given language] */
+    bclass=Class.forName(packagename'.'prefixes[b]'Babel')
+    -- find the constructor that takes one of us as an argument
+    bcons=bclass.getConstructor([RxTranslator.class])
+    -- and invoke it, with us as parent
+    babels[b]=RxBabel bcons.newInstance([Object this])
+  catch Exception
     return 0
   end
   return 1
@@ -257,22 +259,21 @@ class RxTranslator
  method translate(flags=Rexx[], files=Rexx[],-
                   con=PrintStream System.out, log=PrintWriter null,-
                   noexec=boolean 0) returns boolean
-   savecon=con                      -- save
-   savelog=log                      -- ..
-   wontexec=noexec                  -- ..
-   ok=checkflags(flags)             -- sets superflag from flags, shows logo
-   if files.length=0 then
-     do
-       -- next message is really an internal error now
-       RxQuit(this, null, 'no.file.specifications')
-       ok=0
-     end
+  savecon=con                      -- save
+  savelog=log                      -- ..
+  wontexec=noexec                  -- ..
+  ok=checkflags(flags)             -- sets superflag from flags, shows logo
+  if files.length=0 then do
+    -- next message is really an internal error now
+    RxQuit(this, null, 'no.file.specifications')
+    ok=0
+    end
    else sources=RxSource[files.length]
-   
---  make a source for each file
-if ok then loop f=0 for files.length
-reader=RxFileReader(this)
-reader.openfile(files[f])      -- locate and open the file
+
+  --  make a source for each file
+  if ok then loop f=0 for files.length
+    reader=RxFileReader(this)
+    reader.openfile(files[f])      -- locate and open the file
     sources[f]=reader              -- save to pass on
     -- Found the file, check it's not a duplicate file.
     name=reader.getName()
@@ -299,25 +300,25 @@ reader.openfile(files[f])      -- locate and open the file
  method translate(flags=Rexx[], sources=RxSource[],-
                   con=PrintStream System.out, log=PrintWriter null,-
                   noexec=boolean 0) returns boolean
-   savecon=con                      -- save
-   savelog=log                      -- ..
-   wontexec=noexec                  -- ..
-   ok=checkflags(flags)             -- sets superflag from flags, shows logo
-   if sources.length=0 then do
-     -- next message is really an internal error now
-     RxQuit(this, null, 'no.sources')
-     ok=0
-   end
-   if \ok then do
-     showpendings()
-     programlist=RxProgram[0]       -- inhibit any compiles
-     return 0
-   end
-   return dotranslate(sources)
-   
-   /* ----- Common routine to actually translate ----- */
-  method dotranslate(sources=RxSource[]) returns boolean private
-    
+  savecon=con                      -- save
+  savelog=log                      -- ..
+  wontexec=noexec                  -- ..
+  ok=checkflags(flags)             -- sets superflag from flags, shows logo
+  if sources.length=0 then do
+    -- next message is really an internal error now
+    RxQuit(this, null, 'no.sources')
+    ok=0
+    end
+  if \ok then do
+    showpendings()
+    programlist=RxProgram[0]       -- inhibit any compiles
+    return 0
+    end
+  return dotranslate(sources)
+
+ /* ----- Common routine to actually translate ----- */
+ method dotranslate(sources=RxSource[]) returns boolean private
+
   programs=sources.length     -- number of programs we'll need
 
   /* Ready for class process initialization (or reset) */
@@ -635,7 +636,7 @@ reader.openfile(files[f])      -- locate and open the file
     haddiag   =boolean 0                  -- 'diag' requested
     hadnojava =boolean 0                  -- 'nojava' requested
     maxverbose=int 0                      -- maximum verbosity
-    
+
     -- take note if any failed .. if they did, don't run javac on any
     -- note SYMBOLS request, too.
     loop f=0 for programs
@@ -646,12 +647,12 @@ reader.openfile(files[f])      -- locate and open the file
       if program.flag.diag    then haddiag=1
       if program.flag.verbose>maxverbose then maxverbose=program.flag.verbose
     end f
-    
+
     if compileok then if \hadnojava then do label havejava
       -- we have valid java for all
       compilerChoice = System.getProperty("nrx.compiler","javac")
       parse compilerChoice compilerChoice javaoptions
-      if compilerChoice\=="javac" & compilerChoice\=="ecj" then do 
+      if compilerChoice\=="javac" & compilerChoice\=="ecj" then do
 	compilerChoice="javac"
 	javaoptions=System.getProperty("nrx.compiler","javac")
       end
@@ -668,12 +669,12 @@ reader.openfile(files[f])      -- locate and open the file
       args[1]='-classpath'                -- explicit classpath needed
       args[2]=classpath                   -- .. for Java 1.2 javac
 					  -- add the filenames
-      jfoarray=JavaFileObject[programs]	  -- Java compiler API	-- KK -- 2015.05.02  
-      
+      jfoarray=JavaFileObject[programs]	  -- Java compiler API	-- KK -- 2015.05.02
+
       optstring='-nowarn -classpath classpath' javaoptions
       optarray=optstring.toString().trim().split(" ")
       optarray[2]=classpath
-      
+
       offset=args.length-programs
       loop f=0 for programs
 	program=programlist[f]            -- current program
@@ -686,7 +687,7 @@ reader.openfile(files[f])      -- locate and open the file
       end f
       if maxverbose>3 then say('Compiling: '''Rexx(args)'''')
       else if haddiag then say '# Compiling:' Rexx(args)
-      
+
       if program.flag.diag then do    	
 	thisloader=Thread.currentThread().getContextClassLoader()
 	say "Thread context classloader="thisloader
@@ -701,10 +702,10 @@ reader.openfile(files[f])      -- locate and open the file
 	  say "   parent loader="thisloader
 	end
       end
-      
+
       javaloader=Thread.currentThread().getContextClassLoader()
       do
-	javacompiler=ToolProvider.getSystemJavaCompiler()
+	javacompiler=javax.tools.ToolProvider.getSystemJavaCompiler()
         toolman= javaloader.loadClass('com.sun.tools.javac.api.JavacTool')
       catch e=Exception
       end   	
@@ -712,27 +713,27 @@ reader.openfile(files[f])      -- locate and open the file
 	ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')
       catch e=Exception
       end   		
-      
+
       if compilerChoice == "javac" then
-	if toolman==null & javacompiler=null then 
+	if toolman==null & javacompiler=null then
       	  do
       	    compilerChoice="ecj"
       	    if program.flag.diag then say "no javac compiler - switching to ecj (Eclipse) compiler"
 	  end
 	
-	if compilerChoice == "ecj" then 
+	if compilerChoice == "ecj" then
       	  if ecjclass==null then
       	    do
 	      if program.flag.diag then say "no ecj compiler"
 	      if toolman\==null | javacompiler\==null then if program.flag.diag then say "switching to javac compiler"
 	      compilerChoice="javac"
 	    end
-	  
+	
 	  if compilerChoice == "javac" then if toolman==null & javacompiler=null then
 	    RxQuit(this, null, 'compiler.specification.error')
 	  if toolman\==null, ecjclass\==null, javacompiler\==null then
 	    select
-	      
+	
 	      when compilerChoice == "javac" then do
 		
 		if program.flag.diag then say '# compiling' program.programname 'using javac'
@@ -763,7 +764,7 @@ reader.openfile(files[f])      -- locate and open the file
 		  say cle
 		end
 	      end
-	      
+	
 	      when compilerChoice == "ecj" then do
 		if program.flag.diag then say '# compiling' program.programname 'using eclipse batch compiler'
 		--	javacok=org.eclipse.jdt.core.compiler.batch.BatchCompiler.compile(args, PrintWriter(System.out), PrintWriter(System.err), null)
@@ -773,7 +774,7 @@ reader.openfile(files[f])      -- locate and open the file
 		  --		make file manager to capture class files in memory
 		  fileManager = RxForwardingJavaFileManager(JavaFileManager javacompiler.getStandardFileManager(null, null, null))
 		  --		run the Java compiler on the memory strings
-		  
+		
 		  javacok=javacompiler.getTask(null,-
 					       fileManager,-
 					       null,-
@@ -784,20 +785,20 @@ reader.openfile(files[f])      -- locate and open the file
 		  say cle
 		end
 	      end
-	      
+	
 	      otherwise
 		RxQuit(this, null, 'compiler.specification.error')
 	    end
-	  
+	
 	  if haddiag then say '# Compiled: ok='javacok
 	  badjavac=\javacok
-	  
+	
 	  /* persist any .class files that javac made for each file */
 	  /* [If javac failed we assume no new .class files were generated.] */
 	  if javacok then -
 	     loop f=0 for programs
 	       program=programlist[f]                 -- current program
-	       
+	
 	       persister=RxPersistClass(program.source.getName(),'.',this)  -- make a persister
 	       loop c=0 for program.classes.size()
 		 -- build the filename
@@ -814,13 +815,13 @@ reader.openfile(files[f])      -- locate and open the file
 		 else targetclass=localclass
 		 --          if program.flag.diag then say '# Fixing' actualclass-
 		 --           'to' targetclass '['program.flag.sourcedir']'
-		 
+		
 		 /* here the compileroutput, in the form of class images in memory, is persisted to files */
 		 fmi=fileManager.classFileObjects.iterator()
 		 loop while fmi.hasNext()
 		   tba=RxByteArrayJavaClass fmi.next()
 		   persistClass=''
-		   
+		
 		   if compilerChoice = 'ecj' then
 		     do
 		       tempcls = (Rexx tba.getName().substring(1)".class")
@@ -853,7 +854,7 @@ reader.openfile(files[f])      -- locate and open the file
 		 end
                end c
 	     end f
-	  
+	
 	  if javacok then -
 	     if classlist\==null then do
 	       /* now build a special class loader for the class files in memory */
@@ -866,12 +867,12 @@ reader.openfile(files[f])      -- locate and open the file
 	       end
 	       classlist.add(0,RxMapClassLoader(byteCodeMap))
 	     end
-	  
+	
     end havejava
-    
+
     comp=0
     return compileok & \badjavac
-    
+
     /* --------------------------------------------------------------- */
     /* DISPOSE -- dispose of .java files and close source              */
     /*            This must always be called to clean up.              */
@@ -879,12 +880,12 @@ reader.openfile(files[f])      -- locate and open the file
     /* Arg1 is 1 to keep the java file after successful compilation    */
     /*           (normally it is erased if the compile was successful) */
   method dispose(keep1=boolean, keepasjava1=boolean 0)
-    
+
     loop f=0 for programlist.length
       program=programlist[f]                        -- current program
 						    -- we done with the source, now (if not already)
       if program.source\=null then program.source.close()
-      
+
       -- rename or erase the (.java) source file
       select
 	when keep1 & program.errorcount=0 then erase=boolean 0
@@ -894,7 +895,7 @@ reader.openfile(files[f])      -- locate and open the file
       if keep1 then				-- 2015.06.11 -- if using jsr199 to pass java code and no java output, don't touch disk files
 	program.streamer.disposeoutputfile(erase, keepasjava1)
     end f
-    
+
     /* --------------------------------------------------------------- */
     /* SUMMARY -- display summaries as needed                          */
     /* --------------------------------------------------------------- */
@@ -938,7 +939,7 @@ reader.openfile(files[f])      -- locate and open the file
 	if ok then bucket[f]=action||" of \'"inname"\' "okresult||add
         else bucket[f]=action||" of \'"inname"\' failed"||add
       end summary
-      
+
     end f
     faulty=Rexx ""
     x=0
@@ -958,8 +959,8 @@ reader.openfile(files[f])      -- locate and open the file
       end
     end
     return
-    
-    
+
+
     /* showpendings -- show any pending messages */
   method showpendings private
     loop m=0 for program.pendings.size()
@@ -967,11 +968,11 @@ reader.openfile(files[f])      -- locate and open the file
     end m
     program.pendings.removeAllElements()         -- clear shown messages
 						 -- [.clear is JDK 1.2]
-    
+
     /* getstarttime -- return the 'start translate' time */
   method getstarttime returns Rexx
     return starttime
-    
+
     /* getexitvalue -- return 'worstcase' exitvalue */
   method getexitvalue returns int
     if programlist=null then return EXIT_ERROR -- failed before Translate
@@ -987,7 +988,7 @@ reader.openfile(files[f])      -- locate and open the file
     end
     if warns>0 then return EXIT_WARN
     return EXIT_OK
-    
+
     /* setlanguage -- determine and setup program's language
        Arg1 is the program
      */
@@ -995,28 +996,25 @@ reader.openfile(files[f])      -- locate and open the file
     /* Find the name stub and extension for the program */
     infile=Rexx prog.source.getName()
     lastdot=infile.lastpos('.').toint()
-    if lastdot\=0 then
-      do -- determine the language for the program
-	inext=infile.substr(lastdot+1)
-	loop b=0 for babels.length
-	  babel=babels[b]
-	  ext=babel.getExtension()
-	  if ext.OpEq(null, inext) then /* extension match */
-	    do
-              program.babel=babel
-              leave b
-	    end
-	end b
+    if lastdot\=0 then do -- determine the language for the program
+      inext=infile.substr(lastdot+1)
+      loop b=0 for babels.length
+	babel=babels[b]
+	ext=babel.getExtension()
+	if ext.OpEq(null, inext) then /* extension match */ do
+          program.babel=babel
+          leave b
       end
-    -- If no extension, or no match found, assume the primary language
-    if program.babel=null then program.babel=babels[0]
-    -- say '#' infile '--is--' program.babel.getName
-    return
-    
-  /*
-   *  checkflags -- check flags given, and display banner accordingly
-   * Arg1 is the array of flag words
-   */
+    end b
+end
+-- If no extension, or no match found, assume the primary language
+if program.babel=null then program.babel=babels[0]
+-- say '#' infile '--is--' program.babel.getName
+return
+
+/* checkflags -- check flags given, and display banner accordingly
+   Arg1 is the array of flag words
+ */
   method checkflags(flags=Rexx[]) returns boolean private
     -- Process any flags, building the prototype flag object
     ok=boolean 1
@@ -1028,22 +1026,22 @@ reader.openfile(files[f])      -- locate and open the file
 	ok=0
       end
     end
-    
+
     /* Banner-time [had to wait for flags to be processed] */
     if superflag.verbose>0 then if superflag.logo then do
       if this.getClass().getPackage()\=null then vv=this.getClass().getPackage().getImplementationVersion()
       else vv=''
-      if vv=null then vv='' 
+      if vv=null then vv=''
       parse vv . . . vv
       banner=babels[0].getName() 'portable processor' babels[0].getFullVersion() vv
       if superflag.verbose<=3 then say(banner)
       else say(banner ' ['RxProcessor.procdate']')
       say(RxProcessor.copyright)
     end
-    
+
     if superflag.diag then superflag.format=1  -- diag wants to look pretty
     return ok
-    
+
     /* say -- all (non-diag) compiler displays must come through here */
   method say(what=Rexx '')
     if savecon\=null then savecon.println(what)
@@ -1052,11 +1050,11 @@ reader.openfile(files[f])      -- locate and open the file
       if savelog.checkError() then savelog=null       -- give up if error
     end
     return
-    
+
     /* return the first program, for out-of-context babelization */
   method getProgram returns RxProgram
     return programlist[0]
-    
+
   method main(s=String[]) static
     say '??'
 

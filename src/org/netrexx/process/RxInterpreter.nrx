@@ -35,6 +35,8 @@
 /* 2000.04.02 Integrated proxy                                        */
 /* 2012.09.19 allow initialization of constant fields in Java 5+      */
 /*                                               per issue #80 -KK-   */
+/* 2020.12.20 MRE -- catch exception when class modifier fields       */
+/*                                              are accessed in JDK9+ */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -467,19 +469,28 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
   -- property in a real class
 
   -- say '# doProp:' set field.fieldinfo.type.toString field.fieldname
-  infoclass=field.fieldinfo.getClassObject(rxt.loader)
+    infoclass=field.fieldinfo.getClassObject(rxt.loader)
   do label try
     -- now find the Field object for the property
     -- this should always succeed
     prop=infoclass.getDeclaredField(field.fieldname)
     prop.setAccessible(1)     -- we have The Authority
-
+    
     -- now set or get it
     if set then do
       setvalue=code2ref(setvalue, field.fieldtype) /* rewrap if needed */
-      -- temp remove FINAL property as Java 5+ does not allow changing finals --issue #80 -KK-
-      modifiersField = prop.getClass().getDeclaredField("modifiers") --issue #80 -KK-
-      modifiersField.setAccessible(1) --issue #80 -KK-
+
+-- MRE need to wrap this and catch JDK9+ inaccessible class modifiers       
+      do
+        -- temp remove FINAL property as Java 5+ does not allow changing finals --issue #80 -KK-
+        modifiersField = prop.getClass().getDeclaredField("modifiers") --issue #80 -KK-
+-- say '##MRE not reached on JDK9+'
+        modifiersField.setAccessible(1) --issue #80 -KK-
+      catch e=Exception
+        nop                   -- nop, but avoided JDK9+ java.lang.NoSuchFieldException:modifiers
+                              -- triggering 'Severe Error: Internal error: RxInterpreter: pnf'
+      end 
+
       modifiers=prop.getModifiers() --issue #80 -KK-
       if Modifier.isFinal(modifiers) then modifiersField.setInt(prop, modifiers-Modifier.FINAL) --issue #80 -KK-
       prop.set(obj, setvalue)
@@ -501,7 +512,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
     signal RxQuit(rxt, tok, 'internal.error', 'RxInterpreter: pia' ire.getMessage())
   catch NoSuchFieldException
     -- say '#' field.fieldinfo.type field.fieldname field.fieldtype
-    -- if obj\=null then say '#' obj.tostring
+    -- if obj\=null then say '#' obj.toString()
     -- signal RxSignalPend(nsfe, tok)
     signal RxQuit(rxt, tok, 'internal.error', 'RxInterpreter: pnf')
   end try

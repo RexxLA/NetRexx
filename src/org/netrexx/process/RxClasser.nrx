@@ -72,12 +72,22 @@
 /* 2015.05.24 -- KK -- fix for issue #115 =                           */
 /* can't subclass ConcurrentHashMap in Java 8                         */
 /*  2015.06.03 -- KK -- fix for issue #125 = chg from                 */
-/* jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan */ 
+/* jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan */
+/* 2020.12.19 -- MRE -- added support for JPMS on Java 9+             */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
+
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.Files
+import java.nio.file.FileSystem
+import java.nio.file.FileSystems
+import java.nio.file.OpenOption
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
 
 /**   This is the generalized class processor.  The classer object    */
 /*   handles everything to do with classes: finding them, testing     */
@@ -119,8 +129,15 @@ class RxClasser
                               --  [Hashtables, keyed by package name]
   classdefines=Vector         -- Lookasides during interpret [RxClassInfo]
 
-  searchinginterfaces =boolean 0 		--	flag is 1 while searching interfaces - KK
-  	  
+  searchinginterfaces =boolean 0                --      flag is 1 while searching interfaces - KK
+
+--MRE for Java 9 2020-12-13
+
+   isJrt               =boolean 0                -- flag is 1 when running above java 1.1.8 
+   jrtprefix           ='jrt:'                   -- (we'll add fsep later) could be jrt:/modules/$module or jrt:/$module CSR JDK-8227076
+   modpacktable        =Hashtable                -- hashtable mapping package to module
+   
+
  /** Constructor
     Arg1 is the translator object
     Arg2 is an array of standard import name-Strings
@@ -144,38 +161,72 @@ class RxClasser
   classpool=RxClassPool(rxt)       -- make a classpool
 
 /*  if \rxt.program.flag.strictimport then standpacks=standardimports
-                                    else standpacks=String[0]			*/
+                                    else standpacks=String[0]                   */
 
-/*  Check each standard import to see if subpackages were requested - part of mod for issue #61  --KK-20120916  */	
+/*  Check each standard import to see if subpackages were requested - part of mod for issue #61  --KK-20120916  */
    if \rxt.program.flag.strictimport then
      do
-       standpacks=String[standardimports.length]	                                    
-       standpacksscope=boolean[standardimports.length]	
+       standpacks=String[standardimports.length]
+       standpacksscope=boolean[standardimports.length]
        loop i=0 for standardimports.length
-	 if Rexx(standardimports[i]).right(1)=='.' then
-	   do
-  	     standpacks[i]=standardimports[i].substring(0,standardimports[i].length()-1)
-  	     standpacksscope[i]=1
-	   end
-	 else
-	   do
-	     standpacks[i]=standardimports[i]
-	     standpacksscope[i]=0
-	   end
+         if Rexx(standardimports[i]).right(1)=='.' then
+           do
+             standpacks[i]=standardimports[i].substring(0,standardimports[i].length()-1)
+             standpacksscope[i]=1
+           end
+         else
+           do
+             standpacks[i]=standardimports[i]
+             standpacksscope[i]=0
+           end
        end
      end
-   
+
    else
-     do		--		strictimport case
-       standpacks=[String 'java.lang']				--		Java always includes java.lang import   --  part of mod for issue #61  --KK-20120916  */
-       standpacksscope=[boolean 0]					--		no subpackages
+     do         --              strictimport case
+       standpacks=[String 'java.lang']                          --              Java always includes java.lang import   --  part of mod for issue #61  --KK-20120916  */
+       standpacksscope=[boolean 0]                                      --              no subpackages
      end
+  
+
+   -- check for Java 9+
    
-   -- initialize and import standard classes
+   modpacktable=Hashtable(300)      -- stores owning module per package
+
+   jrtprefix=jrtprefix||fsep
+   
+   o=Object.class.getResource('Object.class')   -- check for 1.1.8+ 
+   os=o.toString()
+   if os.startsWith(jrtprefix) then do 
+     isJrt = 1
+     c=jrtprefix||os.substring(jrtprefix.length())
+     p = Paths.get(URI.create(c))
+
+     if \Files.isReadable(p) then do
+       jrtprefix=jrtprefix||'modules'||fsep               -- CSR JDK-8227076, fix for GraalVM/OpenJDK 11
+     end                                                  -- we assume it's readable, or RxQuit
+     if rxt.superflag.diag then do
+       say '# Running JDK9+ with jrt prefix' jrtprefix
+     end  
+     if rxt.superflag.diag then do
+        say '# PACKMODFIND: start loop start'
+        start=System.currentTimeMillis()
+     end
+     packmodfind('')                                      -- discover all packages in all modules
+     if rxt.superflag.diag then do
+       say '# PACKMODFIND loop end after' System.currentTimeMillis()-start'ms'
+       say '# PACKMODFIND 'modpacktable.size()' directories found on jrt:/'
+     end  
+   end
+
+ -- initialize and import standard classes
+  
    initclasspath()                  -- get and parse classpath, loading Zips
-   importclasses('*', 1, null, 1)   -- standard imports, with global access
-				    -- [note current directory only imported, later, if no PACKAGE]
    
+
+   importclasses('*', 1, null, 1)   -- standard imports, with global access
+                                    -- [note current directory only imported, later, if no PACKAGE]
+
    -- Register primitive types
    loop i=1 to RxType.PRIMITIVES.words()
      classpool.register('', RxType.PRIMITIVES.word(i), null, null, 1, null, 0)
@@ -186,7 +237,7 @@ class RxClasser
      say '#' packagetable.size() 'packages'     -- ..
    end
    return
-   
+
   /** INITCLASSPATH -- set and parse/check class path.
      Directory segments are just checked for reality at this point.
      Zip files have a Zipfile object created and cached -- this does the
@@ -200,26 +251,26 @@ class RxClasser
        new jar at a higher level.
        Final 1.2 also adds extensions mechanism .. and .jar files in
        \lib\ext are automatically added to the classpath.
-       
+
        In Java 1.4, some JVMs split and renamed rt.jar, so now we
        simply check all .jars in jre\lib
      */
-    
+
     home=System.getProperty('java.home')
-    
+
     lib=home||fsep'lib'fsep
     -- ancient1 name was classes.zip
     path=path||psep||lib'classes.zip'
     -- path=path||psep||home||fsep'..'fsep'lib'fsep'tools.jar'  -- 1.2b3K
-    
-    --   path=path||psep||lib'classes.zip'				--		duplicate? 	-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+
+    --   path=path||psep||lib'classes.zip'                              --              duplicate?      -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
     -- add standard location for MacOSX so it does not need to be put on classpath anymore
     -- path=path||psep||'/System/Library/Frameworks/JavaVM.framework/Classes/classes.jar'
     --    -- add standard location for java6 on zLinux so it does not need to be put on classpath anymore
     -- path=path||psep||'/opt/ibm/java-s390x-60/lib/tools.jar:/opt/ibm/java-s390x-60/jre/lib/s390x/default/jclSC160/vm.jar'
-    
+
     -- all jars in lib..
-    /*-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan   
+    /*-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
        libpath=lib
        dir=File(libpath)                         -- check the path
        if dir.isDirectory() then do label libdir   -- directory exists
@@ -231,32 +282,32 @@ class RxClasser
        if rxt.superflag.diag then say '# lib:' name
        end i
        end libdir
-     */-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan  
-    path=path||psep||System.getProperty("sun.boot.class.path", "")		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-    path=Rexx(path).strip('t',psep).toString()											-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-    
+     */-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
+    path=path||psep||System.getProperty("sun.boot.class.path", "")              -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
+    path=Rexx(path).strip('t',psep).toString()                                                                                  -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
+
     -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan :
     extensions=System.getProperty("java.ext.dirs") -- RVJ check for the null that Java 9 delivers
     if extensions <> null then
       do
-	-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-	loop label extscan while extensions\==''				-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-	  parse extensions extpath (psep) extensions		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-	  extpath=extpath||fsep											-- 2015.06.03 -- KK -- seems to need the trailing file separator below
-														-- now add the extensions
-														--   extpath=lib'ext'fsep					-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
-	  dir=File(extpath)                         -- check the path
-	  if dir.isDirectory() then
-	    do label extdir   -- directory exists
-	      entries=dir.list()                        -- could be null <sigh>
-	      if entries\=null then loop i=0 for entries.length
-	      name=entries[i]
-	      if \name.endsWith('.jar') then iterate i  -- not a jar file
-	      path=path||psep||extpath||name
-	      if rxt.superflag.diag then say '# ext:' name
-	    end i
-	end extdir
-      end extscan 		-- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan 
+        -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
+        loop label extscan while extensions\==''                                -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
+          parse extensions extpath (psep) extensions            -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
+          extpath=extpath||fsep                                                                                 -- 2015.06.03 -- KK -- seems to need the trailing file separator below
+                                                                                                                -- now add the extensions
+                                                                                                                --   extpath=lib'ext'fsep                                       -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
+          dir=File(extpath)                         -- check the path
+          if dir.isDirectory() then
+            do label extdir   -- directory exists
+              entries=dir.list()                        -- could be null <sigh>
+              if entries\=null then loop i=0 for entries.length
+              name=entries[i]
+              if \name.endsWith('.jar') then iterate i  -- not a jar file
+              path=path||psep||extpath||name
+              if rxt.superflag.diag then say '# ext:' name
+            end i
+        end extdir
+      end extscan               -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
 end
 /* now split into segments and test for zipfiles */
 classpaths=0
@@ -277,7 +328,7 @@ loop label segments while exist\==''
       seg=pre.left(lp-1)||post                   -- delete up and preceding
     end
     -- if rxt.superflag.diag then say '# seg:' seg
-    
+
     stream=File(seg)                             -- test it
     if \stream.exists() then iterate               -- ignore bad segments
 
@@ -285,11 +336,11 @@ loop label segments while exist\==''
       -- In some implements we find duplicated segments (very
       -- expensive!) so we filter them out.  Note that we ignore case
       -- here, as real case distinctions won't work cross-platform */
-      
+
       loop v=0 for classpathseg.size()
-	if seg.OpEq(null, Rexx classpathseg.elementAt(v)) then iterate segments
+        if seg.OpEq(null, Rexx classpathseg.elementAt(v)) then iterate segments
       end v
-      
+
       -- looks like a real segment
       if seg.right(1)==':' then seg=seg||fsep      -- fix for Win32 Java
       classpaths=classpaths+1
@@ -300,7 +351,7 @@ loop label segments while exist\==''
       if rxt.superflag.diag then say '# Classpathseg' seg
       -- if not a directory, assume it's a Zip
       if stream.isDirectory()
-	then classpathzip.addElement(null)
+        then classpathzip.addElement(null)
       else do label zipexpected
         zfile=java.util.zip.ZipFile(stream)      -- process the Zip file
         classpathzip.addElement(zfile)           -- and add to vector
@@ -323,7 +374,7 @@ return
    no other way than to write the default invocation methods manually. */
   method importclasses(import=Rexx) returns Rexx
     return importclasses(import, 1, rxt.program)
-    
+
   /** IMPORTCLASSES -- Register the classes for an IMPORT statement argument
      Arg1 is a NetRexx-like import name,
      or null string for current directory,
@@ -332,10 +383,10 @@ return
      Arg3 is the program from which short name access is allowed (null if
      'all', i.e., the default imports, or is an explicit reference)
      Arg4 is 1 if subpackages should be included
-     
+
      If a name is given, all segments of the classpath are checked for
      matching classes (note: to quit after first would be wrong).
-     
+
      Registers each class found.
      Returns number of classes found (may be 0, and includes duplicates),
      or -1 if Arg1 names a standard package (in which case no classes
@@ -343,7 +394,7 @@ return
      done).
      or -2 for error if explicit class duplicates another explicit
      import (nickable only)
-     
+
      Note this is called in order to auto-import qualified names, as well
      as by IMPORT itself.
    */
@@ -352,122 +403,320 @@ return
       say '# Import:' import '['nickable subpacks (importer==null)']'
       start=System.currentTimeMillis()
     end
-    
+
     known=RxClassInfo null                          -- if a local class, perhaps
-    
+
     -- unless name is '*' then packages are known
     simport=import.toString()
     simlen=simport.length()
     select
       when import=='*' then do                    -- initial call
-	package=String ''
-	find=simport
-	startup=boolean 1
+        package=String ''
+        find=simport
+        startup=boolean 1
       end
       when import.right(1)=='.' then do           -- search form
-						  -- package name given
-	package=simport.substring(0, simlen-1)    -- drop dot
-						  -- if a standard package, return -1 to indicate no re-import done
-	loop i=0 for standpacks.length
-          if standpacksscope[i] then			--		if a matching standard import included sub packages this import is redundant (for issue #61) - KK - 20120916
+                                                  -- package name given
+        package=simport.substring(0, simlen-1)    -- drop dot
+                                                  -- if a standard package, return -1 to indicate no re-import done
+        loop i=0 for standpacks.length
+          if standpacksscope[i] then                    --              if a matching standard import included sub packages this import is redundant (for issue #61) - KK - 20120916
             if standpacks[i]==package then return -1
         end i
-	find=String null
-	startup=boolean 0
+        find=String null
+        startup=boolean 0
       end
-      otherwise                                   -- explicit or '.' import
-						  -- package (and perhaps class) specified, split to package and class
-	package=getpackage(simport, 0)
-	if package=null then do
+    otherwise                                   -- explicit or '.' import
+                                                -- package (and perhaps class) specified, split to package and class
+        package=getpackage(simport, 0)
+        if package=null then do
           package=''                              -- indicate no package
           if import=='' then find=null            -- 'import default package'
           else find=simport         -- class name
         end
-    else do
-      if package.length()=simlen then do
-        find=null -- just a package
-		  -- if a standard package, return -1 to indicate no re-import
-		  -- done (unless explicit class, in which case we want the
-		  -- explicit bit set)
-        loop i=0 for standpacks.length        -- standards please
-          if standpacks[i]==package then return -1
-        end i
-      end
-    else do                                -- have name
-      find=simport.substring(package.length()+1, simlen)  -- class name
-    end
-    end
-    
+        else do
+         if package.length()=simlen then do
+            find=null -- just a package
+                      -- if a standard package, return -1 to indicate no re-import
+                      -- done (unless explicit class, in which case we want the
+                      -- explicit bit set)
+            loop i=0 for standpacks.length        -- standards please
+              if standpacks[i]==package then return -1
+             end i
+          end
+          else do                                -- have name
+            find=simport.substring(package.length()+1, simlen)  -- class name
+          end
+        end
+
     -- if class given ensure we don't already have an explicit import
     -- for the short name, if we're nickable
-    if find\==null then if nickable then do
-      known=classpool.find(importer, null, find, 1) -- find it anywhere, exact case
-						    -- [avoid findanyclass, as that is recursive and will load class]
-      if known\=null then if known.explicit then return -2
+      if find\==null then if nickable then do
+        known=classpool.find(importer, null, find, 1) -- find it anywhere, exact case
+                                                      -- [avoid findanyclass, as that is recursive and will load class]
+        if known\=null then if known.explicit then return -2
+      end
+      startup=boolean 0
     end
-    startup=boolean 0
-    end
-    
+
     if rxt.superflag.diag then do
       ff=find; if ff=null then ff='[null]'
       say '# ImportFind:' package ':' ff
     end
-    
+
     -- Note we must do the lookup, etc., even if the class was found
     -- above, so it will be properly re-registered as an explicit reference
     -- 2000.10.16: look in all classpath segments, even for the 'null' package
     found=0
     loop cp=0 for classpaths
       packlook=Hashtable classpathpax.elementAt(cp) -- needed all paths
-      
-      if package\=='' then                   -- if a package specified
-	if \packlook.containsKey(package)     -- .. and if unknown package
-	  then iterate cp                      -- .. then don't search segment
-	    
-	    zfile=java.util.zip.ZipFile classpathzip.elementAt(cp)
-	    if zfile\=null
-	      then found=found+zipfind(zfile, package, find, nickable,-
-				       importer, subpacks, packlook)
-	    else /* directory */ do
-	    seg=Rexx classpathseg.elementAt(cp)
-	    if \startup then
-              found=found+dirfind(seg, package, find, nickable, importer, subpacks)
-	    else do label standards             -- is '*', startup call
-              packdirfind(seg, packlook)         -- locate packages
-              loop i=0 for standpacks.length     -- standards please
-		found=found+dirfind(seg, standpacks[i], null, nickable,-
-				    importer, standpacksscope[i])		--	mod per issue #61 -KK-20120916
-										--                              importer, subpacks)
-              end i
-            end standards
-    end
-end cp
 
+      if package\=='' then                   -- if a package specified
+        if \packlook.containsKey(package)     -- .. and if unknown package
+          then iterate cp                      -- .. then don't search segment
+
+      zfile=java.util.zip.ZipFile classpathzip.elementAt(cp)
+      if zfile\=null
+          then found=found+zipfind(zfile, package, find, nickable,-
+                                     importer, subpacks, packlook)
+      else /* directory */ do
+        seg=Rexx classpathseg.elementAt(cp)
+        if \startup then 
+          found=found+dirfind(seg, package, find, nickable, importer, subpacks)
+        else do label standards             -- is '*', startup call
+          packdirfind(seg, packlook)         -- locate packages
+          loop i=0 for standpacks.length     -- standards please
+            found=found+dirfind(seg, standpacks[i], null, nickable,-
+                                importer, standpacksscope[i])               --      mod per issue #61 -KK-20120916
+                                                                            --                              importer, subpacks)
+          end i      
+        end standards
+      end 
+    end cp
+    -- MRE Handle importing from java.lang.module
+    if isJrt & ((package \== '' & package.length() \== 1) | import == '*') then do   -- don't look in mod when no package unless startup
+      if \startup then do
+        -- normalize package and find
+        if find \== null then do
+          find = find.replace('.', '$')                                             -- find minor nested classes
+        end     
+        mod=String modpacktable.get(package)
+        if mod \== null then do                                   
+          found=found+modfind(mod, package, find, nickable, importer, subpacks)
+        end  
+      end
+      else do
+        loop i=0 for standpacks.length     -- standards please
+          mod=String modpacktable.get(standpacks[i])
+ --         say mod
+          if mod \== null then do
+             found=found+modfind(mod, standpacks[i], null, nickable,-
+                                importer, standpacksscope[i])               --      mod per issue #61 -KK-20120916
+          end 
+        end 
+      end 
+    end  
+
+  
 /* Now, if it's an explicit class and not in a package, then
    add it to the imports list to generate matching Java code.
    This is required, to disambiguate a local class from (say) a
    java.lang class, and to allow access to a local class from a
    package (undocumented 'feature' of javac).
-   
+
    We also similarly add explicit classes that are in a package, for
    cosmetic reasons only (this means the generated code can use
    short names safely).
-   
+
    Internal imports are not added to the imports list, as they might
    clash with each other or a local class name.
  */
-if found=1 then
-  if nickable then
-    if find\=null then do
-      -- [don't really need next test here, as find==simport; code
-      -- separated for clarity/maintenance only]
-      if package=='' then rxt.program.javaimports.put(find, find)
-      else rxt.program.javaimports.put(simport, simport)
+    if found=1 then
+      if nickable then
+        if find\=null then do
+          -- [don't really need next test here, as find==simport; code
+          -- separated for clarity/maintenance only]
+        if package=='' then rxt.program.javaimports.put(find, find)
+          else rxt.program.javaimports.put(simport, simport)
+        end
+
+    if rxt.superflag.diag then say '# Imported' found 'after' System.currentTimeMillis()-start'ms'
+    return found
+
+ /** PACKMODFIND -- find packages in a directory
+     Arg1 is directory path into jrt: so far
+
+     Walks the jrt: fs tree
+     Builds the modpacktable, so packages can be identified in the module tree
+     Adds packages found in all modules
+     Calls itself recursively to explore the complete directory tree
+   */
+  method packmodfind(dirpath=String) private 
+  
+  dpath=dirpath
+
+  e=Exception
+  do
+ --   say 'jrt 'jrtprefix||dpath
+    p = Paths.get(URI.create(jrtprefix||dpath))
+
+    if \Files.isDirectory(p, [LinkOption null]) then return
+
+/* Here for a directory search */
+    registered=0
+
+    stream = Files.list(p)
+    ap = Object[]
+    ap = stream.toArray()
+
+    loop i=0 to ap.length-1
+      pp=Path ap[i]
+      if Files.isDirectory(pp, [LinkOption null]) then do
+        s=pp.toString()
+        subdir=s.substring(9)                        -- strip /modules/
+        packmodfind(subdir)
+      end
+      else do
+        if registered == 0 then do
+          regpack=p.toString()
+          mod = regpack.substring(9)                  -- strip /modules/
+          pos=mod.indexOf(fsep)                       -- first /
+          if pos > 0 then do                          
+            mod=mod.substring(0, pos)
+            regpack=regpack.substring(9+mod.length()+1)
+            regpack=regpack.replace(fsep, '.')
+
+            modpacktable.put(regpack, mod)
+            addpackage(regpack, null)
+            if rxt.superflag.diag then say '# PACKMODFIND registered 'regpack' in 'mod
+            registered = 1
+          end
+        end   
+      end
     end
+    
+  catch e=Exception
+    signal RxQuit(rxt, null, 'cannot.read.class',dirpath, e.getMessage())
+    end
+  return
+
+
+  /** MODFIND -- find classes in the jrt: file system
+     Arg1 is module name
+     Arg2 is package path (may be null string, has dots)
+     Arg3 is search string: either a classname, or null for 'all classes'
+     Arg4 is 1 if the class(es) being imported may be accessed by short name
+     Arg5 is the program from which short name access is allowed
+     Arg6 is 1 if subpackages (subdirectories) should be included
+     returns the number of files found
+
+     Neither path should end in a file separator.
+     Registers each class found (of form xxx.xxx.yyy)
+   */
+
+method modfind(module=String, package=String, find=String,-
+                 nickable=boolean, importer=RxProgram,-
+                 subpacks=boolean 0) returns int
+
+  if \isJrt then return 0                    -- shouldn't occur
+
+  fpack=package.replace('.',fsep)            -- package name with fileseps
+  dirpath=module                             
   
-  if rxt.superflag.diag then say '# Imported' found 'after' System.currentTimeMillis()-start'ms'
-  return found
-  
+  if fpack.length()>0 then dirpath=dirpath||fsep||fpack
+
+  if find \==null then do
+     ffind = find.replace('.', fsep) 
+     dirpath=dirpath||fsep||ffind
+  end
+
+
+  e=Exception
+  do
+    p = Paths.get(URI.create(jrtprefix||dirpath))
+
+    if Files.isDirectory(p, [LinkOption null]) then do
+  /* We have a directory to check */
+      if rxt.superflag.diag then do
+        if find=null then sfind='[all]'; else sfind=find
+        say '# MODFIND loop start ' dirpath """"module"""" ''''fpack'''' ''''sfind''''
+        start=System.currentTimeMillis()
+      end
+/* Here for a directory search */
+
+      count=0
+      stream = Files.list(p)
+      ap = Object[]
+      ap = stream.toArray()
+      loop i=0 to ap.length-1
+        pp=Path ap[i]
+        if Files.isDirectory(pp, [LinkOption null]) & subpacks then do
+
+          s=pp.toString()
+
+          npack=s.substring(8)                     -- strip /modules
+          npack=npack.substring(module.length() + 1)
+          count = count+modfind(module, npack, null, nickable, importer, subpacks)
+          if rxt.superflag.diag then
+            say '# MODFIND loop end with ['count'] after' System.currentTimeMillis()-start'ms'
+        end
+        else do
+          name = pp.toString()
+          if name.endsWith('.class') then do
+            /* here for a .class file [don't worry about erase .. load will detect] */
+            item=pp
+            class=name.substring(0, name.length()-6)   -- drop .class
+            class=class.substring(name.lastIndexOf(fsep)+1)
+            package=name.substring(0, name.lastIndexOf(fsep))
+            package=package.substring(9)          -- drop /modules/
+            package=package.substring(module.length()+1)
+            package=package.replaceAll(fsep, ".")
+            info=classpool.register(package, class, item, null, nickable, importer, 0)
+            if importer\=null then importclasses.addElement(info) -- discardable
+            count=count+1
+            end
+--        else do
+--          ## say "NOT CLASS " name
+--        end
+        end
+      end
+    end
+    else if find \==null then do
+/* Here for a class search */
+
+      fullfind=find.replace('.','$')'.class'   -- expected file name
+
+      jrt = jrtprefix||module||fsep||fpack||fsep||fullfind
+
+      if rxt.superflag.diag then do
+        say '# MODFIND checking 'jrt
+        start=System.currentTimeMillis()
+      end 
+
+      p = Paths.get(URI.create(jrt))
+      if Files.isReadable(p) then do           
+                                                 -- This is an explicit class import
+        item= p
+      
+        info=classpool.register(package, find, item, null, nickable, importer, 1)
+        if importer\=null then importclasses.addElement(info) -- discardable
+       
+        found=1
+      end
+      else found=0
+      if rxt.superflag.diag then
+        say '# MODFIND checked ['found'] after' System.currentTimeMillis()-start'ms'
+      return found
+    end
+    
+  catch e=IllegalArgumentException          ----catch exception when looking for for arrays of classes,  String[][].class etc
+    found=0
+  catch e=IOException
+    signal RxQuit(rxt, null, 'cannot.read.class', module, e.getMessage())
+  end
+  return count
+
+
   /** DIRFIND -- find classes in a directory
      Arg1 is directory path so far, or null string for current directory
      (system-dependent)
@@ -477,7 +726,7 @@ if found=1 then
      Arg5 is the program from which short name access is allowed
      Arg6 is 1 if subpackages (subdirectories) should be included
      returns the number of files found
-     
+
      Neither path should end in a file separator.
      Registers each class found (of form xxx.xxx.yyy)
      Current directory cannot have subpackages
@@ -494,21 +743,21 @@ if found=1 then
   if fpack.length()>0 then dirpath=dirpath||fsep||fpack
   dir=File(dirpath)                          -- check the path
   if \dir.isDirectory() then return 0          -- directory does not exist
-  
+
   /* We have a directory to check */
   if rxt.superflag.diag then do
     if find=null then sfind='[all]'; else sfind=find
     say '# DIRFIND:' dirpath """"classseg"""" ''''fpack'''' ''''sfind''''
     start=System.currentTimeMillis()
   end
-  
+
   if find\=null then do                      -- single file
     fullfind=find.replace('.','$')'.class'   -- expected file name
     item=File(dir, fullfind)                 -- will be caseless if FS is
     if item.exists() then do                   -- .. not found
-					       -- we should determine exact name spelling here (like RxStreamer),
-					       -- but maybe 1.1 fixes File().  tbd
-					       -- This is an explicit class import
+                                               -- we should determine exact name spelling here (like RxStreamer),
+                                               -- but maybe 1.1 fixes File().  tbd
+                                               -- This is an explicit class import
       info=classpool.register(package, find, item, null, nickable, importer, 1)
       if importer\=null then importclasses.addElement(info) -- discardable
       found=1
@@ -518,15 +767,15 @@ if found=1 then
     say '# DIRFIND checked ['found'] after' System.currentTimeMillis()-start'ms'
   return found
   end
-  
+
   /* Here for a directory search */
   count=0
   entries=dir.list()                           -- could be null <sigh>
   if entries\=null then loop i=0 for entries.length
   name=entries[i]
   if \name.endsWith('.class') then do      -- not a class file
-					   -- isDirectory is expensive, so we test for . first, as Java
-					   -- package names cannot have dots in them.
+                                           -- isDirectory is expensive, so we test for . first, as Java
+                                           -- package names cannot have dots in them.
     if \subpacks then iterate i            -- don't recurse unless asked
     if name.indexOf(int(dot), 0)>=0 then iterate i -- has dot, cannot be directory
     item=File(dir, name)
@@ -558,7 +807,7 @@ return count
      Arg6 is 1 if subpackages should be included
      Arg7 is the package lookaside dictionary
      returns the number of files found
-     
+
      Registers each class found (of form xxx.xxx.yyy)
    */
   method zipfind(zfile=java.util.zip.ZipFile, package=String, find=String,-
@@ -567,26 +816,26 @@ return count
     findname=String null
     if find=null then
       do
-	standard=boolean 0                       -- not standard imports
+        standard=boolean 0                       -- not standard imports
       end
     else
       do
-	standard=(find=='*')                     -- 1 for multi-search
-	if \standard then
-	  findname=find.replace('.','$')         -- expected file name
+        standard=(find=='*')                     -- 1 for multi-search
+        if \standard then
+          findname=find.replace('.','$')         -- expected file name
       end
     -- findname is now non-null for an explicit class match
     explicit=(findname\=null)
-    
+
     e=zfile.entries()                          -- enumerate
     count=0                                    -- files found
     packnamelen=package.length()               -- save length
-    
+
     if rxt.superflag.diag then do
       say '# ZIPFIND '''zfile.getName()''' loop start:' package standard
       start=System.currentTimeMillis()
     end
-    
+
     /* [this loop is time-critical, many hundreds of entries, so minimizes
        conversions] */
     lastpackage=''                                  -- lookaside
@@ -596,13 +845,13 @@ return count
       dname=entry.getName()                         -- get name
       dlen=dname.length()
       if \dname.startsWith('.class', dlen-6) then iterate -- not a class file
-							  -- Split into package and class
-							  lsep=dname.lastIndexOf(int(zsep), dlen-1)
-							  
-						
-													  
+                                                          -- Split into package and class
+                                                          lsep=dname.lastIndexOf(int(zsep), dlen-1)
+
+
+
  fclass=dname.substring(lsep+1, dlen-6)
-								
+
 -- now if doing 1-class search, then check the class name now
 if explicit then do label classmatch
   if fclass==findname then leave classmatch        -- an exact match
@@ -622,24 +871,24 @@ end
 
 -- if rxt.superflag.diag then say '#  see:' fpackage package standard fclass
 if standard then do                           -- special initial call
-					      -- only need to register packages on initial call
-					      -- we save a bit by testing for obvious repeat package
+                                              -- only need to register packages on initial call
+                                              -- we save a bit by testing for obvious repeat package
   if fpackage\==lastpackage then
     if fplen\=0 then do
       addpackage(fpackage, packlook)            -- register if new
       lastpackage=fpackage                      -- save for next test
     end
   loop i=0 for standpacks.length              -- check specials please
-					      -- next line makes assumption that standard packages are
-					      -- reasonably named; could check lengths equal or '.' in right place
-					      -- effectively this implies 'all subpackages'
-    if standpacksscope[i] then				--	standard packages may or may not include subpackages now --(issue #61) --KK-20120916
+                                              -- next line makes assumption that standard packages are
+                                              -- reasonably named; could check lengths equal or '.' in right place
+                                              -- effectively this implies 'all subpackages'
+    if standpacksscope[i] then                          --      standard packages may or may not include subpackages now --(issue #61) --KK-20120916
       if fpackage.startsWith(standpacks[i], 0) then leave
-      else nop		--(issue #61) --KK-20120916
-      else if fpackage.equals(standpacks[i]) then leave		--(issue #61) --KK-20120916
+      else nop          --(issue #61) --KK-20120916
+      else if fpackage.equals(standpacks[i]) then leave         --(issue #61) --KK-20120916
   end i
   if i=standpacks.length then iterate elements -- not found
-					       -- element is 'one of ours'
+                                               -- element is 'one of ours'
 end
 else /* not '*' */ do
 -- [class name already checked if relevant]
@@ -647,10 +896,10 @@ if fpackage\==package then do               -- maybe not our package
   if \subpacks then iterate elements        -- definitely not
   if \fpackage.startsWith(package,0) then iterate elements -- ditto
   if fpackage.charAt(packnamelen)\=='.' then iterate elements -- ditto
-							      -- package is a subpackage and so OK
+                                                              -- package is a subpackage and so OK
 end
     end
-    
+
     /* Match is made */
     info=classpool.register(fpackage, fclass, zfile, entry, nickable,-
                             importer, explicit)
@@ -667,7 +916,7 @@ return count
      Arg1 is directory path so far, or null string for current directory
      (system-dependent)
      Arg2 is lookaside dictionary to record packages for this segment
-     
+
      Arg1 should not end in a separator.
      Registers each package found (of form xxx.xxx.yyy)
      Calls packdirsearch to explore directory tree
@@ -676,7 +925,7 @@ return count
     if classseg=='' then                       -- no segment specified
       dirpath=System.getProperty('user.dir')   -- .. so use current directory
     else dirpath=classseg                     -- [else use specified]
-    
+
     dir=File(dirpath)                     -- check the path
     if \dir.isDirectory() then return       -- directory does not exist
     if rxt.superflag.diag then do
@@ -687,18 +936,18 @@ return count
     -- don't recurse if explicit "current directory please"
     packdirsearch(dir, '', packlook, classseg.length()>0)
     if rxt.superflag.diag then say '# PACKDIRFIND loop end after' System.currentTimeMillis()-start'ms'
-    
+
   /** packdirsearch -- private method to search a directory
      Arg1 is directory object to search
      Arg2 is package name so far [initially null string]
      Arg3 is package lookaside directory
      Arg4 is 1 if recursion allowed
-     
+
      We test for .class files before testing .isDirectory -- this made
      this search 3x faster.
      A package must have at least one file in it (.class or other
      resource).
-     
+
      We make the assumption that package directory names cannot end in
      .class, as the File() + isDirectory call is much slower.
      [In fact we now assume no embedded '.']
@@ -712,9 +961,9 @@ return count
     loop i=0 for entries.length
       name=entries[i]
       if name.indexOf(int(dot), 0)>=0 then do  -- has dot, cannot be directory
-	if hasclasses then iterate i           -- had a .class file already
-	if name.endsWith('.class') then hasclasses=1  -- not a directory
-	iterate i
+        if hasclasses then iterate i           -- had a .class file already
+        if name.endsWith('.class') then hasclasses=1  -- not a directory
+        iterate i
       end
       /* plain name -- could be a directory */
       if \recurse then iterate i                    -- .. if interesting ...
@@ -727,11 +976,11 @@ return count
     end i
     if hasclasses then if package.length()\=0 then addpackage(package, packlook)
     return
-    
+
   /** ADDPACKAGE -- add package to known list, if new
      Arg1 is package name to add; exact case
      Arg2 is lookaside dictionary for segment [null if not from a segment]
-     
+
      For new packages we also must register 'upper' packages, as these
      may exist in a zip file without a corresponding 'directory' entry.
      This is efficiently achieved by recursion.
@@ -739,8 +988,8 @@ return count
   method addpackage(pack=String, packlook=Hashtable null) shared
     if packlook\=null then do
       if packlook.containsKey(pack) then return     -- already known in segment
-						    -- is new in segment, so add entry
-						    packlook.put(pack, pack)
+                                                    -- is new in segment, so add entry
+                                                    packlook.put(pack, pack)
     end
     if packagetable.containsKey(pack) then return   -- already known somewhere
     packagetable.put(pack, pack)                    -- a newie
@@ -752,42 +1001,42 @@ return count
       pack=pack.substring(0, lsep)                    -- drop last segment
       addpackage(pack, packlook)                      -- register (if new)
       return
-      
+
   /** GETPACKAGE -- return package part of a class name
      Arg1 is a (possibly qualified) class name or package name
      Arg2 is 1 if the name cannot be all a package name
-     
+
      returns the package part of the class name (which will be followed
      by at least a dot and one character if the argument is a class
      name), or null if no package name was found.
-     
+
      The longest package in the name is returned; the whole name may be a
      package name iff arg2 is 0
-     
+
      -- used by RxBabel, and in this class
    */
   method getpackage(name=String, haveclass=boolean 1) shared returns String
     lsep=name.length()
-    
+
     if haveclass then                          -- step back one segment
       lsep=name.lastIndexOf(int(dot), lsep-1)  -- find any package separator
-      
+
       loop
-	if lsep<0 then leave                     -- no more dots
-	pack=name.substring(0, lsep)             -- package name?
-	if ispackage(pack) then return pack      -- yes .. done
-	start=lsep-1
-	lsep=name.lastIndexOf(int(dot), start)   -- find any package separator
+        if lsep<0 then leave                     -- no more dots
+        pack=name.substring(0, lsep)             -- package name?
+        if ispackage(pack) then return pack      -- yes .. done
+        start=lsep-1
+        lsep=name.lastIndexOf(int(dot), start)   -- find any package separator
       end
       return null
-      
+
   /** ISPACKAGE -- test if a name is a package name
      Arg1 is package name to test; exact case
      returns 1 if the name is a known package
    */
   method ispackage(pack=String) returns boolean
     return packagetable.get(pack)\=null
-    
+
   /** CURRPACKAGE -- return package name of current directory
      rurns '' if current directory is not on classpath
    */
@@ -799,25 +1048,25 @@ return count
       -- classpath segment is a directory root
       seg=Rexx classpathseg.elementAt(cp)
       if dirpath.left(seg.length()).OpEq(null, seg) then
-	return dirpath.substr(seg.length().toint()+2).translate('.', fsep)
+        return dirpath.substr(seg.length().toint()+2).translate('.', fsep)
     end cp
     return ''    -- none matched
-    
+
   /** LOADCLASS -- load a class and save information for later lookup
      Arg1 is the context cursor
      Arg2 is RxClassInfo object for class to load
      Arg3 is token in case of error
      Arg4 is 1 if visibility is to be tested
      Returns if loaded OK, else signals RxQuit
-     
+
      This should only be called from findclass.
-     
+
      Note that STRICTCASE no longer affects registration of fields
      [1997.11.23], so it could now be called to preload classes.
-     
+
      Interfaces look like classes, with a modifier of 'interface'.
      If the class is the current class, the [old] binary is not loaded.
-     
+
      The RxClassInfo information could be set directly by RxClassImage,
      but the current approach will make it easier to move to use the
      reflection methods in Java 1.1, later (if and when they provide
@@ -829,13 +1078,13 @@ return count
     info.loaded=1                                   -- never again
     if info.type.isPrimitive() then return            -- no 'real' class
     if info.type=RxType.NULL_TYPE then return           -- special case
-    
+
     -- don't need a current class to load a class [e.g., explicit import check]
-    
+
     if rxt.program.flag.verbose>4
       then rxt.say('  Loading class '''info.type.classname'''...')
     else if rxt.superflag.diag then say '# Loadclass' info.type.classname
-    
+
     item=info.fileitem
     if item=null then signal RxQuit(rxt, tok, 'internal.error',-
        'RxClasser: null fileitem for' info.type.classname)
@@ -853,8 +1102,22 @@ return count
       size=zentry.getSize()
     catch e=IOException
       if e<=java.util.zip.ZipException then -- [this is now disguised in 1.1]
-	signal RxQuit(rxt, tok, 'classes.zip.format.error', e.getMessage())
-	signal RxQuit(rxt, tok, 'classes.zip.read.error', e.getMessage())
+        signal RxQuit(rxt, tok, 'classes.zip.format.error', e.getMessage())
+        signal RxQuit(rxt, tok, 'classes.zip.read.error', e.getMessage())
+    end
+--MRE Read class from module
+    else if item<=java.nio.file.Path then do
+      -- Class is in Module
+      pentry=Path item
+
+      if rxt.superflag.diag then say '# ... from module' pentry.toString()
+
+      oo = OpenOption[1]
+      oo[0] = StandardOpenOption.valueOf('READ')
+      is=Files.newInputStream(pentry,oo)
+      size=is.available()
+    catch e=IOException
+      signal RxQuit(rxt, tok, 'cannot.read.class', pentry.toString(), e.getMessage())
     end
     else do
       -- Class is in File
@@ -867,26 +1130,26 @@ return count
     catch e=IOException
       signal RxQuit(rxt, tok, 'cannot.read.class', fentry.getName(), e.getMessage())
     end
-    
+
     /* Loading the RxClassImage was [once] about 2/3 of the total for
        loading a class [needs remeasure] */
     if rxt.superflag.diag then start=System.currentTimeMillis()
     ci=RxClassImage(rxt, info, is, size, tok)  -- load and parse the binary image
 
     -- [RxClassImage will signal any error directly]
-    
+
     /* Check for imposters */
     if info.type.classname\==ci.thisname then
       signal RxQuit(rxt, tok, 'class.imposter', info.type.classname, ci.thisname)
-    
+
     /* Now, if requested, see if the class really is visible */
     if testvis then do
       tp=rxt.program.packagename
       if tp=null then tp=''               -- package is 'current'
       if \ci.isvisible(tp) then
-	signal RxQuit(rxt, tok, 'class.not.public', info.type.classname)
+        signal RxQuit(rxt, tok, 'class.not.public', info.type.classname)
     end
-    
+
     /* Save the Class information that we're interested in */
     info.fullname    =ci.thisfullname     -- [dotted]
     info.parents     =ci.thisparents      -- count of parents
@@ -899,7 +1162,7 @@ return count
     info.isdependent =ci.isdependent
     info.isallpublic =ci.isallpublic
     info.impnames    =ci.interfaces       -- these stay as strings, for now
-    
+
     -- unless won't interpret then save image data for later loadclass use
     if \rxt.wontexec then info.imagedata=ci.data
     --   until needed
@@ -908,7 +1171,7 @@ return count
       info.superinfo=findclass(cursor, ci.supername, null, 0)   -- [perhaps recursive]
     if ci.parentname\=null then
       info.parentinfo=findclass(cursor, ci.parentname, null, 0) -- [perhaps recursive]
-    
+
     -- Load any children classes
   /** This code is correct, but disabled for now as it doesn't actually
    *** achieve anything (we cannot use the information for IMPORT, for
@@ -922,7 +1185,7 @@ return count
      end m
      end
    ***/
-    
+
     /* now process the fields */
     -- private fields are always invisible and are ignored
     -- shared (Java default) fields can be ignored unless:
@@ -940,36 +1203,36 @@ return count
       if arrays=0 then fa=ci.propfields
       else fa=ci.methfields
       loop f=0 for fa.length
-	field=fa[f]
-	if field.fieldvisib=RxField.VIS_PRIV then iterate f
-	registerfield(field)                             -- index it
-	if rxt.program.flag.verbose<5 then iterate f     -- no counting needed
-	if arrays=1 then methods=methods+1
+        field=fa[f]
+        if field.fieldvisib=RxField.VIS_PRIV then iterate f
+        registerfield(field)                             -- index it
+        if rxt.program.flag.verbose<5 then iterate f     -- no counting needed
+        if arrays=1 then methods=methods+1
         else props=props+1
       end f
     end arrays
-    
+
     if rxt.program.flag.verbose>3 then do
       if rxt.superflag.diag then stop=System.currentTimeMillis()
       add=''
       preadd='    '
       if rxt.pass<1 then preadd=''
       if rxt.program.flag.verbose>4 then do
-	preadd=''; add=' (Visible:'
-	if methods=0 then add=add 'no methods'
-	else if methods=1 then add=add 'one method'
-	else add=add methods 'methods'
-	if props=0 then add=add', no properties)'
-	else if props=1 then add=add', one property)'
-	else add=add',' props 'properties)'
+        preadd=''; add=' (Visible:'
+        if methods=0 then add=add 'no methods'
+        else if methods=1 then add=add 'one method'
+        else add=add methods 'methods'
+        if props=0 then add=add', no properties)'
+        else if props=1 then add=add', one property)'
+        else add=add',' props 'properties)'
       end
       if rxt.superflag.diag then add=add '['(stop-start)'ms]'
       rxt.say(preadd'  Loaded' ci.modifiers 'class '''info.type.classname''''add)
     end
-    
+
     ci=null -- done with the image
     return  /* loadclass OK */
-    
+
   /** FINDANYCLASS -- Find a class and return its ClassInfo object
      Arg1 is context cursor, used for parent/child lookup and importer program
      Arg2 is potential class name, either:
@@ -977,7 +1240,7 @@ return count
     -- the short(est) name of a parent class or immediate child
     -- a fullname (in any package)
      Arg3 is token, in case of error
-     
+
      Returns RxClassInfo if the given name names a visible class (or
      primitive type) unambiguously, or null otherwise.
      If the class is found, it is loaded (if needed) and checked for
@@ -997,31 +1260,31 @@ return count
       thisinfo=thisclass.classinfo                 -- current classinfo
       if thisinfo=null then leave checkminor       -- no classinfo yet
       if thisinfo.children\=null then
-	loop i=0 for thisinfo.children.size()
-	  info=RxClassInfo thisinfo.children.elementAt(i)
-	  if rxt.program.flag.strictcase
+        loop i=0 for thisinfo.children.size()
+          info=RxClassInfo thisinfo.children.elementAt(i)
+          if rxt.program.flag.strictcase
             then ischild=(cclass==info.shortname)
           else ischild=(cclass.OpEq(null, info.shortname))
-	  if ischild then leave checkminor -- matched
-	end
+          if ischild then leave checkminor -- matched
+        end
       -- now self and parents
       info=thisinfo
       loop until info=null
-	if rxt.program.flag.strictcase
+        if rxt.program.flag.strictcase
           then isknown=(cclass==info.shortname)
         else isknown=(cclass.OpEq(null, info.shortname))
-	if isknown then leave checkminor -- found
-	info=info.parentinfo             -- up to parent
+        if isknown then leave checkminor -- found
+        info=info.parentinfo             -- up to parent
       end
     end checkminor
     if info=null then info=findpackclass(cursor, 1, cclass, tok, 1)
     if info\=null then if info.isdeprecated then warndep(tok, info)
     return info
-    
+
   /** FINDCLASSBYID -- Find a class and return its ClassInfo object
      Arg1 is the unique class ID
      returns RxClassInfo for the class, or null if not a known local class
-     
+
      Note that all local classes can be retrieved by incrementing the ID
      from 1 until this method returns null.
    */
@@ -1225,17 +1488,17 @@ return count
    lookinfo=findclass(cursor, look, tok, 0)   -- qualify
    if lookinfo=null then return 0             -- unknown class
    return issubclass(cursor, lookinfo, targ, tok)
-   
+
   method issubclass(cursor=RxCursor, lookinfo=RxClassInfo, targ=RxType,-
                     tok=RxToken) returns boolean
     targinfo=findclass(cursor, targ, tok, 0)   -- qualify
     if targinfo=null then return 0             -- unknown class
     return testsubclass(cursor, lookinfo, targinfo, tok, null)
-    
+
   method issubclass(cursor=RxCursor, lookinfo=RxClassInfo, targinfo=RxClassInfo,-
                     tok=RxToken) returns boolean
     return testsubclass(cursor, lookinfo, targinfo, tok, null)
-    
+
   /** Shared recursive routine */
   method testsubclass(cursor=RxCursor, lookinfo=RxClassInfo, targinfo=RxClassInfo,-
                       tok=RxToken, starttype=RxType) private returns boolean
@@ -1246,8 +1509,8 @@ return count
     startname=starttype.classname
     loop label spinup
       if looktype=targtype then return 1                 -- we found it above us
-							 -- [or we are it]
-							 /* Try for the Implements hierarchy, at every level */
+                                                         -- [or we are it]
+                                                         /* Try for the Implements hierarchy, at every level */
     -- Resolve the interface names, if needed
     if lookinfo.impinfos=null then findimps(cursor, lookinfo, tok)
     loop i=0 for lookinfo.impinfos.length
@@ -1355,8 +1618,8 @@ return count
       then isconstructor=(exactname==infostart.shortname)
     else isconstructor=(exactname.OpEq(null,infostart.shortname))
   end
-  
-  searchinginterfaces=0		--		KK
+
+  searchinginterfaces=0         --              KK
 
   retfield=searchfield(cursor, local, lookmeth, lookprop, statics,-
                        infostart, infostart, exactname, argtypearray,-
@@ -1380,7 +1643,7 @@ return count
                      exactname=Rexx, argtypearray=RxType[],-
                      tok=RxToken, checkacc=boolean,-
                      isconstructor=boolean) private returns RxField
-    --	say "searchfield infofrom="infofrom.shortname "infostart="infostart.shortname "exactname="exactname "KK"                    
+    --  say "searchfield infofrom="infofrom.shortname "infostart="infostart.shortname "exactname="exactname "KK"
     gotfield=RxField null
 
   if cursor=null then flag=rxt.superflag               -- external lookup
@@ -1455,7 +1718,7 @@ return count
       loop f=0 for fieldarray.length
         field=fieldarray[f]
         if \field.isMethod() then iterate f         -- not a method
---        say "fieldname="field.fieldname	"field.fieldinfo.shortname="field.fieldinfo.shortname "field.fieldtype.classname="field.fieldtype.classname	 "field.fieldargtypes.length="field.fieldargtypes.length	--		KK
+--        say "fieldname="field.fieldname       "field.fieldinfo.shortname="field.fieldinfo.shortname "field.fieldtype.classname="field.fieldtype.classname      "field.fieldargtypes.length="field.fieldargtypes.length        --              KK
         if lookprop then
          if field.isConstructor() then iterate f    -- paren-less constructor
 
@@ -1491,61 +1754,61 @@ return count
           if cost>fieldcost then iterate f             -- we have a better
           convertlist[a]=aconv                         -- save conversions
           end a
-        if searchinginterfaces then do; if cost \=0 then cost=cost+2;end		--		bias against interface methods because of "ambiguous" message with conversions  -  KK
+        if searchinginterfaces then do; if cost \=0 then cost=cost+2;end                --              bias against interface methods because of "ambiguous" message with conversions  -  KK
         else
-	  do
-            if field.fieldtype \= null then 
-	      tc=findclass(cursor,field.fieldtype.classname,tok,0)
-	    else tc=null
-            if tc \= null then 
-	      if tc.isinterface then if cost \= 0 then cost=cost+1
+          do
+            if field.fieldtype \= null then
+              tc=findclass(cursor,field.fieldtype.classname,tok,0)
+            else tc=null
+            if tc \= null then
+              if tc.isinterface then if cost \= 0 then cost=cost+1
           end
-	--        say "cost="cost		--		KK
+        --        say "cost="cost               --              KK
         if cost>fieldcost then iterate f             -- we have a better
         if cost<fieldcost then do                      -- best so far
           countcost   =1                               -- count is 1
           bestfield   =field                           -- remember which we are
           fieldcost   =cost                            -- best so far
           fieldconvert=convertlist                     -- clean
-						       -- if cost is 0 and name is an exact match then we have a winner
+                                                       -- if cost is 0 and name is an exact match then we have a winner
           if cost=0 then if exact then leave f
         end
         else /* same cost as another */
-	do
+        do
           countcost=countcost+1
           -- update which we are, as fieldhidden set for last (for example)
           bestfield=field
           -- we have to check all, as there may be a lower cost to come,
           -- unless we are at minimum (spelling ambiguousity)
           if cost=0 then leave f        -- definitely ambiguous [and \exact]
-	end
+        end
       end f
       if countcost>0 then
-	do
-	  field=bestfield                 -- this was the one
-	  field.fieldcost=fieldcost
-	  if countcost=1 then do
+        do
+          field=bestfield                 -- this was the one
+          field.fieldcost=fieldcost
+          if countcost=1 then do
             field.fieldambig=0            -- note it is not ambiguous
             field.fieldconvert=fieldconvert
           end
       else /* >1 */
       do               -- it was ambiguous
-	field.fieldambig=1            -- note it is ambiguous, and ..
-	field.fieldconvert=null       -- .. invalidate conversions
+        field.fieldambig=1            -- note it is ambiguous, and ..
+        field.fieldconvert=null       -- .. invalidate conversions
       end
       if flag.diag then
-	do
+        do
           sigargs=argtlist(field.fieldargtypes)
           say '# method:' field.fieldname'('sigargs') returns'-
             field.fieldtype.toSig() 'found in'-
             field.fieldinfo.type.classname '['fieldcost']'
           if field.fieldexcep\=null then say '# +excep:' field.fieldexcep
           if field.fieldambig then say '# Ambiguous'
-	end
+        end
       gotfield = field
       if gotfield=null then leave exact
-      if rxt.program.flag.strictmethods then return field; 
-      if field.fieldcost=0 then return field; 
+      if rxt.program.flag.strictmethods then return field;
+      if field.fieldcost=0 then return field;
       leave exact
         end
 end methodlook
@@ -1566,7 +1829,7 @@ end exact
 /* let's NOT skip the superclass search for interfaces as it causes compile failures when using toString calls for interfaces --  KK 2011-12-26
   if infostart.isinterface then superinfo=RxClassInfo null
    else superinfo=infostart.superinfo             -- get superclass
-*/   
+*/
   superinfo=infostart.superinfo             -- get superclass
   if superinfo\=null then /* have superclass */ do
     lookname=exactname     -- same name
@@ -1575,7 +1838,7 @@ end exact
                          infofrom, superinfo, lookname,-
                          argtypearray, tok, checkacc, isconstructor)
     if newfield\=null then
-    	if newfield.fieldcost=0 then return newfield        -- found in superclass
+        if newfield.fieldcost=0 then return newfield        -- found in superclass
     end
 
   -- Now try the implements list
@@ -1595,15 +1858,15 @@ end exact
       --    if newfield2\=null then return newfield2        -- found in interface class
   end i
   searchinginterfaces=0
-    
+
   if gotfield = null then gotfield=newfield
-  	  else if newfield \= null then
-  	  	  if newfield.fieldcost<gotfield.fieldcost then gotfield=newfield
-  	  
+          else if newfield \= null then
+                  if newfield.fieldcost<gotfield.fieldcost then gotfield=newfield
+
   if gotfield = null then gotfield=newfield2
-  	  else if newfield2 \= null then
-  	  	  if newfield2.fieldcost<gotfield.fieldcost then gotfield=newfield2
-    
+          else if newfield2 \= null then
+                  if newfield2.fieldcost<gotfield.fieldcost then gotfield=newfield2
+
   return gotfield                                     -- not found or found
 --  return null                                     -- not found
 
@@ -1763,21 +2026,21 @@ end exact
         when newfield=null                       then bad=boolean 1
         when newfield.isAbstract()                 then bad=1
         when newfield.fieldtype\=field.fieldtype then
-	  do
-            bad=1		-- KK  this is wrong! must also check against super types!
+          do
+            bad=1               -- KK  this is wrong! must also check against super types!
             returnclass=findclass(cursor,newfield.fieldtype,null,0)
-            if returnclass\=null then					-- missing check here causing null ptr errors   --  20121016 -- KK
+            if returnclass\=null then                                   -- missing check here causing null ptr errors   --  20121016 -- KK
               loop while returnclass.superinfo\=null
-        	if returnclass.type=field.fieldtype then do;bad=0;leave;end
-		  if returnclass.impinfos=null then findimps(cursor, returnclass, null)        	--20150524 -- KK -- fix for issue #115 = can't subclass ConcurrentHashMap in Java 8	
-        	  ii=returnclass.impinfos
-        	  if ii\=null then -											-- missing check here causing null ptr errors   --  20121017 -- KK
-        	     loop n=0 for ii.length
-        	       if ii[n]=null then iterate
-        	       if ii[n].type=field.fieldtype then do;bad=0;leave;end
-        	     end
-        	  if bad=0 then leave
-        	  returnclass=returnclass.superinfo
+                if returnclass.type=field.fieldtype then do;bad=0;leave;end
+                  if returnclass.impinfos=null then findimps(cursor, returnclass, null)         --20150524 -- KK -- fix for issue #115 = can't subclass ConcurrentHashMap in Java 8
+                  ii=returnclass.impinfos
+                  if ii\=null then -                                                                                    -- missing check here causing null ptr errors   --  20121017 -- KK
+                     loop n=0 for ii.length
+                       if ii[n]=null then iterate
+                       if ii[n].type=field.fieldtype then do;bad=0;leave;end
+                     end
+                  if bad=0 then leave
+                  returnclass=returnclass.superinfo
               end
           end
         -- if it was generated for us then it's not really there
@@ -2003,9 +2266,9 @@ end exact
     end
     -- here we import the found class into the classpool
     info = classpool.register(loadedClass.getPackage().getName(),unkName,null,null,1,null,0 )
-    info.loaded = 1 -- this is for 
+    info.loaded = 1 -- this is for
     mods = loadedClass.getModifiers()
-    
+
     info.fullname    = unkName
     info.parents     = 0
     info.minors      = 0
@@ -2019,4 +2282,4 @@ end exact
     info.impnames    = ['']       -- these stay as strings, for now
 
     importclasses.addElement(info)
-    
+

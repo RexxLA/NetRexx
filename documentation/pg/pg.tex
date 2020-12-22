@@ -102,6 +102,7 @@ Java or other JVM languages) in a seamless manner, that is, without
 the need for extra declarations or definitions in the source code.
 \end{description}
 
+
 \chapter{Learning to program}
 \section{Console Based Programs}
 One way that a computer can communicate with a user is to ask
@@ -846,6 +847,38 @@ this. With the first RexxLA release of \nr{} in 2011, the package
 name was changed to \texttt{org.netrexx}, while the runtime package
 name was kept as \texttt{netrexx.lang}, also because some major other
 languages follow this convention.
+
+\chapter{JPMS, The Java Platform Module System}
+Java9+ introduced the Java Platform Module System (JPMS) per JSR 376.
+While Java 9 still loads external classes from files and jar-files, all
+run-time packages now are bundled in modules.
+NetRexx 3 was not capable to load classes from the JPMS.
+
+NetRexx 4 is now supporting the JPMS to find and load its needed run-time
+packages.
+You'll find updates in RxClasser, where method importclasses() is extended to look
+for packages and classes in JPMS' jrt:/ file system.
+
+Method \emph{packmodfind()} walks the jrt:/ directory tree at initialisation and
+registers all found packages. Method modfind() registers classes when imported.
+Method loadclass() loads the class image from the JPMS.
+
+From a NetRexx source code perspective, nothing changes. NetRexx is agnostic
+about modules. It processes packages and classes whether found in directories,
+jar-files or - now - modules.
+All existing source code should run unmodified, with the exception that possibly
+classes could need to be called explicitly when short-named classes now
+exhibit ambiguous classes if the short-named class is found in more than one
+module/package.
+E.g.
+\begin{verbatim}
+/modules/java.base/java/util/spi/ToolProvider.class
+/modules/java.compiler/javax/tools/ToolProvider.class
+\end{verbatim}
+
+NetRexx 4 depends on JSR 203 (NIO.2) and thus requires a minimum JDK level of Java 7,
+whereas NetRexx 3 runs on Java 6.
+NetRexx 4 compiles and runs on Java 7/8 (without JPMS) and on Java 9+ (with JPMS).
 \section{CLASSPATH}
 Most implementations of Java use an environment variable called
 CLASSPATH to indicate a search path for Java classes. The Java Virtual
