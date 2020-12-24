@@ -73,7 +73,6 @@ class NetRexxC
   logfilename='NetRexxC.log'
   
   properties public
-  --  properties private
   -- variables corresponding to our flags
   argarray	   = String[] null           -- arguments for -exec [iff not null]
   compile	   = boolean 1               -- compile if translation OK
@@ -251,12 +250,10 @@ class NetRexxC
       do
 	lookforit=findjavacompiler()
 	if lookforit=="notfound" then 
-	  if javacompiler=null & ecjclass=null then 	say "no java compiler was found" ; else nop
-	  else do 		--		found a possible compiler
-	    --say "Found possible java compiler="lookforit
+	  if javacompiler=null & ecjclass=null then say "no java compiler was found" ; else nop
+	  else do
 	    currentThreadClassLoader = Thread.currentThread().getContextClassLoader()
-	    --// Add the jar to the classpath
-	    --// Chain the current thread classloader
+	    --// Add the jar to the classpath and chain the current thread classloader
 	    newClassLoader = URLClassLoader([File(lookforit).toURI().toURL()], currentThreadClassLoader)
 	    --// Replace the thread classloader - assumes you have permissions to do so
 	    Thread.currentThread().setContextClassLoader(newClassLoader)	
@@ -264,9 +261,8 @@ class NetRexxC
 	    say e
 	  end
       end
-    --		end
     
-    langs=[Rexx 'Nr']                               -- languages supported
+    langs=[Rexx 'Nr'] -- languages supported. There were more.
     
     if \translator.setlanguages(langs) then usage() -- select languages
     else loop label process forever                -- OK languages
@@ -300,7 +296,7 @@ class NetRexxC
       ctime=long 0                 -- compilation
       
       if programstrings\=null then do
-      	programsources=RxSource[filecount]			--	create array of program sources 
+      	programsources=RxSource[filecount]  -- create array of program sources 
       	loop i=0 for filecount
       	  tf=RxFileReader(translator)
       	  if i>=programstrings.length then tf.openfile(Rexx(filearray[i]))
@@ -330,7 +326,7 @@ class NetRexxC
       end /* compilation */
       
       translator.dispose(keep, keepasjava)     -- dispose of .java files
-      translator.summary(exec)     -- summarise
+      translator.summary(exec)                 -- summarise
       
       if time then do
         t10=tenth(ptime)
@@ -340,9 +336,7 @@ class NetRexxC
         wid=tot.length()
         say                           'Translate time:' t10.right(wid)'s'
         if exec & etime>0    then say 'Interpret time:' e10.right(wid)'s'
-	-- 2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
         if compile & ctime>0 then say  Rexx(translator.compilerChoice).right(9) 'time:' c10.right(wid)'s'
-	-- if compile & ctime>0 then say  compilerChoice.right(9) 'time:' c10.right(wid)'s'
 	if etime>0 | ctime>0 then say '    Total time:' tot.right(wid)'s'
       end -- time
     end havefiles
@@ -356,11 +350,10 @@ class NetRexxC
       say "\nEnter new files and additional options, '=' to repeat, 'exit' to end:"
       rt.gc()                                -- good moment to garbage-collect
       response=ask
-      if response = null then leave process			--		fix rare nullpointer errors - KK
+      if response = null then leave process
       if response.OpNotEq(null, '') then leave -- something to process
       usage()
     end prompt
-    -- say 'Mem:' rt.totalmemory rt.freememory 'Used:' rt.totalmemory-rt.freememory
     RexxTrace.reset()      -- reset trace flagging
     if response.OpEq(null, '=') then iterate -- simply repeat
     if response.OpEq(null, 'exit') then leave process -- done
@@ -399,15 +392,15 @@ class NetRexxC
       else do
 	nextpathcheck=File(nextpath)
 	if nextpathcheck.exists() then cpr2=cpr2||ps||nextpath
-	else do				-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
-	  if "\\* /*".pos(nextpath.right(2))>>0 | "\\** /**".pos(nextpath.right(3))>>0  then cpr2=cpr2||ps||wildcard(nextpath)	-- 2015.06.05 fix issue #127  -- KK --
+	else do
+	  if "\\* /*".pos(nextpath.right(2))>>0 | "\\** /**".pos(nextpath.right(3))>>0  then cpr2=cpr2||ps||wildcard(nextpath)
 	  else say "Warning: classpath entry does not exist and has been dropped:" nextpath
-	end -- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
+	end
       end
     end
     classpath=cpr2.strip("b",ps).toString()
     
-  method wildcard(dirstring, passback=Rexx "") returns Rexx				-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
+  method wildcard(dirstring, passback=Rexx "") returns Rexx
     ps=File.pathSeparator; fs=File.separator
     recursive=(dirstring.right(2)=="**")
     basename=dirstring.changestr("/**","").changestr("\\**","").changestr("/*","").changestr("\\*","")
@@ -424,23 +417,23 @@ class NetRexxC
   method findjavacompiler returns Rexx
     do
       ps=File.pathSeparator; fs=File.separator
-      testpath=classpath			--		first check verified classpath in case customer added one or wildcarded one in that Java does not know about  --  2015.06.05 -- KK --
-      if testpath\==null then		-- 2015.06.11 -- fix extraneous nullpointer message in findjavacompiler compiler search -- KK
+      testpath=classpath
+      if testpath\==null then
 	loop while testpath\==""
 	  parse testpath testfile (ps) testpath
 	  if testfile=="." then iterate
 	  fname=testfile.substr(testfile.lastpos(fs).toint()+1) 
 	  if "tools.jar NetRexxF.jar".pos(fname)>>0 | (fname.left(3)=="ecj" & fname.right(4)==".jar") then return testfile
 	end
-      dir=Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()		--		Get NetRexxC location
-      if dir.substring(0,1)==File.separator then dir=File(dir).getParent()		--		*nix is not winblows!
+      dir=Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()
+      if dir.substring(0,1)==File.separator then dir=File(dir).getParent() --*nix is not winblows!
       else dir=File(dir.substring(1)).getParent()
       candidate=checkdirforcompiler(dir)
       if candidate\=="nope"then return candidate	
-      dir=File(dir).getParent()		--	up one from NetRexxC loc
+      dir=File(dir).getParent()         -- up one from NetRexxC loc
       candidate=checkdirforcompiler(dir)
       if candidate\=="nope"then return candidate			
-      dir=System.getProperty("user.dir")		--		current directory
+      dir=System.getProperty("user.dir") --current directory
       candidate=checkdirforcompiler(dir)
       if candidate\=="nope"then return candidate
       java_home= System.getProperty("java.home")
@@ -457,7 +450,7 @@ class NetRexxC
     end
     return "notfound"
     
-  method checkdirforcompiler(base=String)	static returns Rexx
+  method checkdirforcompiler(base=String) static returns Rexx
     fs=File.separator
     bf=File(base)
     if \bf.isDirectory() then return "nope"
@@ -506,6 +499,9 @@ class NetRexxC
       select
         when arglow=='help' then do
 	  helpreq=1
+	end
+	when arglow=='-help' then do
+	  helpreq=1
 	end      	
         when arglow=='nocompile' then do
 	  compile=0
@@ -547,8 +543,8 @@ class NetRexxC
 	  keep=1
 	end
 	when arglow=='nokeepasjava' then keepasjava=0
-	when arglow=='javac' then do;javac=1;ecj=0;end	-- can't prefer both javac and ecj compiler -- KK --
-	when arglow=='ecj' then do;javac=0;ecj=1;end	-- can't prefer both javac and ecj compiler -- KK --
+	when arglow=='javac' then do;javac=1;ecj=0;end	-- can't prefer both javac and ecj compiler KK
+	when arglow=='ecj' then do;javac=0;ecj=1;end	-- can't prefer both javac and ecj compiler KK
 	when arglow=='classpath' | arglow=='cp' then do
    	  a=a+1
    	  if a<arg.length then do
@@ -593,7 +589,7 @@ return
     if usageone then do
       if this.getClass().getPackage()\=null then vv=this.getClass().getPackage().getImplementationVersion()
       else vv=''
-      if vv=null then vv='' /* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared -- KK ----Kermit */
+      if vv=null then vv=''
       parse vv . . . vv
       nv = NrVersion()
       say nv.getLogo() nv.getFullVersion() vv

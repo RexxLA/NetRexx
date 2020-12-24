@@ -91,12 +91,12 @@ class RxTranslator
  properties shared            -- visible within the package
 
   /* Globals (shared by all programs in the package) */
-  keep    =boolean 0              -- keep the java file -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-  keepasjava = boolean 0      -- keep java output and do not rename it to .keep         -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-  classlist=java.util.List                        --    allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-  javac = boolean 0             -- prefer javac compiler if available
-  ecj = boolean 0                       -- prefer ecj compiler if available
-  compilerChoice = String               --      2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
+  keep    =boolean 0          -- keep the java file
+  keepasjava = boolean 0      -- keep java output and do not rename it to .keep
+  classlist=java.util.List    -- allow return of class files to caller in memory
+  javac = boolean 0           -- prefer javac compiler if available
+  ecj = boolean 0             -- prefer ecj compiler if available
+  compilerChoice = String           
 
   babels      =RxBabel[]      -- language-specific key classes
   classer     =RxClasser      -- class handler
@@ -142,20 +142,20 @@ class RxTranslator
                               -- [these will have hierarchies imported]
 
   /* Standard import moduless */
--- MRE for JDK9]
---  moduleimports =String[]     -- array of module names, e.g., 'java.base'
---                              -- [these will have hierarchies imported]
-
- properties constant shared   -- constants, visible within the package
-  convertible     =50              -- conversion possible (e.g., to String)
-
- properties private
+  -- MRE for JDK9]
+  -- moduleimports =String[]      -- array of module names, e.g., 'java.base'
+  --                              -- [these will have hierarchies imported]
+  
+  properties constant shared   -- constants, visible within the package
+  convertible     =50          -- conversion possible (e.g., to String)
+  
+  properties private
   programlist     =RxProgram[]     -- array of corresponding programs
   savecon         =PrintStream     -- con file
   savelog         =PrintWriter     -- log file
   starttime       =Rexx ''         -- translation start timestamp
   badjavac        =boolean 0       -- 1 if javac compile failed
-
+  
  /** RXTRANSLATOR -- constructor, makes a new Translator instance
     */
  method RxTranslator()
@@ -169,123 +169,130 @@ class RxTranslator
   parse Date().toString() . mon day time . year .   -- get date and decompose it
   starttime=day.toint()+0 mon year time             -- timestamp for output
 
-  /* Set up an initial temporary (dummy) program object and flags, to
-     provide a context for errors. */
+  /*
+   * Set up an initial temporary (dummy) program object and flags, to
+   * provide a context for errors. */
   programlist=RxProgram[1]
   program=RxProgram(this, superflag, '')
   programlist[0]=program
 
-  /* Set up the default imports list */
-  /* Temporary: later we will have per-language imports */
-  /*            [or shared + per-language]              */
-
-/* this interface did not allow import of a single package -
-                        importing a package branch will now require a "." at the end like in the import statement - Kermit
-   this way the base swing package can now be added    --issue #61--Kermit */
-
-    imports=[String 'netrexx.lang.',-
+  /*
+   * Set up the default imports list
+   * Temporary: later we will have per-language imports
+   *            [or shared + per-language]
+   */
+  
+  /*
+   * this interface did not allow import of a single package -
+   * importing a package branch will now require a "." at the end like in the import statement
+   * this way the base swing package can now be added    --issue #61--Kermit
+   */
+  
+  imports=[String 'netrexx.lang.',-
           'java.lang.', 'java.io.',   'java.net.',-
           'java.util.', 'java.awt.',  'java.applet.', 'javax.swing']
-
+  
   return
+  
+  -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  
+  method setkeeps(k1,k2,cl=java.util.List,javac1,ecj1)
+    keep=k1
+    keepasjava=k2
+    classlist=cl
+    javac=javac1
+    ecj=ecj1
 
-        -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
-
-        method setkeeps(k1,k2,cl=java.util.List,javac1,ecj1)
-                keep=k1
-                keepasjava=k2
-                classlist=cl
-                javac=javac1
-                ecj=ecj1
-
- /** -------------------------------------------------------------- */
- /* SETLANGUAGES -- set language-specific constants                */
- /* Arg1 is an array of prefixes of known ZzBabel classes          */
- /*      e.g., ['Nr', 'Bx'].                                       */
- /* returns 1 if successful (all languages found), 0 otherwise     */
- /* This must be called before TRANSLATE                           */
- /* -------------------------------------------------------------- */
- /* The prefixes array (which must contain at least one element)   */
- /* lists the supported languages for this run.                    */
- /* If more that one language is provided, then the language for   */
- /* a program is determined by its file extension; if there is no  */
- /* file extension then the default extensions are tried in the    */
- /* order defined in the prefixes array.                           */
- /*                                                                */
- /* Each prefix loads an RxBabel class, the key to hauling in      */
- /* all the other language-specific classes, eventually.  This is  */
- /* the only dynamic load; it prevents all translators being       */
- /* loaded and also allows subsets of languages to be distributed. */
- /* -------------------------------------------------------------- */
- method setlanguages(prefixes=Rexx[]) returns boolean
-  packagename =Rexx           -- where to look for Babels
-  ourname=Rexx RxTranslator.class.getName()
-  packagename=ourname.left(ourname.length().toint()-13)
-  babels=RxBabel[prefixes.length]
-  loop b=0 for prefixes.length
-    /* Construct an object of the ZzBabel class [where Zz is the
-       prefix for a given language] */
-    bclass=Class.forName(packagename'.'prefixes[b]'Babel')
-    -- find the constructor that takes one of us as an argument
-    bcons=bclass.getConstructor([RxTranslator.class])
-    -- and invoke it, with us as parent
-    babels[b]=RxBabel bcons.newInstance([Object this])
-  catch Exception
-    return 0
-  end
-  return 1
-
- /** -------------------------------------------------------------- */
- /* TRANSLATE -- translate one or more program files or sources    */
- /* Arg1 is an array of flagwords (-xxx)                           */
- /* Arg2 is either an array of at least one filename or an array   */
- /*         of at least one RxSource                               */
- /* Arg3 is the console file to use [null if not required]         */
- /* Arg4 is the log file to use [null if not required]             */
- /* Arg5 is 1 if we can assume no interpretation will happen       */
- /* returns 1 if translation was OK (no errors)                    */
- /*                                                                */
- /* Arg3 and Arg4 are assumed checked.  If an error occurs while   */
- /* writing either, we assume the environment handles (as they are */
- /* both Print streams).  Similarly, it is the responsibility of   */
- /* the caller to create and close the files.  Errors in the log   */
- /* file may be checked by calling checkError.                     */
- /* -------------------------------------------------------------- */
- /* This is a multi-pass pseudo-parallel process; we do each phase */
- /* on all files before proceeding to the next phase, so cross-    */
- /* references can be resolved.                                    */
- /* -------------------------------------------------------------- */
- -- The next line is the historical 'filenames only' method
- method translate(flags=Rexx[], files=Rexx[],-
-                  con=PrintStream System.out, log=PrintWriter null,-
-                  noexec=boolean 0) returns boolean
-  savecon=con                      -- save
-  savelog=log                      -- ..
-  wontexec=noexec                  -- ..
-  ok=checkflags(flags)             -- sets superflag from flags, shows logo
-  if files.length=0 then do
-    -- next message is really an internal error now
-    RxQuit(this, null, 'no.file.specifications')
-    ok=0
+  /** -------------------------------------------------------------- */
+    /* SETLANGUAGES -- set language-specific constants                */
+    /* Arg1 is an array of prefixes of known ZzBabel classes          */
+    /*      e.g., ['Nr', 'Bx'].                                       */
+    /* returns 1 if successful (all languages found), 0 otherwise     */
+    /* This must be called before TRANSLATE                           */
+    /* -------------------------------------------------------------- */
+    /* The prefixes array (which must contain at least one element)   */
+    /* lists the supported languages for this run.                    */
+    /* If more that one language is provided, then the language for   */
+    /* a program is determined by its file extension; if there is no  */
+    /* file extension then the default extensions are tried in the    */
+    /* order defined in the prefixes array.                           */
+    /*                                                                */
+    /* Each prefix loads an RxBabel class, the key to hauling in      */
+    /* all the other language-specific classes, eventually.  This is  */
+    /* the only dynamic load; it prevents all translators being       */
+    /* loaded and also allows subsets of languages to be distributed. */
+    
+  method setlanguages(prefixes=Rexx[]) returns boolean
+    packagename =Rexx           -- where to look for Babels
+    ourname=Rexx RxTranslator.class.getName()
+    packagename=ourname.left(ourname.length().toint()-13)
+    babels=RxBabel[prefixes.length]
+    loop b=0 for prefixes.length
+      /* Construct an object of the ZzBabel class [where Zz is the
+	 prefix for a given language] */
+      bclass=Class.forName(packagename'.'prefixes[b]'Babel')
+      -- find the constructor that takes one of us as an argument
+      bcons=bclass.getConstructor([RxTranslator.class])
+      -- and invoke it, with us as parent
+      babels[b]=RxBabel bcons.newInstance([Object this])
+    catch Exception
+      return 0
     end
-   else sources=RxSource[files.length]
-
-  --  make a source for each file
-  if ok then loop f=0 for files.length
+    return 1
+    
+  /**
+   * TRANSLATE -- translate one or more program files or sources 
+   * Arg1 is an array of flagwords (-xxx)
+   * Arg2 is either an array of at least one filename or an array
+   *         of at least one RxSource
+   * Arg3 is the console file to use [null if not required]
+   * Arg4 is the log file to use [null if not required]
+   * Arg5 is 1 if we can assume no interpretation will happen
+   * returns 1 if translation was OK (no errors)
+   *
+   * Arg3 and Arg4 are assumed checked.  If an error occurs while
+   * writing either, we assume the environment handles (as they are
+   * both Print streams).  Similarly, it is the responsibility of
+   * the caller to create and close the files.  Errors in the log
+   * file may be checked by calling checkError.
+   * This is a multi-pass pseudo-parallel process; we do each phase
+   * on all files before proceeding to the next phase, so cross-
+   * references can be resolved.
+   */
+    
+    -- The next line is the historical 'filenames only' method
+  method translate(flags=Rexx[], files=Rexx[],-
+                   con=PrintStream System.out, log=PrintWriter null,-
+                   noexec=boolean 0) returns boolean
+    savecon=con                      -- save
+    savelog=log                      -- ..
+    wontexec=noexec                  -- ..
+    ok=checkflags(flags)             -- sets superflag from flags, shows logo
+    if files.length=0 then
+      do
+	-- next message is really an internal error now
+	RxQuit(this, null, 'no.file.specifications')
+	ok=0
+      end
+    else sources=RxSource[files.length]
+    
+    --  make a source for each file
+    if ok then loop f=0 for files.length
     reader=RxFileReader(this)
     reader.openfile(files[f])      -- locate and open the file
     sources[f]=reader              -- save to pass on
-    -- Found the file, check it's not a duplicate file.
+    
     name=reader.getName()
     path=reader.getPath()
     if f>0 then loop ff=0 for f
-      if sources[ff].getName()==name then
-       if sources[ff].getPath()==path then do
-        if path\=null then name=path||name
-        RxQuit(this, null, 'duplicate.program', name)
-        ok=0
-        end
-      end ff
+    if sources[ff].getName()==name then
+      if sources[ff].getPath()==path then
+	do
+	  if path\=null then name=path||name
+	  RxQuit(this, null, 'duplicate.program', name)
+	  ok=0
+	end
+   end ff
   catch RxQuit                     -- abandon if failed
     ok=0
     end f
@@ -735,17 +742,16 @@ class RxTranslator
 	    select
 	
 	      when compilerChoice == "javac" then do
-		
 		if program.flag.diag then say '# compiling' program.programname 'using javac'
 		do
 		  if javacompiler==null then
 		    javacompiler=JavaCompiler toolman.newInstance()
-		  if javacompiler==null then javacok=boolean 0										    --		flag compile failed
+		  if javacompiler==null then javacok=boolean 0 -- compile failed
 		  else do
-		    --		make file manager to capture class files in memory
+		    -- make file manager to capture class files in memory
 		    fileManager = RxForwardingJavaFileManager( -
-				  JavaFileManager javacompiler.getStandardFileManager(null, null, null))
-		    --		run the Java compiler on the memory strings
+							      JavaFileManager javacompiler.getStandardFileManager(null, null, null))
+		    -- run the Java compiler on the memory strings
 		    javacok=javacompiler.getTask(null,-
 						 fileManager,null,Arrays.asList(optarray),-
 						 null,-
@@ -767,17 +773,16 @@ class RxTranslator
 	
 	      when compilerChoice == "ecj" then do
 		if program.flag.diag then say '# compiling' program.programname 'using eclipse batch compiler'
-		--	javacok=org.eclipse.jdt.core.compiler.batch.BatchCompiler.compile(args, PrintWriter(System.out), PrintWriter(System.err), null)
 		do
 		  ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')
 		  javacompiler=JavaCompiler ecjclass.newInstance()
-		  --		make file manager to capture class files in memory
+		  -- make file manager to capture class files in memory
 		  fileManager = RxForwardingJavaFileManager(JavaFileManager javacompiler.getStandardFileManager(null, null, null))
-		  --		run the Java compiler on the memory strings
-		
+		  -- run the Java compiler on the memory strings
+		  
 		  javacok=javacompiler.getTask(null,-
 					       fileManager,-
-					       null,-
+					       this.diagListener(),-
 					       Arrays.asList(optarray),-
 					       null,-
 					       Arrays.asList(jfoarray)).call().booleanValue()
@@ -1058,4 +1063,6 @@ return
   method main(s=String[]) static
     say '??'
 
-
+class RxTranslator.diagListener implements javax.tools.DiagnosticListener dependent
+  method report(s=Diagnostic)
+    s.getMessage(null)
