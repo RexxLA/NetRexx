@@ -7,21 +7,22 @@
 */
 
 /*
-  20/ 4/ 4  Documentation.
-  20/ 2/ 5  hexstrings and binstrings; documentation
-  19/09/16  anycase synonyms fix for logic; add CASELESS per CMS
   99/05/09  use mrc() instead of rc().  ejt
   98/06/20  aobj; binary; New; derived from FRLABLE.  JHennick
+  19/09/16  anycase synonyms fix for logic; add CASELESS per CMS. Jeff Hennick
+  20/ 2/ 5  hexstrings and binstrings; documentation. Jeff Hennick
+  20/12/26  fix for numeric to string. Jeff Hennick
 
 */
 
 /** between
 
 >>--BETWEEN--+----------------+--+-delimitedString1-+-+-delimitedString2-+---><-
-             +-ANYcase-(2)----+  +-Xhexstring1------+ +-Xhexstring2------+
+             +-ANYcase-(1)(2)-+  +-Xhexstring1------+ +-Xhexstring2------+
                                  +-Hhexstring1------+ +-Hhexstring2------+
                                  +-Bbinstring1------+ +-Bbinstring2------+
                                                       +-n----------------+
+ (1) NJPipes only.
  (2) CASEANY, CASEIGNORE, CASELESS, and IGNORECASE are all synonyms for ANYCASE.
 
   FRLABLE Contributed by Chuck Moore.
@@ -63,13 +64,17 @@ method run()
 
    parse args . str2 .
 
-   d = getstring(res)
-   toLabel = d['d']
-   bin2 = d['b']
-   hex2 = d['h']
+   hex2 = 0
+   if res.datatype('W') then toLabel = res
+   else do
+     d = getstring(res)
+     toLabel = d['d']
+     bin2 = d['b']
+     hex2 = d['h']
 
-   if d['r'] \= '' then do
-      Emsg(11,'Error --' getName() 'extra argument:' d['r'])
+     if d['r'] \= '' then do
+        Emsg(11,'Error --' getName() 'extra argument:' d['r'])
+     end
    end
 
    if toLabel = '' then toLabel = str2
@@ -86,10 +91,10 @@ method run()
          number = 0
          _toLabel_len = toLabel.length
       end
-   end
 
-   if toLabel = '' then do
-      Emsg(11,'Error --' getName() 'No "toLabel"')
+     if toLabel = '' then do
+       Emsg(11,'Error --' getName() 'No "toLabel"')
+     end
    end
 
    _Label_len = Label.length()               -- handy to have around for speed
