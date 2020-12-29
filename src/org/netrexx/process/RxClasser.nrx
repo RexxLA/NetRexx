@@ -193,7 +193,7 @@ class RxClasser
    
    modpacktable=Hashtable(300)      -- stores owning module per package
 
-   jrtprefix=jrtprefix||fsep
+   jrtprefix=jrtprefix||zsep
    
    o=Object.class.getResource('Object.class')   -- check for 1.1.8+ 
    os=o.toString()
@@ -203,7 +203,7 @@ class RxClasser
      p = Paths.get(URI.create(c))
 
      if \Files.isReadable(p) then do
-       jrtprefix=jrtprefix||'modules'||fsep               -- CSR JDK-8227076, fix for GraalVM/OpenJDK 11
+       jrtprefix=jrtprefix||'modules'||zsep               -- CSR JDK-8227076, fix for GraalVM/OpenJDK 11
      end                                                  -- we assume it's readable, or RxQuit
      if rxt.superflag.diag then do
        say '# Running JDK9+ with jrt prefix' jrtprefix
@@ -580,11 +580,11 @@ return
         if registered == 0 then do
           regpack=p.toString()
           mod = regpack.substring(9)                  -- strip /modules/
-          pos=mod.indexOf(fsep)                       -- first /
+          pos=mod.indexOf(zsep)                       -- first /
           if pos > 0 then do                          
             mod=mod.substring(0, pos)
             regpack=regpack.substring(9+mod.length()+1)
-            regpack=regpack.replace(fsep, '.')
+            regpack=regpack.replace(zsep, '.')
 
             modpacktable.put(regpack, mod)
             addpackage(regpack, null)
@@ -620,14 +620,14 @@ method modfind(module=String, package=String, find=String,-
 
   if \isJrt then return 0                    -- shouldn't occur
 
-  fpack=package.replace('.',fsep)            -- package name with fileseps
+  fpack=package.replace('.',zsep)            -- package name with fileseps
   dirpath=module                             
   
-  if fpack.length()>0 then dirpath=dirpath||fsep||fpack
+  if fpack.length()>0 then dirpath=dirpath||zsep||fpack
 
   if find \==null then do
-     ffind = find.replace('.', fsep) 
-     dirpath=dirpath||fsep||ffind
+     ffind = find.replace('.', zsep) 
+     dirpath=dirpath||zsep||ffind
   end
 
 
@@ -666,11 +666,11 @@ method modfind(module=String, package=String, find=String,-
             /* here for a .class file [don't worry about erase .. load will detect] */
             item=pp
             class=name.substring(0, name.length()-6)   -- drop .class
-            class=class.substring(name.lastIndexOf(fsep)+1)
-            package=name.substring(0, name.lastIndexOf(fsep))
+            class=class.substring(name.lastIndexOf(zsep)+1)
+            package=name.substring(0, name.lastIndexOf(zsep))
             package=package.substring(9)          -- drop /modules/
             package=package.substring(module.length()+1)
-            package=package.replaceAll(fsep, ".")
+            package=package.replaceAll(zsep, ".")
             info=classpool.register(package, class, item, null, nickable, importer, 0)
             if importer\=null then importclasses.addElement(info) -- discardable
             count=count+1
@@ -686,7 +686,7 @@ method modfind(module=String, package=String, find=String,-
 
       fullfind=find.replace('.','$')'.class'   -- expected file name
 
-      jrt = jrtprefix||module||fsep||fpack||fsep||fullfind
+      jrt = jrtprefix||module||zsep||fpack||zsep||fullfind
 
       if rxt.superflag.diag then do
         say '# MODFIND checking 'jrt
