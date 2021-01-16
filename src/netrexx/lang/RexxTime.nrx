@@ -17,9 +17,10 @@ package netrexx.lang
 /* 04.09.2007: time('N') returns hh':'mm':'ss  added                          */
 /* 01.01.2021: rvj redid all of date, based on Rexx ANSI/ISO/INCITS standard  */
 /* 09.01.2021: rvj redid time'E' and time'R'                                  */
+/* 15.01.2021: rvj added date('C') following a recipe by Walter Pachl         */
 /******************************************************************************/
 options decimal nobinary nostrictcase
-
+--trace results
 -- absolutely needed
 numeric digits 18
 
@@ -174,6 +175,16 @@ class RexxTime public
     select
       when format = 'B' then
         return Base
+      when format = 'C' then
+	do
+	  yy=Year
+	  y0=yy.left(1)||'000' /* start of century */
+	  yp=(yy-y0) /* preceding years */
+	  ly=(yp-1)%4 /* number of leap years */
+	  if y0//4=0 then ly=ly+1 /* if start of century way a leap year */
+	  dca=365*yp+ly+Days
+	  return dca
+	end
       when format = 'D' then
         return Days
       when format = 'E' then return -
@@ -259,7 +270,7 @@ class RexxTime public
 	 otherwise Logic = 'EOU' /* or BD */
        end
        /* Next try for year without century */
-       if logic = 'EOU' then
+       if Logic = 'EOU' then
 	 Select
 	   when InOption == 'E' then
              if InSeparator == '' then parse Value Day +3 Month +3 YY
@@ -293,6 +304,11 @@ class RexxTime public
 	   Year = Date('S').left(4)
 	   Days = Value - 1 /* 'D' includes current day */
 	 end
+	 if InOption = 'C' then do
+	   Year = nativeDate().right(4).left(1)'000'
+	   Days = Value - 1 /* 'C' includes current day */
+	 end
+
 	 /* Convert to BaseDays */
 	 if InOption <> 'B' then
 	   do
