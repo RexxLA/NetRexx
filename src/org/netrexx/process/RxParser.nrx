@@ -37,6 +37,7 @@
 /* 2000.02.18 Provide a parsing cursor object, always updated         */
 /* 2013.07.12 Issue warning for unqualified properties statement      */
 /* 2016.01.01 support for NETREXX-122 (annotations)                   */
+/* 2021.01.15 support for ADDRESS instruction -- MRE                  */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -314,7 +315,12 @@ class RxParser uses RxCode
 
     /* --- Here only for pass1 and pass2 --- */
    if tok.type\=RxToken.SYM then if tok.type\=RxToken.AT then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
- 
+
+--   if tok.type\=RxToken.SYM then
+--     if tok.type\=RxToken.AT then do
+--       say '#MRE KEYWORD EXPECTED 2'
+--       signal RxQuit(rxt, tok, 'property.or.keyword.expected')
+--     end
 
     
     if willexec then do                 -- add clause to class chain
@@ -428,6 +434,13 @@ class RxParser uses RxCode
         end
         return 1
         end
+--MRE        
+      when rxt.address==1 & iskey(tok.value,'ADDRESS') then do 
+        o=NrAddress NrAddress(rxt)
+        o.scan(rxt.pass)
+        iterate
+        end     
+
       /* The next group are for better error messages */
       when iskey(tok.value,'OPTIONS') then NrOptions(rxt)
       when iskey(tok.value,'PACKAGE') then NrPackage(rxt)
@@ -719,8 +732,10 @@ class RxParser uses RxCode
       end
 
     /* expecting a keyword instruction */
-    if t\=RxToken.SYM then if t\=RxToken.AT then
-      signal RxError(rxt, tok, 'keyword.expected')
+    if t\=RxToken.SYM then 
+      if t\=RxToken.AT then do
+        if rxt.address==0 then signal RxError(rxt, tok, 'keyword.expected')  -- MRE allow if -address flag  
+      end  
       if t2\=RxToken.SP then
 	if t2\=RxToken.END then
 	  if t2\=RxToken.STR then
@@ -792,16 +807,21 @@ class RxParser uses RxCode
         when iskey(tok.value,'NUMERIC')    then do
           tracer.traceclause(cursor.curclause)
           item=NrNumeric(rxt); end
+
+        when rxt.address==1 & iskey(tok.value,'ADDRESS')    then do  -- MRE allow if -address
+-- say '#MRE ADDRESS'        
+          tracer.traceclause(cursor.curclause)
+          item=NrAddress(rxt); end
         when iskey(tok.value,'TRACE')      then do
           tracer.traceclause(cursor.curclause)
-	  item=cursor.curclause.lookaside          --it was constructed in the past
+	        item=cursor.curclause.lookaside          --it was constructed in the past
         end
-	when tok.type=RxToken.AT then
-	do
-	  item=NrAnnotate(rxt)
-	  cursor.curmethod.setAnnotation(tok.value)
-	  --leave constructkeyword
-	end
+	      when tok.type=RxToken.AT then
+	      do
+	        item=NrAnnotate(rxt)
+	        cursor.curmethod.setAnnotation(tok.value)
+	       --leave constructkeyword
+      	end
  	
         /* The remainder are constructed for better error messages */
         when iskey(tok.value,'PROPERTIES') then NrProperties(rxt)
@@ -811,13 +831,28 @@ class RxParser uses RxCode
         otherwise
           /* Improved error message -- symbol unrecognised */
           var=rxt.program.pooler.findvar(cursor, tok.value, tok, 0, 0, 0)
-          select
-            when var=null                                then key='keyword.expected'
-            when (var.varatts & RxVariable.VAR_ARG)\=0   then key='bad.argument.use'
-            when (var.varatts & RxVariable.VAR_LOCAL)\=0 then key='bad.variable.use'
-            otherwise                                         key='bad.property.use'
-            end
-          signal RxQuit(rxt, tok, key)
+          if rxt.address==0 then do
+            select
+              when var=null                                then key='keyword.expected'
+              when (var.varatts & RxVariable.VAR_ARG)\=0   then key='bad.argument.use'
+              when (var.varatts & RxVariable.VAR_LOCAL)\=0 then key='bad.variable.use'
+              otherwise                                         key='bad.property.use'
+              end
+            signal RxQuit(rxt, tok, key)
+          end
+          else do
+            select
+              when var=null                                then key='keyword.expected'
+              when (var.varatts & RxVariable.VAR_ARG)\=0   then key='bad.argument.use'
+              when (var.varatts & RxVariable.VAR_LOCAL)\=0 then key='bad.variable.use'
+              otherwise 
+                key='bad.property.use'
+                signal RxQuit(rxt, tok, key)           -- MRE don't 'ADDRESS' properties 
+              end
+            tracer.traceclause(cursor.curclause)       -- MRE address it
+            item=NrAddress(rxt);
+          end
+
         end /* select certains */
       end constructkeyword
 
