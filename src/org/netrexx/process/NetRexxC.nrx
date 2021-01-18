@@ -62,6 +62,7 @@
 /* 2015.06.11 #134 time output needs correct compiler name -- KK      */
 /* 2015.06.11 fix nullpointer message in findjavacompiler -- KK       */
 /* 2019.08.05 add clgMain to compile, load and go for main method rvj */
+/* 2021.01.15 add option to allow ADDRESS instructions -- MRE         */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -82,11 +83,12 @@ class NetRexxC
   prompt	   = boolean 0               -- prompt after first execution
   time		   = boolean 0               -- display timings
   savelog	   = boolean 0               -- need PrintWriter
-  warnexit0	   = boolean 0               -- exit with zero return code on warnings
-  keepasjava	   = boolean 0               -- keep java output and do not rename it to .keep
+  warnexit0	 = boolean 0               -- exit with zero return code on warnings
+  keepasjava = boolean 0               -- keep java output and do not rename it to .keep
   javac		   = boolean 0               -- prefer javac compiler if available
-  ecj		   = boolean 0               -- prefer ecj compiler if available
-  helpreq          = boolean 0		     -- explicit help request? 2015-05-15 -KK- 
+  ecj		     = boolean 0               -- prefer ecj compiler if available
+  helpreq    = boolean 0		           -- explicit help request? 2015-05-15 -KK-
+  address    = boolean 0               -- prefer no address processing 2021-01-15 MRE
 					     -- next two are set by parseline
   files		   = Vector(10)              -- collects file specifications
   flags		   = Vector(10)              -- collects translator flags
@@ -222,6 +224,7 @@ class NetRexxC
     parseline(arg)    -- collect initial flags and file specification
     
     translator.setkeeps(keep,keepasjava,classlist,javac,ecj)
+    translator.setaddress(address)
     
     -- need to set java.class.path property and restore it later
     currentClassPath = System.getProperty("java.class.path")
@@ -545,6 +548,7 @@ class NetRexxC
 	when arglow=='nokeepasjava' then keepasjava=0
 	when arglow=='javac' then do;javac=1;ecj=0;end	-- can't prefer both javac and ecj compiler KK
 	when arglow=='ecj' then do;javac=0;ecj=1;end	-- can't prefer both javac and ecj compiler KK
+  when arglow=='address' then do; address=1; end  -- explicitely set address flag to change parser MRE
 	when arglow=='classpath' | arglow=='cp' then do
    	  a=a+1
    	  if a<arg.length then do
@@ -611,6 +615,7 @@ return
       say '  -prompt        -- prompt for new request after processing'
       say '  -savelog       -- save messages in NetRexxC.log'
       say '  -time          -- display timings'
+      say '  -address       -- allow ADDRESS instruction'
       say '  -warnexit0     -- exit with a zero returncode on warnings\n'
       say "Any NetRexx options may also be added; these are:\n"
       RxFlag.usage()

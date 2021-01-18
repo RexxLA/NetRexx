@@ -1,0 +1,260 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrAddress                                                          */
+/*                                                                    */
+/*   An object that represents a parsed Address clause                */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2020.01.11 Initial                                                 */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+import lang.netrexx.address 
+
+
+/**
+
+Upon direct ADDRESS instruction (parser)
+  if 'ADDRESS addressee'
+    self.addr = addressee
+    if class context  (pass1) --TBD
+      we store addressee on rxt.program.parser.cursor.curclass.curaddres
+    if method context (pass2)
+      we store addressee on rxt.program.parser.cursor.curmethod.curaddress
+    else fail (no ADDRESS support in program context)  
+  if 'ADDRESS addressee command'
+    self.addr = addressee
+
+Upon direct ADDRESS invocation (exec or run)
+  if 'ADDRESS addressee'
+    nop
+  if 'ADDRESS addressee command'
+    we use self.addr and execute 
+
+Upon indirect ADDRESS instruction (parser)
+  'command'
+    we fail when no curaddres set on method or class
+    we collect curaddres from method, class in that order 
+    self.addr = curaddres
+
+Upon indirect ADDRESS invocation (exec or run) 
+  'command'
+    we use self.addr and execute 
+
+**/
+
+/**   An object that represents a parsed ADDRESS clause                    */
+/*  loosely based on SAY                                                   */
+class NrAddress implements RxClauseParser uses RxCode, RxExpr
+ properties private
+  rxt    =RxTranslator   -- root
+  parser =RxParser       -- local reference
+  tokens =RxToken[]      -- local reference
+
+  expr   =RxExpr         -- expression [null if none]
+  code   =RxCode         -- code
+  addr   =Rexx           -- addressee
+
+  tmethod =RxMethod null
+  tclass  =RxClass  null
+
+  addressing = boolean 0
+
+
+
+ /** Construct an object from the current clause */
+ method NrAddress(newrxt=RxTranslator)
+  rxt    =newrxt                                  -- the boss
+  parser =rxt.program.parser
+  tokens =parser.cursor.curclause.tokens
+ 
+--  say '--tokens'
+--  say parser.cursor.curclause.showtokens()
+
+ /** Pass processing */
+ method scan(pass=int)
+--  say '# NrAddress scan pass ' pass
+--  say '--tokens'
+--  say parser.cursor.curclause.showtokens()
+ 
+  if tokens[0].value \== null then do
+    t = Rexx tokens[0].value
+    if t.upper()=='ADDRESS' then do
+      addressing = 1
+    end
+    else do
+      if pass<2 then signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+    end  
+  end  
+
+
+  if addressing==1 then do  
+-- this is a clause starting with ADDRESS
+
+-- 'ADDRESS'
+    if tokens[1].type=RxToken.END then do
+      signal RxQuit(rxt, tokens[0], 'keyword.or.literal.expected')
+    end
+
+-- starts with 'ADDRESS addressee'
+    tok=tokens[2]
+    endtoken=3
+
+    if tok.type=RxToken.STR then do                -- literal
+      addr=tok.value
+    end 
+    else if tok.type=RxToken.SYM then do           -- symbol, could be addr or VALUE
+      t = Rexx tok.value
+      if t.upper()=='VALUE' then do
+        if tokens[endtoken].type\=RxToken.END then do
+          tok=tokens[4]
+          endtoken=5
+        end
+      end    
+      rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
+
+      if rxvar==null then do
+        addr=tok.value
+      end
+      else if rxvar.islocal() | rxvar.isargument() then do
+        addr=Rexx rxvar.varvalue
+      end
+      else do
+        addr=tok.value
+      end
+    end
+    else do                                        -- we expect a symbol or literal
+      signal RxQuit(rxt, tokens[0], 'keyword.or.literal.expected')
+    end
+
+    if tokens[endtoken].type==RxToken.END then do
+-- 'ADDRESS addressee' or 'ADDRESS VALUE addressee' or 'ADDRESS value'   
+      tclass=parser.cursor.curclass
+      tmethod=parser.cursor.curmethod
+
+      if tmethod \== null then do 
+          if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr' to method 'tclass.classname '-' tmethod.methodname 
+          tmethod.curaddress = addr
+      end
+      else if tclass \== null then do
+        if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr' to class 'tclass.classname  
+        tclass.curaddress = addr
+      end
+      else do
+        signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+      end
+    end
+    else do
+-- 'ADDRESS addressee do something'
+
+      if pass<2 then signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+
+      if rxt.program.flag.diag then say '# NrAddress: DIRECT ADDRESS'
+
+      code=rxt.eparser.parseexpr(parser.cursor, 0, 4, null, null)
+      expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
+    end 
+  end  
+  else do  
+-- this is a clause not starting with ADDRESS, we do 'indirectly' address addressee  
+-- basically, anything not parsed by the parser will come here
+
+    if pass<2 then signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+
+    tclass=parser.cursor.curclass
+    tmethod=parser.cursor.curmethod
+       
+    if tmethod \== null then do 
+      addr = tmethod.curaddress
+      if addr==null then do
+         addr = tclass.curaddress
+         if addr==null then do
+            signal RxQuit(rxt, tokens[0], 'address.unknown', 'ADDRESS not set', pass)
+         end
+         if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from class 'tclass.classname  
+      end 
+      else 
+        if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from method 'tclass.classname '-' tmethod.methodname 
+    end 
+    else if tclass \== null then do
+      addr = tclass.curaddress
+      if addr==null then do
+        signal RxQuit(rxt, tokens[0], 'address.unknown', 'ADDRESS not set', pass)
+      end
+      else 
+        if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from class 'tclass.classname  
+    end
+    else do
+      signal RxQuit(rxt, tokens[0], 'address.unknown', 'ADDRESS not set', pass)
+    end  
+
+    code=rxt.eparser.parseexpr(parser.cursor,0, 0, null, null)
+    expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
+  end
+
+
+/*
+  -- We used to have to play tricks to handle arbitrary null values,
+  --   but RexxIO.Say in NetRexx 1.1 has been upgraded to accept all
+  --   signatures, and handles null gracefully in all cases.
+  -- There is one case we need to worry about, though: floating point
+  --   numbers should not go through a conversion through binary if a
+  --   literal.  (It's OK for integers to be left as binary.)
+  expr.type=code.type
+  expr.conv=null
+  if code.group=S_LIT then
+   if code.type=RxType.FLOAT_TYPE-
+    | code.type=RxType.DOUBLE_TYPE then do
+    conv=rxt.converter.assigncost(parser.cursor, RxType.REXX_TYPE, code.type)
+    -- rxt.converter.convertcode(parser.cursor, RxType.REXX_TYPE, conv.proc, code)
+    rxt.converter.torexx(parser.cursor, code, 1)  -- allow constant
+    expr.type=RxType.REXX_TYPE
+    expr.conv=conv
+    end
+
+  -- Suppose we'd better special-case "say null", too, for javac...
+  if code.type=RxType.NULL_TYPE then do
+    code.javacode='""'
+    code.constant=1
+    code.type=RxType.STRING_TYPE
+    expr.type=RxType.STRING_TYPE
+    end
+
+  return
+*/
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** code generation [only] */
+ method generate
+  if expr\==null then do
+
+    jcode=String expr.code.javacode
+    addressee = addr
+
+    rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.exec("'addressee'",'jcode',1);')
+  end
+  return 
+  
+ /** Interpretation */
+ method interpret(cursor=RxCursor null)
+  if expr\==null then do
+
+    code=expr.evaluate(cursor)          -- re-evaluate as needed
+    addressee = addr
+    netrexx.lang.RexxAddress.exec(addressee, rxt.interpreter.stringvalue(code), Rexx 1)
+    end
+  return
+
+ 
