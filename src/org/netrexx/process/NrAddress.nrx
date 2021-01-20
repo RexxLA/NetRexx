@@ -113,24 +113,42 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
       addr=tok.value
     end 
     else if tok.type=RxToken.SYM then do           -- symbol, could be addr or VALUE
-      t = Rexx tok.value
-      if t.upper()=='VALUE' then do
+      addr=''
+      t =  Rexx tok.value
+      t = t.upper()
+      if t=='VALUE' then do
         if tokens[endtoken].type\=RxToken.END then do
           tok=tokens[4]
           endtoken=5
         end
-      end    
-      rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
+      end
+      else if t=='SYSTEM' then do                                           -- OS hard-coded environments
+        os=Rexx System.getProperty('os.name')
+        os=os.lower()
 
-      if rxvar==null then do
-        addr=tok.value
+        if      os.pos('linux')   >> 0 then addr=System.getenv('SHELL')
+        else if os.pos('macos')   >> 0 then addr=System.getenv('SHELL')
+        else if os.pos('windows') >> 0 then do 
+                                            addr=System.getenv('COMSPEC')
+                                            addr=addr.changestr('\\', '/')  -- freaking backslash ..
+        end  
+        else                                addr='/bin/sh'
+
       end
-      else if rxvar.islocal() | rxvar.isargument() then do
-        addr=Rexx rxvar.varvalue
-      end
-      else do
-        addr=tok.value
-      end
+
+      if addr=='' then do
+        rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
+
+        if rxvar==null then do
+          addr=tok.value
+        end
+        else if rxvar.islocal() | rxvar.isargument() then do
+          addr=Rexx rxvar.varvalue
+        end
+        else do
+          addr=tok.value
+        end
+      end  
     end
     else do                                        -- we expect a symbol or literal
       signal RxQuit(rxt, tokens[0], 'keyword.or.literal.expected')
@@ -254,7 +272,7 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
     code=expr.evaluate(cursor)          -- re-evaluate as needed
     addressee = addr
     netrexx.lang.RexxAddress.exec(addressee, rxt.interpreter.stringvalue(code), Rexx 1)
-    end
+  end
   return
 
  
