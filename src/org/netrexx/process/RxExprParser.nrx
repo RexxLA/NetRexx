@@ -37,6 +37,7 @@
 /* 2000.02.18 Only copy tokens array if necessary; speed termins      */
 /* 2000.02.26 Add evalexpr [wraps exceptions]                         */
 /* 2004.12.18 'do i=0 to to foo' failed (empty expression->AOOB)      */
+/* 2021.01.19 Add RC special name parsing as pseudo local variable    */
 /* ------------------------------------------------------------------ */
 /* To-do .. remove redundant sub-expression code                      */
 -- Currently   foo=boolean \bar    will fail with dyadic.not; raise
@@ -229,7 +230,29 @@ class RxExprParser uses RxCode
     if t=RxToken.SYM | t=RxToken.STR | t=RxToken.NUM | t=RxToken.LPAR-
      | t=RxToken.LBRK then do           -- can be pure term
       newterm=rxt.tparser.parseterm(cursor, n, 1)
-      if newterm.group=T_UNKNOWN then signal RxError(rxt, tok, 'unknown.variable')
+
+--MRE  Handle special name RC    
+      if rxt.address==0 then do                          -- old behaviour
+        if newterm.group=T_UNKNOWN then signal RxError(rxt, tok, 'unknown.variable')
+      end
+      else if newterm.group=T_UNKNOWN then do            -- could be RC
+        isRC = Rexx tok.value                  
+        if isRC.upper()=='RC' then do                    -- provide RC as value of last ADDRESS exitcode
+          if rxt.exec then do                            -- convert token to pseudo local variable
+            newterm.group=S_VAR
+            newterm.type=RxType.REXX_TYPE
+            newterm.value=netrexx.lang.RexxAddress.RC()
+          end
+          else do
+            newterm.group=S_METHOD                       -- call it at run-time
+            newterm.type=RxType.STRING_TYPE
+            newterm.javacode='netrexx.lang.RexxAddress.RC().toString()'
+          end  
+        end
+        else 
+          signal RxError(rxt, tok, 'unknown.variable')    -- not RC
+      end
+        
       if newterm.type=RxType.VOID_TYPE then signal RxError(rxt, tok, 'undefined.type')
       -- push onto term stack
 
