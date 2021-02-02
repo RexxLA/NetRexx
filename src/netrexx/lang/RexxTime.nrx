@@ -167,44 +167,6 @@ class RexxTime public
     end
     return Year Month Day Hour Minute Second Microsecond BaseDays YearDays
     
-  method DateFormat(x, format, delimiter='') static
-    /* Convert from microseconds to given format and separator. */
-    x = Time2Date(x)
-    if x='Bad' then return 'Bad'
-    parse x Year Month Day . . . . Base Days
-    select
-      when format = 'B' then
-        return Base
-      when format = 'C' then
-	do
-	  yy=Year
-	  y0=yy.left(1)||'000' /* start of century */
-	  yp=(yy-y0) /* preceding years */
-	  ly=(yp-1)%4 /* number of leap years */
-	  if y0//4=0 then ly=ly+1 /* if start of century way a leap year */
-	  dca=365*yp+ly+Days
-	  return dca
-	end
-      when format = 'D' then
-        return Days
-      when format = 'E' then return -
-	   Day.right(2,'0')delimiter||Month.right(2,'0')||delimiter||Year.right(2,'0')
-      when format = 'J' then return -
-	   Year||Day.right(3,0)
-      when format = 'M' then return Months.word(Month)
-      when format = 'N' then
-        return Day Months.word(Month).left(3) Year.right(4,'0')
-      when format = 'O' then return -
-	   Year.right(2,'0')||delimiter||Month.right(2,'0')||delimiter||Day.right(2,'0')
-      when format = 'S' then return -
-	   Year.right(4,'0')||delimiter||Month.right(2,'0')||delimiter||Day.right(2,'0')
-      when format = 'U' then return -
-	   Month.right(2,'0')||delimiter||Day.right(2,'0')||delimiter||Year.right(2,'0')
-      when format = 'W' then return Weekdays.word(1+Base//7)
-      otherwise
-	return 'Unknown Date option'
-    end
-
   method Date() static
     return nativeDate()
 
@@ -313,7 +275,7 @@ class RexxTime public
 	   Days = Value - 1 /* 'C' includes current day */
 	 end
 	 if InOption = 'J' then do
-	   Year = nativeDate().right(4).left(1)'000'
+	   Year = nativeDate().right(4)
 	   Days = Value - 1 /* 'C' includes current day */
 	 end
 
@@ -325,8 +287,6 @@ class RexxTime public
 	 else Basedays = Value
 	 /* Convert to microseconds from 0001 */
 	 Micro = BaseDays * 86400 * 1000000
-	 /* Reconvert to check the original. (eg for Month = 99) */
-	 -- if DateFormat(Micro,InOption,InSeparator) == Value then
 	 return DateFormat(Micro,Option,OutSeparator)
 	 
   method nativeDate() static
@@ -335,7 +295,46 @@ class RexxTime public
     mm=cal.get(Calendar.MONTH) + 1
     yyyy=cal.get(Calendar.YEAR)
     return dd.right(2,'0') months3.word(mm) yyyy
-    
+
+  method DateFormat(x, format, delimiter='') static
+    /* Convert from microseconds to given format and separator. */
+    x = Time2Date(x)
+    if x='Bad' then return 'Bad'
+    parse x Year Month Day . . . . Base Days
+    select
+      when format = 'B' then
+        return Base
+      when format = 'C' then
+	do
+	  yy=Year
+	  y0=yy.left(1)||'000' /* start of century */
+	  yp=(yy-y0) /* preceding years */
+	  ly=(yp-1)%4 /* number of leap years */
+	  if y0//4=0 then ly=ly+1 /* if start of century way a leap year */
+	  dca=365*yp+ly+Days
+	  return dca
+	end
+      when format = 'D' then
+        return Days
+      when format = 'E' then return -
+	   Day.right(2,'0')delimiter||Month.right(2,'0')||delimiter||Year.right(2,'0')
+      when format = 'J' then return -
+	   Year||Days.right(3,0)
+      when format = 'M' then return Months.word(Month)
+      when format = 'N' then
+        return Day Months.word(Month).left(3) Year.right(4,'0')
+      when format = 'O' then return -
+	   Year.right(2,'0')||delimiter||Month.right(2,'0')||delimiter||Day.right(2,'0')
+      when format = 'S' then return -
+	   Year.right(4,'0')||delimiter||Month.right(2,'0')||delimiter||Day.right(2,'0')
+      when format = 'U' then return -
+	   Month.right(2,'0')||delimiter||Day.right(2,'0')||delimiter||Year.right(2,'0')
+      when format = 'W' then return Weekdays.word(1+Base//7)
+      otherwise
+	return 'Unknown Date option'
+    end
+
+
   method main(args=String[]) static
     numeric digits 18
     say DateFormat(737791*86400*1000000,'B')
