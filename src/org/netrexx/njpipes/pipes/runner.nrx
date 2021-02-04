@@ -1,5 +1,6 @@
 package org.netrexx.njpipes.pipes
-import org.netrexx.address.
+
+-- import org.netrexx.address.
 /*
  *  Copyright (C) 2019 R.V. Jansen
  *
@@ -13,41 +14,69 @@ import org.netrexx.address.
 -- Pipelines as possible, by enabling the process of specifying and running a
 -- pipe spec from the commandline.
 
+-- 2021-01-22 accept input from a file (with -f)
+-- 2019-09-19 move the reflective call into NetRexxC
 -- 2019-08-04 run with reflective invocation. rvj
 -- 2019-08-02 enable running with specified pipe names. rvj
 -- 2019-07-30 first version. rvj
 
 class runner
 
-  -- check arguments
-  -- compile and run the pipeline using NetRexxC.clgMain
-  
-  method main(args=String[]) static
+  method main(args=String[]) static signals FileNotFoundException, IOException
     do
-      arg=Rexx
-      arg=args[0] -- java stringarray to rexx variable
-      if arg='' then signal ArrayIndexOutOfBoundsException
+      arg    = Rexx
+      arg    = args[0] -- java stringarray to rexx variable
+      if arg = '' then signal ArrayIndexOutOfBoundsException
+      if arg.word(1) = '-f' then
+	do
+	  execFromFile(args)
+	  return
+	end
     catch ArrayIndexOutOfBoundsException
-    -- check for an empty specification, if so, then exit
-      say 'pipe: specify a pipeline to be executed.'
+      -- check for an empty specification, if so, then exit
+      say 'pipe: specify a pipeline.'
       exit
     end -- do
     parse arg '(' className_ ')'
     -- prepend a classname when absent and compile it
-    if className_<>'' then do
-      className_ = className_.word(1)
-      pipesrc = arg
-    end
+    if className_<>'' then
+      do
+	className_ = className_.word(1)
+	pipesrc = arg
+      end
     else do
       uid = Rexx(UUID.randomUUID().toString())
       className_ = 'p'Rexx(uid.left(7))
       pipesrc =  '('className_')' arg
     end
+    executePipe(pipesrc,className_)
 
+  method execFromFile(args=String[]) static signals FileNotFoundException,IOException
+    filename = Rexx(args[1])
+    inFile  = BufferedReader(FileReader(filename))
+    loop forever
+      textline = inFile.readLine()
+      if textline = null then leave
+      parse textline . '('className_')' pipesrc
+      loop while pipesrc.right(1) = '|'
+	pipesrc = pipesrc inFile.readLine()
+      end
+      -- make sure filename <> classname, or you'll get a reflection error
+      if className_ = filename then
+	do
+	  uid = Rexx(UUID.randomUUID().toString())
+	  className_ = 'p'Rexx(uid.left(7))
+	end	
+      executePipe('('className_')'pipesrc,className_)
+    end
+   inFile.close()
+    
+  method executePipe(pipesrc,className_) static
     do
-      p = compiler(pipesrc,boolean 1,className_,boolean 1)
-    catch ex=org.netrexx.njpipes.pipes.ThreadQ
+      compiler(pipesrc,boolean 1,className_,boolean 1)
+    catch org.netrexx.njpipes.pipes.ThreadQ
       return
     end
+    
 
     

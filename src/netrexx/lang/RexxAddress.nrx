@@ -1,0 +1,126 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* netrexx.lang.RexxAddress -- ADDRESS instruction for NetRexx        */
+/* ------------------------------------------------------------------ */
+/* Copyright IBM Corporation, 1996, 1997.  All Rights Reserved.       */
+/* Author    Marc Remes                                               */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2021.01.15 MRE Classic Rexx ADDRESS implementation                 */
+/* ------------------------------------------------------------------ */
+import java.util
+package netrexx.lang
+options binary strictargs nodecimal noformat
+
+/**
+   This defines the I/O utility class for NetRexx.
+ */
+    
+class RexxAddress implements Serializable 
+
+  properties private static
+--  StdIn	 = BufferedReader(InputStreamReader(System.in))
+    StdOut = ConcurrentLinkedDeque()
+  --StdOut = LinkedList()
+  --fileIn = BufferedReader
+    command  = String null
+    exitcode = Rexx ''
+
+  properties private constant unused
+  serialVersionUID=long 2781762092115528702
+
+
+  method exec(addr=String, command_=String, wait=1) static 
+    if command_ == '', command_ == null then return
+    command=command_
+    execAddress(addr, command)
+
+  method exec(addr=String, command_=Rexx, wait=1) static 
+    if command_ == '', command_ == null then return
+    command=command_
+    execAddress(addr, command)
+
+  method RC() static returns Rexx
+    return exitcode
+
+  
+  /** Function to launch an executable and process a command.
+     Arg1 is the executable to launch.
+     Arg2 is the command to process, it is sent into STDIN of
+     the started executable
+     Arg3 is wait for executable to end -- always 1
+     
+     Output of the processed executable command is printed on
+     STDOUT.
+     Returncode is stored on lastrc 
+   */
+  method execAddress(addr=String, command_=String, wait=1) static 
+--   say '#MRE EXECADDR 'addr' 'command_
+   addressee=[addr] 
+    do
+      pb = ProcessBuilder(addressee)
+--      pb.redirectErrorStream(1)   -- don't think we need to do this
+      pid = pb.start()
+      if wait then do
+   	    in = BufferedReader(InputStreamReader(pid.getInputStream()))
+  	    out = BufferedWriter(OutputStreamWriter(pid.getOutputStream()))
+        out.write(command_'\n')          -- add new line to really flush
+        out.flush()
+        out.close()
+	      line = in.readLine()
+	      loop while line <> null
+          Say(line)          
+	        line = in.readLine()
+        end  
+	      pid.waitFor()
+    	  exitcode = pid.exitValue()
+      end
+    catch iox=IOException
+      exitcode=''                 -- set empty
+      say iox.getMessage()
+    catch InterruptedException
+      exitcode=''                 -- set empty
+      say "interrupted"
+    end -- do
+    return
+
+
+    
+  /** Function to write a line to the standard output stream.
+     Arg1 is the Object or Rexx string to be written.
+     If the line ends in the NUL character ('\-' or '\0') then no
+     line termination is provided (and the NUL is deleted).
+     If the write succeeds 0 is returned, otherwise 1 is returned.
+     
+     We handle all the well-known character forms directly to
+     minimize code generation in caller; null is allowed for all
+     objects.
+     We also handle Object here, so null can be processed efficiently.
+     We provide versions for all the other primitives, too.
+   */
+
+-- Borrowed from RexxIO    
+  method Say(aline=char[]) static returns boolean
+    if StdOut.size() == 0 then StdOut.push(PrintWriter(System.out))
+    i = StdOut.iterator()
+    loop while i.hasNext()
+      out=PrintWriter i.next()
+      if aline=null then out.println()      -- just new line
+      else do                                 -- have some data
+	select
+          when aline.length=0 then out.println()
+          when aline[aline.length-1]\=='\-' then out.println(aline)
+          otherwise                            -- rarer continuation case
+            bline=char[aline.length-1]
+            System.arraycopy(aline, 0, bline, 0, bline.length)
+            out.print(bline)
+        end
+      end
+      out.flush()  -- could be a real user out there
+    end -- loop while i
+    return 0
+

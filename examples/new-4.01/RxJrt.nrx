@@ -1,0 +1,133 @@
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.Files
+import java.nio.file.FileSystem
+import java.nio.file.FileSystems
+import java.nio.file.OpenOption
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
+import org.netrexx.process 
+
+
+-- Walks the JMPS jrt:/ file system
+-- By default all directories are listed.
+-- -a shows all content
+-- -m and -p tabulates modules and packages
+-- 
+-- Note, all directories are listed, there's no check if the directories
+--  actually contain class files and thus could qualify as a 'package'
+
+class RxJrt public
+
+  properties public static
+    isJrt       = boolean 0
+    fsep        = '/'
+    opt_all     = boolean 0
+    opt_module  = boolean 0
+    opt_package = boolean 0
+
+  properties public
+    jrtprefix = 'jrt:'||fsep
+
+
+  method main( args=String[] ) static
+    loop a=0 to args.length-1
+      arg=Rexx args[a]            -- get next word
+      select
+        when arg = '-all' | arg = '-a' then do
+          opt_all = 1
+        end
+        when arg = '-module' | arg = '-m' then do
+          opt_module = 1
+        end
+        when arg = '-package' | arg = '-p' then do
+          opt_package = 1
+          opt_module  = 1
+        end
+
+      otherwise
+        say 'RxJrt : Walks the JMPS jrt:/ file system'
+        say ' Optional arguments'
+        say '  [-a | -all]     show all'
+        say '  [-m | -module]  show module'
+        say '  [-p | -package] show package (actually a directory..)'
+        exit 2
+      end  
+    end
+
+    rx = RxJrt()
+    if \isJrt then do
+      exit 1
+    end
+    else do
+      rx.RxJrtTree()
+      exit 0
+    end  
+
+-- constructor
+-- check if running >= JDK9, special case CSR JDK-8227076     
+
+  method RxJrt
+    v = NrVersion()
+    say '# 'v.getLogo() v.getFullVersion() v.getProcdate()
+    
+    o = Object.class.getResource('Object.class')   -- check for 1.1.8+
+    say '# Found Object.class at 'o
+    os = o.toString()
+    if os.startsWith(jrtprefix) then do
+      isJrt = 1
+      c = jrtprefix||os.substring(jrtprefix.length())
+      p = Paths.get(URI.create(c))
+      if \Files.isReadable(p) then do
+        jrtprefix = jrtprefix||'modules'||fsep              -- CSR JDK-8227076, fix for GraalVM/OpenJDK 11
+      end 
+      say '# Running JDK9+ with jrt prefix' jrtprefix
+    end 
+    else 
+      say '# No JPMS available'
+
+-- walk the file system directory tree
+
+  method RxJrtTree(path_ = '')
+    dpath = path_
+    do
+      p = Paths.get(URI.create(jrtprefix||dpath))
+
+      if \Files.isDirectory(p, [LinkOption null]) then return 
+
+      stream = Files.list(p)
+      ap = Object[]
+      ap = stream.toArray()
+
+      loop i = 0 to ap.length-1
+        tp = Path ap[i]
+        if Files.isDirectory(tp, [LinkOption null]) then do
+          s = tp.toString()
+          parse s '/modules/' module '/' package
+          package = package.translate('.', fsep)
+          if opt_module then do
+            if package = '' then do
+              say 'Module: 'module
+            end
+            else if opt_package then do
+              say '  'package
+            end
+          end
+          else do
+            say s
+          end  
+       
+          RxJrtTree(s.substring(9))                     -- strip /modules/ and call recursive
+        end
+        else do
+          if opt_all then do
+            say tp.toString
+          end
+        end
+      end     
+    catch e=Exception
+      say '! exception' e e.getMessage()
+    end
+  return 
+
+
