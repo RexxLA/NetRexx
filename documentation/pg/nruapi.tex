@@ -1,33 +1,33 @@
 % .* ------------------------------------------------------------------
-% .* NetRexx User's Guide                                              mfc
+% .* \nr{} User's Guide                                              mfc
 % .* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.
 % .* ------------------------------------------------------------------
-\chapter{Using the NetRexxA API}\label{api}
+\chapter{Using the \nr{}A API}\label{api}
 \index{interpreting,API}
-\index{interpreting,using the NetRexxA API}
+\index{interpreting,using the \nr{}A API}
 \index{application programming interface, for interpreting}
-\index{NetRexxA, class}
-\index{NetRexxA, API}
+\index{\nr{}A, class}
+\index{\nr{}A, API}
 \index{ref /API/application programming interface}
-As described elsewhere, the simplest way to use the NetRexx interpreter
-is to use the command interface (NetRexxC) with the \emph{-exec}
+As described elsewhere, the simplest way to use the \nr{} interpreter
+is to use the command interface (\nr{}C) with the \emph{-exec}
 or \emph{-arg} flags.
 There is a also a more direct way to use the interpreter when calling it
-from another NetRexx (or Java) program, as described here.  This
-way is called the \emph{NetRexxA Application Programming Interface}
+from another \nr{} (or Java) program, as described here.  This
+way is called the \emph{\nr{}A Application Programming Interface}
 (API).
 \newline
-The \emph{NetRexxA} class is in the same package as the translator
+The \emph{\nr{}A} class is in the same package as the translator
 (that is, \emph{org.netrexx.process}), and comprises a constructor
-and two methods.  To interpret a NetRexx program (or, in general, call
+and two methods.  To interpret a \nr{} program (or, in general, call
 arbitrary methods on interpreted classes), the following steps are
 necessary:
 \begin{enumerate}
-\item Construct the interpreter object by invoking the constructor \emph{NetRexxA()}.
+\item Construct the interpreter object by invoking the constructor \emph{\nr{}A()}.
 At this point, the environment's classpath is inspected and known
 compiled packages and extensions are identified.
 \item Decide on the program(s) which are to be interpreted, and invoke the
-NetRexxA \emph{parse} method to parse the programs.  This parsing
+\nr{}A \emph{parse} method to parse the programs.  This parsing
 carries out syntax and other static checks on the programs specified,
 and prepares them for interpretation.  A stub class is created
 and loaded for each class parsed, which allows access to the classes
@@ -51,11 +51,11 @@ most recent call to the \emph{parse} method.
 Here's a simple example, a program that invokes the \emph{main} method
 of the \emph{hello.nrx} program's class:
 \index{interpreting/API example}
-\begin{lstlisting}[label=netrexxa,caption=Try the NetRexxA interface]
+\begin{lstlisting}[label=netrexxa,caption=Try the \nr{}A interface]
 options binary
-import org.netrexx.process.NetRexxA
+import org.netrexx.process.\nr{}A
 
-interpreter=NetRexxA()             -- make interpreter
+interpreter=\nr{}A()             -- make interpreter
 
 files=['hello.nrx']                -- a file to interpret
 flags=['nocrossref', 'verbose0']   -- flags, for example
@@ -87,7 +87,7 @@ After that point, however, only newly-referenced classes require
 loading, and execution will be very much faster.
 \newline
 The remainder of this section describes the constructor and the two
-methods of the NetRexxA class in more detail.
+methods of the \nr{}A class in more detail.
 %.*
 %.* - - - - -
 %.cp 8
@@ -104,7 +104,7 @@ to the JVM and identifying classes and packages which are available.
 %.* - - - - -
 %.cp 8
 \section{The parse method}
-\index{parse method, in NetRexxA API}
+\index{parse method, in \nr{}A API}
 \begin{lstlisting}[label=parse,caption=parse]
 parse(files=String[], flags=String[]) returns boolean
 \end{lstlisting}
@@ -116,7 +116,7 @@ interpretation.
 \newline
 The second array is a list of zero or more option words; these may be
 any option words understood by the interpreter (but excluding those
-known only to the NetRexxC command interface, such as \emph{time}).
+known only to the \nr{}C command interface, such as \emph{time}).
 \footnote{Note that the option words are not prefixed with a \emph{-}.}
 The parse method prefixes the \emph{nojava} flag automatically, to
 prevent \emph{.java} files being created inadvertently.  In the
@@ -131,7 +131,7 @@ appropriate action; it will not be possible to interpret a program or
 class whose parsing failed with an error.
 
 \section{The getClassObject method}
-\index{getClassObject method, in NetRexxA API}
+\index{getClassObject method, in \nr{}A API}
 
 \begin{lstlisting}[label=getclassobject,caption=getClassObject]
 getClassObject(package=String, name=String [,dimension=int]) returns Class
@@ -161,81 +161,3 @@ Once a Class object has been retrieved from the interpreter it may be
 used with the Java reflection API as usual.  The Class objects returned
 are only valid until the parse method is next invoked.
 
-
-\section{The exiting method}
-\index{exiting method, in NetRexxA API}
-
-Syntax:
-\begin{lstlisting}[label=exiting,caption=exiting]
-exiting() returns boolean
-\end{lstlisting}
-If this method returns true, an interpreted program has invoked the NetRexx “exit” instruction to shut down the interpreter. If more programs need to be interpreted, a new instance of the interpreter will need to be created with the NetRexxA() constructor.
-
-\section{Interpreting programs contained in memory strings}\label{interpretstrings}
-
-\marginnote{\color{gray}3.01}Programs can be interpreted directly from memory
-strings. The first extension adds an optional array of strings containing programs to the standard parse API. It is mainly useful to IDE developers. It also serves as the basis to support two other extensions documented below.
-\begin{lstlisting}[label=memorystrings,caption=parse program in
-  memory buffer]
-method parse(filestrings=String[], programstrings=String[], flagstrings=String[], logfile=PrintWriter null, outfile=PrintStream System.out) returns boolean
-\end{lstlisting}
-
-Parses a set of files, under specified flags:
-\begin{itemize}
-\item filestrings is a list of program names,
-\item programstrings is a list of program strings\footnote{Note that program strings which are not named in the name list are ignored.},
-\item flagstrings is a list of flags,
-\item logfile is a PrintWriter for parse output messages (optional),
-\item outfile is a PrintStream for console output messages (optional),
-\end{itemize}
-This method returns 1 if no error
-
-
-The second extension is a new easy to use method to parse and interpret a program contained in a string.
-\begin{lstlisting}[label=memorystrings2,caption=parse program in string]
-method interpret(programname=String, programstring=String, argstring=String "", flagstring=String "", logfile=PrintWriter null, outfile=PrintStream System.out) returns boolean
-\end{lstlisting}
-A convenience method to interpret a single NetRexx program in a string:
-\begin{itemize}
-\item programname is the program name,
-\item programstring is the program string,
-\item argstring is the argument string (optional),
-\item flagstring is the translator flags string (optional),
-\item logfile is a PrintWriter for parse output messages (optional),
-\item outfile is a PrintStream for console output messages (optional),
-\end{itemize}
-This method returns 1 if no parse error. The default flag is -verbose0
-
-Here is a simple example using the interpret method:
-\begin{lstlisting}[label=stringexample,caption=interpret from string]
-import org.netrexx.process.
-netrexxapi=NetRexxA()
-myprog="say 'argument string is' arg"
-netrexxapi.interpret("myprog",myprog,"a passed argument")
-\end{lstlisting}
-The third extension is a slightly more complex “eval” method that allows a program to call a static method in a program string and receive an object back.
-
-\begin{lstlisting}[label=stringevalexample,caption=eval]
-method eval(programname=String, programstring=String, methodname=String, argstring=String "", flagstring=String "", logfile=PrintWriter null, outfile=PrintStream System.out) returns Object
-\end{lstlisting}
-A convenience method to interpret a method from a NetRexx program in a
-string and return an object:
-\begin{itemize}
-\item programname is the program name,
-\item programstring is the program string,
-\item methodname is the method name to call - the method must accept a String array like main methods,
-\item argstring is the argument string (optional),
-\item flagstring is the translator flags string (optional),
-\item logfile is a PrintWriter for parse output messages (optional),
-\item outfile is a PrintStream for console output messages (optional),
-\end{itemize}
-This method returns an object if no error. The default flag is -verbose0
-
-
-Here is a simple example using the eval method:
-\begin{lstlisting}[label=evalexample,caption=eval example]
-import org.netrexx.process.
-netrexxapi=NetRexxA()
-termpgmstring='method term(sa=String[]) static returns rexx;i=Rexx(sa);return 1/i'	
-say netrexxapi.eval("termpgm",termpgmstring,"term",99)
-\end{lstlisting}

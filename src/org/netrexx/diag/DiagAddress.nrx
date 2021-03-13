@@ -1,0 +1,91 @@
+package org.netrexx.diag
+options binary strictargs trace1
+
+class DiagAddress
+
+  method DiagAddress
+    os=Rexx System.getProperty('os.name')
+    os=os.lower()
+    if os.pos('windows') >> 0 then 
+      DiagAddressWin()
+    else  
+      DiagAddressUnices()
+ 
+
+  method DiagAddressUnices
+    'echo  "Hello world  -- direct addressing default SYSTEM"'
+
+    address bash 'echo "Hello world  -- direct addressing bash"'
+
+    address cat
+    'Hello world  -- indirect addressing cat'
+
+    address '/bin/bash'
+    'echo "Hello world  -- indirect addressing /bin/bash"'
+    'echo "Hello world  -- still indirect addressing /bin/bash"'
+
+    address value bash
+
+    ByClass()
+
+    'echo "Hello world  -- still indirect addressing bash"'
+
+    address SYSTEM
+    'echo "Hello world  -- indirect addressing SYSTEM"'
+    address SYSTEM 'echo "Hello world  -- direct addressing SYSTEM"'
+
+    say 'DiagAddress:' 'OK ! ADDRESS tests completed'
+
+
+method DiagAddressWin
+    'echo  "Hello world  -- direct addressing default SYSTEM"'
+
+    address cmd 'echo "Hello world  -- direct addressing cmd"'
+
+    address '/windows/system32/cmd.exe'
+    'echo "Hello world  -- indirect addressing /windows/system32/cmd.exe"'
+    'echo "Hello world  -- still indirect addressing /windows/system32/cmd.exe"'
+
+    address value cmd
+
+    'echo "Hello world  -- indirect addressing cmd"'
+
+    address SYSTEM
+    'echo "Hello world  -- indirect addressing SYSTEM"'
+    address SYSTEM 'echo "Hello world  -- direct addressing SYSTEM"'
+
+    var = Rexx 'cmd'
+    address var
+    'echo "Hello world  -- overruled indirect addressing literal by var '||var||'"'
+  
+    hello='echo Hello world  -- overruled indirect addressing a var by 'var
+    hello
+
+    say 'DiagAddress:' 'OK ! ADDRESS tests completed'
+
+
+ /* Scaffolding for stand-alone test */
+  method main(s=String[]) static
+    s = s
+    say version '/' source -- say what level we are running under
+    do
+      DiagAddress()
+    catch dx=DiagX
+      say 'Failed: "'dx.getMessage()'"'
+    end
+
+class DiagAddress.ByClass 
+    address 'cat'
+  
+  method ByClass
+    'Hello world  -- indirect addressing cat by class'
+    address 'bash' 'echo "Hello world  -- direct addressing ''bash''"'
+    'Hello world  -- still indirect addressing cat by class'
+    var = Rexx 'bash'
+    address var
+    'echo "Hello world  -- overruled indirect addressing literal by var '||var||'"'
+    hello='echo Hello world  -- overruled indirect addressing a var by 'var
+    hello
+    say 'DiagAddress:' 'OK ! ADDRESS by class'
+
+

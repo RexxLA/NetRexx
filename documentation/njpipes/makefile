@@ -10,7 +10,7 @@ NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
 LATEX_EXE	:= xelatex -shell-esc
 RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
-DOCNAME         := "NetRexx $(RELEASE) Pipelines Quick Start Guide.pdf"
+DOCNAME         := "NetRexx $(RELEASE) Pipelines Guide and Reference.pdf"
 
 .SUFFIXES: .nrx .nry .njp .class .skel .xsl .java .pdf
 

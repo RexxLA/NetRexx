@@ -14,6 +14,7 @@
 /* ------------------------------------------------------------------ */
 /* Change list (see RxLanguage for master change list)                */
 /* 2020.01.11 Initial                                                 */
+/* 2020.02.04 use SYSTEM default if address not set                   */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -42,8 +43,7 @@ Upon direct ADDRESS invocation (exec or run)
 
 Upon indirect ADDRESS instruction (parser)
   'command'
-    we fail when no curaddres set on method or class
-    we collect curaddres from method, class in that order 
+    we collect curaddres from method, class, or SYSTEM address, in that order 
     self.addr = curaddres
 
 Upon indirect ADDRESS invocation (exec or run) 
@@ -122,18 +122,8 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
           endtoken=5
         end
       end
-      else if t=='SYSTEM' then do                                           -- OS hard-coded environments
-        os=Rexx System.getProperty('os.name')
-        os=os.lower()
-
-        if      os.pos('linux')   >> 0 then addr=System.getenv('SHELL')
-        else if os.pos('macos')   >> 0 then addr=System.getenv('SHELL')
-        else if os.pos('windows') >> 0 then do 
-                                            addr=System.getenv('COMSPEC')
-                                            addr=addr.changestr('\\', '/')  -- freaking backslash ..
-        end  
-        else                                addr='/bin/sh'
-
+      else if t=='SYSTEM' then do
+        addr=getSystemAddressee()                                         -- OS hard-coded environments
       end
 
       if addr=='' then do
@@ -196,7 +186,7 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
       if addr==null then do
          addr = tclass.curaddress
          if addr==null then do
-            signal RxQuit(rxt, tokens[0], 'address.unknown', 'ADDRESS not set', pass)
+            addr = getSystemAddressee()                -- use SYSTEM default
          end
          if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from class 'tclass.classname  
       end 
@@ -249,6 +239,24 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
 
   return
 */
+
+/** get default addressee per OS */
+method getSystemAddressee returns Rexx
+
+  os=Rexx System.getProperty('os.name')
+  os=os.lower()
+  sysaddr = Rexx
+
+  if      os.pos('linux')   >> 0 then sysaddr=System.getenv('SHELL')
+  else if os.pos('macos')   >> 0 then sysaddr=System.getenv('SHELL')
+  else if os.pos('windows') >> 0 then do 
+                                      sysaddr=System.getenv('COMSPEC')
+                                      sysaddr=sysaddr.changestr('\\', '/')  -- freaking backslash ..
+  end  
+  else                                sysaddr='/bin/sh'
+
+  return sysaddr
+
 
  /** Trace names list */
  method getAssigns returns String[]
