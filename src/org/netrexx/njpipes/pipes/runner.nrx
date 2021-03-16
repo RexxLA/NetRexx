@@ -41,14 +41,26 @@ class runner
     -- prepend a classname when absent and compile it
     if className_<>'' then
       do
-	className_ = className_.word(1)
-	pipesrc = arg
+	    rclassName_ = className_.word(1)
+      -- MRE do not allow sep debug end stall as classname
+      if 'sep debug end stall '.wordpos(rclassName_' ') == 0 then do
+        className_ = rclassName_
+        pipesrc = arg
       end
+      else do  
+        -- MRE use auto generated classname if any option given without classname
+        uid = Rexx(UUID.randomUUID().toString())
+        parse arg '(' rest 
+        className_ = 'p'Rexx(uid.left(7))
+        pipesrc =  '('className_  rest 
+      end
+    end
     else do
       uid = Rexx(UUID.randomUUID().toString())
       className_ = 'p'Rexx(uid.left(7))
       pipesrc =  '('className_')' arg
     end
+    say className_ '--' pipesrc '(' arg ')' 
     executePipe(pipesrc,className_)
 
   method execFromFile(args=String[]) static signals FileNotFoundException,IOException
