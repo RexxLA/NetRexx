@@ -7,7 +7,7 @@ PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
 NRX_SRC		:= $(wildcard *.nrx)
 NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
-LATEX_EXE	:= xelatex -shell-esc
+LATEX_EXE	:= xelatex -output-driver="xdvipdfmx -i dvipdfmx-unsafe.cfg -q -E" -shell-esc
 RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
 DOCNAME         := "NetRexx $(RELEASE) Language Reference.pdf"
