@@ -11,15 +11,21 @@
  2021-08-17 New. rvj
 */
 
-/** encode64
-                     +-MIME--+
-   >>--+-64ENCODE-+--+-------+--><
-       +-ENCODE64-+  +-BASIC-+
-                     +-URL---+
+/** digest
+                     +-MD5--+
+   >>--+-DIGEST-+--+-+-SHA1-+--><
+                     +-SHA256---+
+                     +-SHA384---+
+                     +-SHA512---+
 */
 
 /*
-   NOTE: CMS 
+   NOTE: CMS has MD5, SHA1, SHA256, SHA384 and SHA 512
+   NetRexx Pipelines has (depedent on the JVM implementation)
+   MD2, MD5, SHA1, SHA224, SHA256, SHA384, SHA512, SHA512/224, SHA512/256
+   Netrexx Pipelines does not (yet) have APPEND, VERIFY and NOT
+   NetRexx Pipelines returns the bytearray as a HEX string
+   CMS returns a char array into the pipeline
 */
 
 options nostrictcase nostrictargs nostrictsignal
@@ -42,15 +48,12 @@ method run()
     select case opt
       when '', 'SHA1' then
 	md = MessageDigest.getInstance('SHA1')
-      when '', 'SHA256' then
-	md = MessageDigest.getInstance('SHA256')
-      when '', 'MD5' then
-	md = MessageDigest.getInstance('MD5')
       otherwise
-	Emsg(11, 'Unrecognised argument found:' arg()'.')
+	md = MessageDigest.getInstance(opt)
     end
   catch java.security.NoSuchAlgorithmException
-    say 'no such digest algorithm implemented'
+    say 'No such digest algorithm implemented'
+    Emsg(11, 'Unrecognised argument found:' arg()'.')
     rc = 16
   end -- do
 
