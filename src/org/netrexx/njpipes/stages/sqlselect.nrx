@@ -160,7 +160,7 @@ method run()
 
     catch IOException
       -- if the properties file is not found, these are the DEFAULT jdbc driver name and url
-      jdbcdriver = "COM.ibm.db2.jdbc.app.DB2Driver"
+      jdbcdriver = "com.ibm.db2.jcc.DB2Driver"
       url = "jdbc:db2:sample"
   end
 
@@ -198,8 +198,15 @@ method run()
 
   do
     -- make the connection
-    jdbcCon = Connection DriverManager.getConnection(url, user, pass)
-
+    if jdbcdriver = "com.ibm.db2.jcc.DB2Driver" then
+      do
+	/* db2 z/OS does not like to override uid/pw in url
+	 * when it was already in properties */ 
+	jdbcCon = Connection DriverManager.getConnection(url)
+      end
+    else do
+      jdbcCon = Connection DriverManager.getConnection(url, user, pass)
+    end
   catch e2 = SQLException
     say 'bSQLException(s) caught while connecting !'
     loop while (e2 \= null)
