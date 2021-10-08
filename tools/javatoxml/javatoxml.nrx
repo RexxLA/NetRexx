@@ -1,0 +1,96 @@
+/*
+ * Copyright (c) 2021 Jason Monroe Martin <agrellum@gmail.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+import com.euclideanspace.xes
+import javax.xml.transform.
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.
+
+class javatoxml
+
+
+  properties public
+    baseNode=nodePackageDec
+
+  /**
+   * Constructor
+   */
+
+  method javatoxml(srcfile=File)
+    parser=JavaParser(srcfile.getAbsolutePath())
+    do
+      SimpleNode.vsymbolTable=Vector()
+      i=0
+      loop while i<parser.tokenImage.length
+        im=String parser.tokenImage[i]
+        if im.charAt(0)=="\"" then do
+          im=im.substring(1,im.length()-1)
+        end
+        SimpleNode.vsymbolTable.addElement(im)
+        i=i+1
+      end
+      baseNode=parser.CompilationUnit()
+      symbolTable.table=String[SimpleNode.vsymbolTable.size()]
+      SimpleNode.vsymbolTable.toArray(symbolTable.table)
+     catch e=ParseException
+      say "errors during parse  "||e
+    end
+    if baseNode\==null then do
+      dbf=DocumentBuilderFactory.newInstance()
+      db=dbf.newDocumentBuilder()
+      doc=db.newDocument()
+      doc.appendChild(baseNode.generateDomTree(doc))
+      if doc\==null then do
+        name=srcfile.getName()
+        pos=name.lastIndexOf(".")
+        if (pos>0) then name=name.substring(0,pos)||".xml"
+        outFile=File(name)
+        transformer=TransformerFactory.newInstance().newTransformer()
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION,"no")
+        transformer.setOutputProperty(OutputKeys.METHOD,"xml")
+        transformer.setOutputProperty(OutputKeys.INDENT,"yes")
+        transformer.setOutputProperty(OutputKeys.ENCODING,"UTF-8")
+        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount","2")
+        output=StreamResult(outFile)
+        input=DOMSource(doc)
+        transformer.transform(input,output)
+      end
+      else say "empty doc"
+    end
+    else say "baseNode == null"
+
+  method main(args=String[]) static
+    parse args[0] filename .
+    if filename.length>5 then do
+      if filename.substr(filename.length-4)==".java" then do
+        target=File(filename)
+        if target.exists()&target.isFile() then do
+          javatoxml(target)
+        end
+        else do
+          say "File not found or not a regular File"
+          exit
+        end
+      end
+      else do
+        say "File extension must be .java"
+        exit
+      end
+    end
+    else do
+      say "File name to short"
+      exit
+    end
