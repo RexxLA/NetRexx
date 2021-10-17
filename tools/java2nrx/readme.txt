@@ -99,3 +99,10 @@ Version history
    - Update versions
    - Support java snippets
 
+1.0.4 (2021-10-17)
+   agrellum@gmail.com remesm@gmail.com
+
+- Changes:
+   - Pad each 'end' token with a space
+
+
