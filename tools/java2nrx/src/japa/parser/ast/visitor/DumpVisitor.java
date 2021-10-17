@@ -889,7 +889,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 		printer.printLn(" end ");
 		printer.printLn(" else do ");
 		n.getElseExpr().accept(this, arg);
-		printer.printLn(" end");
+		printer.printLn(" end ");
 	}
 
 	public void visit(EnclosedExpr n, Object arg) {
@@ -1364,7 +1364,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 						printer.printLn();
 					}
 					printer.unindent();
-					printer.printLn("end");
+					printer.printLn(" end ");
 				}
 				// if (e.getLabel() != null) {
 
@@ -1504,7 +1504,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 		} else {
    		printer.printLn(" ");
 		}	
-		printer.printLn("end");
+		printer.printLn(" end ");
 
 		if (n.getElseStmt() != null) {
 			if (n.getThenStmt().getBeginLine() == n.getElseStmt().getBeginLine()) {
@@ -1520,7 +1520,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 				printer.printLn(" ");
 			}	
 
-			printer.printLn("end");
+			printer.printLn(" end ");
 		}
 	}
 
@@ -1533,7 +1533,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 		n.getBody().accept(this, arg);
 
 		printer.printLn();
-		printer.print("end ");
+		printer.print(" end ");
 
 	}
 
@@ -1551,7 +1551,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 		n.getCondition().accept(this, arg);
 		printer.printLn(" ");
 		n.getBody().accept(this, arg);
-		printer.print("end ");
+		printer.print(" end ");
 
 	}
 
@@ -1611,7 +1611,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 		}
 		printer.unindent();
 		printer.printLn();
-		printer.printLn("end ");
+		printer.printLn(" end ");
 
 	}
 
@@ -1641,7 +1641,7 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 			printer.printLn("finally ");
 			n.getFinallyBlock().accept(this, arg);
 		}
-		printer.print("end ");
+		printer.print(" end ");
 	}
 
 	public void visit(CatchClause n, Object arg) {
