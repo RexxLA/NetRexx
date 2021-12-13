@@ -51,13 +51,12 @@ act  = int 0
 
 -- run a command
 
-method runCommand(a=rexx) private
+  method runCommand(a=rexx) private
   do
     os = Rexx System.getProperty("os.name")
     isWindows = Rexx os.word(1) = "windows"
-
+    
     r = Runtime.getRuntime()
-
     do
       if isWindows then
         do
@@ -66,10 +65,10 @@ method runCommand(a=rexx) private
           p = r.exec('cmd.exe /c' a)  -- "builtin command, e.g. dir"
         end
       else
-        p = r.exec('sh -c' a)
-    catch e = IOException
-      Emsg(11,'Error - Cannot execute Runtime: ' a ':' e)
-    end
+          p = r.exec(a)
+	catch e = IOException
+	  Emsg(11,'Error - Cannot execute Runtime: ' a ':' e)
+	end
 
     act = 0
 
@@ -141,8 +140,7 @@ method runCommand(a=rexx) private
     exit(rc*(rc<>12))
 
 
-    -- read lines from a command's output
-
+-- read lines from a command's output
 class command.writer private implements RunnablePool uses ThreadPool
 
   l  = object
@@ -152,7 +150,6 @@ class command.writer private implements RunnablePool uses ThreadPool
   ok = boolean 1
 
   method run()
-
     do
       if f<>null then
         loop forever
@@ -163,7 +160,7 @@ class command.writer private implements RunnablePool uses ThreadPool
             leave
           do protect l
             r.selectOutput(s)
-            r.output(Rexx(d))
+            r.output((Rexx d))
           catch StageError
             leave
           end
@@ -182,7 +179,6 @@ class command.writer private implements RunnablePool uses ThreadPool
     end
 
   method go(rr=command,ff=BufferedReader,ss=int,ll=object)
-
     r = rr
     f = ff
     s = ss
