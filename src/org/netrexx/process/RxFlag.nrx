@@ -41,6 +41,7 @@ options binary nodecimal strictcase strictargs
 class RxFlag
   properties public
   -- ! anything added here must also be in the copy/clone constructor
+  annotations  = boolean 1      -- annotations are allowed
   binary       = boolean 0      -- all classes are binary classes
   bytes	       = boolean 0      -- generate bytecodes
   comments     = boolean 0      -- copy comments across to .java
@@ -79,6 +80,7 @@ class RxFlag
      Arg1 is the flags object to copy. */
     -- later use cloneable interface
   method RxFlag(orig=RxFlag)
+    annotations=orig.annotations
     binary=orig.binary
     bytes=orig.bytes
     comments=orig.comments
@@ -119,6 +121,7 @@ class RxFlag
     parse opt c2 +2 rest
     if c2\=='NO' then new=1; else do; new=0; opt=rest; end
     select
+      when opt=='ANNOTATIONS'  then annotations =new
       when opt=='BINARY'       then binary      =new
       when opt=='COMMENTS'     then comments    =new
       when opt=='COMPACT'      then compact     =new
@@ -165,6 +168,8 @@ class RxFlag
    */
   method toString(nose=boolean 1) returns String
     acc=Rexx ''
+    if annotations  then acc=acc 'Annotations'
+    else if nose then acc=acc 'NoAnnotations'
     if binary       then acc=acc 'Binary'
     else if nose then acc=acc 'NoBinary'
     if comments     then acc=acc 'Comments'
@@ -226,6 +231,7 @@ class RxFlag
   /** usage :display usage hints */
     -- intended for use from shell, e.g., NetRexxC
   method usage static
+    say '  -annotations   -- allow annotations to pass through'
     say '  -binary        -- all classes are binary classes'
           --say '  -bytes        -- generate bytecodes'
     say '  -comments      -- copy comments across to generated .java'
