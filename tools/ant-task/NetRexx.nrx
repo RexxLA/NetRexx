@@ -1,11 +1,11 @@
 package org.apache.tools.ant.taskdefs.optional
 /**
  * Rewrite of the optional ANT task (originally by dIon Gillard) NetRexxc in NetRexx.
+ * (ported to netrexx code, since it seemed a bit silly to have a netrexx
+ * compile task written in java instead of in netrexx)
  * @author Rene Vincent Jansen <a href="mailto:rvjansen@xs4all.nl">rvjansen@xs4all.nl</a>
  * @author Arjan Bos <a href="mailto:arjan.bos@zaaf.nl">arjan.bos@zaaf.nl</a>
  * @author Kermit Kiser <a href="mailto:infire@kenai.com">infire@kenai.com</a> 
- * (ported to netrexx code, since it seemed a bit silly to have a netrexx
- * compile task written in java instead of in netrexx)
  * compiling this only needs ant.jar and NetRexxC.jar on the classpath.
  * Kermit Kiser 20110904 - updated to fix errors, add missing code from Apache version, 
  * use main2 entry to handle file names with spaces, add nested classpath support.
@@ -14,7 +14,8 @@ package org.apache.tools.ant.taskdefs.optional
  * Kermit Kiser 20120831 - allow specify Eclipse compiler (ecj) via Ant properties:
  * nrx.compiler or ant.netrexxc.javacompiler   
  * Kermit Kiser 20120909 - pass Ant classloader to NetRexx compiler in thread context loader field
- * (so it can still find java compiler from Ant classpath in case NetRexxC.jar is in lib\ext dir)   
+ * (so it can still find java compiler from Ant classpath in case NetRexxC.jar is in lib\ext dir)
+ * Rene Vincent Jansen 20211224 add annotations option to properties 
  */
 
 import java.io.File
@@ -103,8 +104,8 @@ class NetRexx extends MatchingTask
 
   properties indirect
   arg	       = String
+  annotations  = String
   binary       = String
-
   comments     = String
   compact      = String
   compile      = String
@@ -247,11 +248,14 @@ class NetRexx extends MatchingTask
   method init()
     prj = this.getProject()
     p = prj.getProperty("ant.netrexxc.arg")
-
     if p \= null then this.setArg(p)
-    p = prj.getProperty("ant.netrexxc.binary")
+    
+    p = prj.getProperty("ant.netrexxc.annotations")
+    if p \= null then this.annotations = p
 
+    p = prj.getProperty("ant.netrexxc.binary")
     if p \= null then this.binary = p
+    
     p = prj.getProperty("ant.netrexxc.comments")
     if p \= null then this.comments = p
     
@@ -673,6 +677,7 @@ class NetRexx extends MatchingTask
     
     -- need to set java.class.path property and restore it later
     -- since the NetRexx compiler has no option for the classpath
+    -- (that is not true anymore, but hey!)
     currentClassPath = System.getProperty("java.class.path")
     currentProperties = System.getProperties()
     currentProperties.put("java.class.path", classpath)
@@ -745,6 +750,7 @@ class NetRexx extends MatchingTask
     opt = ArrayList()
     optstring= getopt("binary",binary) -
 		      getopt("comments",comments) -
+		      getopt("annotations",comments) -
 		      getopt("compile",compile) -
 		      getopt("compact",compact) -
 		      getopt("console",console) -
@@ -791,7 +797,7 @@ class NetRexx extends MatchingTask
    * Takes a classpath-like string, and adds each element of this string to
    * a new classpath, if the components exist. Components that don't exist,
    * aren't added. We do this, because jikes issues warnings for
-   * non-existant files/dirs in his classpath, and these warnings are pretty
+   * non-existent files/dirs in his classpath, and these warnings are pretty
    * annoying.
    *
    * @param target - target classpath
