@@ -15,9 +15,9 @@ package org.apache.tools.ant.taskdefs.optional
  * nrx.compiler or ant.netrexxc.javacompiler   
  * Kermit Kiser 20120909 - pass Ant classloader to NetRexx compiler in thread context loader field
  * (so it can still find java compiler from Ant classpath in case NetRexxC.jar is in lib\ext dir)
- * Rene Vincent Jansen 20211224 add annotations option to properties 
+ * Rene Vincent Jansen 20211224 add annotations option to properties
+ * Rene Vincent Jansen 20211228 add address and traceAnt option to properties  
  */
-
 import java.io.File
 import java.io.IOException
 import java.io.StringWriter
@@ -29,7 +29,6 @@ import java.util.Hashtable
 import java.util.Enumeration
 import java.util.Properties
 import java.util.StringTokenizer
-import netrexx.lang.Rexx
 import org.apache.tools.ant.BuildException
 import org.apache.tools.ant.DirectoryScanner
 import org.apache.tools.ant.Project
@@ -45,7 +44,9 @@ import org.netrexx.
  * This task can take the following
  * arguments:
  * <ul>
+ * <li>address</li>   
  * <li>arg</li>
+ * <li>annotations</li>
  * <li>binary</li>
  * <li>classpath</li>
  * <li>comments</li>
@@ -73,6 +74,7 @@ import org.netrexx.
  * <li>symbols</li>
  * <li>time</li>
  * <li>trace</li>
+ * <li>traceAnt</li> 
  * <li>utf8</li>
  * <li>verbose</li>
  * <li>warnexit0</li>
@@ -103,6 +105,7 @@ import org.netrexx.
 class NetRexx extends MatchingTask
 
   properties indirect
+  address      = String
   arg	       = String
   annotations  = String
   binary       = String
@@ -131,8 +134,8 @@ class NetRexx extends MatchingTask
   replace      = String
   savelog      = String
   srcDir       = File
-  sourcedir    = String	 -- Should this be the default for ant?
-  sourcedir_b  = boolean -- Should this be the default for ant?
+  sourcedir    = String
+  sourcedir_b  = boolean
   strictargs   = String
   strictassign = String
   strictcase   = String
@@ -141,6 +144,7 @@ class NetRexx extends MatchingTask
   strictsignal = String
   symbols      = String
   time	       = String
+  traceAnt     = String
   utf8	       = String
   warnexit0    = String
   
@@ -223,8 +227,8 @@ class NetRexx extends MatchingTask
    */
   method setTrace(t = String)
     if "trace trace1 trace2 notrace".wordpos(t)=0 then do
-      log("Trace value not recognized - changing to trace")
       t="trace"
+      log("Trace value not recognized - changing to trace")
     end
     this.trace_ = t
     return
@@ -247,6 +251,10 @@ class NetRexx extends MatchingTask
 
   method init()
     prj = this.getProject()
+
+    p = prj.getProperty("ant.netrexxc.address")
+    if p \= null then this.setAddress(p)
+
     p = prj.getProperty("ant.netrexxc.arg")
     if p \= null then this.setArg(p)
     
@@ -331,6 +339,10 @@ class NetRexx extends MatchingTask
     p = prj.getProperty("ant.netrexxc.trace")
     if p \=null then this.setTrace(p)
 
+    p = prj.getProperty("ant.netrexxc.traceAnt")
+    if p \=null && p='true' then trace results
+    if p \=null then this.setTraceAnt(p)
+
     p = prj.getProperty("ant.netrexxc.utf8")
     if p \= null then this.utf8 = p
 
@@ -383,8 +395,10 @@ class NetRexx extends MatchingTask
       if \compile_b then 		     -- 		no compile requested
   	if \exec_b & arg=null then	     --	         	no interpret requested
   	  if \java_b then		     --  		no java output requested
-  	    compile_b=1		--	assume we are compiling to class files so we can check what needs compilation by date comparison
-				--  	if \(keep_b | keepasjava_b) then 	--		no java output implied
+  	    compile_b=1
+	    --	assume we are compiling to class files so we can check what needs compilation by date comparison
+	    --  	if \(keep_b | keepasjava_b) then
+ 	    --		no java output implied
   /**
    * Executes the task. Performs the actual compiler call.
    */
@@ -578,8 +592,10 @@ class NetRexx extends MatchingTask
     if userDirname=null then return
     userDir=File(userDirname)
     
-    if userDir.getAbsolutePath().equals(destDir.getAbsolutePath()) then return -- no point in moving to same place
-    if srcDir.getAbsolutePath().equals(destDir.getAbsolutePath()) then return -- if compile in place, don't move class files (even if in working dir)    	
+    if userDir.getAbsolutePath().equals(destDir.getAbsolutePath()) then return
+    -- no point in moving to same place
+    if srcDir.getAbsolutePath().equals(destDir.getAbsolutePath()) then return
+    -- if compile in place, don't move class files (even if in working dir)    	
     
     if compileList.size() > 0 then do
       log("Moving class files to destDir") 
@@ -750,7 +766,8 @@ class NetRexx extends MatchingTask
     opt = ArrayList()
     optstring= getopt("binary",binary) -
 		      getopt("comments",comments) -
-		      getopt("annotations",comments) -
+		      getopt("annotations",annotations) -
+		      getopt("address",address) -
 		      getopt("compile",compile) -
 		      getopt("compact",compact) -
 		      getopt("console",console) -
