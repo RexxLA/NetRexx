@@ -33,6 +33,7 @@
 /* 2013.05.28 aligned options                                         */
 /* 2015.05.02 switch javac use to jsr199 java compiler api -- KK      */
 /* make nocrossref default to prevent unrequested file access         */
+/* 2021.12.31 add RxModel - Jason Martin                              */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -53,6 +54,7 @@ class RxFlag
   java	       = boolean 1      -- generate Java source
   logo	       = boolean 1      -- display logo (banner)
   format       = boolean 0      -- format output file [0=keep input line numbers]
+  model	       = int     0      -- model input file [0-3]
   replace      = boolean 0      -- replace output file if exists
   sourcedir    = boolean 0      -- force output files to source directory
   strictargs   = boolean 0      -- empty args must be specified; args must be used
@@ -90,6 +92,7 @@ class RxFlag
     diag=orig.diag
     explicit=orig.explicit
     format=orig.format
+    model=orig.model
     java=orig.java
     logo=orig.logo
     replace=orig.replace
@@ -130,6 +133,11 @@ class RxFlag
       when opt=='DIAG'         then diag        =new
       when opt=='EXPLICIT'     then explicit    =new
       when opt=='FORMAT'       then format      =new
+      when opt=="MODEL"        then model       =new*1
+      when opt=="MODEL0"       then model       =0
+      when opt=="MODEL1"       then model       =new*1
+      when opt=="MODEL2"       then model       =new*2
+      when opt=="MODEL3"       then model       =new*3
       when opt=='JAVA'         then java        =new
       when opt=='LOGO'         then logo        =new
       --when opt=='PFPN'         then pfpn        =new
@@ -186,6 +194,8 @@ class RxFlag
     else if nose then acc=acc 'NoExplicit'
     if format       then acc=acc 'Format'
     else if nose then acc=acc 'NoFormat'
+    if model>0 then acc=acc "Model"
+    else if nose then acc=acc "NoModel"
     if java         then acc=acc 'Java'
     else if nose then acc=acc 'NoJava'
     if logo         then acc=acc 'Logo'
@@ -242,6 +252,7 @@ class RxFlag
     say '  -explicit      -- local variables must be explicitly declared'
     say '  -java          -- generate Java source code for this program'
     say '  -logo          -- display logo (banner) after starting'
+    say "  -model[n]      -- model input file [0-3] none, stripped, compacted, braced"
     say '  -format        -- format output file (pretty-print)'
     say '  -replace       -- replace .java file even if it exists'
     say '  -sourcedir     -- force output files to source directory'

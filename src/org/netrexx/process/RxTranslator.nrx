@@ -60,6 +60,7 @@
 /*            don't touch disk files                                  */
 /* 2019.05.09 display failed summaries last - Jason Martin            */
 /* 2021.01.15 store (setaddress) NetRexxC -address flag  -- MRE       */
+/* 2021.12.31 add RxModel - Jason Martin                              */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -376,7 +377,10 @@ class RxTranslator
     -- make the output manager for the program
     program.streamer=RxStreamer(this, program)
     -- open output files, with names based on the source name
-    program.streamer.openfiles(null, null)
+    program.streamer.openfiles(null,null,null)
+    if program.flag.model>0 then do
+      program.model=RxModel(program)    -- make a model
+    end
 
     program.programname=program.source.getName() -- save cleaned-up name
     program.clauser=RxClauser(this)-- make a tokenizer [primes the pump]
@@ -478,6 +482,7 @@ class RxTranslator
     showpendings()                      -- display pending messages
 
     if \program.abandon then do
+      if program.flag.model>0 then program.model.process()
       if program.flag.diag then say '# --- pass 2 ---' program.programname
       program.parser.parseprogram()       -- process pass 2
       if program.flag.java then         -- if generating Java ..
