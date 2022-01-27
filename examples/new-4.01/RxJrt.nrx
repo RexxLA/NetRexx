@@ -9,7 +9,7 @@ import java.nio.file.StandardOpenOption
 import org.netrexx.process 
 
 
--- Walks the JPMS jrt:/ file system
+-- Walks the JPMS jrt:/ file system and modules provided in --module-path
 -- By default all directories are listed.
 -- -a shows all content
 -- -m and -p tabulates modules and packages
@@ -25,6 +25,8 @@ class RxJrt public
     opt_all     = boolean 0
     opt_module  = boolean 0
     opt_package = boolean 0
+    module_path = String null
+    
 
   properties public
     jrtprefix = 'jrt:'||fsep
@@ -46,7 +48,7 @@ class RxJrt public
         end
 
       otherwise
-        say 'RxJrt : Walks the JPMS jrt:/ file system'
+        say 'RxJrt : Walks the JPMS jrt:/ file system and modules provided in --module-path'
         say ' Optional arguments'
         say '  [-a | -all]     show all'
         say '  [-m | -module]  show module'
@@ -61,6 +63,7 @@ class RxJrt public
     end
     else do
       rx.RxJrtTree()
+      rx.RxModPath()
       exit 0
     end  
 
@@ -82,9 +85,85 @@ class RxJrt public
         jrtprefix = jrtprefix||'modules'||fsep              -- CSR JDK-8227076, fix for GraalVM/OpenJDK 11
       end 
       say '# Running JDK9+ with jrt prefix' jrtprefix
+      module_path = System.getProperty("jdk.module.path")
+      if module_path \= null then say '# Module-path set as 'module_path
     end 
     else 
       say '# No JPMS available'
+
+  -- explore the module-path if present
+  -- need to set JDK_JAVA_OPTIONS as in 
+  -- export JDK_JAVA_OPTIONS='--module-path path1:path2' #linux
+  -- set JDK_JAVA_OPTIONS='--module-path path1;path2' #windows
+  -- or run java --module-path path classfile
+  -- all modules (jar files) on path(s) will be loaded
+
+  method RxModPath()
+    if module_path == null then return
+    
+    seen = ''
+    mpath = module_path
+    psep=System.getProperty("path.separator") -- : or ;
+    loop forever
+      parse mpath mp (psep) mpath
+      if mp == '' then leave
+      p = Paths.get(URI.create('file://'||mp))
+      mod_finder = ModuleFinder.of([p])       
+      mod_ref = mod_finder.findAll()
+      i = mod_ref.iterator()     
+      loop while i.hasNext()
+         mod = ModuleReference i.next()
+         zfile = String mod.location.get().toString()
+         d = mod.descriptor()
+         jar = zfile.substring(zfile.lastindexof('/')+1)
+         if opt_module then do
+            say 'Module: 'd.name' from 'jar
+         end      
+         j = d.exports().iterator()
+         loop while j.hasNext()
+            mdexp = ModuleDescriptor.Exports j.next()
+            if \mdexp.isQualified() then do 
+               pack = mdexp.source()
+               seen[pack] = 1
+               if opt_package then do
+                  say '  'pack
+               end
+               else if \opt_module then do   
+                  say '/'jar'/'d.name'/'pack
+               end   
+            end   
+         end
+         j = d.exports().iterator()
+         loop while j.hasNext()
+            mdexp = ModuleDescriptor.Exports j.next()
+            if mdexp.isQualified() then do 
+               pack = mdexp.source()
+               seen[pack] = 1
+               if opt_package then do
+                  say '  'pack' \tqualified to 'mdexp.targets()
+               end
+               else if \opt_module then do   
+                  say '/'jar'/'d.name'/'pack' \tqualified to 'mdexp.targets()
+               end   
+            end   
+         end
+         j = d.packages().iterator()
+         loop while j.hasNext()
+            pack = String j.next()
+            if seen[pack] \= 1 then do
+               if opt_package then do
+                  say '  'pack' \tprivate'
+               end
+               else if \opt_module then do   
+                  say '/'jar'/'d.name'/'pack' \tprivate'
+               end   
+            end   
+         end
+
+      end
+    end
+    return 
+
 
 -- walk the file system directory tree
 
