@@ -16,3 +16,17 @@ Push the image using the following command on the commandline in this directory:
 `docker push rvjansen/netrexx:4.02`
 
 Be sure to change the userid to your own and the descriptor matches what you just built.
+
+## Building an image with more architecture layers
+
+First, a local copy of the buildx tool must be created, because the standard version can only build for the current architecture.
+
+`docker buildx create --use`
+
+This only needs to happen once per install of Docker.
+
+Then the commandline for building the image for multiple architectures is:
+
+`docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t rvjansen/netrexx:latest --push .`
+
+This will in fact build three images of which the layers are put together later, but these layers are only delivered for the requested architecture, which defaults to the instruction set the machine is running.
