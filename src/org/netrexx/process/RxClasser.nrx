@@ -309,6 +309,44 @@ class RxClasser
         end extdir
       end extscan               -- 2015.06.03 -- KK -- fix for issue #125 = chg from jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan
 end
+
+--MRE
+-- fix for issue #4 JPMS modules are not loaded
+-- we check the extra modules in directories given as --module-path and/or --upgrade-module-path
+-- we simply add all jar files found in the directories to the classpath, and let normal processing handle them
+-- to pass the module directories to NetRexx, set the JDK_JAVA_OPTIONS directory
+-- as in 'export JDK_JAVA_OPTIONS=--upgrade-module-path=path1:path2'
+
+mpath=''
+module_path = System.getProperty("jdk.module.path")
+if module_path \= null then do
+  if rxt.superflag.diag then say '# module-path set as 'module_path
+  mpath=module_path||psep
+end  
+upgrade_module_path = System.getProperty("jdk.module.upgrade.path")
+if upgrade_module_path \= null then do
+  if rxt.superflag.diag then say '# upgrade-module-path set as 'upgrade_module_path
+  mpath=mpath||upgrade_module_path
+end
+loop forever
+  parse mpath mp (psep) mpath
+  if mp == '' then leave
+
+  dir=File(mp)                                -- check the path
+  if dir.isDirectory() then do
+    entries=dir.list()                        -- could be null <sigh>
+    if entries\=null then do 
+      loop i=0 for entries.length
+        name=entries[i]
+        if \name.endsWith('.jar') then iterate i  -- not a jar file
+        path=path||psep||mp||fsep||name
+        if rxt.superflag.diag then say '# mod:' mp||fsep||name
+      end 
+    end
+  end
+end  
+
+
 /* now split into segments and test for zipfiles */
 classpaths=0
 classpath=Rexx ''                              -- build shorter
