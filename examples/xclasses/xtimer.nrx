@@ -1,0 +1,134 @@
+--         class:  timer
+--       package:  xsys
+--       version:  1.000 beta
+--          date:  25 JAN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch
+--
+--  SYNTAX
+--    class xtimer
+--
+--  DESCRIPTION
+--
+--    This class implements the 'time()' function in Classical
+--    REXX.
+--
+--  EXAMPLES
+--
+--      t1 = xtimer()
+--      t1.reset()
+--      -- some job here
+--      say 'Elapsed time:' t1.elapsed()
+--
+--  ADDITIONAL INFORMATION
+--
+--  MEMBER SUMMARY
+--
+--   Constructor
+--
+--   Properties
+--
+--
+package xclasses
+class xtimer
+  properties public
+    start = long
+
+-- method......: xtimer
+-- purpose.....: constructor
+--
+  method xtimer() public
+    start = System.currenttimemillis
+
+-- method......: display
+-- purpose.....: Show the CURRENT time in the standard Classical REXX
+--               format
+--                      N : normal hh:mm:ss
+--                      C : civil  hh:mmXX    XX = am or pm
+--                      H : hous since midnight
+--                      M : minutes since midnight
+--                      S : seconds since midnight
+--                      Z : zone: time zone (eg. GMT, CET, etc.)
+--
+  method display(type = Rexx) public
+    if type = '' then type = 'N'
+    now = Date()
+    parse now . . . hh':'mm':'ss zone .
+    select
+      when type = 'N' then
+        do
+          parse now.toString() . . . out .
+        end
+      when type = 'C' then
+        do
+          fl = 'am'
+          if hh > 13 then
+            do
+              hh = hh - 12
+              fl = 'pm'
+            end
+          out = hh.right(2,'0')':'mm.right(2,'0')||fl
+        end
+      when type = 'H' then
+        do
+          out = hh.right(2,'0')
+        end
+      when type = 'M' then
+        do
+          out = hh*60+mm
+        end
+      when type = 'S' then
+        do
+          out = hh*3600+mm*60+ss
+        end
+      when type = 'Z' then
+        do
+          out = zone
+        end
+      otherwise NOP
+    end
+    return out
+
+-- method......: reset
+-- purpose.....: reset the timer; returns '0.000' seconds
+--
+  method reset() public returns Rexx
+    start = System.currenttimemillis
+    return '0.000'
+
+-- method......: sleep
+-- purpose.....: sleeps N seconds
+--
+  method sleep(n=int) public
+    do
+      Thread.sleep(n*1000)
+      catch e = InterruptedException
+        e=e
+    end
+
+-- method......: elapsed
+-- purpose.....: returns the elapsed time in SSSS.MMM
+--
+  method elapsed() public returns Rexx
+    current = System.currenttimemillis
+    numeric digits 16
+    delta = current - start
+    delta = delta/1000
+    numeric digits 9
+    delta = delta.format(NULL,3)
+    return delta
+
+-- method......: main
+-- purpose.....: none
+--
+  method main(args=String[]) public static
+    args = args
+    t1 = xtimer() -- set a timer
+    t2 = xtimer() -- onother one please
+    loop for 5
+      t1.sleep(2)
+      say t1.elapsed()
+    end
+    say t2.elapsed()
+    exit 0

@@ -1,0 +1,190 @@
+--         class:  xexec
+--       package:  xsys
+--       version:  1.000 beta
+--          date:  23 JAN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch
+--
+--  SYNTAX
+--    class xexec
+--
+--  DESCRIPTION
+--
+--    This class easies the pain to run external processes from
+--    a NetRexx application.
+--
+--    The command output can be directed to any combination of:
+--        NULL      : suppress any output
+--        SCREEN    : the screen
+--        VAR       : a variable string
+--        ARRAY     : an array (lines= no.of lines)
+--
+--    The onerror parameter can be
+--        IGNORE    : a return code <> 0 is ignored
+--        WARNING   : print a warning message if rc <> 0
+--        ABORT     : abandon ship if rc <> 0
+--
+--  EXAMPLES
+--
+--      test = xexec('cp test toast','NULL','ABORT')
+--
+--      test = xexec('pwd','VAR','ABORT')
+--      say 'The path is "'test.out'".'
+--
+--      test = xexec('ls -l','ARRAY','WARNING')
+--      loop i = 1 to test.line[0]
+--        say '>>>' test.line[i]
+--      end
+--
+--    NOTE1: Those examples are valid on a UNIX platform
+--    NOTE2: Those examples are provided just as EXAMPLES
+--           there are infact better ways to do 'ls','pwd'
+--           in NetRexx itself
+--
+--
+--  ADDITIONAL INFORMATION
+--
+--  MEMBER SUMMARY
+--
+--   Constructor
+--
+--   Properties
+--      lines     : lines of output
+--      line      : array of output lines; line[0]=no.of out lines
+--      out       : string of output
+--      rc        : return code
+--
+--
+package xclasses
+class xexec
+  properties public
+    line  = Rexx('')       
+    lines                  
+    out
+    rc
+  properties private static
+    default_dest = 'SCREEN'
+    default_oner = 'WARNING'
+
+-- method......: xexec
+-- purpose.....: execute a system command
+--
+  method xexec(cmd=String,dest=Rexx,oner=Rexx) public
+    dest = dest.upper()                  -- uppercase params
+    oner = oner.upper()
+    valid_dest = 'ARRAY SCREEN VAR NULL'
+    valid_oner = 'WARNING ABORT IGNORE'
+
+    -- setting the defaults
+    --
+    if dest = '' then dest = default_dest
+    if oner = '' then oner = default_oner
+
+    -- check if the parms are OK
+    --
+    if valid_dest.wordpos(dest) = 0 then
+      do
+        say 'Error: "'dest'" is not a valid destination.'
+        exit 1
+      end
+    if valid_oner.wordpos(oner) = 0 then
+      do
+        say 'Error: "'oner'" is not a valid ONERROR action.'
+        exit 1
+      end
+
+    -- do the real job
+    --
+    do
+      r  = Runtime.GetRuntime()
+      p  = r.exec(cmd)
+      cr = DataInputStream(BufferedInputStream(p.getInputStream()))
+
+      -- Output handling
+      --
+      lines   = 0
+      out = ''
+      j = 0
+      loop forever
+        s = cr.Readline()
+        if s = NULL then leave
+        if dest.wordpos('SCREEN')
+          then say s
+        if dest.wordpos('VAR')
+          then out = out s
+        if dest.wordpos('ARRAY')
+          then
+            do
+              j = j+1
+              line[j] = s
+            end
+      end
+      lines = j
+      line[0] = lines
+  
+      -- Return code handling
+      --
+      rc = p.exitValue()
+      if rc <> 0 then
+        do
+          select
+            when oner = 'WARNING' then
+              do
+                say 'WARNING: rc=' rc 'from "'cmd'".'
+              end
+            when oner = 'ABORT' then
+              do
+                say 'WARNING: rc=' rc 'from "'cmd'".'
+                say 'ABORTING.'
+                exit 5
+              end
+             otherwise NOP
+          end
+        end
+    catch error = IOException
+      say error
+  end
+
+-- purpose.....: ditto, on error WARNING
+  method xexec(cmd=Rexx,dest=Rexx) public
+    this(cmd,dest,default_oner)
+
+-- purpose.....: ditto, output SCREEN
+  method xexec(cmd=Rexx) public
+    this(cmd,default_dest,default_oner)
+
+-- method......: main
+-- purpose.....: just test the main functions simply running
+--               "java xexec"
+--
+  method main(args=String[]) public static
+    args = args
+
+    test = xexec('ls *.nrx','VAR','IGNORE')
+    say '>>>' test.out'.'
+
+    test = xexec('ls does.not.exist','ARRAY','WARNING')
+
+    test = xexec("ls -l *.nrx","ARRAY",'')
+    loop i = 1 to test.line[0]
+      say '>>>' test.line[i]
+    end
+
+    test = xexec('ls does.not.exist','ARRAY','ABORT')
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

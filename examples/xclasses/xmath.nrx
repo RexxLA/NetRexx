@@ -1,0 +1,266 @@
+--       package:  xmath
+--       version:  1.000 beta
+--          date:  23 JAN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+package xclasses
+class xmath
+  properties public
+
+-- method......: xmath
+-- purpose.....: contructor; pretty useless sive this is a static method collection
+--
+  method xmath
+
+-- method......: n2cu
+-- purpose.....: converts N to Computer Units (K, M,...) [ex. 2048=2K]
+--
+  method n2cu(n=Rexx) public static
+    numeric digits 32        -- set high precision
+    list = 'K M G T P'       -- Kilo Mega Giga Tera Peta
+    base = 1
+    max  = 1024
+    unit = ''
+    loop forever
+      if n < max then
+        do
+          out = (n%base)||unit
+          leave
+        end
+      parse list unit list   -- get next unit, pls
+      base = max
+      max = max*1024
+    end
+    numeric digits 9
+    return out
+
+-- method......: s2h
+-- purpose.....: convert S(seconds) to hours (or days)  [ex. 3655 -> 01:00:55]
+--
+  method s2h(s=Rexx) public static
+    h = s%3600
+    s = s//3600       -- modulo
+    m = s%60
+    s = s//60         -- modulo
+    if h > 24 then    -- express h in DAYSd-HH
+      do              -- if necessary
+        d = h%24
+        h = h//24
+        h = h.right(2,'0')
+        h = d'd-'h
+      end
+    m = m.right(2,'0')
+    s = s.right(2,'0')
+    out = h':'m':'s
+    return out
+
+-- method......: hexop
+-- purpose.....: execute simple HEX operations (=,-,*,/)
+--
+  method hexop(in=Rexx) public static
+    parse in n1 op n2
+    n1 = n1.x2d()
+    n2 = n2.x2d()
+    select
+      when op = '+' then n3 = n1 + n2
+      when op = '-' then n3 = n1 - n2
+      when op = '/' then n3 = n1 / n2
+      when op = '*' then n3 = n1 * n2
+      otherwise 
+        do
+          say 'Invalid operation.'
+          exit 1
+        end
+    end
+    n3 = n3.d2x()
+    return n3
+
+-- method......: dotify
+-- purpose.....: put dots into a numeric string [ex: 300000 -> 300,000]
+--
+  method dotify(n=Rexx) public static
+    if n.datatype('N') = 0 then return n
+    parse n a '.' b
+    if b <> '' then b = '.'b
+    c = ''
+    loop for ((a.length() - 1) % 3)
+      c3 = a.right(3)
+      c = ','||c3||c
+      a = a.left(a.length() - 3)
+    end
+    return a||c||b
+
+-- method......: binop
+-- purpose.....: execute simple BIN operations (+,-,*,/)
+--
+  method binop(in=Rexx) public static
+    parse in n1 op n2
+    n1 = n1.b2x.x2d()
+    n2 = n2.b2x.x2d()
+    select
+      when op = '+' then n3 = n1 + n2
+      when op = '-' then n3 = n1 - n2
+      when op = '/' then n3 = n1 / n2
+      when op = '*' then n3 = n1 * n2
+      otherwise 
+        do
+          say 'Invalid operation.'
+          exit 1
+        end
+    end
+    n3 = n3.d2x.x2b()
+    return n3
+
+-- method......: gcd
+-- purpose.....: find the greatest common divisor foa A and B
+--
+  method gcd(a=int,b=int) public static
+    if a = 0 then return b
+    if b = 0 then return a
+    r2 = a
+    r1 = b
+    loop forever
+      rr = r2/r1
+      g = rr.trunc()
+      r = r2 - r1*g 
+      if r = 0 then return r1
+      r2 = r1
+      r1 = r
+    end
+
+-- method......: gauss
+-- purpose.....: Solves a linear equation with the GAUSS method
+--
+  method gauss(n=int,a=Rexx[,],y=Rexx[],c=rexx[]) public static;
+    b = rexx[n+1,n+1]
+    w = rexx[n+1]
+    error = 0
+    loop i = 1 to n
+      loop j = 1 to n
+        b[i,j] = a[i,j]
+      end                                                         
+      w[i] = y[i]
+    end                                                           
+    loop i = 1 to n-1
+      big = b[i,i].abs()
+      l = i                                                       
+      i1 = i+1                                                    
+      loop j = i1 to n
+        ab = b[j,i].abs()
+        if ab > big then                                          
+          do                                                      
+            big = ab                                           
+            l = j                                              
+          end                                                  
+      end                                                      
+      if big = 0                                               
+      then error = 1                                           
+      else                                                     
+        do                                                     
+          if l<>i then                                         
+            do                                                 
+              loop j=1 to n
+                hold = b[l,j]
+                b[l,j] = b[i,j]
+                b[i,j] = hold
+              end                                              
+              hold = w[l]
+              w[l] = w[i]
+              w[i] = hold
+            end                                                
+          loop j = i1 to n
+            t = b[j,i]/b[i,i]
+            loop k = i1 to n
+              b[j,k] = b[j,k] - t*b[i,k]
+            end                                            
+            w[j] = w[j] - t*w[i]
+          end                                              
+        end                                                
+    end                                                    
+    if b[n,n] = 0 then error = 1
+    else                                                   
+      do                                                      
+        c[n] = w[n]/b[n,n]
+        i = n - 1                                             
+        loop until i = 0
+          sum = 0                                             
+          loop j = i+1 to n
+            sum = sum + b[i,j] * c[j]
+          end                                                 
+          c[i] = (w[i] - sum) / b[i,i]
+          i = i-1                                             
+        end                                                       
+      end                                                         
+    return error
+
+-- method......: random
+-- purpose.....: returns a random number ( < MAX)
+--
+  method random(max=Rexx) public static;
+    max = max.abs()
+    n = Math.random() * max
+    n = n.trunc()
+    return n
+
+-- purpose.....: returns a random number ( < 1000)
+  method random() public static;
+    n = random(1000)
+    return n
+
+-- method......: main
+-- purpose.....: just test the main functions 
+--
+  method main(args=String[]) public static
+    args=args
+
+    say n2cu(100000)
+    say n2cu(5000)
+
+    say s2h(7245)
+    say s2h(100000)
+
+    op = 'FFFF + 1A'
+    say op hexop(op)
+
+    op = '1010 + 10'
+    say op binop(op)
+
+    say random(20)
+    say random()
+
+    n1 = 14
+    n2 = 77
+    say xmath.gcd(n1,n2)
+
+    n = 3
+    a = rexx[n+1,n+1]
+    y = rexx[n+1]
+    c = rexx[n+1]
+    a[1,1] = 13   ;   a[1,2] = -8 ;  a[1,3] = -3    ; y[1] = 20
+    a[2,1] = -8   ;   a[2,2] = 10 ;  a[2,3] = -1    ; y[2] = -5
+    a[3,1] = -3   ;   a[3,2] = -1 ;  a[3,3] = 11    ; y[3] = 0
+                                                                    
+    rc = gauss(n,a,y,c)
+    say 'RC:' rc'.'
+                                                                    
+    say 'Solution:'
+    loop i = 1 to n
+      say c[i].format(NULL,3)
+    end                                                             
+    exit
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

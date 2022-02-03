@@ -1,0 +1,240 @@
+--       package:  xsock
+--       version:  1.000 beta
+--          date:  23 JAN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--
+package xclasses
+class xsock 
+
+  properties public
+    line = Rexx('')          -- buffered I/O lines
+    lines                    -- number of lines
+    EOT                      -- End of Transfer character sequence
+
+  properties private static
+    destination = 'SCREEN'
+    rc   = 0                 -- latest OP rc
+    s    = Socket 
+    sin  = BufferedReader
+    sout = PrintWriter
+
+  properties private static
+    versioni  = 'v1r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: constructor
+-- purpose.....: define a socket connection,opening  HOST,PORT
+--
+  method xsock(host=Rexx,port=Rexx) public
+    -- first initialization
+    --
+    rc = 0
+    line[0] = 0
+    lines = line[0]
+    EOT = 'NULL'
+    -- initialize the socket
+    --
+    if host = '' then return
+    open(host,port)
+
+-- purpose.....: define a socket connection (no open is done)
+  method xsock() public
+    this('','')
+
+-- method......: version
+-- purpose.....: just display XSOCK version
+--
+  method version() public static
+    say 'Library....: xsock.'
+    say 'Version....:' versioni'.'
+    say 'Copyright..:' copyright'.'
+    say 'Contact....:' contact'.'
+
+-- method......: open
+-- purpose.....: open a socket connection to HOST, using protocol PROT
+--
+  method open(host=Rexx,prot=Rexx) public
+
+    -- check if the user entered a protocol or a simple
+    -- port number
+    --
+    rc = 0
+    if prot.datatype('D') = 0 then
+      do
+        -- he just entered a port with a name,
+        -- try to find the port, unless abort
+        dport = getservbyname(prot)
+        if dport = -1 then
+          do
+            say 'Invalid protocol "'prot'".'
+            exit 990
+          end
+        port = dport
+        setprotdef(prot)
+      end
+    else
+      do
+        -- he just entered a numeric port
+        -- we need to do nothing
+        port = prot  
+      end
+
+    -- do the REAL job
+    --
+    do
+      s    = Socket(host, port);
+      sin  = BufferedReader(InputStreamReader(s.getInputStream()));
+      sout = PrintWriter(s.getOutputStream(),1);
+    catch err = IOException
+      say err
+    end
+
+-- method......: getservbyname
+-- purpose.....: get the service port for SERV service [i.e. FTP=21]
+--
+  method getservbyname(serv=Rexx) public static
+    table = 'DAYTIME 13 FTP  21   TELNET 23'  -
+            'FINGER  79 NNTP 119  IMAP   143' -
+            'HTTP    80'
+    serv = serv.upper()
+    res = -1
+    loop while table <> ''
+      parse table sn sp table
+      if sn = serv then return sp
+    end
+    return res
+
+-- method......: setprotdef
+-- purpose.....: set protocol specific parameters
+--
+  method setprotdef(prot=Rexx) public
+    prot = prot.upper()
+    if prot = 'NNTP' then
+      do
+        EOT = '.'
+      end
+    return 
+
+-- method......: send 
+-- purpose.....: sends ILINE to the server port
+--
+  method send(iline=Rexx) public
+    sline = String
+    sline = iline
+    sout.println(sline)
+
+-- method......: readline
+-- purpose.....: read a line from the server
+--
+  method readline() public
+    do
+      iline = sin.readLine();
+    catch err = IOException
+      say err
+    end
+    return iline
+
+-- method......: receive
+-- purpose.....: receives on WHERE MAXL lines of output from server
+--
+  method receive(where=rexx,maxl=rexx) public
+    if maxl = '' then maxl=10000
+    if where = '' then where = destination
+    i = 0
+    do
+      loop forever
+        iline = sin.readLine();
+        if (iline = NULL) then leave
+        if EOT <> "NULL" then
+          do
+            if (iline == EOT)  then leave
+          end
+        i = i+1
+        if where.wordpos('SCREEN') <> 0 then say iline
+        if where.wordpos('ARRAY') <> 0 then
+          do
+            line[i] = iline
+          end
+        if i = maxl then leave
+      end
+    catch err = IOException
+      say err
+    end
+    line[0] = i
+    lines = line[0]
+
+-- purpose.....: receives on WHERE, max 10000 lines of output from server
+  method receive(where=Rexx) public
+    receive(where,'')
+
+-- purpose.....: as above, on SCREEN
+  method receive() public
+    receive('','')
+
+-- method......: close
+-- purpose.....: closes the xsock connection
+--
+  method close() public
+    do
+      s.close()
+    catch err = IOException
+      say err
+    end
+
+-- method......: hostname
+-- purpose.....: get the local hostname
+--
+  method hostname() public static
+    do
+      host = InetAddress.getlocalHost()
+    catch err = UnknownHostException
+      say err
+    end
+    parse host name'/'
+    return name
+
+-- method......: main
+-- purpose.....: just test the functions simply running "java xsock"
+--
+  method main(args=String[]) public static
+    args = args
+    rc = rc
+    xsock.version()
+
+    say 'Testing hostname()'
+    say xsock.hostname()
+    say
+
+    say 'Testing daytime service'
+    so = xsock('shift3.cern.ch','DAYTIME')
+    so.receive('')
+    so.close()
+    say
+
+    say 'Testing finger service'
+    so = xsock('shift3.cern.ch','FINGER')
+    so.send('pippo')
+    so.receive('')
+    so.close()
+    say
+
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

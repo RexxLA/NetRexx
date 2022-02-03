@@ -1,0 +1,427 @@
+--       package:  xclasses
+--       version:  1.010 
+--          date:  23 JAN 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1998
+--                 see notes at the end of this file
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--
+import sun.net.ftp.FtpClient
+import sun.net.ftp.FtpInputStream
+import sun.net.TelnetInputStream
+
+package xclasses
+class xftp extends FtpClient
+
+  properties public
+    rc        = 0            -- RC for a single operation
+    globrc    = 0            -- global RC (<> 0 if any op failed)
+
+  properties public static
+    host      = FtpClient
+    modeab    = 'BINARY'
+
+  properties private static
+    pagesize  = 24
+    replace   = 'NO'
+
+  properties private static
+    versioni  = 'v1r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: constructor
+-- purpose.....: opens an FTP connection to host H, port P
+--
+  method xftp(h=Rexx,p=Rexx) public
+    -- first initialization
+    --
+    super()
+    xopen(h,p)
+
+-- purpose.....: as above, port = 21
+  method xftp(h=Rexx) public
+    this(h,'')
+
+-- method......: version
+-- purpose.....: just display this library's info
+--
+  method version() public static
+    say 'Version....:' versioni'.'
+    say 'Copyright..:' copyright'.'
+    say 'Contact....:' contact'.'
+
+-- method......: rcclear
+-- purpose.....: 
+--
+  method rcclear() public
+    rc = 0
+
+-- method......: rcset
+-- purpose.....: the RC and the GLOBAL rc are set
+--               use the GLOBAL rc to see if ANY operation went wrong
+--
+  method rcset(n=rexx) public
+    rc     = n
+    globrc = n
+
+-- method......: xopen
+-- purpose.....: open the FTP connection (this is done automatically by constructor)
+--
+  method xopen(h=Rexx,p=Rexx) public
+    rcclear()
+    p = p
+    do
+      host = FtpClient(h)
+    catch err = exception
+      say 'Connection to "'h'" failed.'
+      say 'ERROR:' err
+      rcset(1)
+      return
+    end
+    say 'connected to "'h'".'
+
+-- method......: xlogin
+-- purpose.....: remote login
+--
+  method xlogin(up=Rexx) public
+    rcclear()
+    parse up u p      -- user password
+    do
+      host.login(u,p)
+    catch err = exception
+      say 'ERROR:' err
+      rcset(2)
+      return
+    end
+    say 'User "'u'" logged in.'
+
+-- method......: xls
+-- purpose.....: list the remote directory (on screen)
+--
+  method xls(t=rexx) public
+    t = t
+    rcclear()
+    do
+      tis = host.list()
+      line = ''
+      loop forever
+        n = rexx tis.read
+        if n = -1 then leave     -- there are no more bytes in this
+        if n = 10 then
+          do
+            say line
+            line = ''
+            iterate
+          end
+        line = line||n.d2c()
+      end
+      tis.close()
+    catch err = exception
+      say 'ERROR:' err
+      rcset(3)
+    end
+
+-- method......: xmore
+-- purpose.....: type the file on terminal
+--
+  method xmore(fid=Rexx) public
+    rcclear()
+    nlin = 1
+    do
+      tis = host.get(fid)
+      line = ''
+      loop forever
+        n = rexx tis.read
+        if n = -1 then leave     -- there are no more bytes in tis
+        if n = 10 then
+          do
+            say line
+            line = ''
+            nlin = nlin+1
+            if nlin > pagesize then
+              do
+                nlin = 1
+                say '+++ (ENTER to continue; Q to quit) \-'
+                if ask = 'Q' then 
+                  do
+                    leave
+                  end
+              end
+            iterate
+          end
+        line = line||n.d2c()
+      end
+    catch err = exception
+      say 'ERROR:' err
+      rcset(5)
+    end
+
+-- method......: xget
+-- purpose.....: fetch the remote file
+--
+  method xget(fids=Rexx) public
+    rcclear()
+    parse fids fidr fidl
+    if fidl = '' then fidl = fidr
+
+    -- small check: if the local file is there, prompt the user
+    --
+    if xfile.fexist(fidl) & replace = 'NO' then
+      do
+        say 'Local file "'fidl'" already exists. OK to overwrite? (Y|N)'
+        if ask.upper <> 'Y' then
+          do
+            say 'ABORTED by user.'
+            return
+          end
+      end
+
+    say 'Remote file........:' fidr'.'
+    say 'Local file.........:' fidl'.'
+    say 'Transfer type is...:' modeab'.'
+
+    buff = byte[16000]
+    t = xtimer()
+    totsize = 0
+    do
+      os = FileOutputStream(fidl)
+      tis = host.get(fidr)
+      str = '(READING) Tranferred:' totsize 'bytes.'
+      loop forever
+        System.out.print(str'\x0D')
+        n = tis.read(buff)
+        if n = -1 then leave     -- there are no more bytes in tis
+        totsize = totsize + n
+        str = '(WRITING) Tranferred:' totsize 'bytes.'
+        System.out.print(str'\x0D')
+        os.write(buff,0,n)
+        str = '(READING) Tranferred:' totsize 'bytes.'
+      end
+      System.out.print('                                     \x0D')
+      say
+      os.close()
+      sec = t.elapsed()
+      say 'Transferred "'totsize'" bytes in' sec 'seconds.'
+    catch err = exception
+      say 'ERROR:' err
+      rcset(12)
+    end
+
+-- method......: xput
+-- purpose.....: put the remote file
+--
+  method xput(fids=Rexx) public
+    rcclear()
+    parse fids fidl fidr
+    if fidr = '' then fidr = fidl
+
+    -- small check: if the local file is not there
+    --
+    if xfile.fexist(fidl) = 0 then
+      do
+        say 'Local file "'fidl'" does not exist.'
+        return
+      end
+
+    say 'Local file.........:' fidl'.'
+    say 'Remote file........:' fidr'.'
+    say 'Transfer type is...:' modeab'.'
+
+    buff = byte[16000]
+    t = xtimer()
+    totsize = 0
+    do
+      is = FileInputStream(fidl)
+      tos = host.put(fidr)
+      str = '(READING) Tranferred:' totsize 'bytes.'
+      loop forever
+        System.out.print(str'\x0D')
+        n = is.read(buff)
+        if n = -1 then leave     -- there are no more bytes in is
+        totsize = totsize + n
+        str = '(WRITING) Tranferred:' totsize 'bytes.'
+        System.out.print(str'\x0D')
+        tos.write(buff,0,n)
+        str = '(READING) Tranferred:' totsize 'bytes.'
+      end
+      System.out.print('                                     \x0D')
+      say
+      tos.close()
+      is.close()
+      sec = t.elapsed()
+      say 'Transferred "'totsize'" bytes in' sec 'seconds.'
+    catch err = exception
+      say 'ERROR:' err
+      rcset(13)
+    end
+
+-- method......: xcd
+-- purpose.....: remote change of directory
+--
+  method xcd(d=rexx) public
+    rcclear()
+    do
+      host.cd(d)
+    catch err = exception
+      say 'ERROR:' err
+      rcset(21)
+    end
+
+-- method......: xreplace
+-- purpose.....: set replace ON|OFF
+--
+  method xreplace(f=rexx) public
+    rcclear()
+    f = f.upper()
+    select
+      when f = 'Y' then replace = 'YES'
+      when f = 'N' then replace = 'NO'
+      otherwise 
+        do
+          say 'Invalid replace flag "'f'". Should be Y|N.'
+          rcset(51)
+        end
+    end
+    say 'Replace is now' replace'.'
+
+-- method......: xmode
+-- purpose.....: set the mode (ASCII BINARY)
+--
+  method xmode(modet=rexx) public
+    rcclear()
+    do
+      select
+        when modet = 'BINARY' then
+          do
+            modeab = 'BINARY'
+            host.binary()
+          end
+        when modet = 'ASCII' then
+          do
+            modeab = 'ASCII'
+            host.ascii()
+          end
+        otherwise say 'ERROR: Invalid type "'modet'".'
+      end
+    catch err = exception
+      say 'ERROR:' err
+      rcset(31)
+    end
+
+-- method......: xquery
+-- purpose.....: display the current settings
+--
+  method xquery() public
+    say 'Transfer type:' modeab'.'
+    say 'Replace......:' replace'.'
+
+-- method......: cmd
+-- purpose.....: main dispatcher: FTP commands are translated in xftp methods
+--
+  method exec(carg=rexx) public
+    cmd(carg)
+
+-- method......: cmd
+-- purpose.....: main dispatcher: FTP commands are translated in xftp methods
+--
+  method cmd(carg=rexx) public
+    if carg = '' then
+      do
+        say 'Missing command.'
+        return
+      end
+    parse carg cmd carg
+    select
+      when cmd = 'binary'  then xmode('BINARY')
+      when cmd = 'ascii'   then xmode('ASCII')
+      when cmd = 'query'   then xquery()
+      when cmd = 'more'    then xmore(carg)
+      when cmd = 'get'     then xget(carg)
+      when cmd = 'replace' then xreplace(carg)
+      when cmd = 'put'     then xput(carg)
+      when cmd = 'ls'      then xls(carg)
+      when cmd = 'cd'      then xcd(carg)
+      when cmd = 'user'    then xlogin(carg)
+      otherwise say 'Command "'cmd'" not implemented (yet!)'
+    end
+
+-- method......: main
+-- purpose.....: just test the main functions simply running
+--               "java xftp"
+--
+  method main(args=String[]) public static
+    arg = rexx(args)
+    
+    if arg = '' then
+      do
+        say 'This is just a small test conncting to "asisftp.cern.ch".'
+        ftpc = xftp('asisftp.cern.ch')
+        ftpc.cmd('user anonymous toto@toto')
+        ftpc.cmd('ascii')
+        ftpc.cmd('replace Y')
+        ftpc.cmd('get README.cernlib')
+        ftpc.cmd('get wylbur.help')
+        ftpc.cmd('ls')
+        exit
+      end
+    me = Rexx System.getProperty('user.name')
+    parse arg rhost rport
+    h = xftp(rhost,rport)
+    say 'Welcome to xftp version' versioni'.' copyright'.'
+    say 'user ('rhost':'me') : \-'
+    parse ask userid
+    if userid = '' then userid = me
+    if userid <> 'anonymous' then
+      do
+        say 'password: (WARNING: it will appear on your screen!) \-'
+        parse ask passwd
+      end
+    else
+      do
+        passwd = 'toto@toto.com'
+        say 'Anonymous connection: password set to "'passwd'".'
+      end
+    h.xlogin(userid passwd)
+
+    -- main loop
+    --
+--  his = history(100)
+    loop forever
+      say 'xftp ['h.rc'] > \-'
+--    say 'xftp ['his.counter()','h.rc'] > \-'
+      parse ask cmd carg
+
+      -- this is the "dispatcher"
+      --
+--    his.save(cmd arg)
+      select
+        when cmd = 'quit'       then leave
+        when cmd = 'end'        then leave
+        when cmd = 'leave'      then leave
+        when cmd = 'exit'       then leave
+--      when cmd = 'history'    then his.dump(arg)
+        otherwise h.exec(cmd carg)
+      end
+    end
+
+    -- OK, abandon ship
+    --
+    say 'bye.'
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

@@ -1,0 +1,218 @@
+--       package:  xinterpret
+--       version:  1.000 alpha
+--          date:  24 MAY 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, ETHZ 1997 1998
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx/xclasses
+--          note:  see at the end of file for GNU prologue
+--
+--
+package xclasses
+class xinterpret
+  properties public static
+    DEFAULT_PRECISION = 9
+
+  properties private static
+    pversion  = 'v1r000 beta'
+    copyright = '(c) 1998 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: version
+-- purpose.....: display the version
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: xstring
+-- purpose.....: constructor
+--
+  method xinterpter(options=Rexx) public
+    options = options
+
+-- method......: tokenize
+-- purpose.....: build valid tokens from a string
+--
+  method tokenize(in=Rexx) public static
+
+    -- Initialization
+    --
+    out = ''                            
+    validtokens = '( ) + - * / abs'     
+
+    --   We iterate over the valid tokens
+    --   If the input string contains one, we
+    -- parse the input string translating
+    -- "XXXvalid_tokXXX" in "XXX valid_tok XXX"
+    --
+    loop while validtokens <> ''
+      parse validtokens tok validtokens
+      out = ''
+      loop while in.pos(tok) <> 0
+        parse in p1 (tok) in
+        out = out p1 tok' '
+      end
+      out = out in
+      in = out
+    end
+    out = in.space()
+    return out
+
+-- method......: translate
+-- purpose.....: convert an infix tokenized string to a Polish 
+--               Notation
+--
+  method translate(intk=Rexx) public static
+
+    -- initialization
+    --
+    valid_tokens = '+ - * / abs'
+    stk = ''                     -- empty stack  (work)
+    pol = ''                     -- output stack
+
+    loop until intk = ''
+      parse intk t intk
+      select
+        when t = '(' then
+          do
+            stk = t stk          -- push()
+          end
+        when t = ')' then
+          do
+            parse stk t stk
+            loop while t <> '('
+              pol = pol t        -- output
+              parse stk t stk    -- pop()
+            end                        
+          end
+        when valid_tokens.wordpos(t) <> 0 then
+          do
+            loop forever
+              if stk = '' then leave
+              tk1 = stk.word(1)
+              if tk1 = '(' then leave
+              if priority(tk1) < priority(t) then leave
+              if priority(tk1) = priority(t) & priority(t) = 6
+                 then leave
+              parse stk x stk
+              pol = pol x
+            end 
+            stk = t stk
+          end
+        otherwise
+          do
+            pol = pol t
+          end
+      end
+    end
+    loop while stk <> ''
+      parse stk x stk
+      pol = pol x
+    end
+    pol = pol.space()
+    return pol
+
+-- method......: priority
+-- purpose.....: computes the priority of an operand
+--
+  method priority(op=Rexx) public static
+    select
+      when op = 'abs'             then pr = 6
+      when '* /'.wordpos(op) <> 0 then pr = 5
+      when '+ -'.wordpos(op) <> 0 then pr = 4
+      otherwise pr = 0
+    end
+    return pr
+
+-- method......: evalrpn
+-- purpose.....: evaluates an RPN expression
+--
+  method evalrpn(intk=Rexx,precision=Rexx) public static
+
+    -- initialization
+    --
+    if precision = '' 
+      then precision = DEFAULT_PRECISION
+    numeric digits precision
+    stk = ''                      -- stack
+
+    loop while intk <> ''
+      parse intk tk intk
+      select
+        when 'abs'.wordpos(tk) <> 0 then
+          do
+            parse stk p1 stk
+            select
+              when tk = 'abs' then r = p1.abs()
+              otherwise NOP
+            end
+            stk = r stk
+          end
+        when '+ * - /'.wordpos(tk) <> 0 then
+          do
+            parse stk p2 p1 stk
+            select
+              when tk = '+' then r = p1 + p2
+              when tk = '-' then r = p1 - p2
+              when tk = '*' then r = p1 * p2
+              when tk = '/' then r = p1 / p2
+              otherwise NOP
+            end
+            stk = r stk
+          end
+        otherwise
+          do
+            stk = tk stk
+          end
+      end
+    end
+    stk = stk.space()
+    return stk
+
+-- method......: interpret
+-- purpose.....: really BASIC interpret
+--
+  method interpret(expr=Rexx,precision=Rexx) public static
+    exprt = tokenize(expr)
+    pol = translate(exprt)
+    n = evalrpn(pol,precision)
+    return n
+
+  method interpret(expr=Rexx) public static
+    return interpret(expr,DEFAULT_PRECISION)
+
+-- method......: main
+-- purpose.....: maily used to do testing
+--
+  method main(args=String[]) public static
+    parse rexx(args) .
+    
+    xinterpret.version()
+    -- test tokenize
+    --
+    expr = '1+2*3'
+    expr = tokenize(expr)
+    say 'Tokenized: "'expr'".'
+    pol = translate(expr)
+    say 'RPN......: "'pol'".'
+    n = evalrpn(pol,'')
+    say 'result...: "'n'".'
+
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+--

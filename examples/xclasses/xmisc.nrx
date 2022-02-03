@@ -1,0 +1,589 @@
+--       package:  xmisc
+--       version:  1.000 beta
+--          date:  23 JAN 1997
+--        author:  B.Antoine  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--                 (c) B.Antoine, 1997 (XDATE)
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--
+package xclasses
+class xmisc
+  properties constant
+    pversion  = 'v1r001 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich' -
+                '(c) 1997 Bernard Antoine, CERN for XDATE'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+  properties private static
+    in_mode
+    out_mode
+    value
+    this_year
+    this_month
+    this_day
+    this_seconds
+    year
+    month
+    day
+    ddd
+    bbb
+    res
+    leap
+    days_in_year
+    month_table
+    seconds = 0
+
+  properties constant
+    days = 'Monday Tuesday Wednesday Thursday Friday Saturday Sunday'
+    months='January February March April May June' -
+          'July August September October November December'
+
+-- method......: date
+-- purpose.....: same as REXX DATE function
+  method date(fmt=Rexx null) public static returns rexx
+  Return xdate('TODAY',fmt)
+
+-- method......: xdate
+-- purpose.....: converts "value" from in_mode to out_mode
+--
+  method xdate(im=Rexx,vv=Rexx null,om=Rexx null) public static returns rexx
+If im \= null then in_mode   = im.UPPER()
+              else BADSYNTAX()
+if om \= null then out_mode  = om.UPPER()
+              else out_mode  = null
+if vv \= null then value     = vv.UPPER()
+              else value     = null
+
+-- first init a few things                 
+now        = java.util.Date()
+this_year  = rexx now.getYear() + 1900
+this_month = rexx now.getMonth() + 1
+this_day   = rexx now.getDate()
+this_seconds = now.getSeconds() + 60 * ( now.getMinutes() + 60 * now.getHours() )
+gmt_sec = 60 * now.getTimezoneOffset()
+ 
+Select
+   When in_mode = 'E' then Do
+      Parse PARSE_SLASH() N_O_A a1 a2 a3
+      If N_O_A = 1 then Do; day = a1; month = a2; year = this_year; End
+                   else Do; day = a1; month = a2; year = a3       ; End
+      YY_MM_DD()
+      End
+   When in_mode = 'U' then Do
+      Parse PARSE_SLASH() N_O_A a1 a2 a3
+      If N_O_A = 1 then Do; month = a1; day = a2; year = this_year; End
+                   else Do; month = a1; day = a2; year = a3       ; End
+      YY_MM_DD()
+      End
+   When in_mode = 'O' then Do
+      Parse PARSE_SLASH() N_O_A a1 a2 a3
+      If N_O_A = 1 then Do; year = this_year; month = a1; day = a2; End
+                   else Do; year = a1       ; month = a2; day = a3; End
+      YY_MM_DD()
+      End
+   When in_mode = 'S' then Do
+      Select
+         When value.LENGTH() = 6 then
+            Parse value year +2 month +2 day
+         When value.LENGTH() = 8 then
+            Parse value year +4 month +2 day
+         Otherwise BADVALUE()
+         End
+      YY_MM_DD()
+      End
+ 
+   When in_mode = 'TODAY' then Do
+      ONEARG()
+      INCREMENT(0)
+      End
+   When in_mode = 'TOMORROW' then Do
+      ONEARG()
+      INCREMENT(+1)
+      End
+   When in_mode = 'YESTERDAY' then Do
+      ONEARG()
+      INCREMENT(-1)
+      End
+   When in_mode = 'I' then Do
+      INCREMENT(value)
+      End
+   When in_mode.SUBSTR(1,1) = '+' then Do
+      ONEARG()
+      INCREMENT(value)
+      End
+   When in_mode.SUBSTR(1,1) = '-' then Do
+      ONEARG()
+      INCREMENT(value)
+      End
+ 
+   When in_mode = 'D' then Do
+      year = this_year
+      ddd = value
+      GET_MONTH_TABLE()
+      CHECK_DDD()
+      End
+   When in_mode = 'J' then Do
+      Select
+         When value.LENGTH() = 7 then Parse value year +4 ddd
+         When value.LENGTH() = 5 then Parse value year +2 ddd
+         Otherwise BADVALUE()
+         End
+      CHECK_YEAR()
+      GET_MONTH_TABLE()
+      CHECK_DDD()
+      End
+   When in_mode.POS('.') \= 0 then Do
+      ONEARG()
+      Parse in_mode year '.' ddd
+      CHECK_YEAR()
+      GET_MONTH_TABLE()
+      CHECK_DDD()
+      End
+ 
+   When in_mode = 'C' then Do
+      If \ value.DATATYPE('W') then BADVALUE()
+      If value < 0 then BADVALUE()
+      year = this_year.SUBSTR(1,2)||'00'
+      GET_MONTH_TABLE()
+      If value <= days_in_year
+         then ddd = value
+         else Do
+            value = value - 1 - days_in_year   -- delta from 1/1/yy01 
+            year = year + 4 *(value%(4*365+1)) -- nbr of 4-years 
+            value = value // (4*365+1)         -- remainder 
+            delta = value % 365                -- full years 
+            If delta = 4                       -- 31/12 of a leap year 
+               then Do; delta = 3 ; value = 365 ; End
+               else value = value // 365
+            year = year + delta + 1
+            ddd = value + 1
+            If year.SUBSTR(1,2) \= this_year.SUBSTR(1,2)
+               then BADVALUE()
+            GET_MONTH_TABLE()
+            End
+      End
+ 
+   When in_mode = 'B' then Do
+      If \ value.DATATYPE('W') then BADVALUE()
+      If value < 0 then BADVALUE()
+      BBB_2_DDD()              -- convert to Julian form 
+      GET_MONTH_TABLE()
+      End
+ 
+   When in_mode = 'Q' then Do  -- Unix format : days since 01/01/70 
+      If \ value.DATATYPE('W') then BADVALUE()
+      If value < 0 then BADVALUE()
+      value = value + 719162            -- 01/01/70 in 'B' form   
+      BBB_2_DDD()              -- convert to Julian form 
+      GET_MONTH_TABLE()
+      End
+ 
+   When in_mode = 'R' then Do  -- Unix format : secs since 01/01/70 
+      dgt = digits
+      Numeric Digits 24
+      If \ value.DATATYPE('W') then BADVALUE()
+      If value < 0 then BADVALUE()
+      value = value + gmt_sec
+      seconds = value // 86400
+      value   = value %  86400
+      value = value + 719162            -- 01/01/70 in 'B' form   
+      Numeric Digits dgt
+      BBB_2_DDD()              -- convert to Julian form 
+      GET_MONTH_TABLE()
+      End
+ 
+   When in_mode = 'NEXT' then Do
+      index = days.UPPER().WORDPOS(value)
+      If index = 0 then BADVALUE()
+      MM_DD_2_DDD( this_year, this_month , this_day )
+      DDD_2_BBB()
+      today = 1+bbb//7
+      inc = index - today
+      If inc <= 0 then inc = inc + 7
+      INCREMENT(inc)
+      End
+   When in_mode = 'LAST' then Do
+      index = days.UPPER().WORDPOS(value)
+      If index = 0 then BADVALUE()
+      MM_DD_2_DDD( this_year, this_month , this_day )
+      DDD_2_BBB()
+      today = 1+bbb//7
+      inc = index - today
+      If inc >= 0 then inc = inc - 7
+      INCREMENT(inc)
+      End
+ 
+   When in_mode = 'K' then Do
+      Select
+         When value.LENGTH() = 6 then Parse value year +4 ww
+         When value.LENGTH() = 4 then Parse value year +2 ww
+         Otherwise BADVALUE()
+         End
+      CHECK_YEAR()
+      If \ww.DATATYPE('W') then BADVALUE()
+      MM_DD_2_DDD( year, 01 , 01 )
+      DDD_2_BBB()
+      index = 1+bbb//7         -- day number of january 1st 
+      -- that table gives index to monday of 1st week of year 
+      delta = (ww-1)*7 + '1 0 -1 -2 4 3 2'.WORD(index)
+      If delta <= 0
+         then Do
+            year = year - 1
+            GET_MONTH_TABLE()
+            ddd = days_in_year + delta
+            End
+         else Do
+            If leap then x = '364 363 366 366 366 366 365'.WORD(index)
+                    else x = '364 363 362 365 365 365 365'.WORD(index)
+            If delta > x then BADVALUE()
+                         else ddd = delta
+            End
+      End
+ 
+   Otherwise Do
+      BADSYNTAX()
+      End
+   End
+ 
+-- here, date converted in julian form, and 'leap' flag set 
+ 
+Select
+   When out_mode = null then Do
+      DDD_2_MM_DD()
+      res = day months.WORD(month).SUBSTR(1,3) year
+      End
+ 
+   When out_mode = 'E' then Do
+      DDD_2_MM_DD()
+      res =  day.RIGHT(2,'0')||'/'||month.RIGHT(2,'0')||-
+         '/'||year.RIGHT(2,'0')
+      ADD_SECONDS(':')
+      End
+   When out_mode = 'U' then Do
+      DDD_2_MM_DD()
+      res =  month.RIGHT(2,'0')||'/'||day.RIGHT(2,'0')||-
+         '/'||year.RIGHT(2,'0')
+      ADD_SECONDS(':')
+      End
+   When out_mode = 'O' then Do
+      DDD_2_MM_DD()
+      res =  year.RIGHT(2,'0')||-
+         '/'||month.RIGHT(2,'0')||'/'||day.RIGHT(2,'0')
+      ADD_SECONDS(':')
+      End
+   When out_mode = 'S' then Do
+      DDD_2_MM_DD()
+      res =  year.RIGHT(4,'0')||-
+         month.RIGHT(2,'0')||day.RIGHT(2,'0')
+      ADD_SECONDS('')
+      End
+ 
+   When out_mode = 'M' then Do
+      DDD_2_MM_DD()
+      res = months.WORD(month)
+      End
+   When out_mode = 'N' then Do
+      DDD_2_MM_DD()
+      res = month
+      End
+ 
+   When out_mode = 'D' then Do
+      res = ddd
+      End
+   When out_mode = 'J' then Do
+      res = year.RIGHT(2,'0')||ddd.RIGHT(3,'0')
+      End
+ 
+   When out_mode = 'C' then Do
+      century = year%100
+      year = year//100          -- just the rest of it 
+      If year \= 0 then ccc = year*365 + (year-1)%4 + (century//4 = 0)
+                   else ccc = 0
+      res = ccc + ddd
+      End
+   When out_mode = 'B' then Do
+      DDD_2_BBB()
+      res = bbb
+      End
+   When out_mode = 'Q' then Do
+      DDD_2_BBB()
+      res = bbb - 719162
+      End
+   When out_mode = 'R' then Do
+      dgt = digits
+      Numeric digits 24
+      DDD_2_BBB()
+      res = (bbb - 719162)*86400 - gmt_sec + seconds
+      Numeric Digits dgt
+      End
+ 
+   When out_mode = 'L' then Do
+      res = leap
+      End
+ 
+   When out_mode = 'W' then Do
+      DDD_2_BBB()
+      day = 1+bbb//7
+      res = days.WORD(day)
+      End
+   When out_mode = 'X' then Do
+      DDD_2_BBB()
+      day = 1+bbb//7
+      res = day
+      End
+ 
+   When out_mode = 'K' then Do
+      target = ddd           -- keep current day 
+      MM_DD_2_DDD( year , 01 , 01 )
+      DDD_2_BBB()         -- Jan 1st' date 
+      index = 1+bbb//7       -- day index     
+      If target <= '0 0 0 0 3 2 1'.WORD(index)
+         then Do             -- belongs to last year 
+            year = year - 1  -- & keep ddd = 1 
+            GET_MONTH_TABLE()
+            DDD_2_BBB()         -- Jan 1st' date 
+            index = 1+bbb//7       -- day index     
+            target = target + days_in_year - 1
+            End
+      If leap then x = '364 363 366 366 366 366 365'.WORD(index)
+              else x = '364 363 362 365 365 365 365'.WORD(index)
+      If target > x
+         then Do       -- belongs to next year 
+            res = (year+1).RIGHT(4,'0')||'01'
+            End
+         else Do       -- belongs to this year 
+            res = year.RIGHT(4,'0')||-
+               ((target+'6 7 8 9 3 4 5'.WORD(index))%7).RIGHT(2,'0')
+            End
+      End
+ 
+   When out_mode = 'I' then Do
+      DDD_2_BBB()         -- argument date 
+      target = bbb           -- save it       
+      MM_DD_2_DDD( this_year , this_month , this_day )
+      DDD_2_BBB()         -- today's  date 
+      res = target - bbb
+      If seconds \= 0 then
+         res = ( (target*86400 + seconds) - (bbb*86400 + this_seconds) ) ||'.0'
+      End
+ 
+   Otherwise Do
+      BADSYNTAX()
+      End
+   End
+ 
+Return res
+ 
+-- PARSE_SLASH : separate "value" into slash separated elements
+method PARSE_SLASH private static
+   N_O_A = 0
+   If value.POS('/') \= 0 then Do
+      N_O_A = 1
+      Parse value a1 '/' a2
+      If a2.POS('/') \ = 0 then Do
+         N_O_A = 2
+         Parse a2 a2 '/' a3
+         If a3.POS('/') \ = 0 then BADVALUE()
+         End
+      End
+   If N_O_A = 0 then BADVALUE()
+   Return N_O_A a1 a2 a3
+ 
+-- YY_MM_DD : check validity of { year, month & day }.
+method YY_MM_DD private static
+   CHECK_YEAR()
+   If \month.DATATYPE('W') then BADVALUE()
+   If \day.DATATYPE('W') then BADVALUE()
+   If month <= 0 | month > 12 then BADVALUE()
+   If day <= 0 then BADVALUE()
+   MM_DD_2_DDD( year , month , day )
+   Return
+ 
+-- INCREMENT : process an incremental form
+method INCREMENT(incr=Rexx) private static
+   If \ incr.DATATYPE('W') then BADVALUE()
+   MM_DD_2_DDD( this_year , this_month , this_day )
+   ddd = ddd + incr
+   LOOP forever
+      If ddd <= 0
+         then Do   -- roll back one or more year 
+            year = year - 1
+            GET_MONTH_TABLE()
+            ddd = ddd + days_in_year
+            End
+         else Do   -- see if we must incement year 
+            If ddd <= days_in_year then Leave
+            year = year + 1
+            ddd = ddd - days_in_year
+            GET_MONTH_TABLE()
+            End
+      End
+   Return
+ 
+-- MM_DD_2_DDD : Convert  { year , month , day } into { year , ddd }
+method MM_DD_2_DDD(yy,mm,dd) private static
+   year  = yy
+   month = mm
+   day   = dd
+
+   GET_MONTH_TABLE()
+   ddd = month_table.WORD(month) + day
+   If ddd > month_table.WORD(month+1) then BADVALUE()
+
+   Return
+
+ 
+-- DDD_2_MM_DD : converts { year , ddd } into { year , month , day }
+method DDD_2_MM_DD private static
+   LOOP month = 1 to 12
+      If ddd > month_table.WORD(1+month) then Iterate
+      day = ddd - month_table.WORD(month)
+      Leave
+      End
+   Return
+ 
+-- BBB_2_DDD : convert a "based" value into { year , ddd }
+method BBB_2_DDD private static
+   year = 4 *(value%(4*36524+1))        -- nbr of 400-years 
+   value = value // (4*36524+1)         -- remainder 
+   delta = value % 36524                -- full years 
+   If delta = 4                         -- 31/12 of a long century 
+      then Do; delta = 3 ; value = 36524 ; End
+      else value = value // 36524
+   year = 100 * (year + delta)
+ 
+   year = year + 4 *(value%(4*365+1)) -- nbr of 4-years 
+   value = value // (4*365+1)         -- remainder 
+   delta = value % 365                -- full years 
+   If delta = 4                       -- 31/12 of a leap year 
+      then Do; delta = 3 ; value = 365 ; End
+      else value = value // 365
+   year = year + delta + 1
+   ddd = value + 1
+   Return
+ 
+-- DDD_2_BBB : Converts { year , ddd } into a "based" format
+method DDD_2_BBB private static
+   century = year%100
+   delta = year//100       -- what is left 
+   If century \= 0 then value = century*36524 + (century-1)%4
+                   else value = -1
+   If delta \= 0 then ccc = delta*365 + (delta-1)%4 + (century//4 = 0)
+                 else ccc = 0
+   bbb = value -366 +ccc + ddd
+   Return
+ 
+-- GET_MONTH_TABLE : initialize "leap" , "days_in_year", "month_table"
+method GET_MONTH_TABLE private static
+   -- month table is number of days until month 1st 
+   leap = 0
+   month_table = '0 31 59 90 120 151 181 212 243 273 304 334 365'
+   days_in_year = 365
+   Select
+      When year//4 \= 0 then Return    -- normal year if \ *4          
+      When year//100 \= 0 then Nop     -- leap year if *4 & \ *100     
+      When year//400 \= 0 then Return  -- normal year if *100 & \ *400 
+      Otherwise Nop                    -- leap year if *400            
+      End
+   leap = 1
+   month_table = '0 31 60 91 121 152 182 213 244 274 305 335 366'
+   days_in_year = 366
+   Return
+ 
+-- ADD_SECONDS : display additional seconds
+method ADD_SECONDS(sep) private static
+   If seconds = 0 then Return
+   ss = seconds // 60
+   hm = seconds %  60
+   hh = hm %  60
+   mm = hm // 60
+   res = res hh.RIGHT(2,'0') || sep || mm.RIGHT(2,'0') || sep || ss.RIGHT(2,'0')
+   Return
+ 
+-- CHECK_YEAR : verify validity of "year", expand it if necessary
+method CHECK_YEAR private static
+   If \year.DATATYPE('W') then BADVALUE()
+   If year < 0 then BADVALUE()
+   Select
+      When year.LENGTH() = 4 then Nop
+      When year.LENGTH() = 2 then Do
+          If year < 60 then year = '20'year
+                       else year = '19'year
+          End
+      Otherwise BADVALUE()
+      End
+   Return
+ 
+-- CHECK_DDD : verify validity of "ddd"
+method CHECK_DDD private static
+   If \ddd.DATATYPE('W') then BADVALUE()
+   If ddd < 0 | ddd > days_in_year then BADVALUE()
+   Return
+ 
+method ONEARG private static
+   If out_mode \= null then BADSYNTAX()
+   out_mode = value
+   value = in_mode
+   Return
+ 
+-- BADVALUE : display an error message in case of invalid arguments
+method BADVALUE private static
+   Say 'XDT910E Invalid input value in:' in_mode ',' value ',' out_mode
+   Exit ''
+ 
+-- BADSYNTAX : display an error message in case of syntactically incorrect invocation
+method BADSYNTAX private static
+   Say 'XDT911E Syntax error, input was:' in_mode ',' value ',' out_mode
+   Exit ''
+
+-- method......: main
+-- purpose.....: test xdate
+--
+  method main(args=String[]) public static
+
+    args = args
+    errors = 0
+    Say 'Testing xmisc.xdate(). Please stand by.'
+
+    types = 'SBOEUCIJRQ'
+    Loop for 200
+     yyy = xmath.RANDOM(2999).MAX(1).RIGHT(4,'0')
+     mm  = xmath.RANDOM(12).MAX(1).RIGHT(2,'0')
+     dd  = xmath.RANDOM(28).MAX(1).RIGHT(2,'0')
+     date_S = yyy||mm||dd
+     If yyy < 1970 | yyy > 1999 then max = 2
+                   else max = types.LENGTH()
+   
+     Loop k = 1 to max
+        type = types.SUBSTR(k,1)
+        date_t = xdate('S' , date_S , type)
+        date_x = xdate(type , date_t , 'S')
+        If date_x \= date_S then Do
+           Say 'S:'date_S type':'date_t 'S:'date_x
+           errors = errors+ 1
+           End
+        End
+     End
+ 
+    If errors = 0 then Say 'All looks good for now'
+    say 'TODAY.......:' xdate('TODAY')
+    say 'TOMORROW....:' xdate('TOMORROW')
+    say 'YESTERDAY...:' xdate('yesterday')
+    say 'NEXT MONDAY.:' xdate('next','monday')
+ 
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

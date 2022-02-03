@@ -1,0 +1,192 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  19 JUN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+package xclasses
+class xpager public
+  properties public
+    in = Rexx('')
+
+  properties private 
+    showlineno = 1        -- show the line numbers
+    refr       = 1        -- issue a refresh
+    commandno  = 0        -- display the command number
+    prompt     = 'cmd'    -- default prompt vaule
+
+  properties private static
+    lines      = 24       -- page size
+    columns    = 80       --
+
+  properties private static
+    pversion  = 'v1r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: version
+-- purpose.....: build a pager object
+--
+  method xpager() public 
+    lines   = lines
+    columns = columns
+
+-- method......: version
+-- purpose.....: display the version
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: help
+-- purpose.....: gives a short help of available commands
+--
+  method help() private static
+    say 'Available commands are:'
+    say
+    say 'DOWN                - move down one page.'
+    say 'LINENO              - show line numbers.'
+    say 'UP                  - move up one page.'
+    say 'QUIT                - exit program.'
+    say 'VERSION             - show program version.'
+    say 'GO nnnn             - go to line NNNN.'
+    say 'TOP                 - go to top.'
+    say
+
+-- method......: screensize
+-- purpose.....: sets the screen size (col lines)
+--
+  method screensize(dlines=Rexx,dcolumns=Rexx) public static
+    lines = dlines
+    columns = dcolumns
+
+-- method......: forcerefresh
+-- purpose.....: forces a refresh at next display
+--
+  method forcerefresh() public
+    this.refr = 1
+
+-- method......: setprompt
+-- purpose.....: set the prompt to the value
+--
+  method setprompt(str=Rexx) public
+    this.prompt = str
+
+-- method......: options
+-- purpose.....: set the options for this screen
+--
+  method options(str=Rexx) public
+    str = str.upper()
+    loop while str <> ''
+      parse str opt str
+      if opt = 'HIDELINES'  then showlineno = 0
+      if opt = 'SHOWELINES' then showlineno = 1
+    end
+
+-- method......: display
+-- purpose.....: run the pager
+--
+  method display() public 
+    st         = 1
+    lastcmd    = 'DOWN'
+    loop forever
+      if refr then 
+        do
+          loop i = st to st+lines
+            if i > in[0] then leave
+            if showlineno
+              then say i.right(5,'0') in[i]
+              else say in[i]
+          end
+        end
+      say prompt'\-'
+      parse ask.upper() cmd cargs
+      if cmd = '' then cmd = lastcmd
+      refr = 0
+      select
+        when cmd = 'DOWN' then 
+          do
+            st = st+lines
+            if st > in[0]
+              then st = st - lines
+            lastcmd = cmd
+            refr = 1
+          end
+        when cmd = 'UP' then
+          do
+            st = st-lines
+            if st < 1 then
+              st = 1
+            lastcmd = cmd
+            refr = 1
+          end
+        when cmd = 'TOP' then
+          do
+            st = 1
+            lastcmd = 'DOWN'
+            refr = 1
+          end
+        when cmd = 'BOT' then
+          do
+            st = in[0] - lines
+            if st < 1 then st = 1
+            lastcmd = 'DOWN'
+            refr = 1
+          end
+        when cmd = 'LINENO' then
+          do
+            if showlineno
+              then showlineno = 0
+              else showlineno = 1
+            if showlineno
+              then say 'Line numbers are now displayed.'
+              else say 'Line numbers are hidden.'
+          end
+        when cmd = 'VERSION' then version()
+        when cmd = 'HELP'    then help()
+        when cmd = 'QUIT'    then return 'QUIT'
+        when cmd = 'Q'       then return 'QUIT'
+        when cmd = 'END'     then return 'QUIT'
+        when cmd = 'EXIT'    then return 'QUIT'
+        when cmd = 'ABORT'   then return 'QUIT'
+        otherwise leave
+      end
+    end
+    return cmd cargs
+
+-- method......: run
+-- purpose.....: test the xpager funtionality
+--
+  method main(args=String[]) public static
+    arg = Rexx(args)
+    parse arg fn .
+
+    fid = xfile(fn)
+    fid.read()
+
+    page = xpager()
+    page.in = fid.line
+
+    loop forever
+      cmd = page.display()
+      if cmd = 'QUIT' then leave
+      say 'Ops...: command "'cmd'" not implemented.'
+    end
+
+    exit
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

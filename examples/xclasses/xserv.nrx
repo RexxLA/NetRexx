@@ -1,0 +1,208 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  02 APR 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1998
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--
+package xclasses
+class xserv
+
+  properties public
+    oline     = Rexx('')   -- buffered I/O lines
+    usercmds  = 'exit'     -- list of user commands
+    iline     = Rexx
+
+  properties public static
+    trace  = 0
+
+  properties private
+    remote_client = Socket
+    remote_out    = PrintWriter
+    remote_user   = 'unkown'
+
+  properties private static
+    port     = int 6001               -- default port
+    listen   = ServerSocket null
+    requests = 0                      -- number of client requests (for statistics)
+
+  properties private static
+    versioni  = 'v1r000 beta'
+    copyright = '(c) 1998 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: constructor
+-- purpose.....: defines a server on SOCKETPORT, with user commands USERC
+--
+  method xserv(socketport=Rexx,userc=Rexx) public
+    port     = int socketport
+    usercmds = userc
+    say 'xserv version' versioni'.' copyright'.'
+    say 'Running on user......:' xsys.userid()'.'
+    say 'Listening on port....:' port'.'
+    do
+      listen = ServerSocket(port)
+    catch e2=Exception
+      say '(xserv) Got error: "'e2'".'
+    end
+
+-- purpose.....: defines a server (USERC='': no user commands)
+  method xserv(socketport=Rexx) public
+    this(socketport,'')
+
+-- method......: version
+-- purpose.....: just display xserv's current version
+--
+  method version() public static
+    say 'Version....:' versioni'.'
+    say 'Copyright..:' copyright'.'
+    say 'Contact....:' contact'.'
+
+-- method......: get_remote_user
+-- purpose.....: returns the remote userid (userid@system)
+--
+  method get_remote_user() public
+    return remote_user
+
+-- method......: addline
+-- purpose.....: add a line to the output queue
+--
+  method addline(out=rexx) public
+    i = oline[0]
+    i = i+1
+    oline[i] = out
+    oline[0] = i
+
+-- method......: dispatch
+-- purpose.....: main internal command dispatcher
+--
+  method dispatch(carg=rexx) public
+    parse carg cmd carg
+    found = 1
+    select
+      when cmd = 'version' then cmd_version()
+      when cmd = 'status'  then cmd_status()
+      otherwise found = 0
+    end
+    return found
+
+-- method......: cmd_version
+-- purpose.....: returns to client the program version
+--
+  method cmd_version() private
+    addline(versioni copyright)
+
+-- method......: cmd_status
+-- purpose.....: returns to client server's status
+--
+  method cmd_status() private
+    addline('Server status: RUNNING.')
+    addline('Requests.....:'requests'.')
+
+-- method......: answer
+-- purpose.....: answer the client what was in the output queue
+--
+  method answer() public
+    do
+      loop i = 1 to oline[0]
+        remote_out.println(oline[i]);
+      end
+      remote_client.close()
+    catch e2=Exception
+      say '(answer) Got error: "'e2'".'
+    end
+
+-- method......: lineanswer
+-- purpose.....: answer just LINEREPLY to the client
+--
+  method answer(linereply=Rexx) public
+    do
+      remote_out.println(linereply);
+      remote_client.close()
+    catch e2=Exception
+      say '(answer) Got error: "'e2'".'
+    end
+
+-- method......: run
+-- purpose.....: main loop (waits for commands on port)
+--
+  method run() public 
+    do
+      loop forever
+        xstring.ssay(xsys.time('N')' waiting.')
+        remote_client = listen.accept();
+        remote_host = remote_client.getInetAddress().getHostName()
+        if trace then
+          do
+            say '(trace).......: 'remote_host':'remote_client.getPort()
+          end
+
+        oline[0] = 0
+        in = BufferedReader(InputStreamReader(remote_client.getInputStream()))
+        remote_out = PrintWriter(remote_client.getOutputStream(),1);
+        line = in.readLine();
+        parse line user cmd
+        remote_user = user'@'remote_host
+        str = xsys.date('E') xsys.time('N') 'User "'remote_user'" issuing "'cmd'".'
+        system.out.print(str '\x0D')
+        say
+
+        -- user commands require special treatment
+        --
+        parse cmd scmd .
+        if usercmds.wordpos(scmd) <> 0 then
+          do
+            iline = cmd
+            return iline
+          end
+
+        -- OK, it wasn't an user comand, try if it's a local one 
+        --
+        if dispatch(cmd) then
+          do
+            answer()
+            iterate
+          end
+
+        -- try to see if it's one known by the thread handler
+        --
+        xservhandler(remote_client,remote_out,cmd).start()
+      end
+    catch e=IOException
+      say 'Error:' e'.'
+    end
+    return ''
+
+-- method......: main
+-- purpose.....: small test server on port 6002 (no user commands)
+--               
+  method main(args=String[]) public static
+    parse rexx(args) arg
+    arg = arg                      -- make NR happy
+    aserv = xserv(6002)
+    aserv.run()
+    exit 0
+
+
+class xservhandler extends Thread
+  properties private 
+    client = Socket NULL
+    sout = PrintWriter
+    cmd
+
+  method xservhandler(i=Socket,j=PrintWriter,k=Rexx)
+    client = i
+    sout = j
+    cmd = k
+
+  method run() public
+  do
+    parse cmd cmd rest
+    line = 'command not implemented.'
+    if cmd = 'echo' then line = rest
+    sout.println(line);
+    client.close()
+  catch e2=Exception
+    say 'Error:' e2'.'
+  end

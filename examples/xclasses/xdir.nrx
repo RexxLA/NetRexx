@@ -1,0 +1,270 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  23 JAN 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1998
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--
+package xclasses
+class xdir extends File
+  properties public
+
+  properties public
+    path                -- directory's real path
+    cpath               -- current path
+    parent              -- parent directory
+    files               -- list of all files in directory
+    fileinfo = Rexx('') -- file information
+    directories         -- subdirectories from path
+    direinfo = Rexx('') -- information on them
+    attributes          -- like DATE SIZE, etc
+    foundfiles = ''     --
+  properties private static
+    options = ''        -- all options
+
+  properties private static
+    pfoundfiles = ''     --
+    pversion  = 'v1r000 beta'
+    copyright = '(c) 1998 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: constructor
+-- purpose.....: initializes xdir pointing to directory DIR
+--
+  method xdir(dir=Rexx) public
+    super(dir)
+    path = dir       -- path
+    attributes = 'SIZE DATE ACCESS NAME'
+    files = ''
+    path = path
+
+-- purpose.....: initilizes xdir pointing to directory "."
+  method xdir() public
+    this(".")
+
+-- method......: version
+-- purpose.....: display the running version of xdir
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: str_ls
+-- purpose.....: returns a string with the file list as contained in DIR
+--
+  method str_ls(dir=Rexx) public static
+    l = String[]
+    f = File(dir)
+    l = f.list()
+    str = ''
+    if l = NULL then
+      do
+        say 'directory "'dir'" does not exist.'
+        return str
+      end
+    loop i = 0 to l.length-1
+      str = str l[i]
+    end
+    return str.space()
+
+-- purpose.....: returns a string with the files in "."
+  method str_ls() public static
+    return str_ls(".")
+
+-- method......: ls
+-- purpose.....: gets the files contained in the DIR
+--
+  method ls(opt=rexx) public 
+    opt=opt
+    files = str_ls(path)
+    return files
+
+-- purpose.....: gets the files contained (no options)
+  method ls() public 
+    return ls('')
+
+-- method......: options_set
+-- purpose.....: set the options
+--
+  method options_set(opt=rexx) public static
+    options=opt
+      
+-- method......: dir
+-- purpose.....: Issues a directory command (like "ls -l")
+--
+  method dir(opt=rexx) public
+    opt = opt
+    if files = ''
+      then files = str_ls(path)
+    list = files
+    loop while list <> ''
+      parse list item list
+      f = File(path'/'item)
+      le = rexx f.length()
+      da = rexx Date(f.lastModified())
+      parse da . mo da hh':'mm':' . . yy .
+      da = yy'-'mo'-'da hh':'mm
+      if f.isDirectory()
+        then di = 'd'
+        else di = '-'
+      if f.canRead()
+        then re = 'r'
+        else re = '-'
+      if f.canWrite()
+        then wr = 'w'
+        else wr = '-'
+      if options.wordpos('fullpath')
+        then fn = path'/'item
+        else fn = item
+      fileinfo[item] =  di||re||wr le.right(10) da fn
+    end
+
+-- purpose.....: Issues a directory command with no options set
+--
+  method dir() public
+    dir('')
+
+-- method......: str_tree
+-- purpose.....: gets the current tree structure
+--
+  method str_tree(tpath=rexx) public static
+    if options.wordpos('verbose') <> 0
+      then xstring.ssay('searching "'tpath'".')
+    list = str_ls(tpath)
+    todo = ''
+    loop while list <> ''
+      parse list item list
+      f = File(tpath'/'item)
+      if f.isDirectory() then
+        do
+          todo = todo tpath'/'item
+        end
+    end
+    if todo = '' then return tpath
+    list = todo
+    all = tpath
+    loop while list <> ''
+      parse list item list
+      sub = str_tree(item)
+      all = all sub
+    end
+    return all
+
+-- method......: tree
+-- purpose.....: gets the directories unter DIR (-> directories)
+--
+  method tree(opt=rexx) public
+    opt=opt
+    directories = str_tree(path)
+
+-- purpose.....: ditto, with no special options
+  method tree() public
+    tree(" ")
+
+-- method......: str_find
+-- purpose.....: finds SEARCH string in the tree beyong TPATH
+--
+  method str_find(tpath=rexx,search=rexx) public static
+    if options.wordpos('verbose') <> 0
+      then xstring.ssay('looking in "'tpath'".')
+    list = str_ls(tpath)
+    todo = ''
+    loop while list <> ''
+      parse list item list
+      f = File(tpath'/'item)
+      if item.pos(search) <> 0 then
+        do
+          pfoundfiles = pfoundfiles tpath'/'item
+          say tpath'/'item.left(70)
+        end
+      if f.isDirectory() then
+        do
+          todo = todo tpath'/'item
+        end
+    end
+    if todo = '' then return tpath
+    list = todo
+    all = tpath
+    loop while list <> ''
+      parse list item list
+      sub = str_find(item,search)
+      all = all sub
+    end
+    return all
+
+-- method......: find
+-- purpose.....: find the string SEARCH in the current directory tree
+--
+  method find(search=rexx) public
+    pfoundfiles = ''
+    str_find(path,search)
+    foundfiles = pfoundfiles
+
+-- method......: pwd
+-- purpose.....: get the current working directory
+--
+  method pwd() public
+    path = this.getAbsolutePath()
+
+-- method......: main
+-- purpose.....: just test the main functions simply running java xclasses/xdir
+--
+  method main(args=String[]) public static
+    arg = rexx(args)
+--  mydir = xdir('.')
+--  mydir.ls()
+--  say mydir.files
+--  mydir.pwd()
+--    say mydir.path
+--    say mydir.getPath()
+--    say mydir.getParent()
+--  another = xdir(mydir.getParent())
+--  another.ls()
+--  say another.files
+
+-- test the dir method
+--
+/*  mydir = xdir('/java/bin')
+    mydir.options_set('fullpath')
+    mydir.dir()
+    loop fid over mydir.fileinfo
+      say mydir.fileinfo[fid]
+    end
+*/
+    adir = xdir('/afs/cern.ch/user/m/marchesi/src/java')
+    xdir.options_set('fullpath verbose')
+    adir.find(arg)
+
+    say adir.foundfiles
+
+/*  adir.tree()
+    list = adir.directories
+    loop while list <> ''
+      parse list item list
+      tdir = xdir(item)
+      tdir.dir()
+      loop fid over tdir.fileinfo
+        say tdir.fileinfo[fid]
+      end
+    end
+ */
+
+--  say xdir.str_ls()
+--  say xdir.str_ls('/java')
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

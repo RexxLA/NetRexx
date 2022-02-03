@@ -1,0 +1,546 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  13 MAY 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1998
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx/xclasses
+--          note:  see lines below for copyright information
+--
+--
+package xclasses
+class xfile extends File
+  properties public
+    buffer = byte[]     -- I/O buffer (BYTES)
+    line   = Rexx('')   -- buffered I/O lines
+    lines               -- number of lines
+    name                -- file name
+    recfm               -- F | V
+    lrecl = 80          -- record length
+    replace             -- replace flag
+
+  properties private static
+    rc                  -- latest OP rc
+
+  properties private static
+    default_splitsize = 1450000
+    pversion  = 'v1r000 beta'
+    copyright = '(c) 1998 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: constructor
+-- purpose.....: construtor for xfile (fid=filename)
+--
+  method xfile(fid=Rexx) public
+    super(fid)
+    rc = 0
+    name = fid
+    line[0] = 0
+    lines = line[0]
+    recfm = 'V'
+    replace = 0
+
+-- method......: version
+-- purpose.....: display the version
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: options
+-- purpose.....: set the options (REPLACE,RECFM,LRECL,etc)
+--
+  method options(optl=Rexx) public
+
+    -- parse the option list
+    --
+    list = optl.upper()
+    loop while list <> ''
+      parse list key'='value','list
+      select
+        when key = 'REPLACE' then replace = value
+        when key = 'RECFM' then recfm = value
+        when key = 'LRECL' then lrecl = value
+        otherwise
+          do
+            say 'Invalid keyword "'key'" specified.'
+            say 'Aborting.'
+            exit 400
+          end
+      end
+    end
+
+    -- additional checks, please
+    --
+    if replace = 'Y' 
+      then replace = 1
+      else replace = 0
+    if 'F V'.wordpos(recfm) = 0
+      then
+        do
+          say 'Invalid record format "'recfm'" specified.'
+          say 'Aborting.'
+          exit 401
+        end
+    if recfm = 'F' & lrecl = ''
+      then
+        do
+          say 'Missing record length for F format.'
+          say 'Aborting.'
+          exit 402
+        end
+
+-- method......: read
+-- purpose.....: read a full file into the NR array
+--
+  method read() public
+    rc = 0
+    do
+      fis= FileInputStream(File(name))
+      in = BufferedReader(InputStreamReader(fis))
+    catch er=ioException
+      rc = 3
+      return rc
+    end
+
+    i = 0
+    loop forever
+      iline = in.readLine
+      if iline = NULL then leave
+      i = i+1
+      line[i] = iline
+    catch er=ioException
+      say 'Problem reading file "'name'".'
+      say 'Message is "'er'".'
+      rc = 1
+      return rc
+    end
+    line[0] = i
+    lines = line[0]
+    return rc
+
+-- method......: split
+-- purpose.....: split a file in several chunks of N bytes
+--
+  method split(csize=rexx) public
+    if csize = '' then csize = default_splitsize
+
+    -- basic checks
+    --
+    if \csize.datatype('N')
+      then xsys.die(301,'(split) Size should be a number.')
+    if csize < 1 
+      then xsys.die(302,'(split) Size should be a number > 0.')
+
+    buf  = byte[csize]
+    rc = 0
+    wtotal = 0
+    parse name fn'.'
+    do
+      fd    = File(name)
+      isize = int fd.length()
+      ioff  = int 0
+      ooff  = int 0
+      fis   = FileInputStream(fd)
+      in    = DataInputStream(fis)
+      j = 1
+      say 'Input file....:'name'.'
+      say 'Original size.:'isize'.'
+      say 'Split size....:'csize'.'
+      loop forever
+        oprc = in.read(buf)
+        oname = fn'.'j
+        if fexist(oname) 
+          then xsys.die(303,'(split) Opps, file "'oname'" already exists.')
+        fdc  = File(oname)
+        size = int oprc
+        fos  = FileOutputStream(fdc)
+        out  = DataoutputStream(fos)
+        out.write(buf,ooff,size)
+        out.flush()
+        oprc = out.size()
+        out.close()
+        say 'Output file...:'oname '('size').'
+        wtotal = wtotal + size
+        if size <  csize then leave
+        j = j+1
+        ioff = ioff+csize
+      end
+    catch er=ioException
+      rc = 3
+      say '(split) ERROR:' er'.'
+      return rc
+    end
+    say 'Total out size:'wtotal'.'
+    if oprc = size
+      then rc = 0
+      else rc = 1
+    return rc
+
+-- purpose.....: ditto, with N=1450000
+  method split() public
+    return split('')
+
+-- method......: extract
+-- purpose.....: extract a portion of a file and write it into another
+--
+  method extract(sou=rexx,des=rexx,st_tag=rexx,en_tag=rexx,options=rexx) public static
+    do
+      fis= FileInputStream(File(sou))
+      in = BufferedReader(InputStreamReader(fis))
+    catch er=ioException
+      say er
+      xsys.die(501,'(extract) Problems with "'sou'" file.')
+    end
+
+    if fexist(des) & options.wordpos('replace') = 0
+      then xsys.die(502,'(extract) output file "'des'" already exists.')
+    do
+      out = PrintWriter(FileOutputStream(File(des)),1)
+    catch er=ioException
+      xsys.die(503,'(extract) Problems with "'des'" file.')
+    end
+
+    tagfound = 0
+    loop forever
+      iline = in.readLine
+      if iline = NULL then leave
+      uline = Rexx iline
+      if uline.wordpos(st_tag) <> 0 then
+        do
+          tagfound = 1
+          iterate
+        end
+      if \tagfound then iterate
+      if uline.wordpos(en_tag) <> 0 then
+        do
+          leave
+        end
+      out.println(iline)
+    catch er=ioException
+      say er
+      xsys.die(504,'(extract) Problems with "'sou'" file.')
+    end
+--  out.close()
+--  in.close()
+
+-- method......: readbuf
+-- purpose.....: read an entire file into the buffer
+--
+  method readbuf() public
+    rc = 0
+    do
+      fd   = File(name)
+      size = int fd.length()
+      off  = int 0
+      fis  = FileInputStream(fd)
+      in   = DataInputStream(fis)
+      buf  = byte[size]
+      oprc = in.read(buf,off,size)
+    catch er=ioException
+      rc = 3
+      say '(readbuf) ERROR:' er'.'
+      return rc
+    end
+    if oprc = size
+      then rc = 0
+      else rc = 1
+    buffer = buf
+    return rc
+
+-- method......: writebuf
+-- purpose.....: write the entire buffer onto a file
+--
+  method writebuf() public
+    rc = 0
+    do
+      fd   = File(name)
+      size = int buffer.length
+      off  = int 0
+      fos  = FileOutputStream(fd)
+      out  = DataoutputStream(fos)
+      out.write(buffer,off,size)
+      out.flush()
+      oprc = out.size()
+      out.close()
+    catch er=ioException
+      rc = 3
+      say '(writebuf) ERROR:' er'.'
+      return rc
+    end
+    if oprc = size
+      then rc = 0
+      else rc = 1
+    return rc
+
+-- method......: addline
+-- purpose.....: add a line to the OUTPUT array
+--
+  method addline(in=Rexx) public
+    j = line[0]
+    j = j+1
+    line[j] = in
+    line[0] = j
+    lines = line[0]
+
+-- method......: write
+-- purpose.....: ARRAY -> disk file operation
+--
+  method write() public
+    rc = 0
+    if fexist(name) & \replace
+      then xsys.die(401,'Sorry, output file "'name'" already exists.')
+    do
+      out = PrintWriter(FileOutputStream(File(name)),1)
+    catch er=ioException
+      say 'Problem opening file "'name'".'
+      say 'Message is "'er'".'
+      rc = 3
+      return rc
+    end
+
+    loop i = 1 to line[0]
+      linew = line[i]
+      if recfm = 'F' then           -- is recfm = F ?
+        do                          -- Yup, insert the right amount
+          linew = linew.left(lrecl) --      of spaces (or truncate
+        end                         --      if necessary)
+      out.println(linew)
+    end
+
+    -- we're done. but do not forget to close
+    -- and flush the printstream
+    --
+    out.close()
+    if out.checkError() then
+      do
+        say 'ERROR in writing "'name'".'
+        rc = 1
+      end
+    return rc
+
+-- method......: append
+-- purpose.....: append the line buffer to the file
+--
+  method append() public
+    rc = 0
+
+    -- get the file length
+    --
+    raff = File(name)             
+    skip = int raff.length()      
+
+    -- access as a Random File
+    -- and skip till the end
+    do
+      raf = RandomAccessFile(name,"rw")
+    catch er=ioException
+      say 'Problem opening file "'name'".'
+      say 'Message is "'er'".'
+      rc = 3
+      return rc
+    end
+    do
+      raf.skipBytes(skip)
+    catch er=ioException
+      rc = 4
+      return rc
+    end
+
+    loop i = 1 to line[0]
+      buf = line[i]'\x0A'
+      raf.writebytes(buf)
+    catch er=ioException
+      say 'Problem writing file "'name'".'
+      say 'Message is "'er'".'
+      rc = 3
+      return rc
+    end
+    return rc
+
+-- method......: append a line
+-- purpose.....: append a line to a file
+--
+  method lineappend(fname=Rexx,oline=Rexx) public static
+    if fname = '' 
+      then xsys.die(401,'(append) Missing file name.')
+    bool_append = boolean 1
+    rc = 0
+    do
+      out = PrintWriter(FileWriter(fname,bool_append),1)
+    catch er=ioException
+      say 'Problem opening file "'fname'".'
+      say 'Message is "'er'".'
+      rc = 3
+      return 
+    end
+
+    -- do the write
+    --
+    out.println(oline)
+
+    -- we're done. but do not forget to close
+    -- and flush the printstream
+    --
+    out.close()
+    if out.checkError() then
+      do
+        say 'ERROR in writing "'fname'".'
+        rc = 1
+      end
+    return 
+
+-- method......: recio
+-- purpose.....: RANDOM access file record operation
+--
+  method recio(oper=Rexx,recno=Rexx,out=Rexx) public 
+    rc = 0
+
+    -- checks & initialization
+    --
+    oper = oper.upper()
+    if recfm <> 'F' then
+      do
+        rc = 10
+        return rc 'ERROR: not a RECFM=F file.'
+      end
+    raff = File(name)             
+    size = int raff.length()
+    skip = (recno-1)*(lrecl+1)
+    skip = int skip
+    if size <= skip then
+      do
+        rc = 11
+        return rc 'ERROR: past file end.'
+      end
+
+    -- access as a Random File
+    -- and skip till the beginning of record
+    do
+      raf = RandomAccessFile(name,"rw")
+    catch er=ioException
+      say 'Problem opening file "'name'".'
+      say 'Message is "'er'".'
+      rc = 3
+      return rc
+    end
+    do
+      raf.skipBytes(skip)
+    catch er=ioException
+      rc = 4
+      return rc
+    end
+
+    if oper = 'READ' then
+      do
+        do
+          line = raf.readLine()
+        catch er=ioException
+          say 'Problem reading file "'name'".'
+          say 'Message is "'er'".'
+          rc = 3
+          return rc
+        end
+        return rc line
+      end
+
+    -- is it a WRITE operation?
+    --
+    if oper = 'WRITE' then
+      do
+        do
+          linew = out.left(lrecl)
+          buf = linew'\x0A'
+          raf.writebytes(buf)
+        catch er=ioException
+          say 'Problem reading file "'name'".'
+          say 'Message is "'er'".'
+          rc = 3
+          return rc
+        end
+        return 0
+      end
+    return 11
+
+-- method......: recread
+-- purpose.....: RANDOM access file record read
+--
+  method recread(recno=Rexx) public
+    out = recio('READ',recno,' ')
+    return out
+
+-- method......: recwrite
+-- purpose.....: RANDOM access file record write
+--
+  method recwrite(recno=Rexx,rec=Rexx) public
+    out = recio('WRITE',recno,rec)
+    return out
+
+-- method......: state
+-- purpose.....: returns 1 if file exists (0 otherwise)
+--
+  method state(fid=Rexx) public static
+    in = File(fid)
+    fl = in.exists()
+    return fl
+
+-- method......: fexist
+-- purpose.....: returns 1 if file exists (0 otherwise)
+--
+  method fexist(fid=Rexx) public static
+    fl = state(fid)
+    return fl
+
+-- method......: main
+-- purpose.....: just test the main functions of xfile
+--
+  method main(args=String[]) public static
+    args = args
+
+
+--  infid = xfile('test.in')
+--  rc = infid.read()
+--  say rc
+--  say infid.rc
+--  loop i = 1 to infid.lines
+--    say infid.line[i]
+--  end
+
+    /* write a big file
+     */
+    oufid = xfile('test.out')
+    oufid.options('RECFM=F,LRECL=80')
+    loop i = 1 to 2000
+      oufid.addline('line' i)
+    end
+    rc = oufid.write()
+    say 'RC:' rc' writing "'oufid.name'".'
+
+    /* access a record
+     */
+    fid = xfile('test.out')
+    fid.options('recfm=F , lrecl = 80')
+    say fid.recread(19)
+    say fid.recread(1333)
+    say fid.recwrite(1333,'Test')
+    say fid.recread(1973)
+    say fid.recread(1333)
+
+    oufid1 = xfile('test.out1')
+    oufid1.addline('last line')
+    rc = oufid1.append
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
