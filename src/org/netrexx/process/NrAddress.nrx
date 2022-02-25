@@ -15,9 +15,11 @@
 /* Change list (see RxLanguage for master change list)                */
 /* 2020.01.11 Initial                                                 */
 /* 2020.02.04 use SYSTEM default if address not set                   */
+/* 2022.02.25 ooRexx-like ADDRESS WITH stem implementation            */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
-options binary nodecimal strictcase strictargs
+options binary decimal strictcase strictargs
+--options nobinary nostrictcase nostrictargs
 
 import lang.netrexx.address 
 
@@ -63,28 +65,38 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
   expr   =RxExpr         -- expression [null if none]
   code   =RxCode         -- code
   addr   =Rexx           -- addressee
+                         -- addr['with'] holds with stem if permanent
 
   tmethod =RxMethod null
   tclass  =RxClass  null
 
   addressing = boolean 0
-
-
+  
+  -- store 'with' arguments if present
+  with = Rexx ''
+  -- with['input','stem'] = stem
+  -- with['input','stream'] = stream (not yet)
+  -- with['output','stem'] = stem
+  -- with['output','stream'] = stream (not yet)
+  -- with['error','stem'] = stem
+  -- with['error','stream'] = stream (not yet)
+  -- with['output','append'] = 'APPEND' ('replace' is default)
+  -- with['error','append'] = 'APPEND'  ('replace' is default)
+  
 
  /** Construct an object from the current clause */
  method NrAddress(newrxt=RxTranslator)
   rxt    =newrxt                                  -- the boss
   parser =rxt.program.parser
   tokens =parser.cursor.curclause.tokens
- 
---  say '--tokens'
---  say parser.cursor.curclause.showtokens()
+
 
  /** Pass processing */
  method scan(pass=int)
 --  say '# NrAddress scan pass ' pass
 --  say '--tokens'
---  say parser.cursor.curclause.showtokens()
+--  say 'tokens=' parser.cursor.curclause.showtokens()
+
  
   if tokens[0].value \== null then do
     t = Rexx tokens[0].value
@@ -99,6 +111,7 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
 
   if addressing==1 then do  
 -- this is a clause starting with ADDRESS
+--   say 'tokens=' parser.cursor.curclause.showtokens()
 
 -- 'ADDRESS'
     if tokens[1].type=RxToken.END then do
@@ -162,14 +175,66 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
       end
     end
     else do
--- 'ADDRESS addressee do something'
+-- 'ADDRESS addressee 'do something''
 
       if pass<2 then signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
 
       if rxt.program.flag.diag then say '# NrAddress: DIRECT ADDRESS'
 
-      code=rxt.eparser.parseexpr(parser.cursor, 0, 4, null, null)
-      expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
+      tt = tokens[4]                          -- check if WITH permanently set 
+      t = Rexx tt.value
+      t = t.upper()
+      if t = 'WITH' then do
+        if tokens[5].type == RxToken.END then do 
+          signal RxQuit(rxt, tokens[5], 'address.with.expected')
+        end
+ 
+-- 'ADDRESS addressee WITH ..'        
+        scanWITH(6)                           -- scan it
+
+        addr['with'] = with                   -- store it on addr
+
+        tclass=parser.cursor.curclass
+        tmethod=parser.cursor.curmethod
+        if tmethod \== null then do 
+            if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr'['with'] to method 'tclass.classname '-' tmethod.methodname 
+            tmethod.curaddress = addr
+        end
+        else if tclass \== null then do
+          if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr'['with'] to class 'tclass.classname  
+          tclass.curaddress = addr
+        end
+        else do
+          signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+        end
+
+        with = ''                             -- nullify
+      end
+      else do    
+                                              -- parse expression until word 'WITH'
+        endwords = 'WITH'
+        code=rxt.eparser.parseexpr(parser.cursor, 0, 4, null, endwords)
+        expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
+        endtoken = endtoken + 2
+
+--        say 'CODE 'code
+--        say 'EXPR 'expr
+--        code.dump()
+--        say parser.cursor.curclause.showtokens()
+
+        if tokens[endtoken].type\=RxToken.END then do 
+-- 'ADDRESS addressee 'do something' WITH ..'
+
+          nexttoken = endtoken+1
+          tok = tokens[nexttoken]
+          t = Rexx tok.value
+
+          if t \= 'WITH' | tokens[nexttoken+1].type == RxToken.END then do
+            signal RxQuit(rxt, tokens[nexttoken], 'address.with.expected')
+          end
+          scanWITH(nexttoken+2)
+        end  
+      end
     end 
   end  
   else do  
@@ -209,36 +274,89 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
     expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
   end
 
+method scanWITH(nexttoken)
+  tok = tokens[nexttoken]
+  t = Rexx tok.value
 
-/*
-  -- We used to have to play tricks to handle arbitrary null values,
-  --   but RexxIO.Say in NetRexx 1.1 has been upgraded to accept all
-  --   signatures, and handles null gracefully in all cases.
-  -- There is one case we need to worry about, though: floating point
-  --   numbers should not go through a conversion through binary if a
-  --   literal.  (It's OK for integers to be left as binary.)
-  expr.type=code.type
-  expr.conv=null
-  if code.group=S_LIT then
-   if code.type=RxType.FLOAT_TYPE-
-    | code.type=RxType.DOUBLE_TYPE then do
-    conv=rxt.converter.assigncost(parser.cursor, RxType.REXX_TYPE, code.type)
-    -- rxt.converter.convertcode(parser.cursor, RxType.REXX_TYPE, conv.proc, code)
-    rxt.converter.torexx(parser.cursor, code, 1)  -- allow constant
-    expr.type=RxType.REXX_TYPE
-    expr.conv=conv
+  append=Rexx null
+  
+  if t = 'INPUT' & tokens[nexttoken+1].type \= RxToken.END then do
+    next = 2
+  end
+  else if t = 'OUTPUT' & tokens[nexttoken+1].type \= RxToken.END then do
+    if Rexx tokens[nexttoken+2].value = 'REPLACE' & tokens[nexttoken+3].type \= RxToken.END then do
+      next = 4
     end
-
-  -- Suppose we'd better special-case "say null", too, for javac...
-  if code.type=RxType.NULL_TYPE then do
-    code.javacode='""'
-    code.constant=1
-    code.type=RxType.STRING_TYPE
-    expr.type=RxType.STRING_TYPE
+    else if Rexx tokens[nexttoken+2].value = 'APPEND' & tokens[nexttoken+3].type \= RxToken.END then do
+      append='APPEND'
+      next = 4
+    end    
+    else 
+      next = 2
+  end   
+  else if t = 'ERROR' & tokens[nexttoken+1].type \= RxToken.END then do     
+    if Rexx tokens[nexttoken+2].value = 'REPLACE' & tokens[nexttoken+3].type \= RxToken.END then do
+      next = 4
     end
+    else if Rexx tokens[nexttoken+2].value = 'APPEND' & tokens[nexttoken+3].type \= RxToken.END then do
+      append='APPEND'
+      next = 4
+    end
+    else 
+      next = 2   
+  end  
+  else do
+    if tokens[nexttoken+1].type == RxToken.END then do
+      signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.what.expected')
+    end
+    else do
+      signal RxQuit(rxt, tokens[nexttoken], 'address.with.expected')
+    end
+  end
 
-  return
-*/
+  scanWithWhat(nexttoken+next, t, append)  
+  
+  if tokens[nexttoken+next+3].type \= RxToken.END then do
+     scanWITH(nexttoken+next+4)
+  end 
+
+
+method scanWithWhat(nexttoken, with_, append)
+
+  tok = tokens[nexttoken]
+  t = Rexx tok.value
+
+  if t = 'STEM' then do
+    if tokens[nexttoken+1].type == RxToken.END then 
+      signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.stem.expected')
+    else do
+      nexttoken = nexttoken+2
+
+--      scode=rxt.tparser.parseterm(parser.cursor, nexttoken, 0)
+--      say 'MRE' scode.javacode
+    
+      tok = tokens[nexttoken]
+      rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
+      if rxvar == null then do
+         signal RxQuit(rxt, tokens[nexttoken], 'variable.name.expected')
+      end
+      if rxvar.vartype \= RxType.REXX_TYPE then do 
+        signal RxQuit(rxt, tokens[nexttoken], 'address.not.a.stem')  
+      end
+    
+      with[with_, 'stem'] = rxvar.varname
+      with[with_, 'append'] = append
+    end  
+  end
+  else if t = 'STREAM' then do 
+    signal RxQuit(rxt, tokens[nexttoken], 'address.with.stream.expected') -- 'not supported yet'
+--    Not sure yet how to handle a 'stream' .. 
+  end   
+  else do
+    signal RxQuit(rxt, tokens[nexttoken], 'address.with.what.expected')
+  end
+
+  
 
 /** get default addressee per OS */
 method getSystemAddressee returns Rexx
@@ -268,19 +386,111 @@ method getSystemAddressee returns Rexx
 
     jcode=String expr.code.javacode
     addressee = addr
+ 
+    doWith=0
+    with_arg=''
+    if addr.exists('with') then do      -- use with stored on address if existing
+      with=addr['with']
+    end
+ 
+    if with['input'].exists('stem') then do
+      istem = Rexx with['input','stem']
+      with_arg='(Object)'istem','
+      doWith=1
+    end
+    else do
+      with_arg='(Object)null,'
+    end
+    if with['output'].exists('stem') then do
+      ostem = Rexx with['output','stem']
+      if with['output'].exists('append') then 
+        with_arg=with_arg'(Object)'ostem',1,'
+      else 
+        with_arg=with_arg'(Object)'ostem',0,'
+      doWith=1
+    end
+    else do
+      with_arg=with_arg||'(Object)null,0,'
+    end
+    if with['error'].exists('stem') then do
+      estem = Rexx with['error','stem']
+      if with['error'].exists('append') then 
+        with_arg=with_arg'(Object)'estem',1'
+      else 
+        with_arg=with_arg'(Object)'estem',0'
+      doWith=1
+    end
+    else do
+      with_arg=with_arg||'(Object)null,0'
+    end    
 
-    rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.exec("'addressee'",'jcode',1);')
+    if doWith=1 then do
+--      say '#MRE  with_arg:' with_arg
+      rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execWith("'addressee'",'jcode', 'with_arg');')
+    end
+    else do
+      rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.exec("'addressee'",'jcode',1);')
+    end  
+  end 
+  if addr.exists('with') then do
+    with=''
   end
+
   return 
-  
+
+ 
  /** Interpretation */
  method interpret(cursor=RxCursor null)
   if expr\==null then do
 
     code=expr.evaluate(cursor)          -- re-evaluate as needed
     addressee = addr
-    netrexx.lang.RexxAddress.exec(addressee, rxt.interpreter.stringvalue(code), Rexx 1)
+ 
+    doWith=0
+    istem=Rexx null
+    ostem=Rexx null
+    estem=Rexx null
+    oappend=0
+    eappend=0
+
+    if addr.exists('with') then do  -- use with stored on address if existing
+      with=addr['with']
+    end
+
+    if with['input'].exists('stem') then do
+      st = Rexx with['input','stem']
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      istem = Rexx rxvar.varvalue
+      doWith=1
+    end
+    if with['output'].exists('stem') then do
+      st = Rexx with['output','stem']
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      ostem = Rexx rxvar.varvalue
+      doWith=1
+      if with['output'].exists('append') then 
+        oappend=1
+    end
+    if with['error'].exists('stem') then do
+      st = Rexx with['error','stem']
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      estem = Rexx rxvar.varvalue
+      doWith=1
+      if with['error'].exists('append') then 
+        eappend=1
+    end
+        
+    if doWith then do
+      netrexx.lang.RexxAddress.execWith(String addressee, String rxt.interpreter.stringvalue(code), Object istem, Object ostem, oappend, Object estem, eappend)
+    end
+    else do 
+      netrexx.lang.RexxAddress.exec(addressee, String rxt.interpreter.stringvalue(code), 1)
+    end
   end
+  if addr.exists('with') then do
+    with=''
+  end
+
   return
 
  

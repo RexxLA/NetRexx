@@ -11,10 +11,11 @@
 /*                                                                    */
 /* ------------------------------------------------------------------ */
 /* 2021.01.15 MRE Classic Rexx ADDRESS implementation                 */
+/* 2022.02.25 MRE ooRexx-like ADDRESS WITH stem implementation        */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
-options binary strictargs nodecimal noformat
+options binary strictargs decimal noformat
 
 /**
    This defines the I/O utility class for NetRexx.
@@ -44,11 +45,22 @@ class RexxAddress implements Serializable
     command=command_
     execAddress(addr, command)
 
+--  method execWith(addr=String, command_=String, with_=Rexx) static 
+--    if command_ == '', command_ == null then return
+--    command=command_
+--    execAddressWith(addr, command, with_)
+
+--  method execWith(addr=String, command_=Rexx, with_=Rexx) static 
+--    if command_ == '', command_ == null then return
+--    command=command_
+--    execAddressWith(addr, command, with_)
+
+
   method RC() static returns Rexx
     return exitcode
 
   
-  /** Function to launch an executable and process a command.
+  /** Method to launch an executable and process a command.
      Arg1 is the executable to launch.
      Arg2 is the command to process, it is sent into STDIN of
      the started executable
@@ -56,6 +68,9 @@ class RexxAddress implements Serializable
      
      Output of the processed executable command is printed on
      STDOUT.
+     Error output of the processed executable command is printed on
+     STDERR.
+
      Returncode is stored on lastrc 
    */
   method execAddress(addr=String, command_=String, wait=1) static 
@@ -87,6 +102,133 @@ class RexxAddress implements Serializable
       say "interrupted"
     end -- do
     return
+
+ 
+  /** Method to launch an executable and process a command with redirection.
+     Arg1 is the executable to launch.
+     Arg2 is the command to process, it is sent into STDIN of
+     the started executable
+     Arg3 either null or stdin as stem or stream
+     Arg4 either null or stdout as stem or stream
+     Arg5 whether to append to stdout
+     Arg6 either null or stderr as stem or stream
+     Arg7 whether to append to stderr
+     
+     Input if present as stem or stream is fed into 'addr command_'
+     Output of the processed executable command is printed on
+     STDOUT, or if present added to ostem or ostream.
+     Error output of the processed executable command is printed on
+     STDERR, or if present added to estem or estream.
+
+     Returncode is stored on lastrc 
+   */
+
+  method execWith(addr=String, command_=String, i=Object, o=Object, oappend=int, e=Object, eappend=int) static
+    
+    istem=Rexx
+    ostem=Rexx
+    estem=Rexx
+
+    istream=InputStreamReader
+    ostream=OutputStreamWriter
+    estream=OutputStreamWriter
+        
+    if i = null then do
+      istem=Rexx null
+      istream=InputStreamReader null
+    end  
+    else if i.getClass().getName() = 'netrexx.lang.Rexx' then
+      istem=Rexx i
+    else if i.getClass().getName() = 'java.io.InputStreamReader' then 
+      istream=InputStreamReader i
+ 
+    if o = null then do
+      ostem=Rexx null 
+      ostream=OutputStreamWriter null
+    end
+    else if o.getClass().getName() = 'netrexx.lang.Rexx' then
+      ostem=Rexx o
+    else if o.getClass().getName() = 'java.io.OutputStreamWriter' then 
+      ostream=OutputStreamWriter o
+      
+    if e = null then do
+      estem=Rexx null
+      estream=OutputStreamWriter null
+    end
+    else if e.getClass().getName() = 'netrexx.lang.Rexx' then
+      estem=Rexx e
+    else if e.getClass().getName() = 'java.io.OutputStreamWriter' then 
+      estream=OutputStreamWriter e
+      
+
+    addressee=[addr] 
+    do
+      pb = ProcessBuilder(addressee)
+      pid = pb.start()
+      in = BufferedReader(InputStreamReader(pid.getInputStream()))
+      out = BufferedWriter(OutputStreamWriter(pid.getOutputStream()))
+      if estem\=null then do               -- need stderr redirection
+        err = BufferedReader(InputStreamReader(pid.getErrorStream()))
+        readerr = 1
+        if \eappend then do
+          estem['0']=0
+        end  
+      end
+      else do
+        readerr = 0
+      end
+      out.write(command_'\n')              -- add new line to really flush
+      out.flush()
+
+      if istem\=null then do               -- feed input stem if present               
+        loop j=1 to istem[0] 
+          out.write(istem[j]'\n')          -- add new line to really flush
+          out.flush()
+        end
+      end     
+      out.flush()
+      out.close()
+
+      if ostem\=null then do
+        if \oappend then do
+          ostem['0']=0
+        end
+      end  
+
+	    line = in.readLine()
+	    loop while line <> null
+        if ostem\=null then do              -- fill output stem
+          j=ostem['0']
+          j=j+1
+          ostem[j]= line
+          ostem['0']=j
+        end
+        else do
+          Say(line)                         -- or say it
+        end
+	      line = in.readLine()
+      end  
+      if readerr then do                    -- fill error stem if present
+	      eline = err.readLine()
+	      loop while eline <> null
+          j=estem['0']
+          j=j+1
+          estem[j]= eline
+          estem['0']=j
+          eline = err.readLine()
+        end
+      end
+	    pid.waitFor()
+      exitcode = pid.exitValue()
+    catch iox=IOException
+      exitcode=''                 -- set empty
+      say iox.getMessage()
+    catch InterruptedException
+      exitcode=''                 -- set empty
+      say "interrupted"
+    end -- do
+    return
+
 
 
     
