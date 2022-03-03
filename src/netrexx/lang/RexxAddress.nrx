@@ -12,6 +12,7 @@
 /* ------------------------------------------------------------------ */
 /* 2021.01.15 MRE Classic Rexx ADDRESS implementation                 */
 /* 2022.02.25 MRE ooRexx-like ADDRESS WITH stem implementation        */
+/* 2022.03.02 MRE ooRexx-like ADDRESS WITH stream implementation      */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
@@ -24,61 +25,23 @@ options binary strictargs decimal noformat
 class RexxAddress implements Serializable 
 
   properties private static
---  StdIn	 = BufferedReader(InputStreamReader(System.in))
     StdOut = ConcurrentLinkedDeque()
-  --StdOut = LinkedList()
-  --fileIn = BufferedReader
     command  = String null
     exitcode = Rexx 'RC'
 
   properties private constant unused
   serialVersionUID=long 2781762092115528702
 
-
-  method exec(addr=String, command_=String, wait=1) static 
-    if command_ == '', command_ == null then return
-    command=command_
-    execAddress(addr, command)
-
-  method exec(addr=String, command_=Rexx, wait=1) static 
-    if command_ == '', command_ == null then return
-    command=command_
-    execAddress(addr, command)
-
---  method execWith(addr=String, command_=String, with_=Rexx) static 
---    if command_ == '', command_ == null then return
---    command=command_
---    execAddressWith(addr, command, with_)
-
---  method execWith(addr=String, command_=Rexx, with_=Rexx) static 
---    if command_ == '', command_ == null then return
---    command=command_
---    execAddressWith(addr, command, with_)
-
-
   method RC() static returns Rexx
     return exitcode
 
-  
-  /** Method to launch an executable and process a command.
-     Arg1 is the executable to launch.
-     Arg2 is the command to process, it is sent into STDIN of
-     the started executable
-     Arg3 is wait for executable to end -- always 1
-     
-     Output of the processed executable command is printed on
-     STDOUT.
-     Error output of the processed executable command is printed on
-     STDERR.
+/*
+  The plain code, no WITH handling
 
-     Returncode is stored on lastrc 
-   */
   method execAddress(addr=String, command_=String, wait=1) static 
---   say '#MRE EXECADDR 'addr' 'command_
    addressee=[addr] 
     do
       pb = ProcessBuilder(addressee)
---      pb.redirectErrorStream(1)   -- don't think we need to do this
       pid = pb.start()
       if wait then do
    	    in = BufferedReader(InputStreamReader(pid.getInputStream()))
@@ -102,12 +65,11 @@ class RexxAddress implements Serializable
       say "interrupted"
     end -- do
     return
+*/
 
- 
-  /** Method to launch an executable and process a command with redirection.
+ /** Method to launch an executable and process a command with redirection.
      Arg1 is the executable to launch.
-     Arg2 is the command to process, it is sent into STDIN of
-     the started executable
+     Arg2 is the command to process, it is sent into STDIN of the started executable
      Arg3 either null or stdin as stem or stream
      Arg4 either null or stdout as stem or stream
      Arg5 whether to append to stdout
@@ -123,61 +85,83 @@ class RexxAddress implements Serializable
      Returncode is stored on lastrc 
    */
 
-  method execWith(addr=String, command_=String, i=Object, o=Object, oappend=int, e=Object, eappend=int) static
-    
+  method execAddress(addr=String, command_=Rexx,   i=Object, o=Object, oappend=int, e=Object, eappend=int) static signals IOException, InterruptedException
+    execAddress(addr,String command_,i,o,oappend,e,eappend)
+
+  method execAddress(addr=String, command_=String, i=Object, o=Object, oappend=int, e=Object, eappend=int) static signals IOException, InterruptedException
+--    trace results
     istem=Rexx
     ostem=Rexx
     estem=Rexx
 
-    istream=InputStreamReader
-    ostream=OutputStreamWriter
-    estream=OutputStreamWriter
-        
-    if i = null then do
-      istem=Rexx null
-      istream=InputStreamReader null
-    end  
-    else if i.getClass().getName() = 'netrexx.lang.Rexx' then
-      istem=Rexx i
-    else if i.getClass().getName() = 'java.io.InputStreamReader' then 
-      istream=InputStreamReader i
- 
-    if o = null then do
-      ostem=Rexx null 
-      ostream=OutputStreamWriter null
-    end
-    else if o.getClass().getName() = 'netrexx.lang.Rexx' then
-      ostem=Rexx o
-    else if o.getClass().getName() = 'java.io.OutputStreamWriter' then 
-      ostream=OutputStreamWriter o
-      
-    if e = null then do
-      estem=Rexx null
-      estream=OutputStreamWriter null
-    end
-    else if e.getClass().getName() = 'netrexx.lang.Rexx' then
-      estem=Rexx e
-    else if e.getClass().getName() = 'java.io.OutputStreamWriter' then 
-      estream=OutputStreamWriter e
-      
+    iReader=BufferedReader
+    oWriter=BufferedWriter
+    eWriter=BufferedWriter
 
-    addressee=[addr] 
-    do
+    do              -- catching exceptions IOException and InterruptedException 
+        
+      if i = null then do
+        istem=Rexx null
+        iReader=BufferedReader null
+      end  
+      else if i.getClass().getName() = 'netrexx.lang.Rexx' then
+        istem=Rexx i
+      else if i.getClass().getName() = 'java.lang.String' then do
+        istream=String i
+        ifile=File(istream)
+        iReader=BufferedReader(InputStreamReader(FileInputStream(ifile)))
+      end  
+ 
+      if o = null then do
+        ostem=Rexx null 
+        oWriter=BufferedWriter null
+      end
+      else if o.getClass().getName() = 'netrexx.lang.Rexx' then
+        ostem=Rexx o
+      else if o.getClass().getName() = 'java.lang.String' then do
+        ostream=String o
+        ofile=File(ostream)
+        oWriter=BufferedWriter(OutputStreamWriter(FileOutputStream(ofile,oappend)))
+      end  
+      
+      if e = null then do
+        estem=Rexx null
+        eWriter=BufferedWriter null
+      end
+      else if e.getClass().getName() = 'netrexx.lang.Rexx' then
+        estem=Rexx e
+      else if e.getClass().getName() = 'java.lang.String' then do
+        estream=String e
+        efile=File(estream)
+        eWriter=BufferedWriter(OutputStreamWriter(FileOutputStream(efile, eappend)))
+      end  
+
+      addressee=[addr] 
+
       pb = ProcessBuilder(addressee)
       pid = pb.start()
       in = BufferedReader(InputStreamReader(pid.getInputStream()))
       out = BufferedWriter(OutputStreamWriter(pid.getOutputStream()))
-      if estem\=null then do               -- need stderr redirection
+
+      if e\=null then do                     -- need stderr redirection
         err = BufferedReader(InputStreamReader(pid.getErrorStream()))
         readerr = 1
-        if \eappend then do
-          estem['0']=0
+        if estem\=null then do 
+          if \eappend then do
+            estem['0']=0
+          end  
         end  
       end
       else do
         readerr = 0
       end
-      out.write(command_'\n')              -- add new line to really flush
+      if ostem\=null then do
+        if \oappend then do
+          ostem['0']=0
+        end
+      end
+
+      out.write(command_'\n')              -- write command, new line and flush
       out.flush()
 
       if istem\=null then do               -- feed input stem if present               
@@ -185,15 +169,19 @@ class RexxAddress implements Serializable
           out.write(istem[j]'\n')          -- add new line to really flush
           out.flush()
         end
-      end     
+      end
+      else if iReader\=null then do        -- feed input file if present
+   	    line = iReader.readLine()
+	      loop while line <> null
+          out.write(line'\n')            
+          out.flush()
+          line = iReader.readLine()
+        end
+        iReader.close()
+      end
+
       out.flush()
       out.close()
-
-      if ostem\=null then do
-        if \oappend then do
-          ostem['0']=0
-        end
-      end  
 
 	    line = in.readLine()
 	    loop while line <> null
@@ -203,29 +191,47 @@ class RexxAddress implements Serializable
           ostem[j]= line
           ostem['0']=j
         end
+        else if oWriter\=null then do       -- or write to ostream
+          line=line'\n'
+          oWriter.write(line, 0, line.length())
+        end
         else do
           Say(line)                         -- or say it
         end
 	      line = in.readLine()
-      end  
-      if readerr then do                    -- fill error stem if present
+      end
+      if oWriter\=null then  
+        oWriter.close()
+      
+      if readerr then do                    -- if we reading stderr
 	      eline = err.readLine()
 	      loop while eline <> null
-          j=estem['0']
-          j=j+1
-          estem[j]= eline
-          estem['0']=j
+          if estem\=null then do            -- fill error stem if present
+            j=estem['0']
+            j=j+1
+            estem[j]= eline
+            estem['0']=j
+          end  
+          else if eWriter\=null then do     -- or write to estream
+            eline=eline'\n'
+            eWriter.write(eline, 0, eline.length())
+          end  
           eline = err.readLine()
         end
       end
+      if eWriter\=null then
+        eWriter.close()
+
 	    pid.waitFor()
       exitcode = pid.exitValue()
-    catch iox=IOException
+    catch iox=IOException         -- this also catches FileNotFound
       exitcode=''                 -- set empty
       say iox.getMessage()
-    catch InterruptedException
+      signal IOException(iox.getMessage())
+    catch intx=InterruptedException
       exitcode=''                 -- set empty
-      say "interrupted"
+      say intx.getMessage()     
+      signal InterruptedException(intx.getMessage())
     end -- do
     return
 

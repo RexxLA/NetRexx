@@ -16,6 +16,7 @@
 /* 2020.01.11 Initial                                                 */
 /* 2020.02.04 use SYSTEM default if address not set                   */
 /* 2022.02.25 ooRexx-like ADDRESS WITH stem implementation            */
+/* 2022.03.02 ooRexx-like ADDRESS WITH stream implementation          */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
@@ -274,6 +275,10 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
     expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
   end
 
+/**
+Recursively parse WITH redirection
+**/
+
 method scanWITH(nexttoken)
   tok = tokens[nexttoken]
   t = Rexx tok.value
@@ -343,14 +348,30 @@ method scanWithWhat(nexttoken, with_, append)
       if rxvar.vartype \= RxType.REXX_TYPE then do 
         signal RxQuit(rxt, tokens[nexttoken], 'address.not.a.stem')  
       end
-    
+      if with[with_].exists('stream') then do
+        signal RxQuit(rxt, tokens[nexttoken-2], 'address.with.duplicate', with_, 'STREAM' )  
+      end
+
       with[with_, 'stem'] = rxvar.varname
       with[with_, 'append'] = append
     end  
   end
   else if t = 'STREAM' then do 
-    signal RxQuit(rxt, tokens[nexttoken], 'address.with.stream.expected') -- 'not supported yet'
---    Not sure yet how to handle a 'stream' .. 
+    if tokens[nexttoken+1].type == RxToken.END then 
+      signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.stream.expected')
+    else do
+
+      nexttoken= nexttoken+2
+      endwords = 'INPUT OUTPUT ERROR'
+      strcode=rxt.eparser.parseexpr(parser.cursor, 0, nexttoken, null, endwords)
+
+      if with[with_].exists('stem') then do
+        signal RxQuit(rxt, tokens[nexttoken-2], 'address.with.duplicate', with_, 'STEM' )  
+      end
+    
+      with[with_, 'stream'] = String strcode.value.toString()
+      with[with_, 'append'] = append
+    end
   end   
   else do
     signal RxQuit(rxt, tokens[nexttoken], 'address.with.what.expected')
@@ -396,41 +417,75 @@ method getSystemAddressee returns Rexx
     if with['input'].exists('stem') then do
       istem = Rexx with['input','stem']
       with_arg='(Object)'istem','
-      doWith=1
     end
+    else if with['input'].exists('stream') then do
+      istream = String with['input','stream']
+      with_arg='(Object)"'istream'",'
+    end  
     else do
       with_arg='(Object)null,'
     end
+
     if with['output'].exists('stem') then do
       ostem = Rexx with['output','stem']
       if with['output'].exists('append') then 
         with_arg=with_arg'(Object)'ostem',1,'
       else 
         with_arg=with_arg'(Object)'ostem',0,'
-      doWith=1
     end
+    else if with['output'].exists('stream') then do
+      ostream = String with['output','stream']
+      if with['output'].exists('append') then 
+        with_arg=with_arg'(Object)"'ostream'",1,'
+      else
+        with_arg=with_arg'(Object)"'ostream'",0,'
+    end  
     else do
       with_arg=with_arg||'(Object)null,0,'
     end
+
     if with['error'].exists('stem') then do
       estem = Rexx with['error','stem']
       if with['error'].exists('append') then 
         with_arg=with_arg'(Object)'estem',1'
       else 
         with_arg=with_arg'(Object)'estem',0'
-      doWith=1
     end
+    else if with['error'].exists('stream') then do
+      estream = String with['error','stream']
+      if with['error'].exists('append') then 
+        with_arg=with_arg'(Object)"'estream'",1'
+      else
+        with_arg=with_arg'(Object)"'estream'",0'
+    end  
     else do
       with_arg=with_arg||'(Object)null,0'
     end    
 
-    if doWith=1 then do
---      say '#MRE  with_arg:' with_arg
-      rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execWith("'addressee'",'jcode', 'with_arg');')
-    end
-    else do
-      rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.exec("'addressee'",'jcode',1);')
-    end  
+--    say '#MRE  with_arg:' with_arg
+
+    rxt.program.streamer.out('{try{')
+    rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg');')
+    rxt.program.streamer.out('}catch (java.io.IOException $1){/*iox=$1*/;')
+--    rxt.program.streamer.out('say}catch (java.io.IOException $1){/*iox=$1*/;')
+--    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($1.getMessage()));}')
+    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit();')
+--    rxt.program.streamer.out('java.lang.System.exit(9);}')
+    rxt.program.streamer.out('}catch (java.lang.InterruptedException $2){')
+--    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($1.getMessage()));')
+    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit();')
+--    rxt.program.streamer.out('java.lang.System.exit(9);')
+    rxt.program.streamer.out('}}')
+/*
+    say '{try{{'
+    say RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg');'
+    say '}catch (java.io.IOException $1){/*iox=$1;*/'
+--    say 'throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($1.getMessage()));}'
+    say '}catch (java.lang.InterruptedException $2){'
+    say 'throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($2.getMessage()));}'
+    say '}}'
+*/
+
   end 
   if addr.exists('with') then do
     with=''
@@ -440,7 +495,7 @@ method getSystemAddressee returns Rexx
 
  
  /** Interpretation */
- method interpret(cursor=RxCursor null)
+ method interpret(cursor=RxCursor null) 
   if expr\==null then do
 
     code=expr.evaluate(cursor)          -- re-evaluate as needed
@@ -450,6 +505,14 @@ method getSystemAddressee returns Rexx
     istem=Rexx null
     ostem=Rexx null
     estem=Rexx null
+    istream=String null
+    ostream=String null
+    estream=String null
+    
+    i = Object null
+    o = Object null
+    e = Object null
+
     oappend=0
     eappend=0
 
@@ -461,30 +524,51 @@ method getSystemAddressee returns Rexx
       st = Rexx with['input','stem']
       rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
       istem = Rexx rxvar.varvalue
-      doWith=1
+      i = Object istem
     end
+    else if with['input'].exists('stream') then do
+      istream = String with['input','stream']
+      i = Object istream
+    end
+
     if with['output'].exists('stem') then do
       st = Rexx with['output','stem']
       rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
       ostem = Rexx rxvar.varvalue
-      doWith=1
-      if with['output'].exists('append') then 
-        oappend=1
+      o = Object ostem
     end
+    else if with['output'].exists('stream') then do
+      ostream = String with['output','stream']
+      o = Object ostream
+    end
+    if with['output'].exists('append') then 
+      oappend=1
+ 
     if with['error'].exists('stem') then do
       st = Rexx with['error','stem']
       rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
       estem = Rexx rxvar.varvalue
-      doWith=1
-      if with['error'].exists('append') then 
-        eappend=1
+      e = Object estem
     end
-        
-    if doWith then do
-      netrexx.lang.RexxAddress.execWith(String addressee, String rxt.interpreter.stringvalue(code), Object istem, Object ostem, oappend, Object estem, eappend)
+    else if with['error'].exists('stream') then do
+      estream = String with['error','stream']
+      e = Object estream
     end
-    else do 
-      netrexx.lang.RexxAddress.exec(addressee, String rxt.interpreter.stringvalue(code), 1)
+    if with['error'].exists('append') then 
+      eappend=1
+
+    do     
+      netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(code), i, o, oappend, e, eappend)
+    catch iox=IOException         -- this also catches FileNotFound
+      signal RxQuit(rxt, null, 'address.exception', 'IOException', iox.getMessage() )
+
+--      exitcode=''                 -- set empty
+--      say iox.getMessage()
+    catch InterruptedException
+      signal RxQuit(rxt, null, 'address.exception', 'InterruptedException', iox.getMessage() )
+
+--      exitcode=''                 -- set empty
+--      say "interrupted"
     end
   end
   if addr.exists('with') then do
