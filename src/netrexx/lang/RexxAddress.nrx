@@ -13,6 +13,7 @@
 /* 2021.01.15 MRE Classic Rexx ADDRESS implementation                 */
 /* 2022.02.25 MRE ooRexx-like ADDRESS WITH stem implementation        */
 /* 2022.03.02 MRE ooRexx-like ADDRESS WITH stream implementation      */
+/* 2022.03.05 MRE signal exceptions to caller                         */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
@@ -142,19 +143,13 @@ class RexxAddress implements Serializable
       pid = pb.start()
       in = BufferedReader(InputStreamReader(pid.getInputStream()))
       out = BufferedWriter(OutputStreamWriter(pid.getOutputStream()))
+      err = BufferedReader(InputStreamReader(pid.getErrorStream()))
 
-      if e\=null then do                     -- need stderr redirection
-        err = BufferedReader(InputStreamReader(pid.getErrorStream()))
-        readerr = 1
-        if estem\=null then do 
-          if \eappend then do
-            estem['0']=0
-          end  
+      if estem\=null then do 
+        if \eappend then do
+          estem['0']=0
         end  
-      end
-      else do
-        readerr = 0
-      end
+      end  
       if ostem\=null then do
         if \oappend then do
           ostem['0']=0
@@ -203,21 +198,22 @@ class RexxAddress implements Serializable
       if oWriter\=null then  
         oWriter.close()
       
-      if readerr then do                    -- if we reading stderr
-	      eline = err.readLine()
-	      loop while eline <> null
-          if estem\=null then do            -- fill error stem if present
-            j=estem['0']
-            j=j+1
-            estem[j]= eline
-            estem['0']=j
-          end  
-          else if eWriter\=null then do     -- or write to estream
-            eline=eline'\n'
-            eWriter.write(eline, 0, eline.length())
-          end  
-          eline = err.readLine()
+      eline = err.readLine()
+      loop while eline <> null
+        if estem\=null then do            -- fill error stem if present
+          j=estem['0']
+          j=j+1
+          estem[j]= eline
+          estem['0']=j
+        end  
+        else if eWriter\=null then do     -- or write to estream
+          eline=eline'\n'
+          eWriter.write(eline, 0, eline.length())
         end
+        else do
+          System.err.println(eline)       -- or say it on stderr
+        end
+        eline = err.readLine()
       end
       if eWriter\=null then
         eWriter.close()
@@ -226,11 +222,11 @@ class RexxAddress implements Serializable
       exitcode = pid.exitValue()
     catch iox=IOException         -- this also catches FileNotFound
       exitcode=''                 -- set empty
-      say iox.getMessage()
+--      say iox.getMessage()
       signal IOException(iox.getMessage())
     catch intx=InterruptedException
       exitcode=''                 -- set empty
-      say intx.getMessage()     
+--      say intx.getMessage()     
       signal InterruptedException(intx.getMessage())
     end -- do
     return

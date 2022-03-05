@@ -17,6 +17,7 @@
 /* 2020.02.04 use SYSTEM default if address not set                   */
 /* 2022.02.25 ooRexx-like ADDRESS WITH stem implementation            */
 /* 2022.03.02 ooRexx-like ADDRESS WITH stream implementation          */
+/* 2022.03.05 exit(9) upon RexAddress exception                       */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
@@ -408,7 +409,6 @@ method getSystemAddressee returns Rexx
     jcode=String expr.code.javacode
     addressee = addr
  
-    doWith=0
     with_arg=''
     if addr.exists('with') then do      -- use with stored on address if existing
       with=addr['with']
@@ -466,25 +466,13 @@ method getSystemAddressee returns Rexx
 
     rxt.program.streamer.out('{try{')
     rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg');')
-    rxt.program.streamer.out('}catch (java.io.IOException $1){/*iox=$1*/;')
---    rxt.program.streamer.out('say}catch (java.io.IOException $1){/*iox=$1*/;')
---    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($1.getMessage()));}')
-    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit();')
---    rxt.program.streamer.out('java.lang.System.exit(9);}')
+    rxt.program.streamer.out('}catch (java.io.IOException $1){')
+    rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: IOException \'"+$1.getMessage()+"\' occurred during ADDRESS invocation");')
+    rxt.program.streamer.out('java.lang.System.exit(9);')
     rxt.program.streamer.out('}catch (java.lang.InterruptedException $2){')
---    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($1.getMessage()));')
-    rxt.program.streamer.out('throw new org.netrexx.process.RxQuit();')
---    rxt.program.streamer.out('java.lang.System.exit(9);')
+    rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: InterruptedException occurred during ADDRESS invocation");')
+    rxt.program.streamer.out('java.lang.System.exit(9);')
     rxt.program.streamer.out('}}')
-/*
-    say '{try{{'
-    say RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg');'
-    say '}catch (java.io.IOException $1){/*iox=$1;*/'
---    say 'throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($1.getMessage()));}'
-    say '}catch (java.lang.InterruptedException $2){'
-    say 'throw new org.netrexx.process.RxQuit(rxt,(org.netrexx.process.RxToken)null,"address.exception",netrexx.lang.Rexx.toRexx($2.getMessage()));}'
-    say '}}'
-*/
 
   end 
   if addr.exists('with') then do
@@ -501,7 +489,6 @@ method getSystemAddressee returns Rexx
     code=expr.evaluate(cursor)          -- re-evaluate as needed
     addressee = addr
  
-    doWith=0
     istem=Rexx null
     ostem=Rexx null
     estem=Rexx null
@@ -560,15 +547,16 @@ method getSystemAddressee returns Rexx
     do     
       netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(code), i, o, oappend, e, eappend)
     catch iox=IOException         -- this also catches FileNotFound
-      signal RxQuit(rxt, null, 'address.exception', 'IOException', iox.getMessage() )
-
+--      signal RxQuit(rxt, null, 'address.exception', 'IOException', iox.getMessage() )
+      say '     +++ Error: IOException '''iox.getMessage()''' occurred during ADDRESS invocation'
+      System.exit(9)
 --      exitcode=''                 -- set empty
---      say iox.getMessage()
     catch InterruptedException
-      signal RxQuit(rxt, null, 'address.exception', 'InterruptedException', iox.getMessage() )
+--      signal RxQuit(rxt, null, 'address.exception', 'InterruptedException', '' )
+      say '     +++ Error: InterruptedException occurred during ADDRESS invocation'
+      System.exit(9)
 
 --      exitcode=''                 -- set empty
---      say "interrupted"
     end
   end
   if addr.exists('with') then do
