@@ -1,13 +1,23 @@
-\chapter{Address instruction}\label{refparse}
+\chapter{Address instruction}\label{refaddress}
 \index{Address,instruction}
 \index{Instructions,Address}
 \begin{shaded}
-\begin{alltt}
-\textbf{address} \emph{[environment]} \emph{[expression]}
+  \begin{alltt}
+  \textbf{address} \emph{[environment]} \emph{[expression]} \textbf{[with - fragment]}
 
-where \emph{environment} is a native executable or script on the path
-
+  \textbf{with} \textbf{input} [\textbf{stem} \emph{stem}]
+             [\textbf{stream} \emph{stream}]
+	  \textbf{output} \textbf{[APPEND|REPLACE]} [\textbf{stem} \emph{stem}]
+                          [\textbf{stream} \emph{stream}]
+	  \textbf{error} \textbf{[APPEND|REPLACE]} [\textbf{stem} \emph{stem}]
+                         [\textbf{stream} \emph{stream}]
+                
+where \emph{environment} is a native executable or script on the path,
+\emph{stem} is an indexed string as described below
+and \emph{stream} is a valid filename.
 \end{alltt}
+
+% \input{../railroad/address}
 \end{shaded}
 The keyword \emph{address} temporarily or permanently changes the destination of commands. Commands are strings sent to an external environment. You can send commands by specifying clauses consisting of only an expression or by using the \keyword{Address} instruction.
 
@@ -31,8 +41,33 @@ on most operating systems.
 After execution, the most recent return code is in the variable \keyword{RC}.
 
 Moreover, any expression which is not intercepted by the translator as a NetRexx clause, is sent to the address environment.
-The environment sends the expression to STDIN of the external process or procedure for execution.
-Any output received on STDOUT is printed on the console.
+Without \keyword{with-fragment}, the environment sends the expression to STDIN of the external process or procedure for execution, any output received on STDOUT is printed on the console.
+
+I/O can be redirected when submitting commands to an external
+environment. The submitted command's input stream can be taken from an
+existing stream or from a set of compound variables with a common
+stem. In the latter case (that is, when a stem is specified as the
+source for the commands input stream) whole number tails are used to
+order input for presentation to the submitted command.
+
+Stem[0] must contain a whole number indicating the number of compound variables to be presented, and stem[1] through stem[n] (where n=stem[0]) are the compound variables to be presented to the submitted command.
+
+Similarly, the submitted command's output and error stream can be directed to a stream, or to a set of compound variables with a given stem. In the latter case (i.e., when a stem is specified as the destination) compound variables will be created to hold the standard output, using whole number tails as described above. 
+
+Output redirection can specify a REPLACE or APPEND option, which controls positioning prior to the command's execution. REPLACE is the default.
+
+Specifying one of INPUT, OUTPUT or ERROR subkeywords more than once is an error.
+
+I/O can be redirected when submitting commands to an external
+environment. The submitted command's input stream can be taken from an
+existing stream or from a set of compound variables with a common
+stem. In the latter case (that is, when a stem is specified as the
+source for the commands input stream) whole number tails are used to
+order input for presentation to the submitted command.
+
+Stem[0] must contain a whole number indicating the number of compound variables to be presented, and stem[1] through stem[n] (where n=stem[0]) are the compound variables to be presented to the submitted command.
+
+Similarly, the submitted command's output stream can be directed to a stream, or to a set of compound variables with a given stem. In the latter case (i.e., when a stem is specified as the destination) compound variables will be created to hold the standard output, using whole number tails as described above. Output redirection can specify a REPLACE or APPEND option, which controls positioning prior to the command's execution. REPLACE is the default.
 
 \emph{Address} processing can be switched off by the \keyword{noaddress} option.
 
@@ -54,4 +89,19 @@ exitcode=4
 say RC
 \end{lstlisting}
 The program greets the world 4 times, and shows usage of special variable \keyword{RC}.
+
+\textbf{Example with redirection:}
+\begin{lstlisting}
+/* rexx address capability */
+outstem=""
+address cmd with output stem outstem
+
+'dir'
+
+loop i=1 to outstem[0]
+  say outstem[i]
+end
+
+say 'the number of elements is:' outstem[0]
+\end{lstlisting}
 

@@ -37,6 +37,7 @@
 /*                                               per issue #80 -KK-   */
 /* 2020.12.20 MRE -- catch exception when class modifier fields       */
 /*                                              are accessed in JDK9+ */
+/* 2022.02.25 MRE -- getStemElementValue without RxArray              */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -383,6 +384,13 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
     end
   return val
 
+ method getStemElementValue(cursor=RxCursor,val=Rexx,ref=Rexx,tok=RxToken) returns Rexx
+  if val=null then signal RxSignal(cursor,NullPointerException(),tok)
+  val=val.getnode(ref).leaf
+  return val
+
+
+
  /** SETSTEMELEMENTVALUE: Look up an element in an indexed string
     Arg1 is the context
     Arg2 is the Rexx object (may not be null)
@@ -468,7 +476,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
                    set=boolean, setvalue=Object) private returns Object
   -- property in a real class
 
-  -- say '# doProp:' set field.fieldinfo.type.toString field.fieldname
+  -- say '# doProp:' set field.fieldinfo.type.toString() field.fieldname
     infoclass=field.fieldinfo.getClassObject(rxt.loader)
   do label try
     -- now find the Field object for the property

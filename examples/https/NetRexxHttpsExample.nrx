@@ -1,0 +1,119 @@
+/* NetRexx */
+/*------------------------------------------------------------------*/
+/*                                                                  */
+/* Routine to retrieve a latitude/longitude pair from an address    */          
+/* by utilizing the facilities provided by:                         */    
+/*                                                                  */
+/* https://nominatim.openstreetmap.org                              */
+/*                                                                  */
+/* @param   address   - such as 1600 Pennsylvania Avenue            */
+/*                                                                  */
+/* @returns latlon    - latitude longitude in decimal degrees       */
+/*                      as 2 words, e.g. 48.456123 3.876345         */
+/*                      or UNKNOWN if not successful                */
+/*                                                                  */
+/* Can be processsed by NetRexx:       :                            */
+/*                                                                  */
+/*       "nrc NetRexxHttpsExample"                                 */
+/*                                                                  */
+/* Can be executed by Java:                                         */
+/*                                                                  */
+/*       "java NetRexxHttpsExample"                                 */    
+/*                                                                  */
+/*------------------------------------------------------------------*/
+/*                                                                  */
+/* Originally by Ruurd J. Idenburg                                  */
+/*                                                                  */
+/* No copyright, no licence, no guarantees or warrantees, be it     */
+/* explicit, implicit or whatever. Usage is totally and completely  */
+/* at the users own risk, the author shall not be liable for any    */ 
+/* damages whatsoever, for any reason whatsoever.                   */
+/*                                                                  */
+/* Please keep this comment block intact when modifying this code   */
+/* and add a note with date and a description.                      */
+/*                                                                  */
+/*------------------------------------------------------------------*/
+/*                                                                  */
+/* 2022/01/23 - Initial version                                     */
+/*                                                                  */
+/*------------------------------------------------------------------*/
+import java.net.URL;
+import java.io.;
+import javax.net.ssl.HttpsURLConnection;
+
+class NetRexxHttpsExample public;
+
+method main(args = String[]) public static;
+
+address = ""
+loop arg over args
+    address = address || arg || " " 
+end
+-- If no address given let us ask info on the Rijksmuseum in Amsterdam
+if address="" then address = "Rijksmuseum Amsterdam" 
+
+-- remove leading and trailing spaces and reduce spaces to a + in the query
+address = address.strip("B").space(1).translate("+"," ")
+
+/*------------------------------------------------------------------*/
+/* nominatim appreciates a non standard https-header for User_Agent */
+/* I have mine stored as an linux environment variable via .profile */
+/* but it can be hardcoded as well of course,eg:someone@example.com */
+/*------------------------------------------------------------------*/
+myAgent = "me@example.org"
+--myAgent = value("USER_AGENT", ,"ENVIRONMENT")
+/*------------------------------------------------------------------*/
+/* nominatim appreciates an e-mail address in case of frequent and  */
+/* multiple requests. I keep mine as a Linux environment variable,  */
+/* but it can be hardcoded as well of course,eg:someone@example.com */
+/*------------------------------------------------------------------*/
+myEmail = "me@example.org"
+--myEmail = value("MY_EMAIL", ,"ENVIRONMENT")
+/*------------------------------------------------------------------*/
+/* nominatim usage guidelines suggest not to issue more than one    */
+/* request per second, so we'll wait 1 second before issueing the   */
+/* request for the case we do multiple requests in a short period.  */
+/*------------------------------------------------------------------*/
+"sleep 1"
+
+do
+-- Setup for the rquest to obtain latitude/longitde pair for the 
+-- address specified as argument, format can be json or xml, limit
+-- restricts the number of possible alternatives
+  httpsURL = "https://nominatim.openstreetmap.org/search" || -
+             "?q="address || -
+             "&format=json" || -
+             "&limit=1" || - 
+             "&email="myEmail;
+  myUrl = URL(httpsURL);
+-- Establish a connection and receive the answer in json format
+  connection = myUrl.openConnection;
+  connection.setRequestProperty("User_Agent",myAgent);
+-- Need an input stream for the answer
+  inStream = connection.getInputStream;
+-- And a reader for the inputstream
+  inStreamRdr = InputStreamReader(inStream);
+-- Wrap the reader with a buffered one
+  bufferedRdr = BufferedReader(inStreamRdr);
+-- The answer is a JSON string if all goes well
+  inputLine = String;
+-- Paste received lines in the case of more than one line 
+  jsonString = ""
+  loop forever
+    inputLine = bufferedRdr.readLine;
+    if inputLine = null then leave;
+    jsonString = jsonString || inputline;
+  end
+-- Output the JSON to the console or redirection if wanted
+--  say jsonSTring
+  bufferedRdr.close;
+-- Catch any errors
+catch ex = Exception;
+  ex.printStackTrace; 
+end
+-- Get the latitude and longitude from the JSON in a rough manner
+parse jsonString '"lat":"' lat '"' '"lon":"' lon '"' . 
+-- And print them to console/redirection with pretty good precision 
+say "Latitude:" lat.format(null,6) "- Longitude:" lon.format(null,6)
+exit
+

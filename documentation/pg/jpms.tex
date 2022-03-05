@@ -1,0 +1,78 @@
+\chapter{JPMS, The Java Platform Module System}
+Java9+ introduced the Java Platform Module System (JPMS) per JSR 376.
+While Java 9 still loads external classes from files and jar-files, all
+run-time packages now are bundled in modules.
+\nr{} 3.xx was not capable to load classes from the JPMS.
+
+\nr{} 4 is now supporting the JPMS to find and load its needed run-time
+packages.\footnote{You'll find, in the \nr{} source code, updates in RxClasser, where method importclasses() is extended to look
+for packages and classes in JPMS' jrt:/ file system.
+
+Method \emph{packmodfind()} walks the jrt:/ directory tree at initialisation and
+registers all found packages. Method modfind() registers classes when imported.
+Method loadclass() loads the class image from the JPMS.}
+
+From a \nr{} source code perspective, nothing changes. NetRexx is agnostic
+about modules. It processes packages and classes whether found in directories,
+jar-files or - now - modules.
+All existing source code should run unmodified, with the exception that possibly
+classes could need to be called explicitly when short-named classes now
+exhibit ambiguous classes if the short-named class is found in more than one
+module/package.
+E.g.
+\begin{verbatim}
+/modules/java.base/java/util/spi/ToolProvider.class
+/modules/java.compiler/javax/tools/ToolProvider.class
+\end{verbatim}
+
+\nr{} 4 depends on JSR 203 (NIO.2) and thus requires a minimum JDK level of Java 7,
+whereas \nr{} 3 runs on Java 6.
+\nr{} 4 compiles and runs on Java 7/8 (without JPMS) and on Java 9+ (with JPMS).
+\section{CLASSPATH}
+Most implementations of Java use an environment variable called
+CLASSPATH to indicate a search path for Java classes. The Java Virtual
+Machine and the \nr{} translator rely on the CLASSPATH value to find directories, zip files, and jar files which may contain Java classes. 
+The procedure for setting the CLASSPATH environment variable depends on your operating system (and there may be more than one way).
+\begin{itemize}
+\item For Linux and Unix (BASH, Korn, or Bourne shell), use:
+\begin{verbatim}
+        CLASSPATH=<newdir>:\$CLASSPATH 
+        export CLASSPATH
+\end{verbatim}
+
+\item Changes for re-boot or opening of a new window should be placed in your /etc/profile, .login, or .profile file, as appropriate. 
+\item For Linux and Unix (C shell), use:
+\begin{verbatim}
+        setenv CLASSPATH <newdir>:\$CLASSPATH 
+\end{verbatim}
+Changes for re-boot or opening of a new window should be placed in
+your .cshrc file. If you are unsure of how to do this, check the
+documentation you have for installing the Java toolkit.
+\item For Windows operating systems, it is best to set the system wide
+  environment, which is accessible using the Control Panel (a search
+  for ``environment'' offsets the many attempts to relocate the exact
+  dialog in successive Windows Control Panel versions somewhat).
+\end{itemize}
+The \emph{Quick Start Guide} has more information about CLASSPATH.
+
+\section{Adding modules to a compile run}
+Extra modules are provided to the java runtime with the --module-path argument, --module-path describes a list of directories containing module jar files.
+
+Because, by default, NetRexx programs compile in the unnamed module, any referenced jar file must be included in the \texttt{--add-modules} option at run-time.
+So when \texttt{--module-path PATH1:PATH2} is needed at compile-time, \texttt{--module-path PATH1:PATH2 --add-module JAR1,JAR2} is needed at run-time.
+
+Java also supports the \texttt{--upgrade-module-path PATH1:PATH2} option, which 'adds' all modules in the given paths to the unnamed module.
+
+Setting the options in the \keyword{JDK\_JAVA\_OPTIONS} environment variable will allow NetRexx to find classes in the given modules.
+
+By convenience, NetRexx supports both --module-path and --upgrade-module-path:
+
+\begin{verbatim}
+$ export JDK\_JAVA\_OPTIONS='--upgrade-module-path PATH1:PATH2'
+$ nrc -run code-needing-classes-from-modules-outside-jrt
+\end{verbatim}
+or (for Windows)
+\begin{verbatim}
+> set JDK_JAVA_OPTIONS=--upgrade-module-path "PATH1;PATH2"
+> nrc -run code-needing-classes-from-modules-outside-jrt
+\end{verbatim}
