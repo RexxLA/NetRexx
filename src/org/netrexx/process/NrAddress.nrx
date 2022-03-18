@@ -18,6 +18,7 @@
 /* 2022.02.25 ooRexx-like ADDRESS WITH stem implementation            */
 /* 2022.03.02 ooRexx-like ADDRESS WITH stream implementation          */
 /* 2022.03.05 exit(9) upon RexAddress exception                       */
+/* 2022.03.07 exit(9) removed, user must check RC for exceptions      */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
@@ -464,14 +465,20 @@ method getSystemAddressee returns Rexx
 
 --    say '#MRE  with_arg:' with_arg
 
+--#MRE we agreed not to throw exceptions and not to exit upon error
+--     user must check RC, when '' an exception occurred
+
+
     rxt.program.streamer.out('{try{')
     rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg');')
     rxt.program.streamer.out('}catch (java.io.IOException $1){')
     rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: IOException \'"+$1.getMessage()+"\' occurred during ADDRESS invocation");')
-    rxt.program.streamer.out('java.lang.System.exit(9);')
+--    rxt.program.streamer.out('throw new java.io.IOException($1);')  
+--    rxt.program.streamer.out('java.lang.System.exit(9);')           
     rxt.program.streamer.out('}catch (java.lang.InterruptedException $2){')
     rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: InterruptedException occurred during ADDRESS invocation");')
-    rxt.program.streamer.out('java.lang.System.exit(9);')
+--    rxt.program.streamer.out('throw new java.lang.InterruptedException();')
+--    rxt.program.streamer.out('java.lang.System.exit(9);')
     rxt.program.streamer.out('}}')
 
   end 
@@ -544,19 +551,21 @@ method getSystemAddressee returns Rexx
     if with['error'].exists('append') then 
       eappend=1
 
+--#MRE we agreed not to throw exceptions and not to exit upon error
+--     user must check RC, when '' an exception occurred
+
     do     
       netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(code), i, o, oappend, e, eappend)
     catch iox=IOException         -- this also catches FileNotFound
 --      signal RxQuit(rxt, null, 'address.exception', 'IOException', iox.getMessage() )
       say '     +++ Error: IOException '''iox.getMessage()''' occurred during ADDRESS invocation'
-      System.exit(9)
---      exitcode=''                 -- set empty
+--      System.exit(9)
+--      signal IOException(iox)  
     catch InterruptedException
 --      signal RxQuit(rxt, null, 'address.exception', 'InterruptedException', '' )
       say '     +++ Error: InterruptedException occurred during ADDRESS invocation'
-      System.exit(9)
-
---      exitcode=''                 -- set empty
+--      System.exit(9)
+--      signal InterruptedException()
     end
   end
   if addr.exists('with') then do
