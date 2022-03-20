@@ -1,4 +1,7 @@
 package netrexx.lang
+
+import java.io
+
  /*  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.   */   
  /*  See LICENSE for the licence and information on using, copying, modifying, */
  /*  and distributing this program.                                            */
@@ -10,6 +13,13 @@ package netrexx.lang
  * Created on: Thu, 03, Feb 2022 16:40:14 +0100 rvj
  */
 class RexxStream
+
+  properties private static
+  fileReaderHandles = TreeMap()
+  fileWriterHandles = TreeMap()
+  bufferedReaderHandles = TreeMap()
+  bufferedWriterHandles = TreeMap()
+
 
   /**
    * Default constructor
@@ -49,7 +59,10 @@ class RexxStream
    * @param opts is a Rexx
    */
   method linein(opts) static
-    -- parse opts name ',' start ',' length) static
+    parse opts name ',' start ',' length
+    say 'filename:' name
+    fh = fileReaderHandles.get(name.toString())
+    if fh = null then openFile(name,'r')
     
   /**
    * Method lineout without arguments, writes to stdin
@@ -63,4 +76,19 @@ class RexxStream
     -- parse opts name ',' start ',' length) static
     
 
+  method openFile(name=String, mode) static
+    do
+      select
+	when mode = 'r' then do
+	  fr = FileReader(name)
+	  fileReaderHandles.put(name,fr)
+	  brf = BufferedReader(fr)
+	  bufferedReaderHandles.put(name,fr)
+	end
+	otherwise
+	  say '?'
+      end -- select
+    catch FileNotFoundException
+      say 'file not found'
+    end
     
