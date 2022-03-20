@@ -18,7 +18,7 @@ class RexxStream
   fileReaderHandles = TreeMap()
   fileWriterHandles = TreeMap()
   bufferedReaderHandles = TreeMap()
-  bufferedWriterHandles = TreeMap()
+  printWriterHandles = TreeMap()
 
 
   /**
@@ -51,39 +51,73 @@ class RexxStream
     -- parse opts name ',' start ',' length) static
 
   /**
-   * Method linein without arguments, writes to stdin
+   * Method lines returns 0 or the lines left in a file
+   * @param name is a Rexx
+   */
+  method lines(name)
+    
+
+    
+  /**
+   * Method linein without arguments, returns line from stdin 
    */
   method linein() static
+    return ask
+    
   /**
    * Method linein ...
    * @param opts is a Rexx
    */
   method linein(opts) static
     parse opts name ',' start ',' length
-    say 'filename:' name
     fh = fileReaderHandles.get(name.toString())
     if fh = null then openFile(name,'r')
-    
+    do
+      return (BufferedReader bufferedReaderHandles.get(name)).readLine()
+    catch IOException
+      say 'ioexception while reading file' name
+      return 'ioerror'
+    end
   /**
-   * Method lineout without arguments, writes to stdin
+   * Method lineout further arguments, writes to stdout
    */
-  method lineout() static
+  method lineout(in_) static
+    say in_
+    
   /**
    * Method lineout ...
-   * @param opts is a Rexx
+   * @param text is a Rexx
    */
-  method lineout(opts) static
-    -- parse opts name ',' start ',' length) static
+  method lineout(name,text) static
+    fh = fileWriterHandles.get(name.toString())
+    if fh = null then openFile(name,'w')
+    (PrintWriter printWriterHandles.get(name)).println(text)
+    (PrintWriter printWriterHandles.get(name)).flush()
     
 
+  /**
+   * Method openFile ...
+   * @param name is a String
+   * @param mode is a Rexx
+   */
   method openFile(name=String, mode) static
     do
       select
 	when mode = 'r' then do
 	  fr = FileReader(name)
 	  fileReaderHandles.put(name,fr)
-	  brf = BufferedReader(fr)
-	  bufferedReaderHandles.put(name,fr)
+	  bfr = BufferedReader(fr)
+	  bufferedReaderHandles.put(name,bfr)
+	end
+	when mode = 'w' then do
+	  do
+	    fw = FileWriter(name)
+	    fileWriterHandles.put(name,fw)
+	    pw = PrintWriter(fw)
+	    printWriterHandles.put(name,pw)
+	  catch IOException
+	    say 'ioexception while writing file' name
+	  end
 	end
 	otherwise
 	  say '?'
