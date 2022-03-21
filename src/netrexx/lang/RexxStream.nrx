@@ -7,19 +7,19 @@ import java.io
  /*  and distributing this program.                                            */
 /**
  * Class RexxStream implements a Classic Rexx compatible Streams class with
- * static method as to enable a 'uses RexxStream' clause so the user can
- * use linein, lineout, charin, charout in a Classic Rexx comaptible manner.   
+ * static methods as to enable a 'uses RexxStream' clause so we can
+ * use linein, lineout, charin, charout in a Classic Rexx compatible manner.   
  * <BR>
  * Created on: Thu, 03, Feb 2022 16:40:14 +0100 rvj
  */
 class RexxStream
 
   properties private static
-  fileReaderHandles = TreeMap()
-  fileWriterHandles = TreeMap()
-  bufferedReaderHandles = TreeMap()
-  printWriterHandles = TreeMap()
-
+  fileReaderHandles	= TreeMap()
+  fileWriterHandles	= TreeMap()
+  bufferedReaderHandles	= TreeMap()
+  printWriterHandles	= TreeMap()
+  lines			= TreeMap()
 
   /**
    * Default constructor
@@ -54,9 +54,11 @@ class RexxStream
    * Method lines returns 0 or the lines left in a file
    * @param name is a Rexx
    */
-  method lines(name)
-    
-
+  method lines(name) static
+    if lines.get(name) == null then do
+      openFile(name,'r')
+    end
+    return Rexx lines.get(name)
     
   /**
    * Method linein without arguments, returns line from stdin 
@@ -73,7 +75,9 @@ class RexxStream
     fh = fileReaderHandles.get(name.toString())
     if fh = null then openFile(name,'r')
     do
-      return (BufferedReader bufferedReaderHandles.get(name)).readLine()
+      line = Rexx (BufferedReader bufferedReaderHandles.get(name)).readLine()
+      if line = null then lines.put(name, Rexx 0)
+      return line
     catch IOException
       say 'ioexception while reading file' name
       return 'ioerror'
@@ -92,11 +96,13 @@ class RexxStream
     fh = fileWriterHandles.get(name.toString())
     if fh = null then openFile(name,'w')
     (PrintWriter printWriterHandles.get(name)).println(text)
+    /* need to flush every line when we don't really know when to close */
     (PrintWriter printWriterHandles.get(name)).flush()
     
 
   /**
-   * Method openFile ...
+   * Method openFile opens a file for read or write
+   * and adds it to the structures 
    * @param name is a String
    * @param mode is a Rexx
    */
@@ -108,6 +114,7 @@ class RexxStream
 	  fileReaderHandles.put(name,fr)
 	  bfr = BufferedReader(fr)
 	  bufferedReaderHandles.put(name,bfr)
+	  lines.put(name,Rexx 1)
 	end
 	when mode = 'w' then do
 	  do
