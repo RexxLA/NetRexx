@@ -18,6 +18,5 @@ pipeline {
 	           sh 'make tests'
                    }
         }
-
     }
 }
