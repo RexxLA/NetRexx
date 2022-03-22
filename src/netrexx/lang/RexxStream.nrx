@@ -15,11 +15,17 @@ import java.io
 class RexxStream
 
   properties private static
-  fileReaderHandles	= TreeMap()
-  fileWriterHandles	= TreeMap()
-  bufferedReaderHandles	= TreeMap()
-  printWriterHandles	= TreeMap()
-  lines			= TreeMap()
+  fileReaderHandles	  = TreeMap()
+  fileWriterHandles	  = TreeMap()
+  fileInputStreamHandles  = TreeMap()
+  fileOutputStreamHandles = TreeMap()
+  bufferedReaderHandles	  = TreeMap()
+  dataInputStreamHandles  = TreeMap()
+  dataOutputStreamHandles = TreeMap()
+  printWriterHandles	  = TreeMap()
+  lines			  = TreeMap()
+  chars 		  = TreeMap()
+  linepos		  = TreeMap()
 
   /**
    * Default constructor
@@ -27,31 +33,50 @@ class RexxStream
   method RexxStream()
     return this
 
+
+  /**
+   * Method chars returns the remaining number of characters
+   * in a stream, or 1
+   */
+  method chars(name)
+    if chars.get(name) == null then do
+      openFile(name,'rc')
+    end
+    return Rexx chars.get(name)
+
+    
   /**
    * Method charin without arguments, reads from stdin
    */
-  method charin() static
-  /**
-   * Method charin ...
-   * @param opts is a Rexx
-   */
-  method charin(opts) static
-    -- parse opts name ',' start ',' length) static
+  method charin(name) static
+    fhc = fileInputStreamHandles.get(name.toString())
+    if fhc = null then openFile(name,'rc')
+    do
+      char = Rexx (DataInputStream dataInputStreamHandles.get(name)).readUTF()
+      if char = null then char.put(name, Rexx 0)
+      return char
+    catch IOException
+      say 'ioexception while reading file' name
+      return 'ioerror'
+    end
 
-
   /**
-   * Method charout without arguments, writes to stdin
+   * Method charout 
    */
-  method charout() static
-  /**
-   * Method charout ...
-   * @param opts is a Rexx
-   */
-  method charout(opts) static
-    -- parse opts name ',' start ',' length) static
-
+  method charout(name,text) static
+    fhc = fileOutputStreamHandles.get(name.toString())
+    if fhc = null then openFile(name,'wc')
+    do
+      (DataOutputStream dataOutputStreamHandles.get(name)).writeUTF(text)
+      /* need to flush every line when we don't really know when to close */
+      (DataOutputStream dataOutputStreamHandles.get(name)).flush()
+    catch IOException
+      say 'ioexception in charout'
+    end
   /**
    * Method lines returns 0 or the lines left in a file
+   * This is the default which corresponds to lines(filename,N)
+   * which returns 1 of there are still lines left to read.  
    * @param name is a Rexx
    */
   method lines(name) static
@@ -70,8 +95,7 @@ class RexxStream
    * Method linein ...
    * @param opts is a Rexx
    */
-  method linein(opts) static
-    parse opts name ',' start ',' length
+  method linein(name) static
     fh = fileReaderHandles.get(name.toString())
     if fh = null then openFile(name,'r')
     do
@@ -84,13 +108,15 @@ class RexxStream
     end
   /**
    * Method lineout further arguments, writes to stdout
+   * TODO: close a file when only the filename is specified and no output. 
    */
   method lineout(in_) static
     say in_
     
   /**
    * Method lineout ...
-   * @param text is a Rexx
+   * @param name is a Rexx
+   * @param text is a Rexx 
    */
   method lineout(name,text) static
     fh = fileWriterHandles.get(name.toString())
@@ -98,6 +124,10 @@ class RexxStream
     (PrintWriter printWriterHandles.get(name)).println(text)
     /* need to flush every line when we don't really know when to close */
     (PrintWriter printWriterHandles.get(name)).flush()
+    /*
+     * on most OS this is OK for having every line written out to dasd
+     * on end-of-task
+     */  
     
 
   /**
@@ -115,6 +145,13 @@ class RexxStream
 	  bfr = BufferedReader(fr)
 	  bufferedReaderHandles.put(name,bfr)
 	  lines.put(name,Rexx 1)
+	end -- when mode
+	when mode = 'rc' then do
+	  frc = FileInputStream(name)
+	  fileInputStreamHandles.put(name,frc)
+	  dfr = BufferedReader(fr)
+	  dataInputStreamHandles.put(name,dfr)
+	  chars.put(name,Rexx 1)
 	end
 	when mode = 'w' then do
 	  do
@@ -125,11 +162,24 @@ class RexxStream
 	  catch IOException
 	    say 'ioexception while writing file' name
 	  end
+	end -- when mode
+	when mode = 'wc' then do
+	  do
+	    fwc = FileOutputStream(name)
+	    fileOutputStreamHandles.put(name,fwc)
+	    pwc = DataOutputStream(fwc)
+	    dataOutputStreamHandles.put(name,pwc)
+	  catch IOException
+	    say 'ioexception while writing file' name
+	  end
 	end
+
 	otherwise
 	  say '?'
       end -- select
     catch FileNotFoundException
       say 'file not found'
     end
-    
+
+
+  method stream()
