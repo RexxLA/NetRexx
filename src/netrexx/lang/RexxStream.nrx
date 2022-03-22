@@ -10,6 +10,8 @@ import java.io
  * static methods as to enable a 'uses RexxStream' clause so we can
  * use linein, lineout, charin, charout in a Classic Rexx compatible manner.   
  * <BR>
+ * NOTE: a char is a UTF character, not a single byte nor a Java char.
+ * Practical result is that charout() must be used to successfully charin().  
  * Created on: Thu, 03, Feb 2022 16:40:14 +0100 rvj
  */
 class RexxStream
@@ -33,30 +35,30 @@ class RexxStream
   method RexxStream()
     return this
 
-
   /**
    * Method chars returns the remaining number of characters
    * in a stream, or 1
    */
-  method chars(name)
+  method chars(name) static
     if chars.get(name) == null then do
       openFile(name,'rc')
     end
     return Rexx chars.get(name)
-
     
   /**
    * Method charin
    */
   method charin(name) static
-    fhc = fileInputStreamHandles.get(name.toString())
+    fhc = fileInputStreamHandles.get(name)
     if fhc = null then openFile(name,'rc')
     do
-      char_ = (DataInputStream dataInputStreamHandles.get(name.toString())).readUTF()
-      if char_ = null then chars.put(name, Rexx 0)
+      char_ = (DataInputStream dataInputStreamHandles.get(name)).readUTF()
       return char_
+    catch eof=EOFException
+      chars.put(name, Rexx 0)
+      return null
     catch iox=IOException
-      say 'ioexception while reading file' name --iox.getMessage()
+      say 'ioexception while reading file' name 
       return 'ioerror'
     end
 
@@ -64,7 +66,7 @@ class RexxStream
    * Method charout 
    */
   method charout(name,text) static
-    fhc = fileOutputStreamHandles.get(name.toString())
+    fhc = fileOutputStreamHandles.get(name)
     if fhc = null then openFile(name,'wc')
     do
       (DataOutputStream dataOutputStreamHandles.get(name)).writeUTF(text)
@@ -72,7 +74,8 @@ class RexxStream
       (DataOutputStream dataOutputStreamHandles.get(name)).flush()
     catch IOException
       say 'ioexception in charout'
-    end
+    end -- if do
+    
   /**
    * Method lines returns 0 or the lines left in a file
    * This is the default which corresponds to lines(filename,N)
@@ -124,12 +127,7 @@ class RexxStream
     (PrintWriter printWriterHandles.get(name)).println(text)
     /* need to flush every line when we don't really know when to close */
     (PrintWriter printWriterHandles.get(name)).flush()
-    /*
-     * on most OS this is OK for having every line written out to dasd
-     * on end-of-task
-     */  
-    
-
+ 
   /**
    * Method openFile opens a file for read or write
    * and adds it to the structures 
@@ -173,7 +171,6 @@ class RexxStream
 	    say 'ioexception while writing file' name
 	  end
 	end
-
 	otherwise
 	  say '?'
       end -- select
@@ -181,5 +178,43 @@ class RexxStream
       say 'file not found'
     end
 
+  method stream(name,option1=Rexx'STATE',option2=Rexx '') static
+    /* default option is State */
+    option1=option1.upper()
+    option2=option2.upper()
+    select
+      when option1.left(1)='S' then do
 
-  method stream()
+
+      end
+      when option1.left(1)='C' then do
+	select
+	  when option2='OPEN' then do
+	    
+	  end
+	  when option2='CLOSE' then do
+	    
+	  end
+	  when option2.left(4)='SEEK' then do
+	    
+	  end
+	  when option2='QUERY EXISTS' then do
+	    
+	  end
+	  when option2='QUERY SIZE' then do
+	    
+	  end
+	  when option2='QUERY DATETIME' then do
+	    
+	  end
+	  otherwise
+	    say '?'
+	end
+      end
+      otherwise
+	say '?'
+    end
+    
+    
+    
+    
