@@ -33,6 +33,7 @@ class RexxStream
   lines			  = TreeMap()
   chars 		  = TreeMap()
   linepos		  = TreeMap()
+  charpos		  = TreeMap()
 
   /**
    * Default constructor
@@ -48,7 +49,13 @@ class RexxStream
     if chars.get(name) == null then do
       openFile(name,'rc')
     end
-    return Rexx chars.get(name)
+    do
+      if (DataInputStream dataInputStreamHandles.get(name)).available() > 0 then return Rexx 1
+      else return Rexx 0
+    catch IOException
+      return Rexx 0
+    end
+    -- return Rexx chars.get(name)
     
   /**
    * Method charin
@@ -61,7 +68,7 @@ class RexxStream
       return char_
     catch eof=EOFException
       chars.put(name, Rexx 0)
-      return null
+      return char_
     catch iox=IOException
       say 'ioexception while reading file' name 
       return 'ioerror'
@@ -91,7 +98,13 @@ class RexxStream
     if lines.get(name) == null then do
       openFile(name,'r')
     end
-    return Rexx lines.get(name)
+    do
+      if (BufferedReader bufferedReaderHandles.get(name.toString())).ready() then return Rexx 1
+      else return Rexx 0
+    catch IOException
+      return Rexx 0
+    end
+    -- return Rexx lines.get(name)
     
   /**
    * Method linein without arguments, returns line from stdin 
@@ -100,8 +113,8 @@ class RexxStream
     return ask
     
   /**
-   * Method linein ...
-   * @param opts is a Rexx
+   * Method linein returns a line from a file
+   * @param name is a Rexx that contains the filename
    */
   method linein(name) static
     fh = fileReaderHandles.get(name.toString())
@@ -122,9 +135,9 @@ class RexxStream
     say in_
     
   /**
-   * Method lineout ...
-   * @param name is a Rexx
-   * @param text is a Rexx 
+   * Method lineout writes a line to a file
+   * @param name is a Rexx which contains the filename
+   * @param text is a Rexx which contains the line to write
    */
   method lineout(name,text) static
     fh = fileWriterHandles.get(name.toString())
@@ -198,14 +211,33 @@ class RexxStream
 	    return ""
 	  end
 	  when option2='CLOSE' then do
+	    lines.remove(name)
+	    chars.remove(name)
 	    fh1 = (FileReader fileReaderHandles.get(name))
-	    if fh1 <> null then fh1.close()
+	    if fh1 <> null then do
+	      fh1.close()
+	      fileReaderHandles.remove(name)
+	      bufferedReaderHandles.remove(name)
+	    end
 	    fh2 = (FileWriter fileWriterHandles.get(name))
-	    if fh2 <> null then fh2.close()
+	    if fh2 <> null then do
+	      fh2.close()
+	      fileWriterHandles.remove(name)
+	      dataInputStreamHandles.remove(name)
+	    end
 	    fh3 = (PrintWriter printWriterHandles.get(name))
-	    if fh3 <> null then fh3.close()
+	    if fh3 <> null then
+	      do
+		fh3.close()
+		printWriterHandles.remove(name)
+		fileWriterHandles.remove(name)
+	      end
 	    fh4 = (FileOutputStream fileOutputStreamHandles.get(name))
-	    if fh4 <> null then fh4.close()
+	    if fh4 <> null then do
+	      fh4.close()
+	      fileOutputStreamHandles.remove(name)
+	      dataOutputStreamHandles.remove(name)
+	    end
 	    return ""
 	  catch IOException
 	    return ""

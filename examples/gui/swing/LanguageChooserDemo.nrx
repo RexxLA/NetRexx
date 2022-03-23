@@ -1,0 +1,112 @@
+/* NetRexx */
+
+/**
+ * Adapted for Languages from the "codejava.net" CountryListDemo example
+ */
+ 
+class LanguageChooserDemo extends JFrame implements ActionListener
+
+    properties private
+
+        lblLanguage = JLabel
+        cbLanguage  = JComboBox
+        btnSubmit   = JButton("Submit")
+        lstLanguage = ArrayList
+     
+    method LanguageChooserDemo()
+        -- Let the JFrame construct itself
+        super("Language Chooser Demo")
+        -- Create the GUI
+        createContents()
+        -- Set some JFrame properties 
+        setSize(600, 250)
+        setLocationRelativeTo(null)
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE)
+/**
+ * The GUI consists of a JComboBox with all languages available
+ * via the Locale class, and a JButton to select the selected 
+ * language from the JComboBox, which will result in a popup
+ * MessageBox, that prints the selected language.
+ */  
+    method createContents
+        lblLanguage = JLabel("Select your language: ")
+        lstLanguage = ArrayList createLanguageList
+        cbLanguage = JComboBox(lstLanguage.toArray)
+        -- add an ActionListener to the JButton 
+        btnSubmit.addActionListener(this)
+        -- complete the gui 
+        setLayout(FlowLayout(FlowLayout.CENTER, 20, 10));
+        add(lblLanguage)
+        add(cbLanguage)
+        add(btnSubmit)
+/**
+ * All available languages can be obtained via the Locale class
+ * and will be sorted via the Collections sort (static) method
+ * before being returned to the caller
+ */         
+    method createLanguageList returns ArrayList
+        languageList  = ArrayList()
+        languageCodes = String[] Locale.getISOLanguages
+        loop c over languageCodes
+            clocale = Locale(c)
+            name = String clocale.getDisplayLanguage
+            lang = Language(clocale,name)
+            languageList.add(lang)
+        end
+
+        Collections.sort(languageList)
+        return languageList
+/**
+ * The method invoked when the JButton listener gets activated 
+ * when a selection is made for the JComboBox.
+ */
+    method actionPerformed(event = ActionEvent)
+        selectedLanguage = Language cbLanguage.getSelectedItem
+        JOptionPane.showMessageDialog(this, "You selected language:" selectedLanguage)
+/**
+ * Invoke the program on the Java event-dispatch thread for thread safe operation
+ */
+    method main(args = String[]) static
+        SwingUtilities.invokeLater(myRunnable())
+/**
+ * A Runnable class implementation to allow thread safe execution of the program
+ */             
+class myRunnable private implements Runnable
+
+    method run
+        LanguageChooserDemo().setVisible(1)
+/**
+ * The Language class which contains the properties 'code' indicating
+ * the language code such as "en' or "de" and the language 'name' such as
+ * "English" or "French".
+ * Implemented as beans and allowing for a Collections 'sort'.
+ */ 
+class Language implements Comparable
+
+    properties private
+    code = Locale
+    name = String
+
+    method Language(lcode=Locale, lname=String)
+        this.code = lcode
+        this.name = lname
+ 
+    method getCode returns Locale
+        return this.code
+
+    method setCode(lcode=Locale)
+        this.code = lcode
+ 
+    method getName returns String
+        return this.name
+ 
+    method setName(lname=String)
+        this.name = lname
+
+    method toString returns String
+        return this.name
+
+    method compareTo(another=Object) returns int
+        the_other = Language another
+        return this.name.compareTo(the_other.getName)
+
