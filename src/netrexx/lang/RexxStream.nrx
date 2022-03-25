@@ -272,7 +272,25 @@ class RexxStream uses RexxDate
 	    ss = remainder2 - (mm*60)
 	    parse newdate +2 year +2 month +2 day +2 .
 	    return day'-'month'-'year hh.right(2,'0')':'mm.right(2,'0')':'ss.trunc().right(2,'0') 'UTC'
+	  end -- when option2
+	  when option2='QUERY TIMESTAMP' then do
+	    lm = Rexx File(name).lastModified()
+	    -- time is in unix epoch
+	    lm = lm/1000
+	    if lm==0 then return ""
+	    days = lm / (3600*24)
+	    days=days.trunc()
+	    remainder = lm -(days * 24 * 3600)
+	    baserex = 719162 + days -- add the days between rexx and unix epoch (719162)
+	    newdate = Date('S',baserex,'B')
+	    hh = remainder % 3600
+	    remainder2 = remainder - (hh*3600)
+	    mm = remainder2 % 60
+	    ss = remainder2 - (mm*60)
+	    parse newdate year +4 month +2 day +2 .
+	    return year'-'month'-'day hh.right(2,'0')':'mm.right(2,'0')':'ss.trunc().right(2,'0') 'UTC'
 	  end
+
 	  otherwise
 	    say '?'
 	    return ""
