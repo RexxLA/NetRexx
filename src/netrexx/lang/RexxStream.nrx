@@ -53,13 +53,29 @@ class RexxStream uses RexxDate
     end
       
   /**
-   * Method charin
+   * Method charin returns a string of up to length characters read from the character input stream name.
    */
-  method charin(name) static
+  method charin(name, start='', length='') static
     fhc = fileInputStreamHandles.get(name)
-    if fhc = null then openFile(name,'rc')
+    if fhc == null then openFile(name,'rc')
+    -- handle start
+    if start<>'' then do
+      -- close the stream to realign pointer
+      stream(name,'c','CLOSE')
+      -- spin for 'start-1' times
+      loop for start-1
+	char_ = (DataInputStream dataInputStreamHandles.get(name)).readUTF()
+      end
+    catch iox=IOException
+      say 'ioexception while getting to start position' name 
+      return 'ioerror'
+    end -- if start
+    if length=='' then length=1
     do
-      char_ = (DataInputStream dataInputStreamHandles.get(name)).readUTF()
+      char_ = ''
+      loop for length
+	char_ = char_||(DataInputStream dataInputStreamHandles.get(name)).readUTF()
+      end
       return char_
     catch eof=EOFException
       chars.put(name, Rexx 0)
@@ -111,9 +127,21 @@ class RexxStream uses RexxDate
    * Method linein returns a line from a file
    * @param name is a Rexx that contains the filename
    */
-  method linein(name) static
+  method linein(name,start='',count=1) static
+    if start<>''then if start<>1 then do
+      say 'second parameter must be 0 or 1'
+      return null
+    end
+    if count=0 then return null
     fh = fileReaderHandles.get(name.toString())
-    if fh = null then openFile(name,'r')
+    if fh = null then do
+      openFile(name,'r')
+      start=0 -- cancel any start=1 option
+    end
+    if start>0 then do -- start must be 1
+      stream(name,'c','CLOSE')
+      openFile(name,'r') -- reposition file position
+    end
     do
       line = Rexx (BufferedReader bufferedReaderHandles.get(name.toString())).readLine()
       if line = null then lines.put(name, Rexx 0)
