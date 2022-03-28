@@ -105,4 +105,8 @@ Version history
 - Changes:
    - Pad each 'end' token with a space
 
+1.0.5 (2022-03-28)
+   remesm@gmail.com
 
+- Changes:
+   - Translate foreach statement as loop over

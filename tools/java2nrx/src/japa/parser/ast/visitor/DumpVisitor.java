@@ -1556,14 +1556,16 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 	}
 
 	public void visit(ForeachStmt n, Object arg) {
-		printer.print("for (");
+		printer.print("loop ");
 		n.getVariable().accept(this, arg);
-		printer.print(" : ");
+		printer.print(" over ");
 		n.getIterable().accept(this, arg);
-		printer.print(") ");
+		printer.printLn(" ");
 		n.getBody().accept(this, arg);
-	}
+		printer.print(" end ");
 
+	}
+ 
 	public void visit(ForStmt n, Object arg) {
 		/*
 		 * printer.print("for ("); if (n.getInit() != null) { for
