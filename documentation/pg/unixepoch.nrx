@@ -1,0 +1,21 @@
+/* convert from the unix epoch to a basedate */
+/* for example, for a file date              */
+lm = Rexx File('unixepoch.nrx').lastModified()
+-- time is in unix epoch
+lm = lm/1000
+if lm==0 then do
+  say 'filedate not found'
+  exit
+end
+days = lm / (3600*24)
+days=days.trunc()
+remainder = lm -(days * 24 * 3600)
+baserex = date('b',19700101,'s')
+baserex = baserex + days -- add the days between rexx and unix epoch (719162)
+newdate = Date('s',baserex,'b')
+hh = remainder % 3600
+remainder2 = remainder - (hh*3600)
+mm = remainder2 % 60
+ss = remainder2 - (mm*60)
+parse newdate year +4 month +2 day +2 .
+say year'-'month'-'day hh.right(2,'0')':'mm.right(2,'0')':'ss.trunc().right(2,'0') 'UTC'
