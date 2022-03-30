@@ -89,7 +89,21 @@ class RexxStream uses RexxDate
   /**
    * Method charout 
    */
-  method charout(name,text) static
+  method charout(name,text,start='') static
+    if start<>'' then if start<>1 then do
+      say 'third parameter must be 0 or 1'
+      return null
+    end
+    fh = fileReaderHandles.get(name.toString())
+    if fh = null then do
+      openFile(name,'r')
+      start=0 -- cancel any start=1 option
+    end
+    if start>0 then do -- start must be 1
+      stream(name,'c','CLOSE')
+      openFile(name,'r') -- reposition file position
+    end
+    
     fhc = fileOutputStreamHandles.get(name)
     if fhc = null then openFile(name,'wc')
     do
@@ -100,6 +114,13 @@ class RexxStream uses RexxDate
       say 'ioexception in charout'
     end -- if do
     return 0
+
+  /**
+   * Method lineout with stream name, without further arguments
+   * close a file when only the filename is specified and no output. 
+   */
+  method charout(name) static
+    stream(name,'c','CLOSE')
     
   /**
    * Method lines returns 0 or the lines left in a file
@@ -129,8 +150,8 @@ class RexxStream uses RexxDate
    * @param name is a Rexx that contains the filename
    */
   method linein(name,start='',count=1) static
-    if start<>''then if start<>1 then do
-      say 'second parameter must be 0 or 1'
+    if start<>'' then if start<>1 then do
+      say 'third parameter must be 0 or 1'
       return null
     end
     if count=0 then return null
@@ -152,11 +173,11 @@ class RexxStream uses RexxDate
       return 'ioerror'
     end
   /**
-   * Method lineout further arguments, writes to stdout
-   * TODO: close a file when only the filename is specified and no output. 
+   * Method lineout with stream name, without further arguments
+   * close a file when only the filename is specified and no output. 
    */
-  method lineout(in_) static
-    say in_
+  method lineout(name) static
+    stream(name,'c','CLOSE')
     
   /**
    * Method lineout writes a line to a file
