@@ -1,0 +1,243 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  23 JAN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1998
+--  latest vers.:  http://wwwinfo.cern.ch/news/netrexx
+--
+--
+package xclasses
+class xsys
+
+  properties constant
+    pversion  = 'v1r001 beta'
+    copyright = '(c) 1998 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: version
+-- purpose.....: display the version
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: userid
+-- purpose.....: Show the current userid
+--
+  method userid() public static
+    me = Rexx System.getProperty('user.name')
+    return me
+
+-- method......: nodeid
+-- purpose.....: Show the nodename
+--
+  method nodeid() public static
+    me = xsock.hostname()
+    return me
+
+-- method......: time
+-- purpose.....: Show time in the Classical REXX format
+--                      N : normal hh:mm:ss
+--                      C : civil  hh:mmXX    XX = am or pm
+--                      H : hous since midnight
+--                      M : minutes since midnight
+--                      S : seconds since midnight
+--                      Z : zone: time zone (eg. GMT, CET, etc.)
+--
+  method time(type=Rexx) public static
+    if type = '' then type = 'N'
+    now = java.util.Date()
+    parse now . . . hh':'mm':'ss zone .
+
+    select
+      when type = 'N' then
+        do
+          parse now.toString() . . . out .
+        end
+      when type = 'C' then
+        do
+          fl = 'am'
+          if hh > 13 then
+            do
+              hh = hh - 12
+              fl = 'pm'
+            end
+          out = hh.right(2,'0')':'mm.right(2,'0')||fl
+        end
+      when type = 'H' then
+        do
+          out = hh.right(2,'0')
+        end
+      when type = 'M' then
+        do
+          out = hh*60+mm
+        end
+      when type = 'S' then
+        do
+          out = hh*3600+mm*60+ss
+        end
+      when type = 'Z' then
+        do
+          out = zone
+        end
+      otherwise NOP
+    end
+    return out
+
+-- purpose.....: Show time (format = 'N')
+  method time() public static
+    return time('N')
+
+-- method......: date
+-- purpose.....: Show date in the standard Classical REXX format
+--
+  method date(type=Rexx) public static
+    Return xmisc.xdate('TODAY',type)
+
+-- purpose.....: Show date (type = 'TODAY')
+  method date() public static
+    Return xmisc.xdate('TODAY')
+
+-- method......: xdate
+-- purpose.....: interface to xmisc xdate (date conversion)
+--
+  method xdate(p1=Rexx,p2=Rexx,p3=Rexx) public static
+    Return xmisc.xdate(p1,p2,p3)
+
+-- purpose.....: interface to xmisc xdate (date)
+  method xdate(p1=Rexx,p2=Rexx) public static
+    Return xmisc.xdate(p1,p2)
+
+-- purpose.....: interface to xmisc xdate (date)
+  method xdate(p1=Rexx) public static
+    Return xmisc.xdate(p1)
+
+-- method......: timestamp
+-- purpose.....: prints a classical timestamp format
+--
+  method timestamp() public static
+    Return xmisc.xdate('TODAY','O') time('N')
+
+-- method......: die
+-- purpose.....: exit program 
+--                  erc : return code RC from the failing program
+--                  msg : message displaied on STDOUT
+--
+  method die(erc=Rexx,msg=Rexx) public static
+    say erc'-E' msg
+    exit erc
+
+-- method......: warn
+-- purpose.....: send a WARNING message to stderr
+--                  erc : return code RC from the failing program
+--                  msg : message displaied on STDOUT
+--
+  method warn(erc=Rexx,msg=Rexx) public static
+    System.err.print(erc'-W' msg '\x0D\x0A')
+
+-- method......: dump
+-- purpose.....: prints the StackTrace in the "correct" order
+--
+  method dump(e=Exception) public static
+    -- trace buffer
+    trace = Rexx('')
+
+    -- get the error message
+    --
+    err = e.tostring()
+
+    -- printStackTrace outputs to a PrintStream
+    -- we connect a PipedInput to grab the output
+    --
+    pout = PipedOutputStream()
+    pin  = PipedInputStream()
+    pin.connect(pout)
+    out  = PrintWriter(pout,1)
+    in   = DataInputStream(pin)
+
+    -- get the stack
+    --
+    e.printStackTrace(out)
+
+    j = 0
+    loop while in.available() <> 0
+      str = in.readLine()
+      parse str 'at' rest
+      if rest = '' then iterate
+      j = j+1
+      trace[j] = rest
+    end
+    trace[0] = j
+    parse trace[j] ':'line')'
+    say '(dump) Error found line..:' line'.'
+    say '(dump) Message is........:' err'.'
+    say '(dump) Full dump follows.:'
+    say
+    loop i = trace[0] to 1 by -1
+      parse trace[i] p1'('prog':'line')'
+      if line = '' then iterate
+      p1 = '('p1.space()')'
+      say '(dump)' prog.left(12) p1.left(30) 'line:' line.right(5)
+    end
+    say
+
+-- method......: really
+-- purpose.....: asks the question in argument, waiting for answer.
+--               Returns:
+--                   1 = answer was Y|YES
+--                   0 = answer was N|NO
+--               If user types Q(uit) or A(bort) EXIT is called
+--
+  method really(question=rexx) public static
+    loop forever
+      say question '(Yes/No/Quit; ENTER=No)'
+      parse ask.upper() answ
+      if answ = '' then return 0
+      if 'YES'.abbrev(answ,1) then return 1
+      if 'NO'.abbrev(answ,1) then return 0
+      if 'QUIT'.abbrev(answ,1) then xsys.die(201,'Program aborted by user action.')
+      say 'Please enter YES or NO. Just press ENTER for NO.'
+    end
+
+
+-- method......: sleep
+-- purpose.....: sleeps N seconds
+--
+  method sleep(n=rexx) public static
+    do
+      Thread.sleep(n*1000)
+      catch e = InterruptedException
+        e=e
+    end
+
+-- method......: main
+-- purpose.....: just test the main functions (try java xclasses/xsys)
+--
+  method main(args=String[]) public static
+    args = args
+    version()
+
+    -- tests the 'Classical' functions
+    --
+    list = 'N C H M S Z'
+    loop while list <> ''
+      parse list kind list
+      say 'time("'kind'") is:' xsys.time(kind)
+    end
+
+    list = 'E U O C D S'
+    loop while list <> ''
+      parse list kind list
+      say 'date("'kind'") is:' xsys.date(kind)
+    end
+
+    say 'We are:' xsys.date() xsys.time()
+    say '       ' xsys.timestamp()
+    say '       ' xsys.userid()
+    say '       ' xsys.nodeid()
+
+    if really('OK to continue?')
+      then say 'OK'
+      else say 'Not OK.'
+    exit 0

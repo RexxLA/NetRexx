@@ -1,0 +1,208 @@
+/** combine
+
+  >>--COMBINE--+------------------------+--+-Or----------+---><
+               | +-1-----------------+  |  +-aNd---------+
+               +-+-------------------+--+  +-AND---------+
+               | +-number------------+  |  +-eXclusiveor-+
+               | +-*-----------------+  |  +-EXClusiveor-+
+               | +-KEYLENgth--number-+  |  +-FIRST-(2)---+
+               |          +-ALLEOF-(1)+ |  +-LAST-(2)----+
+               +-STOP-(1)-+           +-+
+                          +-ANYEOF-(1)+
+ Notes:
+ (1) Only for use with secondary input streams.
+     Only options from this column usable with
+     any secondary input streams.
+     (This is poorly documented in CMS Pipelines.
+     This is a best guess of their intentions.)
+ (2) Not usable with STOP and secondary streams.
+
+*/
+
+/*
+ 20/ 7/18 ALLEOF was ALLOF, ANYEOF was ANYOF. Jeff Hennick
+ 20/ 7/11 Jeff Hennick
+*/
+
+pipe (combine_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- combine 1 first  ?
+   literal a1a a2b a3c d4d e5e f6f g7c h1h |
+   split |
+   combine 1 first |
+   c1: compare any ~2# 1 combine 1 first ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a1a a3c e5e g7c/ |
+   split |
+   c1: ?
+
+-- combine 1 last  ?
+   literal a1a a2b a3c d4d e5e f6f g7c h1h |
+   split |
+   combine 1 last |
+   c2: compare any ~2# 2 combine 1 last ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a2b d4d f6f h1h/ |
+   split |
+   c2: ?
+
+-- combine 1 or  ?
+   literal a1a a2b a3c d4d e5e f6f g7c h1h |
+   split |
+   combine 1 or |
+   c3: compare any ~2# 3 combine 1 or ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a3c e7g g7g o7k/ |
+   split |
+   c3: ?
+
+-- combine 1 and  ?
+   literal a1a a2b a3c d4d e5e f6f g7c h1h |
+   split |
+   combine 1 and |
+   c4: compare any ~2# 4 combine 1 and ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a0` `0` d4d `1`/ |
+   split |
+   c4: ?
+
+-- combine 1 exclusiveor ?
+   literal a1a a2b a3c d4d e5e f6f g7c h1h |
+   split |
+   combine 1 exclusiveor |
+   c5: compare any ~2# 5 combine 1 exclusiveor ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 000303  050707  030303  0F060B |
+   spec 1.2 x2c 1 3.2 x2c 2 5.2 x2c 3  9.2 x2c 5 11.2 x2c 6 13.2 x2c 7 17.2 x2c 9 19.2 x2c 10 21.2 x2c 11  25.2 x2c 13 27.2 x2c 14 29.2 x2c 15 |
+   split |
+   c5: ?
+
+-- combine 2 first  ?
+   literal a1a a2b a3c d4d e5e f6f g7c h1h |
+   split |
+   combine 2 first |
+   c6: compare any ~2# 6 combine 2 first ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a1a d4d g7c/ |
+   split |
+   c6: ?
+
+-- combine 2 or  ?
+   literal a1a a2b a3c d4d e5e f6f g7c h1h |
+   split |
+   combine 2 or |
+   c7: compare any ~2# 7 combine 2 or ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a3c e7g g7g o7k/ |
+   split |
+   c7: ?
+
+-- combine keylen n first  ?
+   literal xxa1a xxa2b yya3c yyd4d yye5e zzf6f zzg7c zzh1h |
+   split |
+   combine keylen 2 first  |
+   c8: compare any ~2# 8 combine keylen n first  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /xxa1a yya3c zzf6f/ |
+   split |
+   c8: ?
+
+-- combine keylen n last  ?
+   literal xxa1a xxa2b yya3c yyd4d yye5e zzf6f zzg7c zzh1h |
+   split |
+   combine keylen 2 last  |
+   c9: compare any ~2# 9 combine keylen n last  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /xxa2b yye5e zzh1h/ |
+   split |
+   c9: ?
+
+-- combine keylen n or  ?
+   literal xxa1a xxa2b yya3c yyd4d yye5e zzf6f zzg7c zzh1h |
+   split |
+   combine keylen 2 or  |
+   c10: compare any ~2#10 combine keylen n or  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /xxa3c yye5e zzo7k/ |
+   split |
+   c10: ?
+
+-- combine keylen n and  ?
+   literal xxa1a xxa2b yya3c yyd4d yye5e zzf6f zzg7c zzh1h |
+   split |
+   combine keylen 2 and  |
+   c11: compare any ~2#11 combine keylen n and  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /xxa0` yyd4d zz`1` / |
+   split |
+   c11: ?
+
+-- combine keylen n exclusiveor  ?
+   literal xxa1a xxa2b yya3c yyd4d yye5e zzf6f zzg7c zzh1h |
+   split |
+   combine keylen 2 exclusiveor  |
+   c12: compare any ~2#12 combine keylen n exclusiveor  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal xx000303  yy010101  zz0F060B |
+   spec 1.2 1 3.6 x2c n  11.2 nw 13.6 x2c n   21.2 nw 23.6 x2c n |
+   split |
+   c12: ?
+
+-- combine stop or (secondary) ?
+   literal a1a a3c e5e g7c |
+   split |
+   s13: combine stop or |
+   c13: compare any ~2#13 combine stop or (secondary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a3c e7g g7g o7k/ |
+   split |
+   c13: ?
+   literal a2b d4d f6f h1h |
+   split |
+   s13: ?
+
+-- combine stop alleof and (secondary) ?
+   literal a1a a3c e5e g7c |
+   split |
+   s14: combine stop alleof and |
+   c14: compare any ~2#14 combine stop alleof and (secondary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   strliteral /a0` `0` d4d `1`/ |
+   split |
+   c14: ?
+   literal a2b d4d f6f h1h |
+   split |
+   s14: ?
+
+-- combine stop alleof exclusiveor (secondary) ?
+   literal a1a a3c e5e g7c |
+   split |
+   s15: combine stop alleof exclusiveor |
+   c15: compare any ~2#15 combine stop alleof exclusiveor (secondary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 000303  050707  030303  0F060B |
+   spec 1.6 x2c 1  9.6 x2c nw  17.6 x2c nw  25.6 x2c nw |
+   split |
+   c15: ?
+   literal a2b d4d f6f h1h |
+   split |
+   s15: ?
+
+-- combine stop anyeof exclusiveor (short primary) ?
+   literal a1a a3c e5e  |
+   split |
+   s17: combine stop anyeof exclusiveor |
+   c17: compare any ~2#17 combine stop anyeof exclusiveor (short primary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 000303  050707  030303 |
+   spec 1.6 x2c 1  9.6 x2c nw  17.6 x2c nw |
+   split |
+   c17: ?
+   literal a2b d4d f6f h1h |
+   split |
+   s17: ?

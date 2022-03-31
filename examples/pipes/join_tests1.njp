@@ -1,0 +1,171 @@
+/** join
+                   +-1-----------------+
+>>--JOIN-+-------+-+-------------------+-->
+         +-COUNT-+ +-number------------+
+                   +-*-----------------+
+                   +-KEYLENgth--number-+
+
+>--+-------------------------------+-+--------+---><
+   +-delimitedString-+-----------+-+ +-number-+
+                     +-TERMinate-+
+
+*/
+/*
+  19/11/25 Jeff Hennick
+*/
+pipe (join_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- join ?
+   literal 1 2 3 4 5 6 7 8 A B C |
+   split |
+   join |
+   c1: compare any ~2# 1 join ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 12;34;56;78;AB;C |
+   split ; |
+   c1: ?
+
+-- join number ?
+   literal 1 2 3 4 5 6 7 8 A B C |
+   split |
+   join 2 |
+   c2: compare any ~2# 1 join number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123;456;78A;BC; |
+   split ; |
+   c2: ?
+
+-- join keylength number dstring ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join keyleng 1 /../ |
+   c3: compare any ~2# 3 join keylength number dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1..2..3;s4..5;d6..7..8..A;fB..C; |
+   split ; |
+   c3: ?
+
+-- join number dstring number ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join 3 /xyz/ 8 |
+   c4: compare any ~2# 4 join number dstring number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1xyza2;a3xyzs4;s5xyzd6;d7xyzd8;dAxyzfB;fC; |
+   split ; |
+   c4: ?
+
+-- join count ?
+   literal 1 2 3 4 5 6 7 8 A B C |
+   split |
+   join count |
+   c5: compare any ~2# 5 join count ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal          212;         234;         256;         278;         2AB;         1C |
+   split ; |
+   c5: ?
+
+-- join number number ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join 5 8 |
+   c6: compare any ~2# 6 join number number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a2a3s4;s5d6d7d8;dAfBfC |
+   split ; |
+   c6: ?
+
+-- join * ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join * |
+   c7: compare any ~2# 7 join * ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a2a3s4s5d6d7d8dAfBfC |
+   split ; |
+   c7: ?
+
+-- join number dstring terminate ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join 3 /xyz/ terminate |
+   c8: compare any ~2# 8 join number dstring terminate ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1xyza2xyza3xyzs4xyz;s5xyzd6xyzd7xyzd8xyz;dAxyzfBxyzfCxyz; |
+   split ; |
+   c8: ?
+
+-- join number dstring terminate number ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join 3 /xyz/ terminate 8 |
+   c9: compare any ~2# 9 join number dstring terminate number~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1xyza2xyz;a3xyzs4xyz;s5xyzd6xyz;d7xyzd8xyz;dAxyzfBxyz;fCxyz; |
+   split ; |
+   c9: ?
+
+-- join space ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join / /  |
+   c10: compare any ~2#10 join space~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1 a2;a3 s4;s5 d6;d7 d8;dA fB;fC |
+   split ; |
+   c10: ?
+
+-- join null ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join //  |
+   c11: compare any ~2#11 join null~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a2;a3s4;s5d6;d7d8;dAfB;fC |
+   split ; |
+   c11: ?
+
+-- join leading space ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join / lead/  |
+   c12: compare any ~2#12 join leading space~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1 leada2;a3 leads4;s5 leadd6;d7 leadd8;dA leadfB;fC |
+   split ; |
+   c12: ?
+
+-- join mid space ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join /m i d/  |
+   c13: compare any ~2#13 join mid space~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1m i da2;a3m i ds4;s5m i dd6;d7m i dd8;dAm i dfB;fC |
+   split ; |
+   c13: ?
+
+-- join trail space ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join /trail /  |
+   c14: compare any ~2#14 join trail space~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1trail a2;a3trail s4;s5trail d6;d7trail d8;dAtrail fB;fC |
+   split ; |
+   c14: ?
+
+-- join hex ?
+   literal a1 a2 a3 s4 s5 d6 d7 d8 dA fB fC |
+   split |
+   join h2b25  |
+   c15: compare any ~2#15 join hex~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1+%a2;a3+%s4;s5+%d6;d7+%d8;dA+%fB;fC |
+   split ; |
+   c15: ?

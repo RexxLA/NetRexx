@@ -1,16 +1,28 @@
+--diskr.nrx
 /*
- *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 1997-2011 Ed Tomlinson, 2020 Jeffrey Hennick
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  *
  */
+
+/** diskr
+  >>--+--DISKR--+--string---><
+      +--<------+
+      +--FILER--+
+*/
+
+/*
+ 20/12/ 4 Refine Windows check from substr(2,1) = ':'. Jeff Hennick
+ 20/12/ 2 Make filename a clean relative path.  Jeff Hennick
+ 99/05/29 use byte[] directly.  ejt
+ 98/09/06 add an stream option
+*/
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
-
--- 99/05/29 use byte[] directly.  ejt
--- 98/09/06  add an stream option
 
 import org.netrexx.njpipes.pipes.
 
@@ -18,10 +30,17 @@ class diskr extends stage
 
 method run() public
 
-    a = arg()
-    if a.word(1).upper()<>'STREAM' then
+    file = arg()
+    if file.word(1).upper()<>'STREAM' then
        do
-          inFile = Filereader(String a)
+         if file.pos('.\\') > 0 | file.left(1) = '\\' | file.substr(2,2) = ':\\' then
+            file = file.changestr("\\","/")       -- fix any Windows spec
+         if file.pos('/') > 0 then do             -- we are working with a relative filepath out of the working dir
+            workDir = File("").getAbsolutePath()  -- find out where the working directory is
+            file = workDir || '/' || file         -- make a messy absolute path for our file, maybe with relative parts
+          end
+
+          inFile = Filereader(file)
           in = BufferedReader(inFile)
           loop while in.ready()
              z = counter(1)
@@ -43,13 +62,13 @@ method run() public
           end
        catch FileNotFoundException
    --     say 'File 'Arg()' Not found'
-          Emsg(13,'Error - File "'a'" not found')
+          Emsg(13,'Error - File "'file'" not found')
        end
     else
        do
           bytes = byte[32768]
-          a = a.subword(2)
-          binFile = DataInputStream(FileInputStream(String a))
+          file = file.subword(2)
+          binFile = DataInputStream(FileInputStream(String file))
           bin = BufferedInputStream(binFile)
           loop forever
              z = counter(1)
@@ -75,8 +94,8 @@ method run() public
              end
           end
        catch FileNotFoundException
-   --     say 'File 'a' Not found'
-          Emsg(13,'Error - File "'a'" not found')
+   --     say 'File 'file' Not found'
+          Emsg(13,'Error - File "'file'" not found')
        end
 
 exit(rc*(rc<>12))

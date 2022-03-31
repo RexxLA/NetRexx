@@ -5,31 +5,39 @@
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  */
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/06/20 aobj; binary.  JHennick
+
+/*
+   20/ 4/ 5 Removed the long name classes to individual files. jh
+   19/09/16 Add CASELESS to bring up to current CMS. JHennick
+   99/05/09  use mrc() instead of rc().  ejt
+   98/06/20 aobj; binary.  JHennick
+*/
 
 /** abbrev
 
-  >>--ABBREV--+-------------------------------+--------------------------><
-              +-word--+---------------------+-+
-                      +-number--+---------+-+
-                                +-ANYCASE-+
+>>--ABBREViation-(1)--+-------------------------------+---><-
+                      +-word-+---------------------+--+
+                             +-number-+---------+--+
+                                      +-ANYcase-+ (2)(3)
+
+(1) ABBREViation must be ABBREV in CMS
+(2) CASEANY, CASEIGNORE, CASELESS, and IGNORECASE are all synonyms for ANYcase.
+(3) ANYcase must be ANYCASE in CMS
 
 */
 
-options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
 import org.netrexx.njpipes.pipes.
 
 class abbrev extends stage binary
 
-method run()
+method run() signals ThreadQ
 
    parse arg() word number cf .
 
-   cf = cf.upper
-   anyc = boolean 'ANYCASE'.abbrev(cf, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(cf) > 0
+   cf = cf.upper()
+   anyc = boolean 'ANYCASE'.abbrev(cf, 3) | 'CASEANY IGNORECASE CASEIGNORE CASELESS'.wordpos(cf) > 0
 
    if \number.datatype('W') then number = 0
 
@@ -46,14 +54,14 @@ method run()
    end
 
    if anyc then do                 -- ANYCASE
-      word = word.upper
+      word = word.upper()
       if sec then do                 -- secondary connected
          loop
             aobj = peekto()
-            line = rexx aobj
+            line = Rexx aobj
             parse line w1 .
 
-            if word.abbrev(w1.upper,number) then output(line)
+            if word.abbrev(w1.upper(),number) then output(line)
             else do
                selectOutput(1)
                output(aobj)
@@ -68,10 +76,10 @@ method run()
       else do                        -- primary only
          loop
             aobj = peekto()
-            line = rexx aobj
+            line = Rexx aobj
             parse line w1 .
 
-            if word.abbrev(w1.upper,number) then output(aobj)
+            if word.abbrev(w1.upper(),number) then output(aobj)
 
             readto()
          catch StageError
@@ -82,7 +90,7 @@ method run()
       if sec then do                 -- secondary connected
          loop
             aobj = peekto()
-            line = rexx aobj
+            line = Rexx aobj
             parse line w1 .
 
             if word.abbrev(w1,number) then output(aobj)
@@ -100,7 +108,7 @@ method run()
       else do                        -- primary only
          loop
             aobj= peekto()
-            line = rexx aobj
+            line = Rexx aobj
             parse line w1 .
 
             if word.abbrev(w1,number) then output(aobj)

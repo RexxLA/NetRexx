@@ -1,0 +1,139 @@
+
+/** drop
+
+            +-FIRST-+  +-1------+
+  >>--DROP--+-------+--+--------+--+----------+--------------------------><
+            +-LAST--+  +-number-+  +-BYTES-(1)+
+                       +-*------+
+
+  (1) Not CMS
+
+*/
+
+/*
+ 20-01-26 Jeff Hennick
+*/
+
+pipe (drop_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- DROP FIRST number ?
+
+   literal 1 2 3 4 5 6 7 8 A B C D E F G H I J K L M N O P Q R S T |
+   split |
+   drop first 10 |
+   c1: compare any ~2# 1 DROP FIRST number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal C;D;E;F;G;H;I;J;K;L;M;N;O;P;Q;R;S;T; |
+   split ; |
+   c1: ?
+
+-- DROP LAST number ?
+   literal 1 2 3 4 5 6 7 8 A B C D E F G H I J K L M N O P Q R S T |
+   split |
+   drop last 5 |
+   c2: compare any ~2# 2 DROP LAST number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;2;3;4;5;6;7;8;A;B;C;D;E;F;G;H;I;J;K;L;M;N;O; |
+   split ; |
+   c2: ?
+
+-- DROP LAST number BYTES ?
+   literal xyz |
+   literal 12345678ABCDEFGHIJKLMNOPQRST|
+   drop last 5 bytes |
+   c3: compare any ~2# 3 DROP LAST number BYTES~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 12345678ABCDEFGHIJKLMNOPQR; |
+   split ; |
+   c3: ?
+
+-- DROP FIRST number (secondary) ?
+   literal 1 2 3 4 5 6 7 8 A B C D E F G H I J K L |
+   split |
+   a4: drop first 10 |
+   hole ?
+   a4: |
+   c4: compare any ~2# 4 DROP FIRST number (secondary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;2;3;4;5;6;7;8;A;B; |
+   split ; |
+   c4: ?
+
+-- DROP FIRST number BYTES (secondary) ?
+   literal 12345678ABCDEFGHIJKLMNOPQRST |
+   a5: drop first 10 bytes |
+   hole ?
+   a5: |
+   cons |
+   c5: compare any ~2# 5 DROP FIRST number BYTES (secondary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 12345678AB |
+   c5: ?
+
+-- DROP FIRST * (secondary) ?
+   literal 123456;78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   a6: drop first *  |
+   hole ?
+   a6: |
+   c6: compare any ~2# 6 DROP FIRST * (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123456;78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   c6: ?
+
+-- DROP ?
+   literal 123456;78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   a7: drop  |
+   c7: compare any ~2# 7 DROP ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   c7: ?
+
+-- DROP FIRST * ?
+   literal 123456;78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   a8: drop first *  |
+   c8: compare any ~2# 8 DROP FIRST * ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |
+   c8: ?
+
+-- DROP (secondary) ?
+   literal 123456;78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   a9: drop |
+   hole ?
+   a9: |
+   c9: compare any ~2# 9 DROP (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123456 |
+   split ; |
+   c9: ?
+
+-- DROP number ?
+   literal 123456;78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   drop 1  |
+   c10: compare any ~2#10 DROP number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   c10: ?
+
+-- DROP -number ?
+   literal 123456;78ABCDEFGHIJKLMNOPQRST |
+   split ; |
+   drop -1  |
+   c11: compare any ~2#11 DROP -number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123456 |
+   split ; |
+   c11: ?

@@ -1,13 +1,17 @@
 -- unique.nrx  njPipes Stage
 
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998-2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 98/12/05  now uses BuildIRange, could be improved to use buildirangeexit.  ejt
--- 98/07/27  New.  JHennick
+
+/*
+ 20/ 6/ 9  Fix for FIRST; fix PAIRWISE; fix for PAD. Jeff Hennick
+ 98/12/05  now uses BuildIRange, could be improved to use buildirangeexit.  ejt
+ 98/07/27  New.  JHennick
+*/
 
 /** unique.nrx
 
@@ -89,12 +93,19 @@ if acount then do
 end
 else ocount = ''
 
+--trace results
+npad = (w1 = 'NOPAD')
+if npad then do
+   parse rest w1 rest
+end
+
 apad = (w1 = 'PAD')
 if apad then do
    parse rest padc w1 rest
    padc = GetXorc(padc)
    if padc = '"' then padc = "'" || '"' || "'"
    else padc = '"'padc'"'
+   npad = 0
 end
 
 aanyc = 'ANYCASE'.abbrev(w1.upper, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1.upper) > 0
@@ -130,8 +141,6 @@ select
       rest = w1 rest
 end
 
-
-
 do
    SelectOutput(1)
    secc = 1  -- secondary output is connected
@@ -149,6 +158,8 @@ n=n+1;o[n] ='class 'cname' extends stage private uses IRange'
 
 n=n+1;o[n]='method run()'
 
+n=n+1;o[n]='--trace results'
+
 if countem then do
    n=n+1;o[n]='   rcount = rexx 1'
 end
@@ -156,13 +167,16 @@ end
 if afirst then do
    n=n+1;o[n]='   first = 1'
 end
+else do
+   n=n+1;o[n]='   first = 0; first=first'
+end
 
 if apad then do
    n=n+1;o[n]='   padc = rexx' padc
-   end
+end
 else do
-   n=n+1;o[n]='   padc = rexx " "'
-   end
+   n=n+1;o[n]='   padc = rexx " ";padc=padc'
+end
 
 if numranges > 0 then do
    n=n+1;o[n]='   r = GetIRanges("'rangarg'")'
@@ -191,7 +205,7 @@ n=n+1;o[n]='   sec =' secc
 n=n+1;o[n]='   loop while pri | sec'
 
 if apairwise then do
-   n=n+1;o[n]='      do'
+   n=n+1;o[n]='      do --xpair'
    n=n+1;o[n]='         aobj = peekto()'
    n=n+1;o[n]='      catch StageError'
    n=n+1;o[n]='         output(pl)'
@@ -214,7 +228,12 @@ if numranges > 0 then do
    n=n+1;o[n]='      lpart = r[0].BuildIRange(lpart,padc)'
 end
 
+if npad then do
    n=n+1;o[n]='      nomatch = lpart.compare(plpart) > 0'
+end
+else do
+   n=n+1;o[n]='      nomatch = lpart.compare(plpart, padc) > 0'
+end
 
 select
    when asingles then do
@@ -229,14 +248,16 @@ end
 
 if afirst then do
    n=n+1;o[n]='         if first then do -- first'
-   n=n+1;o[n]='            first = 0'
    n=n+1;o[n]='            output('ocount'pl)'
    n=n+1;o[n]='         catch StageError'
    n=n+1;o[n]='            pri = 0'
    n=n+1;o[n]='         end -- first'
+   n=n+1;o[n]='         else do -- pri'
 end
 
-n=n+1;o[n]='         do -- pri'
+else do
+   n=n+1;o[n]='         do -- pri'
+end
 
 select
    when apairwise then do
@@ -250,8 +271,10 @@ select
       n=n+1;o[n]='            output('ocount'pl)'
 end
 
-n=n+1;o[n]='         catch StageError'
-n=n+1;o[n]='            pri = 0'
+if \apairwise then do
+   n=n+1;o[n]='         catch StageError'
+   n=n+1;o[n]='            pri = 0'
+end
 n=n+1;o[n]='         end -- pri'
 n=n+1;o[n]='      end -- not same'
 n=n+1;o[n]='      else do -- same'
@@ -280,15 +303,31 @@ if secc then do
    n=n+1;o[n]='            end'
    n=n+1;o[n]='         end -- sec'
 end
+else do -- pri
+   select
+   when apairwise then do
+      n=n+1;o[n]='            output('ocount'pl)'
+      n=n+1;o[n]='            output('ocount'l)'
+   end
+   otherwise
+   end
+   n=n+1;o[n]='         catch StageError'
+   n=n+1;o[n]='         pri = 0'
+   n=n+1;o[n]='         end -- pri'
+end -- pri
 
 n=n+1;o[n]='      end -- same'
 
 if countem then do
-   n=n+1;o[n]='   if nomatch then rcount = 1'
+   n=n+1;o[n]='   if nomatch then do'
+   n=n+1;o[n]='      rcount = 1'
+   n=n+1;o[n]='      if first then pl = l'
+   n=n+1;o[n]='   end'
    n=n+1;o[n]='   else rcount = rcount + 1'
 end
 
 if apairwise then do
+   n=n+1;o[n]='      plpart = lpart'
    n=n+1;o[n]='      readto() -- previous (even) one'
    n=n+1;o[n]='      aobj = readto() -- next (odd) one'
    n=n+1;o[n]='      pl = rexx aobj'
@@ -300,12 +339,11 @@ if apairwise then do
       n=n+1;o[n]='      plpart = pl'
    end
 
-   n=n+1;o[n]='      plpart = lpart'
 end  -- pairwise
 else do
-   n=n+1;o[n]='      plpart = lpart'
-   n=n+1;o[n]='      pl = l'
-   n=n+1;o[n]='      readto()'
+   n=n+1;o[n]='   plpart = lpart'
+   n=n+1;o[n]='   if \\first then pl = l'
+   n=n+1;o[n]='   readto()'
 end
 
 n=n+1;o[n]='   catch StageError'
@@ -323,6 +361,13 @@ if lastone then do
    n=n+1;o[n]='      end'
 end
 
+if afirst then do
+   n=n+1;o[n]='      do'
+   n=n+1;o[n]='         output('ocount'pl)'
+   n=n+1;o[n]='      catch StageError'
+   n=n+1;o[n]='      end'
+end
+
 n=n+1;o[n]='   end -- main loop'
 
 n=n+1;o[n]='rc = rc()'
@@ -334,4 +379,3 @@ pInfo[3] = cname
 pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
 
 return 1
-

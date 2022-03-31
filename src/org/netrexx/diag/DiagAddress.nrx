@@ -1,0 +1,187 @@
+package org.netrexx.diag
+options nobinary strictargs trace1
+
+
+
+class DiagAddress
+
+  method DiagAddress
+    os=Rexx System.getProperty('os.name')
+    os=os.lower()
+    if os.pos('windows') >> 0 then 
+      DiagAddressWin()
+    else  
+      DiagAddressUnices()
+ 
+
+  method DiagAddressUnices
+    'echo  "Hello world  -- direct addressing default SYSTEM"'
+
+    address bash 'echo "Hello world  -- direct addressing bash"'
+
+    address cat
+    'Hello world  -- indirect addressing cat'
+
+    address '/bin/bash'
+    'echo "Hello world  -- indirect addressing /bin/bash"'
+    'echo "Hello world  -- still indirect addressing /bin/bash"'
+
+    address value bash
+
+    ByClass()
+
+    'echo "Hello world  -- still indirect addressing bash"'
+
+    address SYSTEM
+    'echo "Hello world  -- indirect addressing SYSTEM"'
+    address SYSTEM 'echo "Hello world  -- direct addressing SYSTEM"'
+
+    DiagAddressWithStem()
+    
+    DiagAddressWith()
+    
+
+    say 'DiagAddress:' 'OK ! ADDRESS tests completed'
+
+
+method DiagAddressWin
+    'echo  "Hello world  -- direct addressing default SYSTEM"'
+
+    address cmd 'echo "Hello world  -- direct addressing cmd"'
+
+    address '/windows/system32/cmd.exe'
+    'echo "Hello world  -- indirect addressing /windows/system32/cmd.exe"'
+    'echo "Hello world  -- still indirect addressing /windows/system32/cmd.exe"'
+
+    address value cmd
+
+    'echo "Hello world  -- indirect addressing cmd"'
+
+    address SYSTEM
+    'echo "Hello world  -- indirect addressing SYSTEM"'
+    address SYSTEM 'echo "Hello world  -- direct addressing SYSTEM"'
+
+    var = Rexx 'cmd'
+    address var
+    'echo "Hello world  -- overruled indirect addressing literal by var '||var||'"'
+  
+    hello='echo Hello world  -- overruled indirect addressing a var by 'var
+    hello
+ 
+    say 'DiagAddress:' 'OK ! ADDRESS tests completed'
+
+  method DiagAddressWithStem
+    istem=''
+    ostem=''
+    estem=''
+    istem=istem
+
+    istem['0']=1
+    istem['1']='Hello world  -- with addressing bash cat (INPUT STEM)'
+
+    address bash 'cat' with input stem istem 
+
+    istem['0']=1
+    istem['1']='Hello world  -- with addressing bash cat'
+
+    address bash 'cat' with input stem istem output REPLACE stem ostem error replace stem estem
+    loop i=1 to ostem[0]
+      say 'STDOUT: 'ostem[i]    
+    end  
+    loop i=1 to estem[0]
+      say 'STDERR: 'estem[i]    
+    end  
+
+    istem['1']='Hello world  -- with addressing bash cat with APPEND'
+
+    address bash 'cat' with input stem istem output APPEND stem ostem error replace stem estem
+    loop i=1 to ostem[0]
+      say 'STDOUT: 'ostem[i]    
+    end  
+    loop i=1 to estem[0]
+      say 'STDERR: 'estem[i]    
+    end  
+
+    istem['1']='echo Hello world >&2 -- with addressing bash, read STDERR'
+    address bash 'bash' with input stem istem output stem ostem error stem estem
+    loop i=1 to ostem[0]
+      say 'STDOUT: 'ostem[i]    
+    end  
+    loop i=1 to estem[0]
+      say 'STDERR: 'estem[i]    
+    end  
+
+    address bash WITH input stem istem output stem ostem error stem estem
+    
+    istem['1']='echo Hello world >&2 -- with addressing bash bash, redirecting from permanent'
+    'bash'
+    loop i=1 to ostem[0]
+      say 'STDOUT: 'ostem[i]    
+    end  
+    loop i=1 to estem[0]
+      say 'STDERR: 'estem[i]    
+    end  
+    
+
+    istem['1']='Hello world -- with addressing bash cat, redirecting from permanent'
+    'cat'
+    loop i=1 to ostem[0]
+      say 'STDOUT: 'ostem[i]    
+    end  
+    loop i=1 to estem[0]
+      say 'STDERR: 'estem[i]    
+    end  
+
+  method DiagAddressWith
+    istem=''
+    ostem=''
+    estem=''
+    istem=istem
+
+    istem['0']=1
+    istem['1']='echo "Hello world  -- with addressing bash cat INPUT STREAM">file.in'
+
+    address bash 'bash' with input stem istem 
+
+    estream='file.err'
+    address bash 'cat' with input stream 'file.in' output REPLACE stream 'file.out' error replace stream estream
+ 
+    address bash 'cat file.out'
+
+    istem['1']='echo Hello world >&2 -- with addressing bash ERROR STREAM'
+    address bash 'bash' with input stem istem output stream 'file.out' error stream estream
+    
+    'cat file.out'
+    'cat file.err'
+
+    'rm -f file.in file.out file.err'
+
+
+
+
+
+ /* Scaffolding for stand-alone test */
+  method main(s=String[]) static
+    s = s
+    say version '/' source -- say what level we are running under
+    do
+      DiagAddress()
+    catch dx=DiagX
+      say 'Failed: "'dx.getMessage()'"'
+    end
+
+class DiagAddress.ByClass 
+    address 'cat'
+  
+  method ByClass
+    'Hello world  -- indirect addressing cat by class'
+    address 'bash' 'echo "Hello world  -- direct addressing ''bash''"'
+    'Hello world  -- still indirect addressing cat by class'
+    var = Rexx 'bash'
+    address var
+    'echo "Hello world  -- overruled indirect addressing literal by var '||var||'"'
+    hello='echo Hello world  -- overruled indirect addressing a var by 'var
+    hello
+    say 'DiagAddress:' 'OK ! ADDRESS by class'
+
+

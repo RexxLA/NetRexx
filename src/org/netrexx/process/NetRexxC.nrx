@@ -50,20 +50,23 @@
 /* 2000.02.08 Extend help to list all options                         */
 /* 2000.03.22 Add -prompt loop [AA 23 BHX-ORD]                        */
 /* 2000.10.16 Properly ignore -savelog if Printwriter specified       */
-/* 2011.08.20 Update to allow compiling programs from memory strings - Kermit Kiser       */
-/* 2011.08.22 add option to supress rename of java files to .keep - Kermit Kiser       */
-/* 2012.07.31 mod for select of ecj compiler  *rvj*        */
-/* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fix bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
--- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
--- 2015.05.15 reformat build info -- KK -- Kermit
--- 2015.05.15 only display options list on specific -help request -- KK --
--- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
--- 2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
--- 2015.06.11 -- fix extraneous nullpointer message in findjavacompiler -- KK
+/* 2011.08.20 allow compiling programs from memory strings - KK       */
+/* 2011.08.22 add option to supress rename of java files to .keep - KK*/
+/* 2012.07.31 mod for select of ecj compiler  *rvj*                   */
+/* 2013.09.18  eliminate prob where getImplementationVersion returns  */
+/* null so compiler will run unjared (also fix bad build #105)  -- KK */
+/* 2015.05.02 switch javac use to jsr199 api per issue #90 -- KK --   */
+/* 2015.05.15 reformat build info -- KK -- Kermit                     */
+/* 2015.05.15 only display options on specific -help request -- KK -- */
+/* 2015.06.05 #127 - classpath operand does not handle * wildcard KK  */
+/* 2015.06.11 #134 time output needs correct compiler name -- KK      */
+/* 2015.06.11 fix nullpointer message in findjavacompiler -- KK       */
+/* 2019.08.05 add clgMain to compile, load and go for main method rvj */
+/* 2021.01.15 add option to allow ADDRESS instructions -- MRE         */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
-import javax.tools.		--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
+import javax.tools.
 
 class NetRexxC
   
@@ -71,7 +74,6 @@ class NetRexxC
   logfilename='NetRexxC.log'
   
   properties public
---  properties private
   -- variables corresponding to our flags
   argarray	   = String[] null           -- arguments for -exec [iff not null]
   compile	   = boolean 1               -- compile if translation OK
@@ -85,11 +87,12 @@ class NetRexxC
   keepasjava	   = boolean 0               -- keep java output and do not rename it to .keep
   javac		   = boolean 0               -- prefer javac compiler if available
   ecj		   = boolean 0               -- prefer ecj compiler if available
-  helpreq = boolean 0				 -- explicit help request? 2015-05-15 -KK- 
-  -- next two are set by parseline
+  helpreq	   = boolean 0		           -- explicit help request? 2015-05-15 -KK-
+  address	   = boolean 1               -- prefer no address processing 2021-01-15 MRE -do prefer rvj 
+					     -- next two are set by parseline
   files		   = Vector(10)              -- collects file specifications
   flags		   = Vector(10)              -- collects translator flags
-
+  
   -- others
   compileexplicit  = boolean 0	             --	record if compile was explicitly requested
   javaexplicit	   = boolean 0		     -- record if java was explicitly requested
@@ -98,12 +101,12 @@ class NetRexxC
   testflag	   = RxFlag()                -- used only for testing if flags valid
   usageone	   = boolean 1               -- 1 to show general usage information
                                              -- 0 after prompting
-                                   
+  
   classpath	   = String                  --	allows classpath to be passed as an argument
-
+  
   properties private static
-  programstrings = String[]		--	allows programs to be passed in memory strings
-  classlist=java.util.List							--	allow return of class files to caller in memory -- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+  programstrings = String[]                  --	allows programs to be passed in memory strings
+  classlist=java.util.List		     -- allow return of class files to caller in memory
   
   /** get here when called from java.exe */
   method main(arg=String[]) static
@@ -122,6 +125,29 @@ class NetRexxC
    */
   method main(arg=Rexx, programstring=String, logfile=PrintWriter null, classfiles=java.util.List null) constant returns int
     return main(arg,[String programstring],logfile,classfiles)
+
+  /** method compile-load-and-go, no translator messages produced
+     arg is the name of the class of which the main method is called with no args
+   */
+  method clgMain(arg=Rexx, programstring=String) constant
+    classList = ArrayList()
+    rc = main(arg' -nologo -verbose0',[String programstring],null,classList)
+    mapLoader = RxMapClassLoader classList.get(0)
+    do
+      c = mapLoader.findClass(arg)
+      paramTypes = Class[1]
+      paramTypes[0] = String[].class
+      methodName = String "main"
+      m = c.getMethod(methodName, paramTypes)
+      params = Object[1]
+      params[0] = String[0]
+      m.invoke(null, params)
+    catch e=Exception
+      say 'Reflection exception encountered:'
+      say e.getMessage()
+    end
+
+    return rc
     
   /** public call-from-Java entry,
      Arg1 is command argument string which has words which are flags or
@@ -133,7 +159,7 @@ class NetRexxC
   method main(arg=Rexx, programarray=String[], logfile=PrintWriter null, classfiles=java.util.List null) constant returns int
     
     programstrings=programarray	--	save array of program strings 
-    classlist=classfiles		-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+    classlist=classfiles
     return main(arg,logfile)
     
   /** public call-from-Java entry,
@@ -147,7 +173,7 @@ class NetRexxC
     -- entry point.
     words=Vector(10)
     loop while arg\==''
-      parse arg argword arg               -- get next word
+      parse arg argword arg  -- get next word
       if argword.left(1)=='"' then do     -- handle quoted word(s)
 	arg=argword.substr(2) arg         -- reconstitute without leading '"'
 	if arg.pos('"')=='0' then
@@ -162,15 +188,16 @@ class NetRexxC
     return main2(array, logfile)
     
   /** public call-from-Java entry,
-     Arg1 is array of argument strings (each containing a flag or a file
-     specification, which may have embedded blanks),
-     Arg2 is a array of Strings containing programs in memory (no more than the number of file names passed in Arg1),
-     Arg3 is PrintWriter file (forces -savelog if specified),
-    -- this cannot be called just 'main' as it then clashes with the
-    -- primary entrypoint
+   * Arg1 is array of argument strings (each containing a flag or a file
+   * specification, which may have embedded blanks),
+   * Arg2 is a array of Strings containing programs in memory
+   * (no more than the number of file names passed in Arg1),
+   * Arg3 is PrintWriter file (forces -savelog if specified),
+   *-- this cannot be called just 'main' as it then clashes with the
+   *-- primary entrypoint
    */
   method main2(arg=String[], programarray=String[], logfile=PrintWriter null) constant returns int
-    programstrings=programarray	--	save array of program strings 
+    programstrings=programarray	-- save array of program strings 
     return main2(arg,logfile)
     
   /** public call-from-Java entry,
@@ -190,58 +217,55 @@ class NetRexxC
   /** actual processing is done here, with a private copy of flags, etc. */
   -- arguments as main2
   method process(arg=String[], logfile=PrintWriter null) private returns int
-    -- lastmemuse=long 0                            -- last memory usage
     rt=Runtime.getRuntime()                         -- runtime instance
     
     translator=RxTranslator()                       -- construct translator
     
     parseline(arg)    -- collect initial flags and file specification
     
-    translator.setkeeps(keep,keepasjava,classlist,javac,ecj)			-- 2015.05.02 switch javac use to jsr199 java compiler api per issue #90 -- KK -- Kermit
+    translator.setkeeps(keep,keepasjava,classlist,javac,ecj)
+    translator.setaddress(address)
     
     -- need to set java.class.path property and restore it later
-      currentClassPath = System.getProperty("java.class.path")
+    currentClassPath = System.getProperty("java.class.path")
     if classpath\=null then do
       validateClassPath()
       currentProperties = System.getProperties()
       currentProperties.put("java.class.path", classpath)
     end
     
-    javacompiler=ToolProvider.getSystemJavaCompiler()
-	javaloader=this.getClass().getClassLoader()
-	if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()   --  If running from ext dir, switch to thread loader	
-	do
-	ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')			---			no ecj compiler found?
-	catch e=Exception
-		ecjclass=null
-	end
-
+    javacompiler=javax.tools.ToolProvider.getSystemJavaCompiler()
+    javaloader=this.getClass().getClassLoader()
+    if javaloader.getParent()=null then javaloader=Thread.currentThread().getContextClassLoader()
+    do
+      ecjclass=javaloader.loadClass('org.eclipse.jdt.internal.compiler.tool.EclipseCompiler')
+    catch e=Exception
+      ecjclass=null
+    end
+    
     compilerChoice = Rexx(System.getProperty("nrx.compiler","javac"))
     parse compilerChoice compilerChoice javaoptions
     if compilerChoice\=="javac" & compilerChoice\=="ecj" then compilerChoice="javac"
     if javac then compilerChoice="javac"
     if ecj then compilerChoice="ecj"
-
-	if (compilerChoice=="javac" & javacompiler=null) | (compilerChoice=="ecj" & ecjclass=null) then
-			do
-			lookforit=findjavacompiler()			--		lets look very agressively for a java compiler and add to classpath if needed
-			if lookforit=="notfound" then 
-					if javacompiler=null & ecjclass=null then 	say "no java compiler was found" ; else nop
-					else do 		--		found a possible compiler
-						say "Found possible java compiler="lookforit
-						 currentThreadClassLoader = Thread.currentThread().getContextClassLoader()
-						--// Add the jar to the classpath
-						--// Chain the current thread classloader
-						newClassLoader = URLClassLoader([File(lookforit).toURI().toURL()], currentThreadClassLoader)
-						--// Replace the thread classloader - assumes you have permissions to do so
-						Thread.currentThread().setContextClassLoader(newClassLoader)	
-						catch e=Exception
-							say e
-					end
-			end
---		end
-    			
-    langs=[Rexx 'Nr']                               -- languages supported
+    
+    if (compilerChoice=="javac" & javacompiler=null) | (compilerChoice=="ecj" & ecjclass=null) then
+      do
+	lookforit=findjavacompiler()
+	if lookforit=="notfound" then 
+	  if javacompiler=null & ecjclass=null then say "no java compiler was found" ; else nop
+	  else do
+	    currentThreadClassLoader = Thread.currentThread().getContextClassLoader()
+	    --// Add the jar to the classpath and chain the current thread classloader
+	    newClassLoader = URLClassLoader([File(lookforit).toURI().toURL()], currentThreadClassLoader)
+	    --// Replace the thread classloader - assumes you have permissions to do so
+	    Thread.currentThread().setContextClassLoader(newClassLoader)	
+	  catch e=Exception
+	    say e
+	  end
+      end
+    
+    langs=[Rexx 'Nr'] -- languages supported. There were more.
     
     if \translator.setlanguages(langs) then usage() -- select languages
     else loop label process forever                -- OK languages
@@ -275,7 +299,7 @@ class NetRexxC
       ctime=long 0                 -- compilation
       
       if programstrings\=null then do
-      	programsources=RxSource[filecount]			--	create array of program sources 
+      	programsources=RxSource[filecount]  -- create array of program sources 
       	loop i=0 for filecount
       	  tf=RxFileReader(translator)
       	  if i>=programstrings.length then tf.openfile(Rexx(filearray[i]))
@@ -305,7 +329,7 @@ class NetRexxC
       end /* compilation */
       
       translator.dispose(keep, keepasjava)     -- dispose of .java files
-      translator.summary(exec)     -- summarise
+      translator.summary(exec)                 -- summarise
       
       if time then do
         t10=tenth(ptime)
@@ -313,14 +337,10 @@ class NetRexxC
         c10=tenth(ctime)
         tot=t10.OpAdd(null, e10).OpAdd(null, c10)
         wid=tot.length()
---	compilerChoice = Rexx(System.getProperty("nrx.compiler","javac")).word(1)
---	if ecj then compilerChoice="ecj"
---	compilerChoice = Rexx(System.getProperty("nrx.compiler","javac"))
         say                           'Translate time:' t10.right(wid)'s'
         if exec & etime>0    then say 'Interpret time:' e10.right(wid)'s'
-        if compile & ctime>0 then say  Rexx(translator.compilerChoice).right(9) 'time:' c10.right(wid)'s'		--	2015.06.11 -- fix for #134 time output needs correct compiler name -- KK
---        if compile & ctime>0 then say  compilerChoice.right(9) 'time:' c10.right(wid)'s'
-        if etime>0 | ctime>0 then say '    Total time:' tot.right(wid)'s'
+        if compile & ctime>0 then say  Rexx(translator.compilerChoice).right(9) 'time:' c10.right(wid)'s'
+	if etime>0 | ctime>0 then say '    Total time:' tot.right(wid)'s'
       end -- time
     end havefiles
     
@@ -333,11 +353,10 @@ class NetRexxC
       say "\nEnter new files and additional options, '=' to repeat, 'exit' to end:"
       rt.gc()                                -- good moment to garbage-collect
       response=ask
-      if response = null then leave process			--		fix rare nullpointer errors - KK
+      if response = null then leave process
       if response.OpNotEq(null, '') then leave -- something to process
       usage()
     end prompt
-    -- say 'Mem:' rt.totalmemory rt.freememory 'Used:' rt.totalmemory-rt.freememory
     RexxTrace.reset()      -- reset trace flagging
     if response.OpEq(null, '=') then iterate -- simply repeat
     if response.OpEq(null, 'exit') then leave process -- done
@@ -360,10 +379,10 @@ class NetRexxC
     if classpath\=null then
       currentProperties.put("java.class.path", currentClassPath)
     
-    programstrings=null		--		clear memory of any program strings in case we are called again
+    programstrings=null	-- clear memory of any program strings in case we are called again
     
     return translator.getexitvalue()
-
+    
   method validateClassPath
     cpr=Rexx(classpath)
     cpr2=Rexx ""
@@ -374,91 +393,91 @@ class NetRexxC
       nextpath=nextpath.strip("b",'"')
       if nextpath=="." then cpr2=cpr2||ps||nextpath
       else do
-			nextpathcheck=File(nextpath)
-			if nextpathcheck.exists() then cpr2=cpr2||ps||nextpath
-			else do				-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
-				if "\\* /*".pos(nextpath.right(2))>>0 | "\\** /**".pos(nextpath.right(3))>>0  then cpr2=cpr2||ps||wildcard(nextpath)	-- 2015.06.05 fix issue #127  -- KK --
-					else say "Warning: classpath entry does not exist and has been dropped:" nextpath
-				end					-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
-			end
+	nextpathcheck=File(nextpath)
+	if nextpathcheck.exists() then cpr2=cpr2||ps||nextpath
+	else do
+	  if "\\* /*".pos(nextpath.right(2))>>0 | "\\** /**".pos(nextpath.right(3))>>0  then cpr2=cpr2||ps||wildcard(nextpath)
+	  else say "Warning: classpath entry does not exist and has been dropped:" nextpath
+	end
+      end
     end
     classpath=cpr2.strip("b",ps).toString()
-    	
-  method wildcard(dirstring, passback=Rexx "") returns Rexx				-- 2015.06.05 fix issue #127 - classpath operand does not handle * wildcard -- KK --
-  	ps=File.pathSeparator; fs=File.separator
-  	recursive=(dirstring.right(2)=="**")
-  	basename=dirstring.changestr("/**","").changestr("\\**","").changestr("/*","").changestr("\\*","")
-  	basedir=File(basename)
-  	contentlist=basedir.list()
-  	loop i=0 for contentlist.length
-  		if ".jar .JAR".pos(Rexx(contentlist[i]).right(4))>>0 then passback=passback||ps||basename||fs||contentlist[i]
-  		if \recursive then iterate
-  		possibledir=File(basename||fs||contentlist[i])
-  		if possibledir.isDirectory() then passback=passback||ps||wildcard(basename||fs||contentlist[i]||fs"**")
-  		end
-  	return passback.strip("b",ps)
-  		
-	method findjavacompiler returns Rexx
-		do
-		ps=File.pathSeparator; fs=File.separator
-		testpath=classpath			--		first check verified classpath in case customer added one or wildcarded one in that Java does not know about  --  2015.06.05 -- KK --
-		if testpath\==null then		-- 2015.06.11 -- fix extraneous nullpointer message in findjavacompiler compiler search -- KK
-		  loop while testpath\==""
-			parse testpath testfile (ps) testpath
-			if testfile=="." then iterate
-			fname=testfile.substr(testfile.lastpos(fs).toint()+1) 
-			if "tools.jar NetRexxF.jar".pos(fname)>>0 | (fname.left(3)=="ecj" & fname.right(4)==".jar") then return testfile
-			end
-		dir=Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()		--		Get NetRexxC location
-		if dir.substring(0,1)==File.separator then dir=File(dir).getParent()		--		*nix is not winblows!
-			else dir=File(dir.substring(1)).getParent()
-		candidate=checkdirforcompiler(dir)
-		if candidate\=="nope"then return candidate	
-		dir=File(dir).getParent()		--	up one from NetRexxC loc
-		candidate=checkdirforcompiler(dir)
-		if candidate\=="nope"then return candidate			
-		dir=System.getProperty("user.dir")		--		current directory
-		candidate=checkdirforcompiler(dir)
-		if candidate\=="nope"then return candidate
-		java_home= System.getProperty("java.home")
-		candidate=checkdirforcompiler(java_home)
-		if candidate\=="nope"then return candidate
-		phone_home=File(java_home).getParent()
-		candidate=checkdirforcompiler(phone_home)
-		if candidate\=="nope"then return candidate		
-		grand_home=File(phone_home).getParent()
-		candidate=checkdirforcompiler(grand_home)
-		if candidate\=="nope"then return candidate				
-		catch e=Exception
-			say e
-		end
-		return "notfound"
-		
-	method checkdirforcompiler(base=String)	static returns Rexx
-		fs=File.separator
-		bf=File(base)
-		if \bf.isDirectory() then return "nope"
-		conlist=bf.list()
-		loop i=0 for conlist.length
-			if Rexx(conlist[i]).right(4)==".jar" then
-				do
-				can=Rexx(conlist[i])
-				if can=="tools.jar" then return base||fs||can 
-				if can=="NetRexxF.jar" then return base||fs||can
-				if can.substr(1,3)=="ecj" then return base||fs||can
-				end
-			end
-		if bf.getParent()=null then return "nope"		--		better not to scan whole filesystem			
-		loop i=0 for conlist.length
-			tf=File(base||fs||conlist[i])
-			if tf.isDirectory() then 
-					do
-						rescan=checkdirforcompiler(tf.getPath())
-						if rescan\=="nope" then return rescan
-					end
-			end		
-		return "nope"
-    	
+    
+  method wildcard(dirstring, passback=Rexx "") returns Rexx
+    ps=File.pathSeparator; fs=File.separator
+    recursive=(dirstring.right(2)=="**")
+    basename=dirstring.changestr("/**","").changestr("\\**","").changestr("/*","").changestr("\\*","")
+    basedir=File(basename)
+    contentlist=basedir.list()
+    loop i=0 for contentlist.length
+      if ".jar .JAR".pos(Rexx(contentlist[i]).right(4))>>0 then passback=passback||ps||basename||fs||contentlist[i]
+      if \recursive then iterate
+      possibledir=File(basename||fs||contentlist[i])
+      if possibledir.isDirectory() then passback=passback||ps||wildcard(basename||fs||contentlist[i]||fs"**")
+    end
+    return passback.strip("b",ps)
+    
+  method findjavacompiler returns Rexx
+    do
+      ps=File.pathSeparator; fs=File.separator
+      testpath=classpath
+      if testpath\==null then
+	loop while testpath\==""
+	  parse testpath testfile (ps) testpath
+	  if testfile=="." then iterate
+	  fname=testfile.substr(testfile.lastpos(fs).toint()+1) 
+	  if "tools.jar NetRexxF.jar".pos(fname)>>0 | (fname.left(3)=="ecj" & fname.right(4)==".jar") then return testfile
+	end
+      dir=Class.forName('org.netrexx.process.NetRexxC').getProtectionDomain().getCodeSource().getLocation().getPath()
+      if dir.substring(0,1)==File.separator then dir=File(dir).getParent() --*nix is not winblows!
+      else dir=File(dir.substring(1)).getParent()
+      candidate=checkdirforcompiler(dir)
+      if candidate\=="nope"then return candidate	
+      dir=File(dir).getParent()         -- up one from NetRexxC loc
+      candidate=checkdirforcompiler(dir)
+      if candidate\=="nope"then return candidate			
+      dir=System.getProperty("user.dir") --current directory
+      candidate=checkdirforcompiler(dir)
+      if candidate\=="nope"then return candidate
+      java_home= System.getProperty("java.home")
+      candidate=checkdirforcompiler(java_home)
+      if candidate\=="nope"then return candidate
+      phone_home=File(java_home).getParent()
+      candidate=checkdirforcompiler(phone_home)
+      if candidate\=="nope"then return candidate		
+      grand_home=File(phone_home).getParent()
+      candidate=checkdirforcompiler(grand_home)
+      if candidate\=="nope"then return candidate				
+    catch e=Exception
+      --say e
+    end
+    return "notfound"
+    
+  method checkdirforcompiler(base=String) static returns Rexx
+    fs=File.separator
+    bf=File(base)
+    if \bf.isDirectory() then return "nope"
+    conlist=bf.list()
+    loop i=0 for conlist.length
+      if Rexx(conlist[i]).right(4)==".jar" then
+	do
+	  can=Rexx(conlist[i])
+	  if can=="tools.jar" then return base||fs||can 
+	  if can=="NetRexxF.jar" then return base||fs||can
+	  if can.substr(1,3)=="ecj" then return base||fs||can
+	end
+    end
+    if bf.getParent()=null then return "nope" -- better not to scan whole filesystem			
+    loop i=0 for conlist.length
+      tf=File(base||fs||conlist[i])
+      if tf.isDirectory() then 
+	do
+	  rescan=checkdirforcompiler(tf.getPath())
+	  if rescan\=="nope" then return rescan
+	end
+    end		
+    return "nope"
+    
     /* TENTH -- convert ms to 0.1s */
 	     -- this could use format()
   method tenth(n=long) constant returns Rexx private
@@ -482,6 +501,9 @@ class NetRexxC
       arglow=argword.substr(2).lower()    -- drop '-' and lowercase
       select
         when arglow=='help' then do
+	  helpreq=1
+	end
+	when arglow=='-help' then do
 	  helpreq=1
 	end      	
         when arglow=='nocompile' then do
@@ -524,8 +546,9 @@ class NetRexxC
 	  keep=1
 	end
 	when arglow=='nokeepasjava' then keepasjava=0
-	when arglow=='javac' then do;javac=1;ecj=0;end			--	can't prefer both javac and ecj compiler -- KK --
-	when arglow=='ecj' then do;javac=0;ecj=1;end			--	can't prefer both javac and ecj compiler -- KK --
+	when arglow=='javac' then do;javac=1;ecj=0;end	-- can't prefer both javac and ecj compiler KK
+	when arglow=='ecj' then do;javac=0;ecj=1;end	-- can't prefer both javac and ecj compiler KK
+when arglow=='noaddress' then do; address=0; end  -- explicitely set address flag to change parser MRE
 	when arglow=='classpath' | arglow=='cp' then do
    	  a=a+1
    	  if a<arg.length then do
@@ -550,7 +573,7 @@ class NetRexxC
           loop i=0 for alen
             argarray[i]=arg[a+1+i]
           end
-          leave a                  -- no more flags or files
+          leave a -- no more flags or files
         end
         otherwise
           if \testflag.setFlag(arglow) then
@@ -568,34 +591,36 @@ return
   /** USAGE -- display usage hints */
   method usage returns int private
     if usageone then do
-    if this.getClass().getPackage()\=null then vv=this.getClass().getPackage().getImplementationVersion()
-    else vv=''
-    if vv=null then vv='' 		/* 2013.09.18  eliminate prob where getImplementationVersion returns null so compiler will run unjared (also fix bad playing with strings msg in build - issue #105)  -- KK ----Kermit */
-	parse vv . . . vv
-      say 'NetRexx portable processor' NrVersion().getFullVersion() vv
-      say NrVersion().getCopyright()'\n'
+      if this.getClass().getPackage()\=null then vv=this.getClass().getPackage().getImplementationVersion()
+      else vv=''
+      if vv=null then vv=''
+      parse vv . . . vv
+      nv = NrVersion()
+      say nv.getLogo() nv.getFullVersion() vv
+      say nv.getCopyright()'\n'
       say 'Arguments are: in_file_specification... [-option]...\n'
     end
-    if \helpreq then do; say 'Use "-help" to show all options'; return 0;end			--	2015.05.15 -- KK --
-    say 'In brief, NetRexxC-specific options are:\n'
-    say '  -arg words     -- interpret; remaining words are arguments'
-    say '  -classpath     -- specify a classpath'
-    say '  -cp            -- short for classpath'
-    say '  -compile       -- compile (default; -nocompile implies -keep)'
-    say '  -console       -- display messages on console (default)'
-    say '  -exec          -- interpret with no argument words'
-    say '  -ecj           -- prefer ecj compiler if available'
-    say '  -javac         -- prefer javac compiler if available'
-    say '  -keep          -- keep any completed .java file (as xxx.java.keep)'
-    say '  -keepasjava    -- keep any completed .java file (as xxx.java)'
-    say '  -prompt        -- prompt for new request after processing'
-    say '  -savelog       -- save messages in NetRexxC.log'
-    say '  -time          -- display timings'
-    say '  -warnexit0     -- exit with a zero returncode on warnings\n'
-    say "Any NetRexx options may also be added; these are:\n"
-    RxFlag.usage()
-    say "\nAll options may have prefix 'no' added for the inverse effect."
-    say '\nPlease see the NetRexx Language definition at'
-    say 'http://netrexx.org/documentation.nsp for more details.'
-    return 0
-    
+    if \helpreq then do; say 'Use "-help" to show all options'; return 0;end
+      say 'In brief, NetRexxC-specific options are:\n'
+      say '  -arg words     -- interpret; remaining words are arguments'
+      say '  -classpath     -- specify a classpath'
+      say '  -cp            -- short for classpath'
+      say '  -compile       -- compile (default; -nocompile implies -keep)'
+      say '  -console       -- display messages on console (default)'
+      say '  -exec          -- interpret with no argument words'
+      say '  -ecj           -- prefer ecj (eclipse) compiler if available'
+      say '  -javac         -- prefer javac compiler if available'
+      say '  -keep          -- keep any completed .java file (as xxx.java.keep)'
+      say '  -keepasjava    -- keep any completed .java file (as xxx.java)'
+      say '  -prompt        -- prompt for new request after processing'
+      say '  -savelog       -- save messages in NetRexxC.log'
+      say '  -time          -- display timings'
+      say '  -address       -- allow ADDRESS instruction'
+      say '  -warnexit0     -- exit with a zero returncode on warnings\n'
+      say "Any NetRexx options may also be added; these are:\n"
+      RxFlag.usage()
+      say "\nAll options may have prefix 'no' added for the inverse effect."
+      say '\nPlease see the NetRexx Language definition at'
+      say 'http://netrexx.org/documentation.nsp for more details.'
+      return 0
+      

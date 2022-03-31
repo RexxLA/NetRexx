@@ -28,6 +28,8 @@
 /* 1999.10.19 Add class body clause list [used iff exec]              */
 /* 2000.02.11 Deferred NUMERIC and TRACE re-timed scan and generate   */
 /* 2000.02.18 Move to parsing-cursor-based                            */
+/* 2021.01.15 Add curaddress, last known ADDRESS --MRE                */
+/* 2022.03.24 Use RexxStream, RexxDate in scripting mode --MRE        */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -84,6 +86,9 @@ class RxClass implements RxClauseParser
   classrunnumer=RexxSet       -- numeric setting after initialization
   classruntrace=RexxTrace     -- trace setting after initialization
 
+-- MRE
+  curaddress = Rexx null  
+
  properties private
   rxt    =RxTranslator        -- the boss
   parser =RxParser            -- our parser
@@ -110,6 +115,7 @@ class RxClass implements RxClauseParser
   implerror=Vector(5)         -- list of errors to defer [RxField[]]
 
   classAnnotation = Rexx ''
+
   
  /** Construct a class environment from the current clause */
  /* [PARSECLASS, in prototype] */
@@ -817,6 +823,8 @@ class RxClass implements RxClauseParser
  /* The 'generate' method is called, as usual, to generate code.      */
  /* This should be called on all passes, for beginclass/2 setup.      */
  method defaultscan(pass=int)
+--  say "#MRE scripting mode, generate default class"
+-- MRE use RexxStream, RexxDate in scripting mode  
   beginclass(null, pass)
   if pass=0 then do
     classtoken=null
@@ -835,6 +843,16 @@ class RxClass implements RxClauseParser
      classinfo.superinfo=objectinfo
     classinfo.ispublic=1
     classinfo.localclass=this                -- back link
+
+    infolist=RxClassInfo[2]  
+    info=checkclass('RexxDate', null)             -- get the classinfo
+    infolist[0]=info
+    info=checkclass('RexxStream', null)           -- get the classinfo
+    infolist[1]=info
+ 
+    classusei=infolist
+    if rxt.program.flag.diag then say '# default scripting uses RexxDate, RexxStream' 
+
     end
   beginclass2(pass)
 
@@ -870,7 +888,7 @@ class RxClass implements RxClauseParser
   if objectinfo=null then do  -- very first call
     objectinfo=classer.findclass(pcursor, RxType.OBJECT_CLASS, null, 0)
     -- [this is also a sanity check on CLASSPATH, etc.]
-    if objectinfo=null then signal RxQuit(rxt, null, 'class.not.found', RxType.OBJECT_CLASS)
+    --if objectinfo=null then signal RxQuit(rxt, null, 'class.not.found', RxType.OBJECT_CLASS)
     end
 
   /* Warn if package assumed */

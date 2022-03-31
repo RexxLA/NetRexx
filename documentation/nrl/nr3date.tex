@@ -1,0 +1,84 @@
+\section{The R\textsc{exx}Date class}\label{refrexxdate}
+\index{netrexx.lang,R\textsc{exx}Date class}
+ 
+The \texttt{R\textsc{exx}Date} class inherits from
+\texttt{R\textsc{exx}Time} which implements the Classic
+Rexx \texttt{Date()} and \texttt{Time()} functions.\footnote{At the
+  4.02 level, including the input and conversion functions, including
+some of the options that were available in Rexx/VM but left out of the
+Rexx ANSI/ISO/INCITS standard.}
+
+\begin{figure}[h]
+  \begin{shaded}
+\begin{rail}
+  DATE : 'DATE' '('   outputDateFormat? GROUP1?  ')'
+  ;
+  GROUP1 : ','  inputDate GROUP2?
+  | ','  ','  outputSeparatorChar
+  ;
+  GROUP2 : ','  inputDateFormat? GROUP3?
+  ;
+  GROUP3 : ','  outputSeparatorChar? (',' inputSeparatorChar?)?
+  ;
+  
+\end{rail}
+\end{shaded}
+\end{figure}
+
+The \texttt{date()} function can be called standalone when using a \texttt{uses RexxDate} option on the \texttt{class} statement. You can use the following options to obtain specific date formats. (Only the capitalized letter is needed; all characters following it are ignored.)
+\subsection{Options}
+\begin{description}
+\item[Base]
+  the number of complete days (that is, not including the current day) since and including the base date, 1 January 0001, in the format: dddddd (no leading zeros or blanks). The expression DATE('B')//7 returns a number in the range 0–6 that corresponds to the current day of the week, where 0 is Monday and 6 is Sunday.
+Thus, this function can be used to determine the day of the week independent of the national language in which you are working.
+Note: The base date of 1 January 0001 is determined by extending the current Gregorian calendar backward (365 days each year, with an extra day every year that is divisible by 4 except century years that are not divisible by 400). It does not take into account any errors in the calendar system that created the Gregorian calendar originally.
+\item[Century]
+the number of days, including the current day, since and including January 1 of the last year that is a multiple of 100 in the form: ddddd (no leading zeros). Example: A call to DATE('C') on March 13 1992 returns 33675, the number of days from 1 January 1900 to 13 March 1992. Similarly, a call to DATE('C') on 2 January 2000 returns 2, the number of days from 1 January 2000 to 2 January 2000.
+Note: When the Century option is used for input, the output may change, depending on the current century. For example, if DATE('S','1','C') was entered on any day between 1 January 1900 and 31 December 1999, the result would be 19000101. However, if DATE('S','1','C') was entered on any day between 1 January 2000 and 31 December 2099, the result would be 20000101. It is important to understand the above, and code accordingly.
+\item[Days]
+the number of days, including the current day, so far in the current year in the format: ddd (no leading zeros or blanks).
+\item[Julian]
+  date in the format: yyyyddd (yy and ddd must have leading zeros).
+ \item[European]
+    date in the format: dd/mm/yy (dd, mm, and yy must have leading zeros).
+\item[Month]
+full name of the current month. Only valid for OutputDateFormat.
+\item[Normal]
+date in the format: dd mon yyyy. This is the default (dd cannot have any leading zeros or blanks; yyyy must have leading zeros but cannot have any leading blanks). If Normal is specified for input\_date\_format, the input\_date must have the month (mon) specified in English (for example, Jan, Feb, Mar, and so on).
+\item[Ordered]
+date in the format: yy/mm/dd (suitable for sorting, and so forth; yy, mm, and dd must have leading zeros).
+\item[Standard]
+date in the format: yyyymmdd (suitable for sorting, and so forth; yyyy, mm, and dd must have leading zeros).
+\item[Usa]
+date in the format: mm/dd/yy (mm, dd, and yy must have leading zeros).
+\item[Weekday]
+the name for the day of the week.
+\end{description}
+
+\subsection{Conversions and date calculations}
+Date() with more than two arguments converts the second
+argument (which has a format given by the third argument) to the
+format specified by the first argument.
+
+Calculations with dates can be done using the 'B(asedate)'
+option.\footnote{Examples can be found in the NetRexx Programming Guide.}
+
+\subsection{Formatting the separator fields}
+The separators can be specified using the \emph{inputseparatorchar}
+and \emph{outputseparatorchar} fields.
+
+\subsection{Examples}
+
+\begin{lstlisting}[label=datessexample,caption=Example of using Date()]
+    say date('b','10 Mar 1962')     -- 716308
+    say date('w','10 Mar 1962','n') -- Saturday
+    say date('w','716308','b')      -- Saturday
+    say date('s','716308','b')      -- 19620310 
+    say date('s','716308','b','/')  -- 1962/03/10
+    say date('s','716308','b','-')  -- 1962-03-10
+    say date('w',7688,'c')          -- Sunday
+    say date('c','1 Feb 2021')      -- 7703
+    say date('j','18 Jan 2021')     -- 2021018
+    say date('j','10 Mar 1962')     -- 1962069
+\end{lstlisting}
+

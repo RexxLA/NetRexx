@@ -31,7 +31,9 @@
 /* 2000.04.19 drop exec (now handled by caller)                       */
 /* 2011.10.28 add strictmethods option - KK                           */
 /* 2013.05.28 aligned options                                         */
---	2015.05.02 switch javac use to jsr199 java compiler api -- KK	--	make nocrossref default to prevent unrequested file access
+/* 2015.05.02 switch javac use to jsr199 java compiler api -- KK      */
+/* make nocrossref default to prevent unrequested file access         */
+/* 2021.12.31 add RxModel - Jason Martin                              */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -40,26 +42,28 @@ options binary nodecimal strictcase strictargs
 class RxFlag
   properties public
   -- ! anything added here must also be in the copy/clone constructor
-  binary      =boolean 0      -- all classes are binary classes
-  bytes       =boolean 0      -- generate bytecodes
-  comments    =boolean 0      -- copy comments across to .java
-  compact     =boolean 0      -- display compact error messages
-  crossref    =boolean 0      -- generate cross-reference			--	2015.05.02 switch javac use to jsr199 java compiler api -- KK --	make nocrossref default to prevent unrequested file access
---  crossref    =boolean 1      -- generate cross-reference
-  decimal     =boolean 1      -- allow implicit decimal arithmetic
-  diag        =boolean 0      -- diagnostic output
-  explicit    =boolean 0      -- local variables must be explicit
-  java        =boolean 1      -- generate Java source
-  logo        =boolean 1      -- display logo (banner)
-  format      =boolean 0      -- format output file [0=keep input line numbers]
-  replace     =boolean 0      -- replace output file if exists
-  sourcedir   =boolean 0      -- force output files to source directory
-  strictargs  =boolean 0      -- empty args must be specified; args must be used
-  strictassign=boolean 0      -- assign types must be cost-free
-  maxassign =int     RxConverter.MAXASSIGN -- default maximum assignment cost [0-100]
-  strictcase  =boolean 0      -- names must match in case
-  strictimport=boolean 0      -- imports must be explicit
---strictmethods - any local matchable method will override superclass - strictmethods is the original NetRexx algorithm
+  annotations  = boolean 1      -- annotations are allowed
+  binary       = boolean 0      -- all classes are binary classes
+  bytes	       = boolean 0      -- generate bytecodes
+  comments     = boolean 0      -- copy comments across to .java
+  compact      = boolean 0      -- display compact error messages
+  crossref     = boolean 0      -- generate cross-reference
+  decimal      = boolean 1      -- allow implicit decimal arithmetic
+  diag	       = boolean 0      -- diagnostic output
+  explicit     = boolean 0      -- local variables must be explicit
+  java	       = boolean 1      -- generate Java source
+  logo	       = boolean 1      -- display logo (banner)
+  format       = boolean 0      -- format output file [0=keep input line numbers]
+  model	       = int     0      -- model input file [0-3]
+  replace      = boolean 0      -- replace output file if exists
+  sourcedir    = boolean 0      -- force output files to source directory
+  strictargs   = boolean 0      -- empty args must be specified; args must be used
+  strictassign = boolean 0      -- assign types must be cost-free
+  maxassign    = int RxConverter.MAXASSIGN -- default maximum assignment cost [0-100]
+  strictcase   = boolean 0      -- names must match in case
+  strictimport = boolean 0      -- imports must be explicit
+  /* strictmethods - any local matchable method will override superclass */
+  /* (strictmethods is the original NetRexx algorithm)                   */
   strictmethods=boolean 0      -- prevents superclass methods from being compared to subclass methods to find best match
   strictprops =boolean 0      -- even local properties must be qualified
   strictsignal=boolean 0      -- signals are checked
@@ -70,14 +74,15 @@ class RxFlag
   utf8        =boolean 0      -- source file is in UTF8 encoding -- NETREXX-6 temp change rvj 20130726 -- rolled back for z/OS USS compatibility
   verbose     =int     3      -- progress reports of output [0-5]
 
- /** Construct the flags with default values */
+  /** Construct the flags with default values */
   method RxFlag()
     return
-
+    
   /** Construct a copy of a flags object
      Arg1 is the flags object to copy. */
     -- later use cloneable interface
   method RxFlag(orig=RxFlag)
+    annotations=orig.annotations
     binary=orig.binary
     bytes=orig.bytes
     comments=orig.comments
@@ -87,6 +92,7 @@ class RxFlag
     diag=orig.diag
     explicit=orig.explicit
     format=orig.format
+    model=orig.model
     java=orig.java
     logo=orig.logo
     replace=orig.replace
@@ -106,7 +112,7 @@ class RxFlag
     verbose=orig.verbose
     maxassign=orig.maxassign
     return
-
+    
  /** setFlag: parse an option word and set option flag
     Arg1 is an option word (unchecked, no spaces, no prefix'-')
     An option word sets a flag unless prefixed with 'no', in which case
@@ -118,6 +124,7 @@ class RxFlag
     parse opt c2 +2 rest
     if c2\=='NO' then new=1; else do; new=0; opt=rest; end
     select
+      when opt=='ANNOTATIONS'  then annotations =new
       when opt=='BINARY'       then binary      =new
       when opt=='COMMENTS'     then comments    =new
       when opt=='COMPACT'      then compact     =new
@@ -126,6 +133,11 @@ class RxFlag
       when opt=='DIAG'         then diag        =new
       when opt=='EXPLICIT'     then explicit    =new
       when opt=='FORMAT'       then format      =new
+      when opt=="MODEL"        then model       =new*1
+      when opt=="MODEL0"       then model       =0
+      when opt=="MODEL1"       then model       =new*1
+      when opt=="MODEL2"       then model       =new*2
+      when opt=="MODEL3"       then model       =new*3
       when opt=='JAVA'         then java        =new
       when opt=='LOGO'         then logo        =new
       --when opt=='PFPN'         then pfpn        =new
@@ -164,6 +176,8 @@ class RxFlag
    */
   method toString(nose=boolean 1) returns String
     acc=Rexx ''
+    if annotations  then acc=acc 'Annotations'
+    else if nose then acc=acc 'NoAnnotations'
     if binary       then acc=acc 'Binary'
     else if nose then acc=acc 'NoBinary'
     if comments     then acc=acc 'Comments'
@@ -180,6 +194,8 @@ class RxFlag
     else if nose then acc=acc 'NoExplicit'
     if format       then acc=acc 'Format'
     else if nose then acc=acc 'NoFormat'
+    if model>0 then acc=acc "Model"
+    else if nose then acc=acc "NoModel"
     if java         then acc=acc 'Java'
     else if nose then acc=acc 'NoJava'
     if logo         then acc=acc 'Logo'
@@ -225,6 +241,7 @@ class RxFlag
   /** usage :display usage hints */
     -- intended for use from shell, e.g., NetRexxC
   method usage static
+    say '  -annotations   -- allow annotations to pass through'
     say '  -binary        -- all classes are binary classes'
           --say '  -bytes        -- generate bytecodes'
     say '  -comments      -- copy comments across to generated .java'
@@ -235,6 +252,7 @@ class RxFlag
     say '  -explicit      -- local variables must be explicitly declared'
     say '  -java          -- generate Java source code for this program'
     say '  -logo          -- display logo (banner) after starting'
+    say "  -model[n]      -- model input file [0-3] none, stripped, compacted, braced"
     say '  -format        -- format output file (pretty-print)'
     say '  -replace       -- replace .java file even if it exists'
     say '  -sourcedir     -- force output files to source directory'

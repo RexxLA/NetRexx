@@ -1,0 +1,101 @@
+/** pickparse
+
+               +--ONE--+                          +--------------------------------+
+>>--PICKPARSE--+-------+--parse_template_Dstring--v--+--------------------------+--+--><
+               +--ALL--+                             +--logic_template_Dstring--+
+                                                     +--ELSE_Dstring-(1)--------+
+
+**/
+/*
+  21/ 1/30 #2: Fix getting secondary output and result. Jeff Hennick
+  20/ 8/ 1 Jeff Hennick
+*/
+
+pipe (pickparse_tests01)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+-- pickparse dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   pickparse /2 $1 +1/ /$1=1/ |
+   c1: compare any ~2#1 pickparse dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a |
+   split |
+   c1: ?
+
+-- pickparse dstring dstring (secondary) ?
+   literal a1a a3c e5e g7c |
+   split |
+   p2: pickparse /2 $1 +1/ /$1=1/ |
+   hole ?
+   p2: |
+   c2: compare any ~2#2 pickparse dstring dstring (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a3c e5e g7c |
+   split |
+   c2: ?
+
+-- pickparse dstring dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   p3: pickparse /2 $1 +1/ /$1=1/ /5 = $1/ |
+   hole ?
+   p3: |
+   c3: compare any ~2#3 pickparse dstring dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal e5e |
+   split |
+   c3: ?
+
+-- pickparse dstring dstring dstring (ELSE) ?
+   literal a1a a3c e5e g7c |
+   split |
+   p4: pickparse /2 $1 +1/ /$1=1/ /5 = $1/ |
+   hole ?
+   p4: |
+   hole ?
+   p4: |
+   c4: compare any ~2#4 pickparse dstring dstring dstring (ELSE) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a3c g7c |
+   split |
+   c4: ?
+
+-- pickparse one dstring dstring ?
+   literal a1a a3c e5e g7c |
+   split |
+   pickparse one /2 $1 +1/ /$1=1/ /$1=1/ |
+   c5: compare any ~2#5 pickparse one dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a |
+   split |
+   c5: ?
+
+-- pickparse all dstring dstring (second) ?
+   literal a1a a3c e5e g7c |
+   split |
+   p6: pickparse all /2 $1 +1/ /$1=1/ /$1=1/ |
+   hole ?
+   p6: |
+   c6: compare any ~2#6 pickparse all dstring dstring (second) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1a |
+   split |
+   c6: ?
+
+-- pickparse one dstring dstring (second) ?
+   literal a1a a3c e5e g7c |
+   split |
+   p7: pickparse one /2 $1 +1/ /$1=1/ /$1=1/ |
+   hole ?
+   p7: |
+   c7: compare any ~2#7 pickparse one dstring dstring (second) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |
+   split |
+   c7: ?

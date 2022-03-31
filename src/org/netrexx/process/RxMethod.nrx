@@ -35,8 +35,10 @@
 /* 1998.04.30 Use Methodatts                                          */
 /* 1999.10.19 Add method body clause list [used iff exec]             */
 /* 2000.02.28 Allow the construction of synthetic methods             */
-/* 2013.01.14 Allow Java 5+ covariant return types	--	2013-01-14 -- KK -- issue 95  */
-/* 2014.04.13 Allow Java 8+ default and static methods in interfaces	--	KK -- issue 108  */
+/* 2013.01.14 Allow Java 5+ covariant return types    KK -- issue 95  */
+/* 2014.04.13 Allow Java 8+ default and static methods in interfaces  */
+/* --	KK -- issue 108                                                 */
+/* 2021.01.15 Add curaddress, last known ADDRESS --MRE                */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -69,6 +71,10 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   methodtracedefer   =boolean 1    -- defer trace code generation until safe
   methodtracevars    =Rexx 0       -- dictionary of method-level TRACE VAR names
   methodmaxtrace     =int RexxTrace.OFF -- method maximum tracing level
+
+-- MRE
+  curaddress =Rexx null  
+
 
  properties constant shared
   SYN_DEFCON         =int 1        -- synthetic default constructor
@@ -120,6 +126,8 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   /* Argument descriptors, valid for explicit methods */
   optargfirst=0                    -- number of first optional arg, 0 if none
   optargtoken=RxToken null         -- .. and its whereabouts
+
+
 
  /* Construct an object from the current clause */
  /* This is used for all methods, including implied and synthetic ones */
@@ -774,6 +782,10 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
 
   -- prefix all methods by a cosmetic blank line
   rxt.program.streamer.out(null)
+  
+  -- suppress jdk warnings about generics etc, except when not wanted
+  -- due to broker annotation processors etc
+  if rxt.program.flag.annotations then rxt.program.streamer.out('@SuppressWarnings("unchecked")\n')
 
   /* Now generate the method(s): optional first, then the full arguments
      version, which may be followed by the real body.
@@ -1081,7 +1093,7 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
      rxt.program.streamer.out(close, 1)
      parser.indention=1                       -- ..
      /* write the method level annotations here */
-     rxt.program.streamer.out(this.methodAnnotation)
+     if rxt.program.flag.annotations then rxt.program.streamer.out(this.methodAnnotation)
    end
 
   /* --- Add super() call, if needed --- */

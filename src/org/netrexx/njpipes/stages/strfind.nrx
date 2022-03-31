@@ -1,21 +1,28 @@
 -- strfind.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998, 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 99/05/09 use mrc() instead of rc().  ejt
--- 98/06/20 aobj; binary; Use "catch"; Case sensitivity; minor speedup. JHennick
--- 98/07/18 fixed to allow stream0 to be unconnected.  ejt
+/*
+ 20/ 5/30 add CASELESS. Jeff Hennick
+ 20/ 4/29 fix for null dstring. This could be much faster, but it is an unlikely corner condition. jh
+ 99/05/09 use mrc() instead of rc().  ejt
+ 98/06/20 aobj; binary; Use "catch"; Case sensitivity; minor speedup. JHennick
+ 98/07/18 fixed to allow stream0 to be unconnected.  ejt
+*/
 
 /** strfind
 
-       +-FIND--+--------+----------------------+
-       |       +-string-+                      |
-   >>--+-STRFIND--+---------+--delimitedString-+--------------------------><
-                  +-ANYcase-+
-
+       +-FIND--+--------+-------------------------+
+       |       +-string-+                         |
+   >>--+-STRFIND--+------------+--delimitedString-+--------------------------><
+                  +-ANYcase----+
+                  +-CASEANY----+
+                  +-IGNORECASE-+
+                  +-CASEIGNORE-+
+                  +-CASELESS---+
 */
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
@@ -43,13 +50,15 @@ method run()
 
    parse args.upper a1 .
 
-   anycase = rexx 'ANYCASE'.abbrev(a1, 3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(a1) > 0
+   anycase = rexx 'ANYCASE'.abbrev(a1, 3) | 'CASEANY IGNORECASE CASEIGNORE CASELESS'.wordpos(a1) > 0
 
    if anycase then parse args . args
 
    f_str = rexx DString(args).String
 
-   if f_str == '' then do
+   if f_str == '' & args \= '' & args.words = 1 & args.length = 2 & args.left(1) = args.right(1) then do
+   end
+   else if f_str == '' then do
       Emsg(11,'Error -' getName() 'requires a delimited string to find')
    end
 

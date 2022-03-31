@@ -1,0 +1,100 @@
+/** xlate
+
+                                                <---------------------+
+   >>--+-XLATE-----+--+----------------------+---+-------------------++---->
+       +-TRANSlate-+  +-inputRange-----------+   +-+ default-table +-+
+                      | <------------------+ |
+                      +---(--inputRange--)-+-+
+
+      <------------------+
+   >---+----------------++------------------------------------------------><
+       +-xrange--xrange-+
+
+   default-table:
+   +--+-UPper--------------------------+-----------------------------------+
+      +-LOWer--------------------------+
+      +-INput--------------------------+
+   {  +-OUTput-------------------------+  }
+   {  +-+-TO---+--+----------+--number-+  }
+   {    +-FROM-+  +-CODEPAGE-+            }
+   {                                      }
+   { Not yet in njPipes                   }
+
+  XLATE Contributed by Rene Jansen
+
+*/
+/*
+  20/ 7/19 Jeff Hennick
+*/
+
+pipe (xlate_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- xlate xrange char ?
+literal abcdefghijklm |
+xlate a-l = |
+c1: compare any ~2# 1 xlate xrange char  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal ============m |
+c1: ?
+
+-- xlate xrange char char char?
+literal abcdefghijklm |
+xlate a-l =  m 9 |
+c2: compare any ~2# 2 xlate xrang char char char ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal ============9 |
+c2: ?
+
+-- xlate ?
+literal abcdefghijklm |
+xlate |
+c3: compare any ~2# 3 xlate ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal ABCDEFGHIJKLM |
+c3: ?
+
+-- xlate xrange char char char (overlap)?
+literal abcdefghi |
+xlate c-g = e e |
+c4: compare any ~2# 4 xlate xrange char char char (overlap) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal ab==e==hi |
+c4: ?
+
+-- xlate xrange (multiple overlap)?
+literal ABCDEFG |
+xlate A X B Y C Z A 1 |
+c5: compare any ~2# 5 xlate xrange (multiple overlap) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal 1YZDEFG |
+c5: ?
+
+-- xlate pairs reversed ?
+literal ABCDEF |
+xlate A B B C |
+c6: compare any ~2# 6 xlate pairs reversed ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal BCCDEF |
+c6: ?
+
+-- xlate xrange short-xrange ?
+literal ABCDE  |
+xlate A-E 1-3  |
+c7: compare any ~2# 7 xlate xrange short-xrange ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal 12333 |
+c7: ?
+
+-- xlate short-xrange xrange ?
+literal ABCDEFG  |
+xlate A-B 1-5  |
+c8: compare any ~2# 8 xlate short-xrange xrange ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+o: ?
+literal 12CDEFG |
+c8: ?
+

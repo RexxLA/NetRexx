@@ -1,0 +1,129 @@
+/** between
+
+>>--BETWEEN--+----------------+--+-delimitedString1-+-+-delimitedString2-+---><-
+             +-ANYcase-(1)(2)-+  +-Xhexstring1------+ +-Xhexstring2------+
+                                 +-Hhexstring1------+ +-Hhexstring2------+
+                                 +-Bbinstring1------+ +-Bbinstring2------+
+                                                      +-n----------------+
+ (1) NJPipes only.
+ (2) CASEANY, CASEIGNORE, CASELESS, and IGNORECASE are all synonyms for ANYCASE.
+
+  FRLABLE Contributed by Chuck Moore.
+**/
+
+/*
+  20/ 2/ 5 Jeff Hennick
+*/
+
+pipe (between_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+   literal 1# 0 "between dstring1 dstring2 extra" gives rc=11, not tested here. |
+   literal 1. |
+   o: ?
+
+-- between dstring1 dstring2 ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between /ccc/ /rrr/ |
+   c1: compare any ~2# 1 between dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal cccddd;dddeee;eeefff |
+   split ; |
+   c1: ?
+
+-- between dstring1 number ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between /ccc/ 2 |
+   c2: compare any ~2# 2 between dstring number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal cccddd;dddeee |
+   split ; |
+   c2: ?
+
+-- between Xhexstring1 dstring2 ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between x6262 /ccc/ |
+   c3: compare any ~2# 3 between Xhexstring1 dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c3: ?
+
+-- between Hhexstring3 dstring2 ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between h6262 /ccc/ |
+   c4: compare any ~2# 4 between Hhexstring1 dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c4: ?
+
+-- between Binstring dstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between b01100010 /ccc/ |
+   c5: compare any ~2# 5 between Bbinstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c5: ?
+
+-- between dstring Xhexstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between /bb/ X6363 |
+   c6: compare any ~2# 6 between dstring Xhexstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c6: ?
+
+-- between dstring Hhexstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between /bb/ h6363 |
+   c7: compare any ~2# 7 between dstring Hhexstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c7: ?
+
+-- between dstring Bbinstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between /bb/ b01100011 |
+   c8: compare any ~2# 8 between dstring Bbinstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c8: ?
+
+-- between ANYCASE dstring dstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between anyCASE /Bb/ /cCc/ |
+   c9: compare any ~2# 9 between ANYCASE dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c9: ?
+
+-- between ANYCASE dstring Bbinstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   between anyCASE /Bb/ b01100011 |
+   c10: compare any ~2#10 between ANYCASE dstring Bbinstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal bbbccc;aaabbb;cccddd |
+   split ; |
+   c10: ?
+
+-- between dstring dstring extra ?

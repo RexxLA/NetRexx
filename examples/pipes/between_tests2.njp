@@ -1,0 +1,93 @@
+/** between
+
+>>--BETWEEN--+----------------+--+-delimitedString1-+-+-delimitedString2-+---><-
+             +-ANYcase-(1)(2)-+  +-Xhexstring1------+ +-Xhexstring2------+
+                                 +-Hhexstring1------+ +-Hhexstring2------+
+                                 +-Bbinstring1------+ +-Bbinstring2------+
+                                                      +-n----------------+
+ (1) NJPipes only.
+ (2) CASEANY, CASEIGNORE, CASELESS, and IGNORECASE are all synonyms for ANYCASE.
+
+  FRLABLE Contributed by Chuck Moore.
+**/
+
+/*
+  20/ 2/ 5 Jeff Hennick
+*/
+
+pipe (between_tests2)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+-- between dstring1 dstring2 ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   between /fourth/ /sixth/ |
+   c11: compare any ~2# 11 between dstring1 dstring2 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fourth one;fifth one;sixth one; |
+   split ; |
+   c11: ?
+
+-- between anycase dstring1 dstring2 ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   between anycase /fourth/ /sixth/ |
+   c12: compare any ~2# 12 between anycase dstring1 dstring2 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal fourth one;fifth one;sixth one; |
+   split ; |
+   c12: ?
+
+-- between anycase dString1 number ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   between anycase /tHird/ 2 |
+   c13: compare any ~2# 13 between anycase dString1 number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c13: ?
+
+-- between dString1 number ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   between /tHird/ 2 |
+   c14: compare any ~2# 14 between dString1 number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |
+   split ; |
+   c14: ?
+
+-- between dstring number ?
+   literal first one,second one,third one,fourth one,fifth one,sixth one,seventh one,eighth one  |
+   split , |
+   between /third/ 2 |
+   c15: compare any ~2# 15 between dstring1 number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal third one;fourth one; |
+   split ; |
+   c15: ?
+
+-- between dstring number (multiple)?
+   literal first one,second one,third one,fourth one,first one,sixth one,seventh one,eighth one  |
+   split , |
+   between /first/ 2 |
+   c16: compare any ~2# 16 between dstring1 number (multiple) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;first one;sixth one; |
+   split ; |
+   c16: ?
+
+-- between null-dstring number (multiple)?
+   literal first one,second one,third one,fourth one,first one,sixth one,seventh one,eighth one  |
+   split , |
+   between // 2 |
+   c17: compare any ~2# 17 between null-dstring1 number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal first one;second one;third one;fourth one;first one;sixth one;seventh one;eighth one; |
+   split ; |
+   c17: ?

@@ -1,13 +1,17 @@
 -- split.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998 - 2019  Jeffrey Hennick, JHennick@Delphi.Com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/06/20  Binary; Output blank (but not null) lines; GetXRange.  JHennick
--- 98/06/12  DString.  Up to CMS documentation. JHennick
+
+/*
+  19/11/20  null input to ''; fix xrange number. JH
+  99/05/09  use mrc() instead of rc().  ejt
+  98/06/20  Binary; Output blank (but not null) lines; GetXRange.  JHennick
+  98/06/12  DString.  Up to CMS documentation. JHennick
+*/
 
 /** split
 
@@ -32,335 +36,355 @@ package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
 
 class split extends stage binary
-
-method run()
-
-   args = rexx arg()
-   w1 = rexx
-   s = rexx ''
-   anycase = boolean
-
-   parse args.upper w1 rest                               -- ANYCASE etc.
-
-   if 'ANYCASE'.abbrev(w1, 4) | w1.wordpos('CASEANY IGNORECASE CASEIGNORE') > 0 then do
-      anycase = 1
-      args = rest
-   end
-   else do
-      args = arg()
-      anycase = 0
-   end
-
-   parse args.upper w1 .
-
-   min = boolean 'MINIMUM'.abbrev(w1, 3)               -- MINimum
-   minn = rexx 0
-
-   if min then do
+  
+  method run()
+    
+    args = rexx arg()
+    w1 = rexx
+    s = rexx ''
+    anycase = boolean
+    
+    parse args.upper w1 rest                               -- ANYCASE etc.
+    
+    if 'ANYCASE'.abbrev(w1, 4) | w1.wordpos('CASEANY IGNORECASE CASEIGNORE') > 0 then
+      do
+	anycase = 1
+	args = rest
+      end
+    else
+      do
+	args = arg()
+	anycase = 0
+      end
+    
+    parse args.upper w1 .
+    
+    min = boolean 'MINIMUM'.abbrev(w1, 3)               -- MINimum
+    minn = rexx 0
+    
+    if min then do
       parse args . minn args
       if \minn.datatype('W') then do
-         Emsg(11,'Error -' getName() 'MINIMUM' minn 'value must be numeric')
+	Emsg(11,'Error -' getName() 'MINIMUM' minn 'value must be numeric')
       end
       if minn < 1 then do
-         Emsg(11,'Error -' getName() 'MINIMUM' minn 'value must be positive')
+	Emsg(11,'Error -' getName() 'MINIMUM' minn 'value must be positive')
       end
-   end
-
-   parse args.upper w1 w2 .
-
-   before = boolean
-   after = boolean 0
-   snum = rexx 0
-
-   select
+    end
+    
+    parse args.upper w1 w2 .
+    parse args . . rest
+    org_args = args
+    
+    before = boolean
+    after = boolean 0
+    snum = rexx 0
+    
+    select
       when w1 = 'AT' then parse args . args                  -- AT
       when w1 = 'BEFORE' then do                             -- BEFORE
-         before = 1
-         parse args . args
+	before = 1
+	parse args . args
       end
       when w1 = 'AFTER' then do                              -- AFTER
-         after = 1
-         parse args . args
+	after = 1
+	parse args . args
       end
       when w1.datatype('W') then do
-         if w2 = 'BEFORE' then before = 1
-         if w2 = 'AFTER' then after = 1
-         snum = w1
-         parse args . . args
+	snum = w1
+	args = rest
+	if w2 = 'BEFORE' then before = 1
+	else if w2 = 'AFTER' then after = 1
+	else do
+	  snum = 0
+	  args = org_args
+	end
+	--         parse args . . args
       end
       otherwise nop
-   end
-
-   at = boolean
-   at = \(before | after)
-
-   parse args.upper w1 .
-
-   not = boolean 0
-
-   if w1 = 'NOT' then do                                   -- NOT
+    end
+    
+    at = boolean
+    at = \(before | after)
+    
+    parse args.upper w1 .
+    
+    not = boolean 0
+    
+    if w1 = 'NOT' then do                                   -- NOT
       not = 1
       parse args . args
-   end
-
-   parse args.upper w1 w2 .
-
-   str = boolean 0
-   anyof = boolean 0
-
-   infinity = rexx 999999999
-   maxsp = rexx infinity
-
-   select
+    end
+    
+    parse args.upper w1 w2 .
+    
+    str = boolean 0
+    anyof = boolean 0
+    
+    infinity = rexx 999999999
+    maxsp = rexx infinity
+    
+    select
       when 'STRING'.abbrev(w1, 3) then do                  -- STRing
-         str = 1
+	str = 1
       end
-      when 'ANYOF'.abbrev(w1, 3) then do                   -- ANYo
-         anyof = 1
+      when 'ANYOF'.abbrev(w1, 3) then do                   -- ANYof
+	anyof = 1
       end
       otherwise
-         args = '.' args
-   end
-
-   parse args . args
-
-
-   if str | anyof then do                                   -- DelimitedString
+	args = '.' args
+    end
+    
+    parse args . args
+    
+    if str | anyof then do                                   -- DelimitedString
       ds = DString(args)
       s = ds.String
       maxsp = ds.Residue
-   end
-   else if \str & \anyof & args \= '' then do               -- xrange
+    end
+    else if \str & \anyof & args \= '' then do               -- xrange
       anyof = 1
-      parse args xr maxsp                                  -- xrange and maxsplits
+      parse args xr maxsp                                  -- xrange and max splits
       s = GetXRange(xr)
-   catch StageError
-      Emsg(11,'Bad Range')
-   end
-
-   if maxsp = '' then maxsp = infinity                         -- max splits
-
-   if s = '' then s = ' '
-
-   if after &  str then snum = snum + s.length() - 1           -- BEFORE  or AFTER
-   if before then do
-     snum = -snum - 1
-     after = 1
-   end
-
-   if at then select
+      -- catch StageError
+      --   Emsg(11,'Bad Range')
+    end
+    
+    if maxsp = '' then maxsp = infinity                         -- max splits
+    
+    if s = '' then s = ' '
+    
+    if after &  str then snum = snum + s.length() - 1           -- BEFORE  or AFTER
+    if before then do
+      snum = -snum - 1
+      after = 1
+    end
+    
+    -- now lets run this thing
+    
+    if at then select
       when anyof & anycase then do                             -- AT ANYCASE  ANYOF  \STRING
-         if not then vkey = 'N'
-         else vkey = 'M'
-         s = s.upper()
-         loop
-            line = Rexx peekto()
-            p = minn
-            loop for maxsp until line = ''
-               if minn > 1 then do
-                  parse line f =(minn) line
-                  minn = 0
-               end
-               else f = ''
-               p = line.upper().verify(s, vkey)
-               if p = 0 then do
-                 data = line
-                 line = ''
-               end
-               else if p = 1 then do
-                  parse line 2 line
-                  data = ''
-               end
-               else parse line data =(p) +1 line
-               outl = f || data
-               if outl \== '' then output(outl)
+	if not then vkey = 'N'
+	else vkey = 'M'
+	s = s.upper()
+	loop
+	  line = Rexx peekto()
+	  if line = null then line = ''
+	  p = minn
+	  loop for maxsp until line = ''
+            if minn > 1 then do
+              parse line f =(minn) line
+              minn = 0
             end
-            if line \== '' then output(line)
-            readto()
-         catch StageError
-         end
+	  else f = ''
+	  p = line.upper().verify(s, vkey)
+	  if p = 0 then do
+            data = line
+            line = ''
+	  end
+	  else if p = 1 then do
+            parse line 2 line
+            data = ''
+	  end
+	  else parse line data =(p) +1 line
+	  outl = f || data
+	  if outl \== '' then output(outl)
+	  end
+	  if line \== '' then output(line)
+	  readto()
+	catch StageError
+	end
       end
       when anyof then do                                  -- AT \ANYCASE  ANYOF  \STRING
-         if not then vkey = 'N'
-         else vkey = 'M'
-         loop
-            line = Rexx peekto()
-            p = minn
-            loop for maxsp until line = ''
-               if minn > 1 then do
-                  parse line f =(minn) line
-                  minn = 0
-               end
-               else f = ''
-               p = line.verify(s, vkey)
-               if p = 0 then do
-                 data = line
-                 line = ''
-               end
-               else if p = 1 then do
-                  parse line 2 line
-                  data = ''
-               end
-               else parse line data =(p) +1 line
-               outl = f || data
-               if outl \== '' then output(outl)
+	if not then vkey = 'N'
+	else vkey = 'M'
+	loop
+	  line = Rexx peekto()
+	  if line = null then line = ''
+	  p = minn
+	  loop for maxsp until line = ''
+            if minn > 1 then do
+              parse line f =(minn) line
+              minn = 0
             end
-            if line \== '' then output(line)
-            readto()
-         catch StageError
-         end
+	  else f = ''
+	  p = line.verify(s, vkey)
+	  if p = 0 then do
+            data = line
+            line = ''
+	  end
+	  else if p = 1 then do
+            parse line 2 line
+            data = ''
+	  end
+	  else parse line data =(p) +1 line
+	  outl = f || data
+	  if outl \== '' then output(outl)
+	  end
+	  if line \== '' then output(line)
+	  readto()
+	catch StageError
+	end
       end
       when anycase then do                                  -- AT ANYCASE \NOT \ANYOF  STRING
-         s = s.upper
-         sl = s.length()
-         loop
-            line = Rexx peekto()
-            loop for maxsp until line = ''
-               f = ''
-               if minn < 2 then do
-                  parse line.upper data (s)
-                  dl = data.length()
-                  parse line data +(dl) +(sl) line
-               end
-               else do
-                  parse line.upper f +(minn) data (s)
-                  dl = data.length() + minn
-                  parse line f +(minn) data =(dl) line
-               end
-               output(f || data)
-               minn = 0
+	s = s.upper
+	sl = s.length()
+	loop
+	  line = Rexx peekto()
+	  if line = null then line = ''
+	  loop for maxsp until line = ''
+            f = ''
+            if minn < 2 then do
+              parse line.upper data (s)
+              dl = data.length()
+              parse line data +(dl) +(sl) line
             end
-            readto()
-         catch StageError
-         end
+	  else do
+            parse line.upper f +(minn) data (s)
+            dl = data.length() + minn
+            parse line f +(minn) data =(dl) line
+	  end
+	  output(f || data)
+	  minn = 0
+	  end
+	  readto()
+	catch StageError
+	end
       end
       otherwise                                          -- AT \ANYCASE \NOT \ANYOF  STRING
-         loop
-            line = Rexx peekto()
-            loop for maxsp until line = ''
-               f = ''
-               if minn < 2 then parse line data (s) line
-               else parse line f +(minn) data (s) line
-               output(f || data)
-               minn = 0
-            end
-            readto()
-         catch StageError
-         end
-      end
+	loop
+	  line = Rexx peekto()
+	  if line = null then line = ''
+	  loop for maxsp until line = ''
+            f = ''
+            if minn < 2 then parse line data (s) line
+            else parse line f +(minn) data (s) line
+            output(f || data)
+            minn = 0
+	  end
+	  readto()
+	catch StageError
+	end
+end
 
-   else select
-      when anycase & anyof then do                   -- BEFORE/AFTER ANYCASE  ANYOF  \STRING
-         if not then vkey = 'N'
-         else vkey = 'M'
-         s = s.upper()
-         loop
+else select
+      when anycase & anyof then                    -- BEFORE/AFTER ANYCASE  ANYOF  \STRING
+        do
+	  if not then vkey = 'N'
+          else vkey = 'M'
+          s = s.upper()
+          loop
             line = Rexx peekto()
+            if line = null then line = ''
             p = minn
             loop for maxsp until line = ''
-               if minn > 1 then do
-                  parse line f =(minn) line
-                  minn = 0
-               end
-               else f = ''
-               p = verifyit(s,line.upper, vkey,snum,1)
-               if p < 1 then do
-                  data = line
-                  line = ''
-               end
-               else parse line data +(p) line
-               outl = f || data
-               if outl \== '' then output(outl)
+              if minn > 1 then do
+                parse line f =(minn) line
+                minn = 0
+              end
+            else f = ''
+            p = verifyit(s,line.upper, vkey,snum,1)
+            if p < 1 then do
+              data = line
+              line = ''
+            end
+            else parse line data +(p) line
+            outl = f || data
+            if outl \== '' then output(outl)
             end
             if line \== '' then output(line)
             readto()
-         catch StageError
-         end
-      end
+          catch StageError
+          end
+	end
       when anyof then do                     -- BEFORE/AFTER \ANYCASE  ANYOF  \STRING
-         if not then vkey = 'N'
-         else vkey = 'M'
-         loop
-            line = Rexx peekto()
-            p = minn
-            loop for maxsp until line = ''
-               if minn > 1 then do
-                  parse line f =(minn) line
-                  minn = 0
-               end
-               else f = ''
-               p = verifyit(s,line, vkey,snum,1)
-               if p < 1 then do
-                  data = line
-                  line = ''
-               end
-               else parse line data +(p) line
-               outl = f || data
-               if outl \== '' then output(outl)
+        if not then vkey = 'N'
+        else vkey = 'M'
+        loop
+          line = Rexx peekto()
+          if line = null then line = ''
+          p = minn
+          loop for maxsp until line = ''
+            if minn > 1 then do
+              parse line f =(minn) line
+              minn = 0
             end
-            if line \== '' then output(line)
-            readto()
-         catch StageError
-         end
+          else f = ''
+          p = verifyit(s,line, vkey,snum,1)
+          if p < 1 then do
+            data = line
+            line = ''
+          end
+          else parse line data +(p) line
+          outl = f || data
+          if outl \== '' then output(outl)
+          end
+          if line \== '' then output(line)
+          readto()
+        catch StageError
+        end
       end
       when anycase then do                    -- BEFORE/AFTER ANYCASE \NOT \ANYOF  STRING
-         s = s.upper
-         sl = s.length()
-         loop
-            line = Rexx peekto()
-            loop for maxsp until line = ''
-               f = ''
-               if minn > 1 then parse line f +(minn) line
-               p = findit(s,line.upper(),snum,1)
-               if p = 0 then do
-                  data = line
-                  line = ''
-               end
-               else parse line data +(p) line
-               output(f || data)
-               minn = 0
+        s = s.upper
+        sl = s.length()
+        loop
+          line = Rexx peekto()
+          if line = null then line = ''
+          loop for maxsp until line = ''
+            f = ''
+            if minn > 1 then parse line f +(minn) line
+            p = findit(s,line.upper(),snum,1)
+            if p = 0 then do
+              data = line
+              line = ''
             end
-            readto()
-         catch StageError
-         end
+            else parse line data +(p) line
+            output(f || data)
+            minn = 0
+          end
+          readto()
+        catch StageError
+        end
       end
       otherwise                           -- BEFORE/AFTER \ANYCASE \NOT \ANYOF  STRING
-         loop
-            line = Rexx peekto()
-            loop for maxsp until line = ''
-               f = ''
-               if minn > 1 then parse line f +(minn) line
-               p = findit(s,line,snum,1)
-               if p = 0 then do
-                  data = line
-                  line = ''
-               end
-               else parse line data +(p) line
-               output(f || data)
-               minn = 0
+        loop
+          line = Rexx peekto()
+          if line = null then line = ''
+          loop for maxsp until line = ''
+            f = ''
+            if minn > 1 then parse line f +(minn) line
+            p = findit(s,line,snum,1)
+            if p = 0 then do
+              data = line
+              line = ''
             end
-            readto()
-         catch StageError
-         end
-      end
+            else parse line data +(p) line
+            output(f || data)
+            minn = 0
+          end
+          readto()
+        catch StageError
+        end
+end
 
-      rc = mrc()
+rc = mrc()
 exit(rc*(rc<>12))
 
-method verifyit(needle,haystack,key,offset,start) returns rexx
-   p = haystack.verify(needle,key,start)
-   if p = 0 then return 0
-   pp = p + offset
-   if pp > 0 then return pp
-   else
-   p = verifyit(needle,haystack,key,offset,p+1)
-   return p
-
-method findit(needle,haystack,offset,start) returns rexx
-   p = haystack.pos(needle,start)
-   if p = 0 then return 0
-   pp = p + offset
-   if pp > 0 then return pp
-   else
-   p = findit(needle,haystack,offset,p+1)
-   return p
+  method verifyit(needle,haystack,key,offset,start) returns rexx
+    p = haystack.verify(needle,key,start)
+    if p = 0 then return 0
+    pp = p + offset
+    if pp > 0 then return pp
+    else
+      p = verifyit(needle,haystack,key,offset,p+1)
+    return p
+    
+  method findit(needle,haystack,offset,start) returns rexx
+    p = haystack.pos(needle,start)
+    if p = 0 then return 0
+    pp = p + offset
+    if pp > 0 then return pp
+    else
+      p = findit(needle,haystack,offset,p+1)
+    return p
+    

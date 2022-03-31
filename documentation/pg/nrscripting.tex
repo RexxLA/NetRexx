@@ -1,0 +1,85 @@
+\chapter{\nr{} as a Scripting Language}\label{refscripting}
+The term \emph{scripting} is used here in the sense of using the
+programming language for quickly composed programs that interact with
+some application or environment to perform a number of simple tasks.
+
+You can use \nr{} as a simple scripting language without having
+knowledge of, or using any of the features that is needed in a Java
+program that runs on the JVM - like defining a class name, and having
+a \texttt{main} method that is static and expects an array of String
+as its input. 
+
+Scripts can be written very fast. There is
+no boilerplate, such as defining a class, constructors and methods, and the programs contain only
+the necessary statements. In this sense, a \nr{} script looks like
+an oo-version of a Classic Rexx script.  These will be automatically generated
+in the Java language source that is being generated for a script.
+
+The scripting feature can be used for test purposes. It is an easy and convenient way of entering some statements and testing them.
+The scripting feature can also be used for the start sequence of a \nr{} application.
+
+Scripts can be interpreted or compiled - there is no rule that a
+script needs to be interpreted. In interpreted mode, the
+edit-compile-run cycle is shortened, in the sense that there is no separate compilation
+step necessary and incremental editing and testing can be done very efficiently. In both cases, interpreted or
+compiled, the \nr{} translator adds the necessary syntactic overhead
+into the Java source to enable
+the JVM to execute the resulting program.
+\section{A Scripting Example}
+In the following example we see how a simple script is written,
+translated to Java source and executed.
+\lstinputlisting[label=greets,caption=Greet.nrx]{./Greet.nrx}
+If we execute this with \keyword{nrc -verbose0 Greet -arg Mike} it will say \emph{Hello Mike}. Note that in scripting mode the commandline arguments are put into a string called \keyword{arg}, which can be parsed like in a Classic Rexx script. We can look how this is done. To see the source, we must compile it and tell the processor to keep the source, and format it for readability (normally, no Java source is written to disk). Add a \keyword{-replace} for when we are doing this more than once.
+The commandline for this is: \keyword{nrc -keepasjava -format -replace Greet}. This will leave a \keyword{Greet.java} file for us to look at.
+\begin{lstlisting}
+/* Generated from 'Greet.nrx' 28 Mar 2022 22:11:40 [v4.03] */
+/* Options: Annotations Decimal Format Java Logo Replace Trace2 Verbose3 */
+
+
+public class Greet{
+ private static final char[] \$01={1,10,2,0,1,0};
+ private static final netrexx.lang.Rexx \$02=netrexx.lang.Rexx.toRexx("");
+ private static final netrexx.lang.Rexx \$03=netrexx.lang.Rexx.toRexx("Hello,");
+ private static final java.lang.String \$0="Greet.nrx";
+
+\@SuppressWarnings("unchecked")
+
+
+ public static void main(java.lang.String \$0s[]){
+  netrexx.lang.Rexx name=null;
+  netrexx.lang.Rexx arg=new netrexx.lang.Rexx(\$0s);
+  {netrexx.lang.Rexx \$1[]=new netrexx.lang.Rexx[2];
+  netrexx.lang.RexxParse.parse(arg,\$01,\$1);
+  name=\$1[0];}
+  if (name.OpNotEq(null,\$02))
+   netrexx.lang.RexxIO.Say(\$03.OpCcblank(null,name));
+  else
+   netrexx.lang.RexxIO.Say("Hello, stranger!");
+  return;}
+
+
+ private Greet(){return;}
+}
+\end{lstlisting}
+We see that the Java source has a class Greet defined, and a static and public \keyword{main} method, which is what the JVM looks for when asked to execute a class file. Its argument is an Array of type String, called \$0s - the contents of which are copied into a Rexx variable called \keyword{arg}.
+
+\begin{shaded}
+The scripting facility and its automatic generation of a class
+statement can lead to one surprising message when there is
+an error in the first part of the program: \emph{class x already
+  implied} when the automatically generated class statement (using the
+program file name) somehow clashes with the specified name that
+contains the error. When not in scripting mode, this error message
+nearly always indicates an error that occurred before the first class statement.
+\end{shaded}
+
+\section{Automatic 'Uses'}
+When \emph{Scripting Mode} \marginnote{\color{gray}4.03} is employed, the classes \keyword{RexxStream}, \keyword{RexxDate} and \keyword{RexxTime} are automatically added to the Class definition using a \keyword{uses} statement. This statement causes the static methods of these classes to be available to the program without further qualification, as shown in the following example:
+\lstinputlisting[label=autouses,caption=\nr{} Automatic
+Uses]{./daydate.nrx}
+When we run this with \keyword{nrc -verbose0 daydate -arg 1962 2022
+  saturday mar 10}, the following result is obtained:
+\bash[stdout]
+nrc -verbose0 daydate -arg 1962 2022 saturday mar 10
+\END
+(for more date and time examples, see page \pageref{refdatetimearith}) .

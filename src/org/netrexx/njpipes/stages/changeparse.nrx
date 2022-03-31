@@ -1,0 +1,247 @@
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** changeparse
+
+Change the contents of records, using Rexx Parse. Calculations can be done.
+And a final record added.
+
+                 +-FROM-+                        +-TO-+
+>>--CHANGEParse--+------+-parse_template_Dstring-+----+-output_template_Dstring-->
+
+>--+-----------------------+-->
+   +-BY-by_NetRexx_Dstring-+
+
+>--+-----------------------------+--+----------------------------------+--><
+   +-FIRST-first_NetRexx_Dstring-+  +-FINALLY-finally_template_Dstring-+
+
+ Records are parsed via the parse_template_delimited_string.
+ Variables are named $n, where n is 1 to 9.
+ The by_NetRexx_delimited_string is interpreted.  This is 0 or more
+ semicolon separated NetRexx statements, probably using the $n variables,
+ which can have the value altered.
+ Other variables may be used, and are persistent while the stage is active,
+ so can be used as accumulators.
+ The values of the variables are put into the output_template_delimited_string
+ replacing $n.
+ For a literal $n that won't be changed, use $$n.
+ A first_NetRexx_delimited_string, if present, is interpreted before reading
+ any record from the primary input steam.  Any variables used in the
+ by_NetRexx_delimited string must be defined here.
+ A finally_template_delimited_string, if present, is written as a final
+ output record after the primary input stream is finished, using the $n's.
+ Any keyword phrases must, in any order, follow any non-keyworded FROM & TO phrases.
+
+ Examples:
+   changeparse  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./
+   changeparse from / 2 $1 +1/ to /The second letter is "$1". $$1 won't be changed./
+   changeparse from / . $2 . 50 $5 +5 / to /The product is $1/ by /$1 = $2 * $5/
+   changeparse from / . $2 . 50 $5 +5 / ,
+               to /The product is $1/ ,
+               by /$1 = $2 * $5;$3 = $3 + $1/ ,
+               first /$3 = 0/ ,
+               finally /$3 is the total/
+
+*/
+
+/*
+ 20/10/ 6 From PARSE; add FROM, TO, BY & block, FIST & block, FINALLY & block. Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class changeparse extends stage
+
+options = Rexx
+optionsup = Rexx
+
+  -- The run method of this stage should never get called
+
+method run()
+  rc = 16
+  exit(rc)
+
+
+  /*
+   * pInfo    = name of pipe,
+   * pInfo[1] = stage number in pipe
+   * pInfo[2] = stage label, null if no label
+   * pInfo[3] = stage name
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of pipe
+   * pInfo[6] = sep
+   * pInfo[7] = end
+   * pInfo[8] = not modifier active
+   * pInfo[9] = stage is a driver
+   * code     = ''
+   * code[0]  = 0
+   *
+   * When compilerExit returns with true, the compiler expects:
+   *
+   * pInfo[2] = stage label
+   * pInfo[3] = name of stage
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of the pipe
+   * code[0]  = number of lines generated
+   * code[n]  = line n
+   *
+   */
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean
+  pid  = pInfo
+  name = pInfo[3]
+
+  templates = pInfo[4]
+
+  fromkw = getKeyWord(templates, 'FROM', 4, 'D')
+  if fromkw[5] > 0 then do
+    templates = fromkw[1]
+    from = fromkw[2]
+  end
+  else do
+    fromds = DString(templates)
+    from = fromds.string()
+    if from = '' then do
+      -- Emsg(11, 'No FROM delimited string found.')
+      say 'No FROM delimited string found.'
+      exit 11
+    end
+    templates = fromds.residue
+  end
+
+  by = ''
+  bykw = getKeyWord(templates, 'BY', 2, 'D')
+  if bykw[5] > 0 then do
+    templates = bykw[1]
+    by = bykw[2].changestr('"','""')
+  end
+
+  tokw = getKeyWord(templates, 'TO', 2, 'D')
+  if tokw[5] > 0 then do
+    templates = tokw[1]
+    to = tokw[2]
+  end
+  else do
+    tods = DString(templates)
+    to = tods.string()
+    if to = '' then do
+      -- Emsg(11, 'ChangeParse - No TO delimited string found.')
+      say 'ChangeParse - No TO delimited string found.'
+      exit 11
+    end
+    templates = tods.residue
+  end
+
+  one = 1.d2c()
+  to = to.changestr('$$',one)
+  to = to.changestr('"','""')
+  loop i = 1 for 9
+    to = to.changestr("$"i,'"$'i'"')
+  end
+
+  first = ''
+  firstkw = getKeyWord(templates, 'FIRST', 5, 'D')
+  if firstkw[5] > 0 then do
+    templates = firstkw[1]
+    first = firstkw[2].changestr('"','""')
+  end
+
+  finally = Rexx ''
+  finallykw = getKeyWord(templates, 'FINALLY', 6, 'D')
+  if finallykw[5] > 0 then do
+    templates = finallykw[1]
+    finally = finallykw[2]
+    finally = finally.changestr('$$',one)
+    finally = finally.changestr('"','""')
+    loop i = 1 for 9
+      finally = finally.changestr("$"i,'"$'i'"')
+    end
+  end
+
+  if templates <> '' then do
+    -- Emsg(11, 'ChangeParse -- Unknown extra:' templates)
+    say 'ChangeParse -- Unknown extra:' templates 'RC = 11'
+    exit 11
+  end
+
+
+  /* make the generated stage */
+  n=0
+  cname = stageName(name,pid,pInfo[1])
+
+
+  n=n+1;o[n]= 'class 'cname' extends stage private'
+  n=n+1;o[n]= '--trace results'
+  n=n+1;o[n]= 'one = 1.d2c()'
+
+  n=n+1;o[n]= ''
+  n=n+1;o[n]= 'method run()'
+
+  if first <> '' then do
+    n=n+1;o[n]= first -- interpret the first block
+  end
+
+  n=n+1;o[n]= 'loop forever'
+       /* See what input we have. */
+  n=n+1;o[n]= '  line = Rexx peekto()'
+  n=n+1;o[n]= '  line = line.changestr("$",one)'
+
+  n=n+1;o[n]= '  parse line' from
+
+  if by <> '' then do
+    n=n+1;o[n]= by -- interpret the by block
+  end
+
+  n=n+1;o[n]= '  ol = Rexx "'to'"'
+  n=n+1;o[n]= '  ol = ol.changestr(one,"$")'
+
+  n=n+1;o[n]= '  output(ol)'
+
+       /* Go on to the next one. */
+  n=n+1;o[n]= '  readto()'
+  n=n+1;o[n]= 'catch StageError'  /* Most likely end of input */
+  n=n+1;o[n]= '  rc = rc()'
+
+  if finally <> '' then do
+    n=n+1;o[n]= '  if rc = 12 then do'
+    n=n+1;o[n]= '    ol = Rexx "'finally'"'
+    n=n+1;o[n]= '    output(ol)' -- interpret the finally block
+    n=n+1;o[n]= '  catch StageError'
+    n=n+1;o[n]= '  end'
+  end
+
+  n=n+1;o[n]= 'end'
+
+  n=n+1;o[n]= 'exit(rc*(rc<>12))'
+
+  o[0] = n
+
+  pInfo[3] = cname
+  pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
+
+  /* show off the generated code */
+  trace off
+  sc = 0
+  -- sc = 1 -- comment out to not show the code
+  sn = 0
+  sn = 1 -- comment out to not show line numbers
+  nn = Rexx
+  if sc then do
+    say "*************************************************************"
+    loop nn = 1 for o[0]
+      if sn then l = nn.right(3)" "
+      else l = ""
+      say l""o[nn]
+    end
+    say "*************************************************************"
+  end
+return 1

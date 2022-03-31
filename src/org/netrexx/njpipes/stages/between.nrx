@@ -1,22 +1,33 @@
 -- between.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998, 2020  Jeffrey Hennick, JHennick@Delphi.Com
  *Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program. 
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/06/20  aobj; binary; New; derived from FRLABLE.  JHennick
+ *  and distributing this program.
 */
+
+/*
+  99/05/09  use mrc() instead of rc().  ejt
+  98/06/20  aobj; binary; New; derived from FRLABLE.  JHennick
+  19/09/16  anycase synonyms fix for logic; add CASELESS per CMS. Jeff Hennick
+  20/ 2/ 5  hexstrings and binstrings; documentation. Jeff Hennick
+  20/12/26  fix for numeric to string. Jeff Hennick
+
+*/
+
 /** between
 
-
-   >>--BETWEEN--+---------+--delimitedString--+-number----------+---------><
-                +-ANYcase-+                   +-delimitedString-+
-
+>>--BETWEEN--+----------------+--+-delimitedString1-+-+-delimitedString2-+---><-
+             +-ANYcase-(1)(2)-+  +-Xhexstring1------+ +-Xhexstring2------+
+                                 +-Hhexstring1------+ +-Hhexstring2------+
+                                 +-Bbinstring1------+ +-Bbinstring2------+
+                                                      +-n----------------+
+ (1) NJPipes only.
+ (2) CASEANY, CASEIGNORE, CASELESS, and IGNORECASE are all synonyms for ANYCASE.
 
   FRLABLE Contributed by Chuck Moore.
-
 **/
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -33,39 +44,65 @@ method run()
    args          = Rexx     ''
    anycase       = boolean  0
    w1            = Rexx     ''
+   number        = Rexx     0
+
+   bin1          = boolean 0
+   bin2          = boolean 0
 
    /* get incoming arguments and associated parameters */
 
    parse arg() args
    parse args.upper() w1 .
-   anycase = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1)
+
+   anycase = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASELESS CASEIGNORE'.wordpos(w1) > 0
    if anycase then parse args . args
 
-   ds = DString(args)
+   d = getstring(args)
+   Label = d['d']
+   bin1 = d['b']
+   res = d['r']
 
-   Label = ds.String
+   parse args . str2 .
 
-   toLabel = ds.Residue
-   if toLabel = '' then do
-      Emsg(11,'Error --' getName() 'No "toLabel"')
-   end
-
-   if toLabel.datatype('W') then do
-      number = toLabel - 1
-      if number < 1 then do
-         Emsg(11,'Error --' getName() 'number must be > 1')
-      end
-   end
+   hex2 = 0
+   if res.datatype('W') then toLabel = res
    else do
-      toLabel = DString(toLabel).String
-      number = 0
-      _toLabel_len = toLabel.length
+     d = getstring(res)
+     toLabel = d['d']
+     bin2 = d['b']
+     hex2 = d['h']
+
+     if d['r'] \= '' then do
+        Emsg(11,'Error --' getName() 'extra argument:' d['r'])
+     end
+   end
+
+   if toLabel = '' then toLabel = str2
+
+   if \hex2 then do
+      if toLabel.datatype('W') then do
+         number = toLabel - 1
+         if number < 1 then do
+            Emsg(11,'Error --' getName() 'number must be > 0')
+         end
+      end
+      else do
+         toLabel = DString(str2).String
+         number = 0
+         _toLabel_len = toLabel.length
+      end
+
+     if toLabel = '' then do
+       Emsg(11,'Error --' getName() 'No "toLabel"')
+     end
    end
 
    _Label_len = Label.length()               -- handy to have around for speed
-
+   _Label_bin_len = Label.length() % 8 + 1              -- handy to have around for speed
+   _toLabel_len = toLabel.length()               -- handy to have around for speed
+   _toLabel_bin_len = toLabel.length() % 8 + 1              -- handy to have around for speed
    select
-       when _Label_len > 0 & anycase then                   -- real label, ANYCASE
+       when _Label_len > 0 & anycase & \bin1 then                   -- real label, ANYCASE
             loop forever
                aobj = peekto()          -- look at the next record
                _record = Rexx aobj          -- look at the next record
@@ -78,11 +115,24 @@ method run()
                      if number > 0 then loop for number
                         output(readto())
                      end
-                     else loop until toLabel = _record.left(_toLabel_len)
-                        aobj = peekto()
-                        _record = Rexx aobj
-                        output(aobj)
-                        readto()
+
+                     else do
+                        if bin2 then do
+                           dif = c2d(_record.left(_toLabel_bin_len)).compare(toLabel)
+                           test2 = dif == 0 | dif = _toLabel_len + 1
+                        end
+                        else test2 = toLabel = _record.left(_toLabel_len)
+                        loop until test2
+                           aobj = peekto()
+                           _record = Rexx aobj
+                        if bin2 then do
+                           dif = c2d(_record.left(_toLabel_bin_len)).compare(toLabel)
+                           test2 = dif = 0 | dif = _toLabel_len + 1
+                        end
+                        else test2 = toLabel = _record.left(_toLabel_len)
+                           output(aobj)
+                           readto()
+                        end
                      end
 
                   catch StageError           -- errors (or end of datastream)
@@ -102,7 +152,12 @@ method run()
             loop forever
                aobj = peekto()          -- look at the next record
                _record = Rexx aobj          -- look at the next record
-               if Label == _record.left(_Label_len) then
+               if bin1 then do
+                  dif = c2d(_record.left(_Label_bin_len)).compare(Label)
+                  test = dif == 0 | dif = _Label_len + 1
+               end
+               else test = Label == _record.left(_Label_len)
+               if test then
                   do
                      selectOutput(0)
                      output(aobj)
@@ -111,11 +166,23 @@ method run()
                      if number > 0 then loop for number
                         output(readto())
                      end
-                     else loop until toLabel == _record.left(_toLabel_len)
-                        aobj = peekto()
-                        _record = Rexx aobj
-                        output(aobj)
-                        readto()
+                     else do
+                        if bin2 then do
+                           dif = c2d(_record.left(_toLabel_bin_len)).compare(toLabel)
+                           test2 = dif == 0 | dif = _toLabel_len + 1
+                        end
+                        else test2 = toLabel == _record.left(_toLabel_len)
+                        loop until test2
+                           aobj = peekto()
+                           _record = Rexx aobj
+                        if bin2 then do
+                           dif = c2d(_record.left(_toLabel_bin_len)).compare(toLabel)
+                           test2 = dif == 0 | dif = _toLabel_len + 1
+                        end
+                        else test2 = toLabel == _record.left(_toLabel_len)
+                           output(aobj)
+                           readto()
+                        end
                      end
 
                   catch StageError           -- errors (or end of datastream)
@@ -143,3 +210,43 @@ method run()
    _rc = mrc()
    if _rc = 4 then _rc = 12
    exit(_rc * (_rc <> 12) )        -- sever streams and leave with Colishaw (tm) retcode
+
+method getstring(word) signals ThreadQ
+   parse word.upper().strip() fc +1 w .
+   bin = boolean 0
+   hex = boolean 1
+   res = Rexx ''
+   select case fc
+     when 'H', 'X' then ds = mx2c(w)
+     when 'B' then do
+       ds = w
+       bin = 1
+     end
+     otherwise
+        dsr = DString(word)
+        ds = Rexx dsr.String
+        hex = 0
+        res = Rexx dsr.Residue
+   catch BadArgumentException
+     Emsg(11,'Error -- bad number ' word)
+   end
+   ret = rexx ''
+   ret['d'] = ds
+   ret['b'] = bin
+   ret['h'] = hex
+   ret['r'] = res
+   return ret
+
+method c2d(str)
+   ret = ''
+   loop i = 1 to str.length
+      ret = ret || str.substr(i,1).c2x.x2b()
+   end
+   return ret
+
+method mx2c(hex)
+  ret = rexx ''
+  loop i = 1 to hex.length by 2
+     ret = ret || hex.substr(i,2).x2c
+  end
+  return ret

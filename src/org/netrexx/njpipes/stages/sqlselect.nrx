@@ -1,110 +1,253 @@
 /*
- *  Copyright (C) 1997,1998,1999  R.V. Jansen
+ *  Copyright (C) 1997,1998,1999  R.V. Jansen. 2020 Jeff Hennick
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  *
  */
+
+/** sqlselect
+
+                                   +-SELECT-(5)+                                    +-;-+
+>>--SQLSELECT--+-----------------+-+-----------+-+--------------------------------+-+---+--><
+               +-(-| options |-)-+               +-sql_select_statement_string-(3)+
+
+OPTIONS:
+   +------------------------------------------------+
+ |-v-+--------------------------------------------+-+-|
+     |            +-/sqlselect.properties/-+      |
+     +-PROPERTIES-+-filename_Dstring-------+-(5)+-+
+     | +-HEADERS---+                            |
+     +-+-----------+-(5)(6)---------------------+
+     | +-NOHEADERS-+                            |
+     +-URL-Qword-(7)----------------------------+
+     +-JDBCDRIVER-Qword-(7)---------------------+
+     +-DBMS-Qword-(7)(8)------------------------+
+     +-DB_NAME-Qword-(7)(8)---------------------+
+     +-USER-Qword-(7)(8)(10)--------------------+
+     +-PASS-Qword-(7)(8)(10)--------------------+
+
+ uses jdbc to select from any jdbc enabled dbms
+
+ properties file ("sqlselect.properties" default) is read to find jdbcdriver name and url
+ sample properties file:
+
+ #JDBC driver name
+ #Tue Feb 03 23:29:43 GMT+01:00 1998
+ jdbcdriver=com.imaginary.sql.msql.MsqlDriver
+ url=jdbc:msql://localhost:1114/TESTDB
+ # the following are not needed for some DBMS, ex: SQLite
+ user=db_user_name
+ pass=password_for_db
+
+ if this file is not found default (compiled in) values are used
+
+ (1) when using a sqlselect * (all columns) from the commandline, quote the query
+ as in java pipes.compiler (query) "sqlselect * from dept | console"
+ (2) the netrexx/jdbc combination is extremely case sensitive for column and table names
+ (3) if no sql_select_string is specified, it is read from the primary input stream.
+     this is optional in NetRexx Pipelines only. CMS does not use the stream input.
+ (4) a maximum of only one record is ever read from the primary input stream.
+ (5) NetRexx Pipelines only
+ (6) CMS Pipelines is implied HEADERS only.
+ (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
+ (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
+     DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
+     SQLite is the only one tested as of 8/15/20.
+ (9) the SQL stage uses NOHEADERS as the default.
+ (10) USER & PASS are needed for some DBMSs and not others, ex. SQLite.
+
+ Priority order for URL, JDBCDRIVER, DBMS, DB_NAME, USER, & PASS (first one found rules):
+   1. option in the SQL command string
+   2. from secondary input stream
+   3. from "sqlselect.properties" file
+      or from file specified by PROPERTIES option
+   4. Builtin
+*/
+
+/*
+ 8/17/20 Added MySQL as dbms.  Jeff Hennick
+ 8/15/20 Added URL, JDBCDRIVER, DBMS, & DB_NAME, USER & PASS; documentation. Jeff Hennick
+ 8/13/20 Added PROPERTIES, HEADERS, NOHEADERS, SELECT; documentation. Jeff Hennick
+  /  /97 New Rene V Jansen
+*/
+
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
 import java.sql.
 import java.util.
 
--- sqlselect by rvjansen
--- uses jdbc to select from any jdbc enabled dbms
-
--- properties file sqlselect.properties is read to find jdbcdriver name and url
--- sample properties file:
-
--- #JDBC driver name
--- #Tue Feb 03 23:29:43 GMT+01:00 1998
--- jdbcdriver=com.imaginary.sql.msql.MsqlDriver
--- url=jdbc:msql://localhost:1114/TESTDB
-
--- if this file is not found default (compiled in) values are used
--- note 1) when using a sqlselect * (all columns) from the commandline, quote the query
--- as in java pipes.compiler (query) "sqlselect * from dept ! console"
--- note 2) the netrexx/jdbc combination is extremely case sensitive for column and table names
-
 class sqlselect extends stage
+--trace results
+
+options = Rexx
+optionsup = Rexx
+default_properties = "sqlselect.properties"
 
 method run()
 
-a = arg()
+  a = arg()
 
--- read from properties file and get url and jdbcdriver values
-do
-fi = BufferedReader(FileReader("sqlselect.properties"))
+  parse a '(' options ')' selstatement
+                                              /* SELECT Statement */
+  if options = '' then selstatement = a
+  do
+    if selstatement = '' then selstatement = Rexx readto()
+  catch StageError
+    say 'sqlstage error'
+  end
+  if selstatement.word(1) = 'select' then
+    selstatement = selstatement.subword(2)
+                                         /* OPTIONS ? */
+                                         /* user & password defaults */
+  user = ''
+  pass = ''
 
-loop forever
-    textLine = Rexx fi.readLine()
-    if textline = null then leave
-    if textline.left(3) = 'url' then parse textline name '=' url
-    if textline.left(10) = 'jdbcdriver' then parse textline name '=' jdbcdriver
-    name = name -- dummy clause to lose compiler warning
-end
+  optionsup = options.upper
+                                          /* headers or noheaders ? */
+  headers = \getOpt('noheaders', 9)
+  if getOpt('headers', 7) then headers = 1
+                                          /* properties file ? */
+  prop_file = getOpt('properties', 10, 3)
+  if prop_file = '' | prop_file = 1 then prop_file = default_properties
 
-catch IOException
--- if the properties file is not found, these are the DEFAULT jdbc driver name and url
-jdbcdriver = "COM.ibm.db2.jdbc.app.DB2Driver"
-url = "jdbc:db2:sample"
-end
+                                         /* URL & JDBCdriver */
+  urlcmd = getOpt('url', 3, 3)
+
+  jdbcdrivercmd = getOpt('jdbcdriver ', 10, 3)
+
+                                         /* DBMS & File DB_NAME */
+  dbms = getOpt('dbms', 4, 3)
+  select case dbms.lower
+    when '' then nop
+    when 'sqlite' then  jdbcdrivercmd = "org.sqlite.JDBC"
+    when 'mysql' then   jdbcdrivercmd = "com.mysql.jdbc.Driver"
+    otherwise jdbcdrivercmd = "org."dbms".JDBC"  -- might work
+  end
+
+  db_name = getOpt('db_name', 7, 3)
+  if db_name \= '' then
+    select  case dbms.lower
+      when '' then nop
+      when 'sqlite' then  urlcmd = "jdbc:sqlite:"db_name
+      when 'mysql' then   urlcmd = "jdbc:mysql:"db_name
+      otherwise urlcmd = "jdbc:"dbms":"db_name  -- might work
+    end
+
+                                          /* User & Password */
+  usercmd = getOpt('user', 4, 3)
+  passcmd = getOpt('pass', 4, 3)
+
+                                           /* extra options ? */
+  if options \= '' then
+    Emsg(11, 'sqlselect: extra options:' options)
 
 
--- force loading of jdbc driver
-do
-  Class.forName(jdbcdriver).newInstance()
 
-catch e1 = Exception
-  say 'JDBC driver could not be loaded.'
-  say 'Exception (' e1 ') caught : \n' e1.getMessage()
-  exit 1
-end
+      /* read from properties file and get url and jdbcdriver values */
+  name = Rexx ''
+  if prop_file \= '' then do
+    fi = BufferedReader(FileReader(prop_file))
 
-do
--- make the connection
-  jdbcCon = Connection DriverManager.getConnection(url, '', '')
+    loop forever
+      textLine = Rexx fi.readLine()
+      if textline = null then leave
+      if textline.left(4).lower = 'user' then parse textline name '=' user
+      if textline.left(3).lower = 'url' then parse textline name '=' url
+      if textline.left(10).lower = 'jdbcdriver' then parse textline name '=' jdbcdriver
+    end
 
-catch e2 = SQLException
-  say 'SQLException(s) caught while connecting !'
-  loop while (e2 \= null)
-     say 'SQLState:' e2.getSQLState()
-     say 'Message: ' e2.getMessage()
-     say 'Vendor:  ' e2.getErrorCode()
-     say
-     e2 = e2.getNextException()
-   end
-   exit 1
-end
+    catch IOException
+      -- if the properties file is not found, these are the DEFAULT jdbc driver name and url
+      jdbcdriver = "com.ibm.db2.jcc.DB2Driver"
+      url = "jdbc:db2:sample"
+  end
+
+  do
+    selectInput(1)
+    loop
+      textLine = Rexx peekto()
+      if textline.left(3).lower = 'url' then parse textline name '=' url
+      if textline.left(10).lower = 'jdbcdriver' then parse textline name '=' jdbcdriver
+      readto()
+    end
+  catch stageError
+  end
+  do
+    selectInput(0)
+  catch stageError
+  end
+  name = name -- dummy clause to lose compiler warning
+
+                                  /* command line options are king */
+  if urlcmd \= '' then url = urlcmd
+  if jdbcdrivercmd \= '' then jdbcdriver = jdbcdrivercmd
+  if usercmd \= '' then user = usercmd
+  if passcmd \= '' then pass = passcmd
+
+  -- force loading of jdbc driver
+  do
+    Class.forName(jdbcdriver).newInstance()
+
+  catch e1 = Exception
+    say 'JDBC driver' prop_file 'could not be loaded.'
+    say 'aException (' e1 ') caught : \n' e1.getMessage()
+    exit 1
+  end
+
+  do
+    -- make the connection
+    if jdbcdriver = "com.ibm.db2.jcc.DB2Driver" then
+      do
+	/* db2 z/OS does not like to override uid/pw in url
+	 * when it was already in properties */ 
+	jdbcCon = Connection DriverManager.getConnection(url)
+      end
+    else do
+      jdbcCon = Connection DriverManager.getConnection(url, user, pass)
+    end
+  catch e2 = SQLException
+    say 'bSQLException(s) caught while connecting !'
+    loop while (e2 \= null)
+       say 'SQLState:' e2.getSQLState()
+       say 'Message: ' e2.getMessage()
+       say 'Vendor:  ' e2.getErrorCode()
+       say
+       e2 = e2.getNextException()
+     end
+     exit 1
+  end
 
 do
 -- the query
-  query = 'Select ' a.space()
+  query = 'Select ' selstatement.space()
   stmt = Statement jdbcCon.createStatement()
   rs = ResultSet stmt.executeQuery(query)
   meta = ResultSetMetaData rs.getMetaData();
   cols = meta.getColumnCount();
   helpline=Rexx
 -- get the column names
-  outputline = ''
-  width = ''
-  loop i=1 to cols
-    if meta.getColumnDisplaySize(int i) > meta.getColumnName(int i).length()
-      then width[i] = meta.getColumnDisplaySize(int i)
-    else width[i] = meta.getColumnName(int i).length()+2
-    if width[i] > 9999 then width[i] = meta.getColumnName(int i).length()+2
-    columnline = meta.getColumnName(int i).toUppercase()
-    helpline = columnline
-    helpline = helpline.left(width[i], '-')
-    outputline = outputline||helpline
-  catch NullPointerException
-  end
-  do
-    output(outputline)
-  catch StageError
-    rc = rc()
-  end
+--  if headers then do
+    outputline = ''
+    width = ''
+    loop i=1 to cols
+      if meta.getColumnDisplaySize(int i) > meta.getColumnName(int i).length()
+        then width[i] = meta.getColumnDisplaySize(int i)
+      else width[i] = meta.getColumnName(int i).length()+2
+      if width[i] > 9999 then width[i] = meta.getColumnName(int i).length()+2
+      columnline = meta.getColumnName(int i).toUppercase()
+      helpline = columnline
+      helpline = helpline.left(width[i], '-')
+      outputline = outputline||helpline
+    catch NullPointerException
+    end
+    if headers then do
+      output(outputline)
+    catch StageError
+      rc = rc()
+    end
+--  end
   -- get the data rows
   loop i=1 while rs.next()
     outputline = ''
@@ -120,16 +263,16 @@ do
   catch StageError
     rc = rc()
   end
-  
+
   rs.close()
   stmt.close()
   jdbcCon.close()
-  
+
 catch e3 = SQLException
   say 'SQLException(s) caught !'
   loop while (e3 \= null)
-    say 'SQLState:' e3.getSQLState()
-    say 'Message: ' e3.getMessage()
+    if e3.getSQLState() \= null then say 'SQLState:' e3.getSQLState()
+    if e3.getMessage() \= null then say 'Message: ' e3.getMessage()
     say 'Vendor:  ' e3.getErrorCode()
     say
     e3 = e3.getNextException()
@@ -139,3 +282,64 @@ end
 
 exit(rc*(rc<>12))
 
+method getOpt(opt, len, kind = 0)
+trace off
+ /* searches for the opt's abbriviation at len.  Returns depending on kind:
+    kind: 0: boolean exists; 1: return next word; 2: return DString 3: return QWord
+    removes opt and Dstring/QWord from options
+    QWord has optional single or double quotes, must have quotes for multi-word */
+  ret = Rexx
+  retw = Rexx ''
+  del2 = 1
+
+  optup = opt.upper
+  loop wp = 1 to optionsup.words()
+    if optup.abbrev(optionsup.word(wp), len) then leave
+  end
+  if wp > optionsup.words() then wp = 0
+
+  ret = wp > 0
+  if kind = 1 & ret then do
+    retw = options.word(wp + 1)
+    if \ retw.datatype('N') then
+      do
+        retw = 1 /* Default number */
+        del2 = 0
+      end
+  end
+
+  select
+  when kind = 2 & ret then do
+    opt = options.subword(wp + 1)
+    ds = DString(opt)
+    retw = ds.String()
+    options = options.subword(1, wp - 1) ds.Residue
+    optionsup = options.upper
+  end
+  when kind = 3 & ret then do  /* possibly quoted "word" */
+    opt = options.subword(wp + 1)
+    fc = opt.left(1)
+    if fc = '"' | fc = "'" then do
+      ds = DString(opt)
+      retw = ds.String()
+      options = options.subword(1, wp - 1) ds.Residue
+    end
+    else do
+      retw = options.word(wp + 1)
+      options = options.delword(wp, 2)
+    end
+    optionsup = options.upper
+  end
+  when kind = 2 | kind = 3 then
+    ret = ''
+  when ret > 0 then do
+    w = 1
+    if kind > 0 & del2 then w = 2
+    options = options.delword(wp,w)
+    optionsup = optionsup.delword(wp,w)
+  end
+  otherwise
+    nop
+  end
+  if kind > 0 & retw <> '' then ret = retw
+  return ret

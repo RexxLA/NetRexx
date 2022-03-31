@@ -2,9 +2,9 @@
 \begin{document}
 \renewcommand{\isbn}{978-90-819090-3-7}    
 \setcounter{tocdepth}{1} 
-\title{\fontspec{Bodoni URW Light}Pipelines Reference}
-\author{Ed Tomlinson \and Jeff Hennick \and Rene Jansen}
-\date{Version \splice{java org.netrexx.process.NrVersion} of \today}
+\title{\fontspec{Bodoni URW Light}Pipelines Guide and Reference}
+\author{Ed Tomlinson \and Jeff Hennick \and René Jansen}
+\date{\null\hfill Version \splice{java org.netrexx.process.NrVersion} of \today}
 \maketitle
 \pagenumbering{Roman}
 \pagestyle{plain}
@@ -18,31 +18,39 @@
 \frontmatter
 \large
 \input{../boilerplate/series}
-\input{../boilerplate/conventions}
+%\input{../boilerplate/conventions}
 \mainmatter
 \chapter{Introduction}
-A Pipeline, or Hartmann Pipeline\footnote{\url{http://en.wikipedia.org/wiki/Hartmann_pipeline}}, is a concept that extends and improves pipes as they are known from Unix and other operating systems. The name pipe indicates an interprocess communication mechanism, as well as the programming paradigm it has introduced. Compared to Unix pipes, Hartmann Pipelines offer multiple input- and output streams, more complex pipe topologies, and a lot more.\\
+A Pipeline, or Hartmann
+Pipeline\footnote{\url{//https://en.wikipedia.org/wiki/CMS_Pipelines}}\footnote{This
+  page used to be called Hartmann Pipeline, but was renamed to CMS Pipelines
+  in 2016}, is a concept that extends and improves pipes as they are known from Unix and other operating systems. The name pipe indicates an interprocess communication mechanism, as well as the programming paradigm it has introduced. Compared to Unix pipes, Hartmann Pipelines offer multiple input- and output streams, more complex pipe topologies, and a lot more.
 
 Pipelines were first implemented on VM/CMS, one of IBM's mainframe
-operating systems. This version was later ported to TSO to run under
-MVS and has been part of several product configurations. Pipelines are
+operating systems. This version was later adapted to run under
+MUSIC/SP and TSO/MVS (now z/OS) and has been part of several product configurations. Pipelines are
 widely used by VM users, in a symbiotic relationship with REXX, the
 interpreted language that also has its origins on this platform.
 
-Pipes for NetRexx is the implementation of Pipelines for the Java Virtual
-machine.\footnote{And indeed, it can also be used from programs written
-  in the Java Language.} It is written in NetRexx and pipes and stages can be defined using this
-language. The resulting code can run on every platform that has a JVM
+Pipes for \nr{} is the implementation of Pipelines for the Java Virtual
+machine. It is written in \nr{} and pipes and stages can be defined using this
+language. It can run on every platform that has a JVM
 (Java Virtual Machine) installed. This portable version of Pipelines was started
-by Ed Tomlinson in 1997 under the name of \emph{njPipes}, when NetRexx was
-still very new, and was open sourced in 2011, soon after the NetRexx
-translator itself. The included stages have always been open source. It was integrated into the NetRexx translator in
+by Ed Tomlinson in 1997 under the name of \emph{njPipes}, when \nr{} was
+still very new, and was open sourced in 2011, soon after the \nr{}
+translator itself. The included stages have always been open source. It was integrated into the \nr{} translator in
 2014 and first released with version 3.04.
 
+In version 3.08, there are
+important improvements that enable pipelines to be run from the
+command line, and from the \nr{} REPL program \emph{nrws}, the
+\nr{} Workspace. The pipes compiler has been renamed
+\emph{pipc}, while the pipes runner component keeps using the name \emph{pipe}.
+
 \chapter{The Pipeline Concept}
-\section{What is a pipeline?}
-The \emph{pipeline} terminology is a metaphore derived from
-plumbing. Fitting two or more pipe segments together yield a
+\section{What is a Pipeline?}
+The \emph{pipeline} terminology is a set of metaphores derived from
+plumbing. Fitting two or more pipe segments together yields a
 pipeline. Water flows in one direction through the pipeline.
 
 There is a source, which could be a well or a water tower; water is
@@ -73,173 +81,890 @@ The pipeline specification is processed by the \emph{pipeline
   compiler}, and it must be contained in a character string; on the
 commandline, it needs to be between quotes, while when contained in a
 file, it needs to be between the delimiters of a \nr{} string. An
-exclamation mark (!) is used as \emph{stage separator}, while the
-solid vertical bar | can be used as an option when specifiying the
-local option for the pipe, after the pipe name.
+solid vertical bar | is used as \emph{stage separator}, while other characters
+can be used as an option when specifiying the
+local option for the pipe, after the pipe name.\footnote{In versions
+  before Pipelines for \nr{} 3.08, the default was the exclamation
+  mark (!), which use was discontinued in favour of conformity with
+  VM/CMS Pipelines.}
 
-When looking a two adjaced segments in a pipeline, we call the left
+When looking a two adjacent segments in a pipeline, we call the left
 stage the \emph{producer} and the stage on the right the
 \emph{consumer}, with the \emph{stage separator} as the connector.
 \section{Device Driver}
 A \emph{device driver} reads from a device (for instance a file, the
 command prompt, a machine console or a network connection) or writes
 to a device; in some cases it can both read and write. An example of a
-device drivers are \texttt{diskr} for diskread and \texttt{diskw} for
-diskwrite; these read and write data from and to files.
+device drivers are \texttt{<} and \texttt{>} ; these read and write data from and to files.
 
 A pipeline can take data from one input device and write it to a
 different device. Within the pipeline, data can be modified in almost
 any way imaginable by the programmer.
 
 The simplest process for the pipeline is to read data from the input
-side and copy it unmodified to the output side. Figure X shows the
+side and copy it unmodified to the output side. Chapter
+\ref{ch:devicedrivers} on page \pageref{ch:devicedrivers} shows the
 currently supported input- and output devices. The pipeline compiler
 connects these programs; it uses one program for each device and
 connects them together.
 
 The inherent characteristic of the pipeline is that any program can be
 connected to any other program because each obtains data and sends
-data throug a device independent standard interface.
+data throug a device independent standard interface. This becomes
+apparent when data can be in-line (specified or generated within the
+pipeline specification), come in (or be output) to devices like disk
+or tape, or be handled through a network -- all these formats can be
+processed by the same stages.
 
 The pipeline usually processes one record (or line) at a time. The
 pipeline reads a record for the input, processes it and sends it to
 the output. It continues until the input source is drained.
 
-\section{Building the pipeline}
-Until now everything was just theory, but now we are going to show how
-to compile and run a pipeline. The executable script \texttt{pipe} is
-included in the \nr{} distribution to specify a pipeline and to compile
-\nr{} source that contains pipelines. Pipelines can be specified on
-the command line or in a file, but will always be compiled to a .class
-file for execution in the JVM. In this case, we have the following
-pipe definition in a file called \code{firstsample.njp}. We tell the
-pipe compiler that the pipe is called \code{hello}. 
-\lstinputlisting[label=firstpipe,caption=Hello World]{firstsample.njp} 
+\chapter{Running pipelines}
+There are a number of ways to specify and run a pipeline. A little
+setup is necessary.
 
-This specifies a pipeline consisting of a source stage
-\texttt{literal} that puts a string (``hello world'') into the pipeline, and
-a \texttt{console} sink, that puts the string on the screen. 
-
-We compile this pipe with the command:
+\section{Configuration}
+The required configuration is minimal. The \nr{}F.jar (java archive
+file) needs to be on the classpath environment variable (\nr{}C.jar, which is smaller, will suffice when there is a working javac compiler). Also, the current directory (.) needs to be on the classpath.
+It is convenient to have aliases or shell scripts defined as abbreviations for the invocation of the pipe, pipc (pipe compiler) and nrc (netrexx compiler) utility programs. 
+Aliases are preferable because some shell processors have
+idiosyncrasies in the treatment of script arguments. With an alias we
+can be sure that every \nr{} program sees its arguments the same
+way.
 \begin{verbatim}
-pipe firstsample
-\end{verbatim} 
-\bash[stdout]
-pipe firstsample
-\END
-The pipe
-compiler will echo the source of the pipe to the screen - or issue
-messages when something was mistyped. The name of the classfile is the
-name of the pipe, here specified between parentheses. Options also go there.
-
-We call execute the pipe by typing:
-\begin{verbatim}
-java hello
+.bash_aliases:
+alias pipc="java org.netrexx.njpipes.pipes.compiler"
+alias pipe="java org.netrexx.njpipes.pipes.runner"
+alias nrc="java org.netrexx.process.NetRexxC"
 \end{verbatim}
-Its output is:
-\bash[stdout]
-java hello
-\END
-Now we
-have shown the obligatory example, we can make it more interesting by
-adding a \texttt{reverse} stage in between:
-\lstinputlisting[label=secondpipe,caption=Hello World 2]{secondsample.njp} 
-When this is executed, it dutifully types 
-\bash[stdout]
-pipe secondsample
-java hello
-\END
+For Windows, the following works for the pipes runner: file \texttt{pipe.bat}:
+\fontspec{IBM Plex Sans Condensed}
+\begin{verbatim}
+@java -cp "%NETREXX_HOME%\lib\NetRexxF.jar;%CLASSPATH%"
+org.netrexx.njpipes.pipes.runner %*
+\end{verbatim}
+\fontspec{TeX Gyre Pagella}
+For Windows, the following works for the pipes compiler: file \texttt{pipc.bat}:
+\fontspec{IBM Plex Sans Condensed}
+\begin{verbatim}
+@java -cp "%NETREXX_HOME%\lib\NetRexxF.jar;%CLASSPATH%"
+ org.netrexx.njpipes.pipes.compiler %*
+\end{verbatim}
+\fontspec{TeX Gyre Pagella}
+\begin{shaded}
+The previous examples should have the command on one line; the lines
+are split here because of the limited space on a page.
+  Do note that the Windows .bat files assume that the NETREXX\_HOME
+environment variable is set correctly, that is, to the top of the path
+where NetRexx is installed. This prepends the NetRexxF.jar file to an
+already existing CLASSPATH. For the development of local classes (that is, all precompiled pipelines), a
+dot ('.'), needs to be on this CLASSPATH.
+\end{shaded}
+These aliases (or command scripts (in Windows it is called a batch
+file) enable you to do the following:
 
-If we replace the string after \texttt{literal} with \texttt{arg()},
-we then can start the \texttt{hello} pipeline with a an argument to
-reverse:
-
-\begin{lstlisting}[label=hellopipes3,caption=Hello World3]
-pipe "(hello) literal arg() ! reverse ! console"
+To run a pipeline from the commandline, type:
+\begin{lstlisting}
+pipe 'gen 100 | dup 999 | count words | console'
 \end{lstlisting}
- and we run it with:
-\begin{verbatim}
-java hello a man a plan a canal panama
-\end{verbatim}
-and it will respond:
-\begin{verbatim}
-amanap lanac a nalp a nam a
-\end{verbatim}
-which goes to show that without ignoring space no palindrome is very
-convincing - which we can remedy with a change to the pipeline: use the
-\texttt{change} stage to take out the spaces:
-\begin{lstlisting}[label=hellopipes4,caption=Hello World4]
-pipe "(hello) literal arg() ! change /" "// ! console"
+
+Remember to use double quotes on Windows shells. When the \texttt{pipe}
+alias or command script is not on your path, you can also use:
+
+\begin{lstlisting}
+java org.netrexx.njpipes.pipes.runner 'gen 100 | dup 999 | count words | console'
 \end{lstlisting}
+
+In both cases the answer should be 100000 - you have generated one
+hundred thousand lines, but fortunately you did not print them, but
+only counted them. To see them all, you can insert a | console | stage
+in between the dup and the count stage.
+
+After we have verified the working of the command processors, we will
+discuss in the next section which possibilities you have for running
+pipelines in day-to-day usage.
+
+
+
+\section{From the \nr{} Workspace (nrws) with direct execution}
+The first way is the most straightforward, and highly recognizable for
+users of CMS Pipelines, as it mimics the way a pipe is run in the CMS
+3270 interface. It also yields the best response time, specially when
+the \texttt{nrws.input} file in your home directory preloads the Pipes subsystem, as in this
+example:
+\begin{verbatim}
+-- preload the pipe machinery for good response on first pipe
+pipe literal Pipelines processor loaded. | console
+\end{verbatim}
+This is not magic: we do a Pipe execution (that displays: ``Pipe
+processor loaded'') which loads all necessary classes and leaves them
+in memory. We can then type this command after the \emph{nrws>}
+prompt.
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/runnrws.png}
+  \caption{Run in the \nr{} Workspace}
+  \label{fig:runnrws}
+\end{figure}
+
+\begin{lstlisting}
+pipe literal a man a plan a canal panama | reverse | console
+\end{lstlisting}
+Executed this way, the executed class image will not be written to
+disk. The \emph{timing} option is great for prototyping and
+performance work.
+\section{From the command line with direct execution}
+The only difference is that after the \texttt{pipe} command,
+the rest of the specification needs to be quoted in the command shells
+of Linux, Windows and macOS. In CMS, the pipeline specification can
+also be quoted - in this way, a pipeline can be entirely
+portable. Windows needs double quotes, zVM/CMS does not need quotes,
+but if they are used they need to be double quotes. macOS and Linux
+can use single or double quotes, in most cases.
+\begin{lstlisting}
+pipe "literal a man a plan a canal panama | reverse | console"
+\end{lstlisting}
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/runfromshell.png}
+  \caption{Run from the OS command line}
+  \label{fig:runfromshell}
+\end{figure}
+
+Executed this way, the executed class image again will not be written to
+disk.
+
+% When the pipe is named, for example test1 with a (test1) prologue, this name will be used for the class image, instead of a generated unique name. Naming a pipe will enable specification of options for the compiler, like the pipe separator character.
+% \begin{lstlisting}
+% pipe "(test1 sep !) literal a man a plan a canal panama ! reverse !
+% console"
+% \end{lstlisting}
+% As of pipes for \nr{} 3.08 the default separator is the | (pipe)
+% symbol, as in zVM/CMS. The above example shows how to use the previous
+% default, the exclamation mark.
+\section{Precompiled Pipelines}
+In this mode, which uses the \texttt{pipc} command (for pipe
+compiler), a .class file will be persisted to disk. This class can be
+run as many times as needed, without the overhead of compilation. This
+also would be the right mode for pipes that take different arguments when re-run.
+The pipe name needs to be specified, and will be the class name. When
+the class name exists, it will be overwritten.
+\begin{lstlisting}
+pipc "(test1) literal a man a plan a canal panama | reverse | console"
+\end{lstlisting}
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/pipcfromshell.png}
+  \caption{Precompile a Pipeline from the OS command line}
+  \label{fig:pipcfromshell}
+\end{figure}
+
+This will yield a \begin{alltt}test1.class\end{alltt} classfile, which
+can be executed by the java virtual machine.
+
+The file test1.class can be run with the command\footnote{or an
+  appropriate shortcut in modern shells}:
+\begin{verbatim}
+java test1
+\end{verbatim}
+Be sure to leave out the .class suffix when invoking java.
+% Additional options in this mode:
+% Option
+% Function
+% Remarks
+% gen	additionally save .nrx class to disk	default is -nogen
+% keep	keep from the .nrx generated java source	default is -nokeep
+\section{Compiled from an .njp file}
+When compiled from a file, the pipe specification must not be quoted. Pipes can be specified in so-called /emph{Portrait Mode}, which is the standard for more complex pipelines as it is easier to read.
+An example is:
+\begin{lstlisting}
+pipe (appendtest)
+ 
+   gen 100  |
+   append gen 50  |
+   rexx locate /0/ |
+   console
+\end{lstlisting}
+
+\section{Compiled from an .njp file with additional stage definitions in \nr{}}
+An example (length1.njp) is:
+\begin{lstlisting}
+pipe (lengthp) < output.lst | length1 | console
+
+import org.netrexx.njpipes.pipes.
+class length1 extends stage final
+  method run()
+    do
+      loop forever
+    line = rexx peekto()
+    l = line.length
+    output(l l.d2x line)
+    readto()
+      end
+    catch StageError
+      rc = rc()
+    end
+    exit(rc*(rc<>12))
+\end{lstlisting}
+In this example, the name of the generated pipe is lengthp, while the name of the custom stage is length1. Be sure to invoke the right class, invoking length1 will have the JVM complain about a non-existing main method.
+This class (lengthp) will be generated by the command:
+\begin{verbatim}
+pipc length1
+\end{verbatim}
+note that the .njp suffix is optional when invoking the pipes
+compiler. When run, it tries to read the contents of the file
+length.nrx and will put out its lines, prepended by the line length in
+decimal and hex - because that is what the (in \nr{}) specified
+homegrown stage does.
+
+
+
+
+
+% \section{Building the pipeline}
+% Until now everything was just theory, but now we are going to show how
+% to compile and run a pipeline. The executable script \texttt{pipe} is
+% included in the \nr{} distribution to specify a pipeline and to compile
+% \nr{} source that contains pipelines. Pipelines can be specified on
+% the command line or in a file, but will always be compiled to a .class
+% file for execution in the JVM. In this case, we have the following
+% pipe definition in a file called \code{firstsample.njp}. We tell the
+% pipe compiler that the pipe is called \code{hello}. 
+% \lstinputlisting[label=firstpipe,caption=Hello World]{firstsample.njp} 
+
+% This specifies a pipeline consisting of a source stage
+% \texttt{literal} that puts a string (``hello world'') into the pipeline, and
+% a \texttt{console} sink, that puts the string on the screen. 
+
+% We compile this pipe with the command:
+% \begin{verbatim}
+% pipe firstsample
+% \end{verbatim} 
+% \bash[stdout]
+% pipc firstsample
+% \END
+% The pipe
+% compiler will echo the source of the pipe to the screen - or issue
+% messages when something was mistyped. The name of the classfile is the
+% name of the pipe, here specified between parentheses. Options also go there.
+
+% We call execute the pipe by typing:
+% \begin{verbatim}
+% java hello
+% \end{verbatim}
+% Its output is:
+% \bash[stdout]
+% java hello
+% \END
+% Now we
+% have shown the obligatory example, we can make it more interesting by
+% adding a \texttt{reverse} stage in between:
+% \lstinputlisting[label=secondpipe,caption=Hello World 2]{secondsample.njp} 
+% When this is executed, it dutifully types 
+% \bash[stdout]
+% pipc secondsample
+% java hello2
+% \END
+
+% If we replace the string after \texttt{literal} with \texttt{arg()},
+% we then can start the \texttt{hello} pipeline with a an argument to
+% reverse:
+
+% \begin{lstlisting}[label=hellopipes3,caption=Hello World3]
+% pipe "(hello) literal arg() | reverse | console"
+% \end{lstlisting}
+%  and we run it with:
+% \begin{verbatim}
+% java hello a man a plan a canal panama
+% \end{verbatim}
+% and it will respond:
+% \begin{verbatim}
+% amanap lanac a nalp a nam a
+% \end{verbatim}
+% which goes to show that without ignoring space no palindrome is very
+% convincing - which we can remedy with a change to the pipeline: use the
+% \texttt{change} stage to take out the spaces:
+% \begin{lstlisting}[label=hellopipes4,caption=Hello World4]
+% pipe "(hello) literal arg() | change /" "// | console"
+% \end{lstlisting}
+
+
+\chapter{Example Session}
+Imagine you have landed a job as programmer in an accounting firm,
+and on your first day there is a question about backups; \emph{the backup
+process takes too long}. There is an urgent need to identify the files that are produced on this day. You know how to this, of course, it is only some 20 lines of code; use the File() API, fill a collection class (you are thinking of an ArrayList already), or a TreeMap to sort the File object on last modified date already, call an instance of the Calender class, run a comparison - get that compiled and test it a bit - an hour or so would be sufficient. Of course, you need to install the Java compiler, because all machines have Java nowadays, but just not the compiler.
+But if you want to really impress people, you should type in a command line and be done with it. For this you can use \nr{} pipelines. Fortunately, you emailed the \nr{}F.jar to yourself so you save it on the machine, and you're in business right away; you add it to the classpath.
+Your first pipeline command should just test the waters. For this
+chapter, we will use the \begin{alltt}nrws\end{alltt} program. You send a
+command into the pipeline, and get its output:
+\begin{lstlisting}
+pipe command ls -laFTl | console
+\end{lstlisting}
+\begin{figure}[H]
+  \includegraphics[width=0.75\textwidth]{images/example1.png}
+  \caption{example 1}
+  \label{fig:example1}
+\end{figure}
+
+The \emph{ls} command with the flags is the unix way to get a
+directory listing - for Windows we would use \emph{dir}. In this case, we send the output into the pipeline, but as the last stage (called a pipe 'sink') occurs immediately after that, every line will be echoed on the console.
+A number of lines like these will be displayed on the console, as in
+\emph{example 1}.
+
+You see straight away that the relevant info is not in the first
+columns, and not in consecutive columns; we want to know the date
+(whether it is today or not) and not the time. So we filter this out
+of every line with a \texttt{specs} stage, as in \emph{example 2}.
+\begin{lstlisting}
+pipe command ls -laFTl | specs 42-47 1 58-* 8 | console
+\end{lstlisting}
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/example2.png}
+  \caption{example 2}
+  \label{fig:example2}
+\end{figure}
+We can easily sort this, with almost no programming:
+\begin{lstlisting}
+pipe command ls -laFTl | specs 42-47 1 58-* 8 | sort | console
+\end{lstlisting}
+So what now comes out of the pipeline is sorted (see \emph{example 3}).
+But this is a bit funny, we would like to see chronological order of course, so we switch around some columns with another specs stage:
+\begin{figure}[h]
+  \includegraphics[width=0.65\textwidth]{images/example3.png}
+  \caption{example 3}
+  \label{fig:example3}
+\end{figure}
+\begin{lstlisting}
+pipe command ls -laFTl | specs 42-47 1 58-* 8 | specs 7-11 1 1-6 7 12-* 12 | sort | console
+\end{lstlisting}
+\begin{figure}[h]
+  \includegraphics[width=0.65\textwidth]{images/example4.png}
+  \caption{example 4}
+  \label{fig:example4}
+\end{figure}
+which is very near to what we want (see \emph{example 4}). Only thing to do now is to filter
+on the date. We use the \emph{locate} stage and hardcode the date for
+now. Let's say it is the 2nd of March, 2019:
+\begin{lstlisting}
+pipe command ls -laFTl | specs 42-47 1 58-* 8 |  specs 7-11 1 1-6
+7 12-* 12 | locate /2019 Mar 2/ | sort | console
+\end{lstlisting}
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/example5.png}
+  \caption{example 5}
+  \label{fig:example5}
+\end{figure}
+As \emph{example 5} shows, on that day there were only two files
+produced. Also, because this is a short list now, you can see that
+Pipelines runs this pipe in 0.157 seconds, because we switched on the
+time option in \emph{nrws}.
+Normally, you would specify your pipeline in a file and use
+\emph{portrait mode}:
+commandtest.njp:
+\begin{lstlisting}
+pipe (newfiles)
+command ls -laFTl |
+specs 42-47 1 58-* 8 |
+specs 7-11 1 1-6 7 12-* 12 |
+sort |
+locate /2019 Mar 2/ |
+console
+\end{lstlisting}
+The filename is different from the generated class file name, on purpose. You could, and would, put different related pipelines in one file.
+Then we do a:
+\begin{alltt}
+pipc commandtest && java newfiles
+\end{alltt}
+
+\chapter{Write your own Filters}
+So we have seen in the previous example that it is not too hard to
+make a simple pipeline out of things called 'device drivers' (such as
+\emph{command}, for OS commands, '<' for reading files on disk, and
+\emph{literal}, for inserting literal strings into a pipeline,
+filters, and sinks.
+% We received some comments, here and on the CMS-Pipelines list, that the first example was too easy and more representative for Unix pipes than for VM, which can do more involved multistream stuff. That is true, but we would like to start with the easier examples so everybody is still comfortable. So please hold your horses while I show you something that is also really cool. And please try the things we showed with the spec stages in a Unix pipe: you'll probably need awk to do that and it will not be as clean as the specs examples, so it is not that easy; writing a Unix filter in C is even more work.
+% One of the most appealing characteristics of piping on CMS and TSO is
+% that you can make your own filters in Rexx, and that it is really
+% simple. Of course, this also works in \nr{} and its Pipelines
+% implementation.
+When a filter is not delivered in the standard set of stages, it is
+very easy to make one yourself in the \nr{} language. The model for
+this closely follows the way it is done with CMS Pipelines and Classic
+Rexx.
+Imagine, for the sake of argument (and a simple example\footnote{From
+the document CMS Pipelines Explained, by John P. Hartmann}), that you have an
+assignment to quickly reverse a string.
+\begin{lstlisting}
+/* BAGVENDT REXX -- Reverse the contents of lines in the pipeline */
+signal on error
+ do forever
+   'peekto data'
+   'output' reverse(data)
+   'readto'
+end
+error: exit RC*(RC<>12)
+\end{lstlisting}
+And you would need to remember to call your filetype REXX instead of EXEC.  The \texttt{peekto} reads the input but does not actually commit the read yet, so you can read it one more time with knowledge about the contents. The \texttt{output} pushes its argument back into the pipeline. The \texttt{readto} reads and commits the read so the line is really processed and we can go to the next one.
+
+In \nr{}, that would be about the same, but for some small changes
+incurred by the object oriented model of \nr{}, which does not exist in Classic Rexx. Here \texttt{peekto()}, \texttt{readto()} and
+\texttt{output()} are method calls on the \texttt{stage} object. This
+will be made addressable
+by the import from org.netrexx.njpipes.pipes. (file: \texttt{bagvendt.nrx})
+\begin{lstlisting}
+import org.netrexx.njpipes.pipes.
+class bagvendt extends stage
+method run()
+   loop forever
+      line = Rexx peekto()
+      output(line.reverse())
+      readto()
+   catch StageError
+      rc = rc()
+   end
+exit(rc*(rc<>12))
+\end{lstlisting}
+So that would look fairly familiar, and admittedly, a bit easier for us already well versed in \nr{}.
+Because the source uses pipe idioms, the regular \nr{} compiler cannot understand everything, and we need to uses the pipes compiler \emph{pipc} to compile this source. This will call the \nr{} and Java compilers at the appropriate moment. The resulting .class file needs to be on the CLASSPATH environment variable.
+
+We can test this by building a pipeline and running the filter on its
+own source:
+\begin{alltt}
+pipe "literal abcd | bagvendt | console"
+ \end{alltt}
+If you have a CMS handy, that would be:
+\begin{alltt}
+pipe literal abcd | bagvendt | console
+ \end{alltt}
+on the first, Classic Rexx version of the filter - but the quoted
+version also works on CMS.
+\begin{figure}[h]
+  \includegraphics[width=0.65\textwidth]{images/vmbagvendt.png}
+  \caption{BAGVENDT under VM/CMS}
+  \label{fig:vmbagvendt}
+\end{figure}\begin{figure}[h]
+  \includegraphics[width=0.65\textwidth]{images/nrbagvendt.png}
+  \caption{bagvendt.nrx under \nr{}}
+  \label{fig:nrbagvendt}
+\end{figure}
+
+\chapter{More advanced Pipelines}
+Admittedly, the examples in the previous chapters could have been done
+with Unix pipes or at least with incorporation of stream utilities
+like awk or sed.
+
+To get a good idea of what can be done with Pipelines for \nr{}, look at the tasktest
+pipe in the examples directory.  It \footnote{using code from Melinda Varians
+'Cramming for the Journeyman Plumber Exam' paper} implements the
+shell of a  multitasking server - using about eight stages.  The file
+examples/tcptask.njp contains an example of this technique being used.
+\begin{lstlisting}
+--tasktest.njp
+
+pipe (tasktest stall 2000 -gen)
+
+   literal 0 1 2 3 4 5 6 7 8 9 A B C D E F G H I J K L M N O P Q R S T |
+   dup 2 |
+   split |                   -- supply work for task stage
+
+   ptimer |
+a: deal secondary ?          -- send work to task stage requesting work
+b: faninany |
+   elastic |                 -- buffer requests to so no deadlocks
+   ptimer |
+
+ a: |
+   copy |                    -- buffer work so no deadlocks
+   task 1 |                  -- worker task 1
+ b: ?
+
+ a: |
+   copy |
+   task 2 |                  -- worker tast 2...
+ b: ?
+
+ a: |
+   copy |
+   task 3 |
+ b:
+\end{lstlisting}
+
+Before discussing this example in-depth, we need to go into some more
+basic concepts.
 
 \chapter{Device Drivers}
+\label{ch:devicedrivers}
+Pipelines for \nr{} contains the following device drivers:
 
-A device driver reads from a device (for instance a file on disk, on
-the network, or from the shell) or writes to a device; in some cases
-it can both read from and write to the device. An example of a device
-driver is \keyword{disk} which reads and writes files. You can use it
-on the left-hand side of the pipeline as an input device and on the
-right-hand side of the pipeline as an output device.
+(see next page)
+
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+\toprule
+\texttt{<}&read from a fle
+\\\midrule
+\texttt{>}&write to a file (which is overwritten if it exists)
+\\\midrule
+\texttt{>>}&append to a file (which is created if it does not exist)
+\\\midrule
+diskr&read from a fle
+\\\midrule
+diskw&write to a file (which is overwritten if it exists)
+\\\midrule
+diska&append to a file (which is created if it does not exist)
+\\\midrule
+diskslow&read, create or append to a file
+\\\midrule
+array&manipulate arrays
+\\\midrule
+arraya&manipulate arrays
+\\\midrule
+arrayr&manipulate arrays
+\\\midrule
+stem&manipulate stems
+\\\midrule
+stema&manipulate stems
+\\\midrule
+stemr&manipulate stems
+\\\midrule
+vector&manipulate vectors
+\\\midrule
+vectora&manipulate vectors
+\\\midrule
+vectorr&manipulate vectors
+\\\midrule
+var&read or set a variable in a \nr{} program
+\\\midrule
+zip&compress a set of files (0 or more) into a zip archive
+\\\midrule
+unzip&decompress a set of files (0 or more) from a zip archive
+\\\midrule
+listzip&list a zip file directory
+\\\midrule
+console& read from, or write to a terminal (window)
+\\\midrule
+hole&destroy data
+\\\midrule
+delay&suspend stream
+\\\midrule
+literal&write the argument string
+\\\midrule
+strliteral&write the argument string
+\\\midrule
+sqlselect&select from any jdbc source
+\\\midrule
+xrange&write a character range
+\\\bottomrule
+\end{tabularx}
 
 
-A pipeline can take data from one input device and write it to another
-device. Within the pipeline, data can be modified in may ways.
-The simplest process for the pipeline is to copy data from a device on
-the input side to a device on the output side. 
+\chapter{Record Selection}
+Various stages can select records and work on data in the
+pipeline. These are stages called select, sort, specs, locate,
+etcetera. For a complete description we refer to the IBM Pipelines
+documentation. 
 
-Using any input driver with any output driver, Pipelines for NetRexx moves data directly from the input device to the output device. The pipeline implementation uses one program for each device and connects them together.
-The inherent characteristic of the pipeline is that any program can be connected to any other one because each obtains data and sends data through a device independent standard interface.
+These are the main selection stages supported in Pipelines for \nr{}:
 
-The pipeline usually processes one record (or line) at a time. The pipeline reads a record from the input, processes it and sends it to the output. It continues until all records from the input have been processed.
-
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+\toprule
+between&selects records between labels
+\\\midrule
+drop&discard records from the beginning or the end of a file
+\\\midrule
+find&select lines
+\\\midrule
+strfind&select lines
+\\\midrule
+frlabel&select records from the first one with leading string
+\\\midrule
+strfrlabel&select records from the first one with leading string
+\\\midrule
+inside&select records between labels
+\\\midrule
+locate&select records between labels
+\\\midrule
+nfind&select lines using xedit nfind logic
+\\\midrule
+strnfind&select lines using xedit nfind logic
+\\\midrule
+nlocate&select lines without a string
+\\\midrule
+notinside&select records not between labels
+\\\midrule
+outside&select records not between labels
+\\\midrule
+pick&select records that satisfy a relation
+\\\midrule
+take&select records from the beginning or the end of a file
+\\\midrule
+tolabel&select records to the first one with leading string
+\\\midrule
+strtolabel&select records to the first one with leading string
+\\\midrule
+unique&discard or retain duplicate lines
+\\\bottomrule
+\end{tabularx}
 
 \chapter{Filters}
-\chapter{Record Selection}
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+\toprule
+buffer&buffer records
+\\\midrule
+chop&truncate the record
+\\\midrule
+join&join records
+\\\midrule
+pad&expand short records
+\\\midrule
+split&split records relative to a target
+\\\midrule
+change&substitute contents of records
+\\\midrule
+specs&rearrange contents of records
+\\\midrule
+xlate&transliterate contents of records
+\\\midrule
+copy&copy records
+\\\midrule
+count&count lines, words and bytes
+\\\midrule
+dup&duplicate the object
+\\\midrule
+reverse&reverse contents of records
+\\\midrule
+timestamp&prefix date and time to records
+\\\midrule
+append&put output from device driver after data on the primary input
+\\\midrule
+casei&run selection stage in a case-insensitive manner
+\\\midrule
+not&run stages with output streams inverted
+\\\midrule
+prefix&Blocks its primary input and excutes stage supplied as an argument
+\\\midrule
+zone&run selection stage on subset of input record
+\\\midrule
+elastic&buffer sufficient records to prevent stall
+\\\midrule
+fanin&concatenate streams
+\\\midrule
+faninany&copy records from whichever input stream has one
+\\\midrule
+gate&pass records until stopped
+\\\midrule
+juxtapose&preface record with marker
+\\\midrule
+overlay&overlay data from input streams
+\\\midrule
+command&issue a command and write response to pipeline
+\\\bottomrule
+\end{tabularx}
 
 
-\chapter{NetRexx Pipelines Implementation}
-\nr{} Pipelines enables us to follow the usage model of CMS Pipelines
-closely; in fact, the documentation for the mainframe product can be
-used for most stages.
+\chapter{Other Stages}
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+\toprule
+query&check version and level of Pipelines for \nr{}
+\\\midrule
+\doublehyphenunquoted{}&insert comments into a pipeline
+\\\midrule
+comment&insert comments into a pipeline
+\\\bottomrule
+\end{tabularx}
 
-\section{Installation and verification}
-To run \nr{} Pipelines a running \nr{} installation is needed.  To write your own pipes or stages you need compilers for both Java and NetRexx. 
-The core classes for pipes and stages are in the archive \nr{}F.jar.  This file may
-be used on the -cp option or added to your CLASSPATH, as indicated in
-the \emph{NetRexx Quickstart Guide}.
 
-To test the installation, we can run a pipeline from the command line.
-Running a pipeline from the command line
- To run a pipeline from the commandline, type:
-\begin{lstlisting}[label=countwords,caption=Count Words]
-pipe (test) 'literal arg() ! dup 999 ! count words ! console'
+ % \chapter{\nr{} Pipelines Implementation}
+% \nr{} Pipelines enables us to follow the usage model of CMS Pipelines
+% closely; in fact, the documentation for the mainframe product can be
+% used for most stages.
+
+% \section{Installation and verification}
+% To run \nr{} Pipelines a running \nr{} installation is needed.  To write your own pipes or stages you need compilers for both Java and \nr{}. 
+% The core classes for pipes and stages are in the archive \nr{}F.jar.  This file may
+% be used on the -cp option or added to your CLASSPATH, as indicated in
+% the \emph{\nr{} Quickstart Guide}.
+
+% To test the installation, we can run a pipeline from the command line.
+% Running a pipeline from the command line
+%  To run a pipeline from the commandline, type:
+% \begin{lstlisting}
+% pipe 'gen 100 | dup 999 | count words | console'
+% \end{lstlisting}
+
+% Remember to use double quotes on Windows shells. When the \texttt{pipe}
+% alias or command script is not on your path, you can also use:
+
+% \begin{lstlisting}
+% java org.netrexx.njpipes.pipes.runner 'gen 100 | dup 999 | count words | console'
+% \end{lstlisting}
+
+% In both cases the answer should be 100000 - you have generated one
+% hundred thousand lines, but fortunately you did not print them, but
+% only counted them. To see them all, you can insert a | console | stage
+% in between the dup and the count stage.
+
+\chapter{Multi-Stream Pipelines}
+One of the defining differences with Unix pipes is the possibility to
+define multi-stream pipelines. The selection stages from the previous
+chapter all have \emph{secondary streams}. What the selection
+parameters have discarded, \emph{seem to have discarded}, is in
+reality not gone. In fact, Pipelines for \nr{} throws very little away during
+execution.
+
+The way to use the not-selected part of the data through
+these secondary streams is explained in this chapter; it is this
+capacity that constitutes the freedom to work with many different
+streams in one pipeline; where Unix pipes are limited to not very much
+more than stdin, stdout, stderr -- Pipelines for \nr{} enables the user
+to define as many streams as necessary to accomplish the task at hand
+in an efficient manner.
+
+Let us look at a simple selection like the following:
+
+\begin{lstlisting}
+ pipe literal foo bar baz frob frobnitz frobbotzim | split | locate /oo/ |
+ console
+\end{lstlisting}
+\begin{verbatim}
+foo
+\end{verbatim}
+The string that makes it through the selection that is done by the
+\emph{locate} is 'foo' - it is the only one that is captured by the
+/oo/ filter.
+
+The rest of the words is not gone, however, and we can use these in
+further processing by using the secondary stream that \emph{locate}
+provides.
+
+To prepare for this, we give the secondary stream a name by providing
+a label for it, we call it, in absence of any creativity,
+\emph{rest}\footnote{often, you will see it being called 'a:'}. Also, we send the selected output, \texttt{foo} into a
+\emph{hole} stage, where it disappears.
+\begin{lstlisting}
+ pipe literal foo bar baz frob frobnitz frobbotzim | split | rest: locate /oo/ |
+ hole
+\end{lstlisting}
+As predicted, there is no output. To get to the rest of the words,
+unselected by \emph{locate}, we connect the secondare output stream to
+a new pipe, using the '?' (the default pipe-end character) like this:
+\begin{lstlisting}
+ pipe literal foo bar baz frob frobnitz frobbotzim | split | rest: locate /oo/ |
+ hole ? rest: | console
+\end{lstlisting}
+The output is now:
+\begin{verbatim}
+bar
+baz
+frob
+frobnitz
+frobbotzim
+\end{verbatim}
+
+Instead of sending the original output into a black \emph{hole}, we
+could have also gone further with it, and, for example, reverse it:
+\begin{lstlisting}
+ pipe literal foo bar baz frob frobnitz frobbotzim | split | rest: locate /oo/ |
+ reverse | console  ? rest: | console
+\end{lstlisting}
+The output is now:
+\begin{verbatim}
+oof
+bar
+baz
+frob
+frobnitz
+frobbotzim
+\end{verbatim}
+Likewise, we can specify more filter stages in the second, attached
+pipeline, and bifurcate the pipeline even further.
+
+\begin{lstlisting}
+ pipe literal foo bar baz frob frobnitz frobbotzim | split | rest: locate /oo/ |
+ reverse | console  ? rest: | locate /botzim/ | console
+\end{lstlisting}
+The output is now:
+\begin{verbatim}
+oof
+frobbotzim
+\end{verbatim}
+
+
+
+
+It is good to define and implement secondary streams when you write
+your own stages.
+
+
+\chapter{Pipeline Stalls}
+With multistream pipelines a new problem sometimes rears its head - a \emph{Pipeline stall}, also called \emph{deadlock}. This happens when stages
+wait for input that cannot be delivered, in a way that ensures that it
+cannot be delivered.
+
+Pipes for \nr{} detects deadlocks and outputs information to allow you to fix the problem.  Consider the following session:
+\begin{lstlisting}
+pipe literal test | a: fanin | console | a:
 \end{lstlisting}
 
-The first time you use the pipe command in a new directory it will
-create a default pipes.cnf file for you. When the \texttt{pipe}
-command is not on your path, you can also use:
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/deadlock.png}
+  \caption{Deadlock detection}
+  \label{fig:tcpcompile}
+\end{figure}
 
-\begin{lstlisting}[label=testdup,caption=Test Dup]
-java org.netrexx.njpipes.pipes.compiler (test) 'literal arg() ! dup 999 ! count words ! console'
-\end{lstlisting}
+We can see that there are three stages in the Running state.  None
+have any return codes set.  The Flags tell us that all the stages are
+waiting for an output to complete.
 
-You should see a message that the pipe compiler is processing your pipe and soon after that messages from the NetRexx compiler as it processes the pipe.
-To run the pipe type:
-\begin{verbatim}
-java test some words
-\end{verbatim}
-The pipe should then output:
-\begin{verbatim}
- 2000
-\end{verbatim}
-\chapter{Differences with respect to the CMS Pipelines version}
+The '->' show which stream is
+selected.  From this we can see console\_3 is trying to output to
+fanin\_2. Unfortunately fanin\_2 is waiting for output on stream 0 to
+complete, it cannot read the data waiting on in stream 1.  Hence the
+stall.
 
-\chapter{Developing stages in NetRexx}
-Writing your own pipes or stage is simple.  Take a look at the source of the supplied stages in the stages directory.  Here are some more examples.  The first shows how to use a pipe in a NetRexx program:
-    -- examples/testpipe.njp
-    -- to compile use: pipe testpipe.njp
-    --             or: java njp testpipe.njp
-    -- to execute use: java testpipe some text
+The strings after \emph{Dumping} and \emph{Monitored by} are the
+autogenerated class names. When you name your pipelines with
+precompiled pipes yourself, the names you have given them will be displayed here.
+
+When a stream has data being output, there is a boolean flag following the name of the stage the stream is connected to. This tracks the peek state of the object.  For an output stream, true means the following stage has peeked at the value. With input streams, the current stage has seen the value when its true.
+
+When a stage is multithreaded, like elastic, you can get flags of 3 or 5. This means that threads are waiting on output and read, or output and any. When using multithreaded stages, only one thread should use output unless it is serialized using protected or syncronized blocks.
+
+When a stage has a pending sever or autocommit, flag bits are set too.
+
+
+
+
+% In z/VM CMS, it is quite common to use a pipe in a Rexx exec. Conversely,
+% often a stage is written in Rexx. In Pipes for
+% \nr{} it is also easy to write your own stages. Both scenarios are
+% shown in this chapter.
+
+% Writing your own pipes or stage is simple.  Take a look at the source
+% of the supplied stages in the stages directory.  Input can be supplied
+% on the commandline, in which case the arguments to the \nr{} program
+% are used; when the input comes \emph{through the pipleline}, the
+% methods \begin{alltt}peekto(), readto()\end{alltt}
+% and \begin{alltt}output()\end{alltt} methods. Here are some more
+% examples.
+% \begin{lstlisting}
+% class length extends stage final
+ 
+%   method run()
+%     do
+%       loop forever
+%     line = rexx peekto()
+%     l = line.length
+%     output(l l.d2x line)
+%     readto()
+%       end
+%     catch StageError
+%       rc = rc()
+%     end
+%     exit(rc*(rc<>12))
+%   \end{lstlisting}
+  
+\chapter{How to use a pipe in a \nr{} program}
+
+This shows how to use a pipe in a \nr{} program:
+
 \begin{lstlisting}
  class testpipe
 
@@ -256,7 +981,7 @@ Writing your own pipes or stage is simple.  Take a look at the source of the sup
        F[5]=444
 
        pipe (apipe stall 1000 )
-         stem F ! sort ! prefix literal {avar} ! console ! stem T
+         stem F | sort | prefix literal {avar} | console | stem T
 
        loop i=1 to T[0]
           say 'T['i']='T[i]
@@ -266,9 +991,19 @@ Writing your own pipes or stage is simple.  Take a look at the source of the sup
 
        testpipe(Rexx(a))
 \end{lstlisting}
- A couple things can be inferred from this example.  First its simple to pass rexx variables to pipes using STEM.  Also look at the  phrase {avar}. It passes the Rexx variable's value to the stage at runtime.  In CMS the pipe would be quoted and you would unquote sections to get a similiar effect.
-Another thing to note is that the pipe extraction program is fairly smart. It detects when pipes takes several lines.  As long as there are stages, or the current line ends with a stagesep or stageend character, or the next line starts with a stagesep or stageend character.  It gets added to the pipe.
-The arg(), arg(rexx) or arg(null) methods get the arguments passed to a stage or pipe.  To get the complete rexx string of an argument use arg(). To get the nth word of a rexx argument use arg(n).  When using pipes in netrexx or java code you can use arg('name') to get the named argument. If the class of the arguement is not rexx use arg(null) to get the object.
+ A couple of things can be seen in this example.  First that it is
+ simple to pass \nr{} variables to pipes using \emph{stem}.  Also look
+ at the phrase \texttt{ \{avar\}}. It passes the \nr{} variable's value to the stage at runtime.  In CMS the pipe would be quoted and you would unquote sections to get a similiar effect.
+
+ Another thing to note is that the pipe extraction program is fairly smart. It detects when pipes takes several lines.  As long as there are stages, or the current line ends with a stagesep or stageend character, or the next line starts with a stagesep or stageend character.  It gets added to the pipe.
+
+ The arg(), arg(rexx) or arg(null) methods get the arguments passed to
+ a stage or pipe.  To get the complete rexx string of an argument use
+ arg(). To get the nth word of a rexx argument use arg(n).  When using
+ pipes in netrexx code you can use arg('name') to get the named
+ argument. If the class of the argument is not rexx use arg(null) to
+ get the object.
+ 
 In .njp files you can use {avar} phrase actually just shorthand for  arg('avar').
 The following example shows what has to be done in a stage to access the rexx variables passed by VAR, STEM and OVER.  The real  over stage is a bit more complete.
 \begin{lstlisting}
@@ -288,7 +1023,7 @@ The following example shows what has to be done in a stage to access the rexx va
  The getRexx method is passed the name of a string by the pipe.  In the previous example it would be passed A and would return an Object pointer to A in testpipe. If you wish to replace a stream this can be done using connectors.  For example look at the following fragment:
 \begin{verbatim}
     -- examples\calltest.njp
-    pipe (callt1) literal test ! calltest {} ! console
+    pipe (callt1) literal test | calltest {} | console
 \end{verbatim}
 \begin{lstlisting}
     import org.netrexx.njpipes.pipes.
@@ -300,7 +1035,7 @@ The following example shows what has to be done in a stage to access the rexx va
        do
           a = arg()
 
-          callpipe (cp1) gen {a} ! *out0:
+          callpipe (cp1) gen {a} | *out0:
 
           loop forever
              line = peekto()
@@ -334,7 +1069,7 @@ If you do not want the stage to wait for the called pipe to complete you can use
     a  = 100
     b  = 'some text for literal'
 
-    addpipe (linktest) literal {b} ! dup {a} ! *in0:
+    addpipe (linktest) literal {b} | dup {a} | *in0:
 
     loop forever
        line = Rexx readto()
@@ -349,72 +1084,286 @@ Serious stage writers will probably want to take a good look at the
 methods defined in the \nr{} source package \texttt{org.netrexx.process.njpipes.stages}.  There you will find various methods for parsing ranges.  You will also find the stub for the stageExit compiler exit.  It can be used to produce 'on the fly' code at compile time.  You can also use it to change the topology of the unprocessed part of the pipe.  The major use is to allow implementations of stages like prefix, append or zone.  Its also used to produce better performing stages, for an example see specs.
 The compiler also queries the rexxArg() and stageArg() methods.  If your stage expects objects of class Rexx as arguments rexxArg() should return the number of variables expected.  If your stage expects a stage for an argument, stageArg() should return the word position of the stage.
 
-To get a good idea of what can be done with pipes look at the tasktest pipe in the examples directory.  It, using code from Melinda Varins 'Cramming for the Journeyman Plumber Exam' paper,  implements the shell of a  multitasking server - using about eight stages.  The file examples/tcptask.njp contains an example of this technique being used.
+\chapter{Giving commands to the operating system}
 
-\chapter{Deadlocks}
-Pipes for NetRexx and Java detects deadlocks and outputs information to allow you to fix the problem.  Consider the following session:
+The \texttt{command} stage is used to issue commands to the operating
+system and trap the output to the pipeline. \texttt{command} can
+receive its input as parameters, or through the pipeline. So
+\begin{lstlisting}
+  pipe literal ls | command | sort | console
+\end{lstlisting}
+is equivalent to:
+\begin{lstlisting}
+  pipe command ls | sort | console
+\end{lstlisting}
+
+
+\section{Built-ins}
+Some commands, like \texttt{dir} in Windows, do not have a separate
+executable file; there is no \texttt{dir.exe}. This can be solved by
+having the command processor, \texttt{cmd.exe} start its built-in
+command. The pipeline would be, for example:
+\begin{lstlisting}
+  pipe literal cmd /c dir | command | sort | console
+\end{lstlisting}
+\chapter{TCP/IP Networking}
+As the built-in stages all work on data that is dispatched through the
+pipeline, irrespective of which device driver is used, it is also
+convenient to do network programming using a set of pipelines.
+
+The \emph{tcplisten} stage can be used as a network device driver, as
+in CMS, but limited to specification of the port and a timeout value. Below an example of how to implement a sample TCP/IP
+client/server application.
+\begin{lstlisting}
+-- one shot tcpip server
+
+pipe (tcpserv stall 60000 debug 0 )
+   tcplisten 1958 timeout 15000 | tcpexample
+
+-- one shot tcpip requestor
+
+pipe (tcpreq stall 60000 debug 0 )
+   random {} |
+   specs *-* 1 ,\n, next |
+   tcpclient deblock c localhost 1958 timeout 10000 linger 500 oneresponse |
+   rexx to console
+
+-- a single tasking server
+
+options binary
+import org.netrexx.njpipes.pipes.
+class tcpexample extends stage
+
+method run() public
+
+   loop forever
+
+      peekto()
+
+      callpipe (tcplog stall 15000 debug 0)
+         *in0: |
+         take first 1 |
+         console |
+      f: fanin |
+         tcpdata timeout 10000 deblock C oneresponse |
+         elastic |
+         insert /\n/ after |
+      f:
+
+   catch StageError
+      rc = rc()
+   end
+
+exit(rc*(rc<>12))
+\end{lstlisting}
+This example needs to be compiled with the pipes compiler, see
+\emph{TCP/IP Client/Server compile}, which yields the classes tcpserv
+and tcpreq, for the server and the requester component. 
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/tcpcompile.png}
+  \caption{TCP/IP Client/Server compile}
+  \label{fig:tcpcompile}
+\end{figure}
+
+Now we can start the generated pipelines each in their own shell
+window. As can be seen in \emph{TCP/IP server}, the class keeps
+waiting on connections on port 1958 - which is arbitrary, but
+specified in the pipeline source.
+
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/tcpserv.png}
+  \caption{TCP/IP server}
+  \label{fig:tcpcompile}
+\end{figure}
+
+In another window, we can start the \emph{TCP/IP requestor}, which
+when given port 1958 as argument, connects to the server, and displays
+a series of random numbers that is sent to it.
+
+\begin{figure}[h]
+  \includegraphics[width=0.75\textwidth]{images/tcpreq.png}
+  \caption{TCP/IP requestor}
+  \label{fig:tcpcompile}
+\end{figure}
+
+Note that the stage \emph{tcpexample} from the \emph{tcpserver}
+pipeline is a custom stage that is written in this tcpexample.njp
+file.
+
+\chapter{Selecting from relational databases}
+
+Using the built-in \emph{sqlselect} stage you can select data, using
+SQL, from any jdbc source available.
+
+An \texttt{sqlselect.properties} file is needed to define the jdbc parameters
+like the driver to use, the url of the data source and other
+arguments, like a password and tracing options, if needed.
+
+The file looks like this:
 \begin{verbatim}
-    java njp (deadlock) literal test ! a: fanin ! console ! a:
-    Pipes for NetRexx and Java version 0.33
-    Copyright (c) E. J. Tomlinson , 1998.  All rights reserved.
-    Building pipe deadlock
-    NetRexx portable processor, version 1.140
-    Copyright (c) IBM Corporation, 1998.  All rights reserved.
-    Program deadlock.nrx
-    Compilation of 'deadlock.nrx' successful
-
-    njpipes/examples]java -nojit deadlock
-    test
-    Deadlocked in deadlock
-
-    Dumping deadlock Monitored by deadlock
-
-     Flag units digit:  1=wait out, 2=wait in, 4=wait any, 8=wait commit
-                     : 10=pending autocommit, 20=pending sever
-
-     literal_1
-     Running rc=0 commit=-1 Flag=201
-     -> out 0 fanin_2 1 test
-
-     fanin_2
-     Running rc=0 commit=-1 Flag=101
-     -> in  0 literal\_1 1 test
-        in  1 console\_3 0 test
-     -> out 0 console\_3 1 test
-
-     console_3
-     Running rc=0 commit=-1 Flag=101
-     -> in  0 fanin\_2 1 test
-     -> out 0 fanin\_2 0 test
-
-    Dumped Pipe deadlock Flag 40F rc=16
-
-    RC=16
+jdbcdriver=org.sqlite.JDBC
+url=jdbc:sqlite:flightroute-iata.sqb
 \end{verbatim}
 
-We can see that there are three stages Running.  None have any return codes set.  The Flags tell us that all the stages are waiting for an output to complete.  The '->' show which stream is selected.  From this we can see console\_3 is trying to output to fanin\_2. Unfortunately fanin\_2 is waiting for output on stream 0 to complete, it cannot read the datawaiting on in stream 1.  Hence the stall.
-When a stream has data being output, there is a boolean flag following the name of the stage the stream is connected to. This tracks the peek state of the object.  For an output stream, true means the following stage has peeked at the value. With input streams, the current stage has seen the value when its true.
-When a stage is multithreaded, like elastic, you can get flags of 3 or 5. This means that threads are waiting on output and read, or output and any. When using multithreaded stages, only one thread should use output unless it is serialized using protected or syncronized blocks.
-When a stage has a pending sever or autocommit flag bits are set too.
+This is all that is needed for an sqlite database containing flight
+data. A simple select * can then be done with the following pipeline:
 
-\chapter{The Pipe Compiler}
+\begin{lstlisting}
+pipe literal * from FlightRoute where flight = 'KLM765' | sqlselect | console
+\end{lstlisting}
 
-% \chapter{Built-in Stages}
-% This section describes the set of built in stages, i.e. the ones that are delivered with the downloadable open source package. These stages are directly executable from the njpipesC.jar file; also, the source of these stages is delivered in the package.
-% General notes on the built-in stages:
-% \begin{enumerate}
-% \item The underlying technology, the JVM, and the chosen implementation language, NetRexx, cause the character representation to be Unicode.
-% \item Most of the stages expect the objects in the pipeline to be of type Rexx
-% \end{enumerate}
-\input{stagesChapter}
-\include{appendixa}
+This yields the following output:
+\begin{verbatim}
+FLIGHT--ROUTE--UPDATETIME--
+KLM765  AUA-BON-AMS  1494132448
+\end{verbatim}
+
+\begin{shaded}
+Note that from the command line, the quotes around the pipe
+specification and the literal string in the SQL statement should be
+opposite, while when the pipeline is issued from the Workspace for
+\nr{}, the pipeline does not have to be quoted, but the sql string
+needs double quotes instead of the - for SQL statements- normal single quotes.
+\end{shaded}
+\chapter{The Pipes Runner}
+The pipes compiler is used in both precompiled and directly executed
+pipelines. When you directly execute a pipeline from the commandline
+or from the \emph{nrws} \nr{} workspace, the process is optimized to not persist
+generated \nr{}, Java and Class files to disk before execution; the
+whole process runs from memory. The Pipes Runner uses the Pipes
+Compiler for this purpose, and as such misses the options for
+persistence\footnote{But specifying them will not generate an error}.
+
+The \emph{pipe} command alias start the Pipes Runner, which is a
+command processor that can execute a pipe from the command line in an
+OS shell, the OS being Windows, Linux or macOS\footnote{this is a
+  non-exhaustive list of operating systems}.
+
+A pipe can be run with options prepended within parentheses, like this:
+\begin{lstlisting}
+pipe '(test1 sep ! stall 2000 debug 63) literal abcde ! console'
+\end{lstlisting}
+
+The following options are
+available:
+
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+\toprule
+pipename&Specify the name of the generated class file. This
+can be useful for debugging purposes but is not mandatory when running
+a pipe. An unnamed pipe receives a generated unique name. This option
+needs to go first.
+\\\midrule
+sep&The default stage separator is the |
+(pipe) character; this can be overridden with the sep option; a pipe
+called test1 which uses an exclamation mark as separator character,
+needs the options (test1 sep !).
+\\\midrule
+debug&The debug option specifies a bitmask for
+debugging the execution of a pipe; (debug 63), for
+example, generates a rather complete debugging trail).
+\\\midrule
+end&The default pipe end character is the ' ?'
+  (question mark), which can be overridden here. Note that the
+  backslash, which is an obvious pipe end character for the z/VM 3270
+  interface, is not a good choice for Windows and Unix shells.
+  \\\midrule
+stall& The duration in number of seconds of a pipe stall (or deadlock)
+detection cycle.
+\\\bottomrule
+\end{tabularx}
+
+
+\chapter{The Pipes Compiler}
+The purpose of precompiling a pipeline specification is to produce a
+.class file for the JVM that can be run independently and on different
+machines; only the JVM and the NetRexxC.jar or the NetRexxF.jar are
+required to run a precompiled pipe. A set of precompiled pipes can be
+shipped as an application.
+
+When precompiling pipes, there are options to save and view the
+generated \nr{}, Java and JVM Class files. A precompiled pipe has
+the advantage that it can be executed over and over in an application,
+without the need to compile it every time; the performance savings are
+accumulative in this scenario.
+
+The following options can be used on the \emph{pipc} command, in
+addition to the ones specified in the previous chapter for the Pipes Runner:
+
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+\toprule
+-gen&Generate the \nr{} source file. The pipeline needs a name.
+\\\midrule
+-keep&Keep the Java source which is generated from the \nr{} source.
+\\\bottomrule
+\end{tabularx}
+
+Example:
+\begin{lstlisting}
+pipe (testpipe -gen -keep)
+\end{lstlisting}
+This will generate the \nr{} source as well as keep the java source.
+
+
+
+\chapter{Built-in Stages}
+This section describes the set of built-in stages, i.e. the ones that
+are delivered with the downloadable open source package. These stages
+are directly executable from the NetRexxC.jar file or the NetRexxF.jar
+file (the latter contains a Java compiler for use on JRE-only
+systems); also, the source of these stages is delivered in the \nr{}
+source repository. This repository can be checked out at
+\begin{verbatim}
+git clone https://git.code.sf.net/p/netrexx/code netrexx-code
+\end{verbatim}
+The source of the stages is in directory
+\begin{verbatim}
+netrexx-code/src/org/netrexx/njpipes/stages
+\end{verbatim}
+
+\chapter{Differences with CMS Pipelines}
+The goal of this implementation is to be as close as possible to the
+the CMS version of Pipelines. A few differences are unavoidable.
+
+\begin{itemize}
+\item The character set is Unicode and not EBCDIC, as Unicode is the
+  character set of the underlying Java platform
+\item As shells are different, many 3270 related stages are not
+  implemented
+ \item Pipes need to be quoted on the Windows and Unix command lines;
+   the Workspace for \nr{} (\emph{nrws}) environment is an exception to this rule
+\item The mainframe is record-oriented in many stages, Pipelines for \nr{} does
+  an approximation of this
+\item Pipelines on the mainframe is an interpreted language with
+  components as the scanner and the dispatcher; the \nr{}
+  version is compiled to Java .class files by \emph{pipc}, the pipes
+  compiler, and dispatched as threads by the JVM.
+\item The mainframe pipes dispatcher is not multiprocessor enabled. In
+  Pipelines for \nr{} all tasks (stages) are dispatched over all available
+  processors in parallel.
+  \item The fact that pipes run from \nr{} implies that they can be
+    used in Java source. In previous releases there was more direct
+    support for this; this has lapsed due to changes in the way a java
+    toolchain works. This support can be restored in future releases.
+  \item To put the content of  a \nr{} variable in a pipe
+    specification in a \nr{} program, there is a \texttt{\{\}}
+    mechanism. In CMS the pipe would be quoted in the Rexx source and you would unquote sections to get a similiar effect.
+\end{itemize}
+
+
+% \input{stagesChapter}
+\includepdf[pages=-,nup=1x1,landscape=false]{stages.pdf}
+%% \include{appendixa}
 \backmatter
-\listoffigures
-\listoftables
-\lstlistoflistings
+%% \listoffigures
+%\listoftables
+%% \lstlistoflistings
 \printindex
 \clearpage
 \psset{unit=1in}
+
+
+
 \begin{pspicture}(3.5,1in)
   \psbarcode{\isbn}{includetext guardwhitespace}{isbn}
 \end{pspicture}

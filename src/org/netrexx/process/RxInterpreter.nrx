@@ -33,7 +33,11 @@
 /* 2000.02.29 Add PROTECTion                                          */
 /* 2000.03.14 Begin proxy work                                        */
 /* 2000.04.02 Integrated proxy                                        */
-/* 2012.09.19 allow initialization of constant fields in Java 5+ per issue #80 -KK-   */
+/* 2012.09.19 allow initialization of constant fields in Java 5+      */
+/*                                               per issue #80 -KK-   */
+/* 2020.12.20 MRE -- catch exception when class modifier fields       */
+/*                                              are accessed in JDK9+ */
+/* 2022.02.25 MRE -- getStemElementValue without RxArray              */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -380,6 +384,13 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
     end
   return val
 
+ method getStemElementValue(cursor=RxCursor,val=Rexx,ref=Rexx,tok=RxToken) returns Rexx
+  if val=null then signal RxSignal(cursor,NullPointerException(),tok)
+  val=val.getnode(ref).leaf
+  return val
+
+
+
  /** SETSTEMELEMENTVALUE: Look up an element in an indexed string
     Arg1 is the context
     Arg2 is the Rexx object (may not be null)
@@ -465,85 +476,94 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
                    set=boolean, setvalue=Object) private returns Object
   -- property in a real class
 
-  -- say '# doProp:' set field.fieldinfo.type.toString field.fieldname
-  infoclass=field.fieldinfo.getClassObject(rxt.loader)
+  -- say '# doProp:' set field.fieldinfo.type.toString() field.fieldname
+    infoclass=field.fieldinfo.getClassObject(rxt.loader)
   do label try
     -- now find the Field object for the property
     -- this should always succeed
     prop=infoclass.getDeclaredField(field.fieldname)
     prop.setAccessible(1)     -- we have The Authority
-
+    
     -- now set or get it
     if set then do
-      setvalue=code2ref(setvalue, field.fieldtype) -- rewrap if needed
-								-- temp remove FINAL property as Java 5+ does not allow changing finals --issue #80 -KK-
-								modifiersField = prop.getClass().getDeclaredField("modifiers") --issue #80 -KK-
-								modifiersField.setAccessible(1) --issue #80 -KK-
-								modifiers=prop.getModifiers() --issue #80 -KK-
-								if Modifier.isFinal(modifiers) then modifiersField.setInt(prop, modifiers-Modifier.FINAL) --issue #80 -KK-
-      prop.set(obj, setvalue)
-								if Modifier.isFinal(modifiers) then modifiersField.setInt(prop, modifiers) --issue #80 -KK-
-      value=Object null
-      end
-     else do -- get its value
-      value=prop.get(obj)
-      value=ref2code(value, field.fieldtype)       -- rewrap if needed
-      end
+      setvalue=code2ref(setvalue, field.fieldtype) /* rewrap if needed */
 
-   catch iae=IllegalAccessException
+-- MRE need to wrap this and catch JDK12+ inaccessible class modifiers       
+      do
+        -- temp remove FINAL property as Java 5+ does not allow changing finals --issue #80 -KK-
+        modifiersField = prop.getClass().getDeclaredField("modifiers") --issue #80 -KK-
+-- say '##MRE not reached on JDK12+'
+        modifiersField.setAccessible(1) --issue #80 -KK-
+      catch e=NoSuchFieldException
+        nop                   -- nop, but avoided JDK12+ java.lang.NoSuchFieldException:modifiers
+                              -- triggering 'Severe Error: Internal error: RxInterpreter: pnf'
+      end 
+
+      modifiers=prop.getModifiers() --issue #80 -KK-
+      if Modifier.isFinal(modifiers) then modifiersField.setInt(prop, modifiers-Modifier.FINAL) --issue #80 -KK-
+      prop.set(obj, setvalue)
+      if Modifier.isFinal(modifiers) then modifiersField.setInt(prop, modifiers) --issue #80 -KK-
+      value=Object null
+    end
+   else do -- get its value
+     value=prop.get(obj)
+     value=ref2code(value, field.fieldtype)       -- rewrap if needed
+   end
+   
+  catch iae=IllegalAccessException
     -- rethrow in our runtime wrapping
     signal RxSignalPend(iae, tok)
-   catch se=SecurityException
+  catch se=SecurityException
     -- rethrow in our runtime wrapping
     signal RxSignalPend(se, tok)
-   catch ire=IllegalArgumentException
+  catch ire=IllegalArgumentException
     signal RxQuit(rxt, tok, 'internal.error', 'RxInterpreter: pia' ire.getMessage())
-   catch NoSuchFieldException
+  catch NoSuchFieldException
     -- say '#' field.fieldinfo.type field.fieldname field.fieldtype
-    -- if obj\=null then say '#' obj.tostring
+    -- if obj\=null then say '#' obj.toString()
     -- signal RxSignalPend(nsfe, tok)
     signal RxQuit(rxt, tok, 'internal.error', 'RxInterpreter: pnf')
-    end try
+  end try
   return value
-
- /** PROXYINIT -- request to statically initialize a proxy class
-    Arg1 is the class index (unique integer for each local class)
-    */
- method proxyInit(classId=int)
-  -- say '# proxy class init:' classid
-  info=rxt.classer.findclassbyid(classId)    -- find the right class
-  localclass=info.localclass
-  initializeProperties(localclass, null)     -- static initialize
-  return
-
- /** CALLMETHOD -- call a method or constructor from a proxy
-    Arg1 is the context object (null for a function, null for an
-            ordinary constructor, non-null instance for instance method,
-            or non-null parent for a dependent constructor)
-    Arg2 is the field index (unique integer for each local field)
-    Arg3 is the values array for the arguments (arguments suitably
-            wrapped for RxCode values)
-    returns the method result, suitably wrapped for an RxCode.value
-      (or null, for an empty return or null value)
-
-    If Arg2 is negative, this is a precall for a constructor, in which
-    case the call simply collects the arguments for the super(...) call.
-    In this case an object array is returned with the evaluated
-    arguments (wrapped RxCode-style for primitives).
-
-    We could be handling an Event.  In this case if we get an Exit then
-    we must not pass our event signal back up to the catcher; instead we
-    simply return a null reference.  We only need to worry about this
-    for methods with no (void) return type.
-
-    Special handling of parent object in dependent constructors:
-      During precall, the context object (curthis) is the parent object.
-      During the body of the constructor, or in instance methods, the
-        parent object is in the 'this$n' field of the instance (referred
-        to by curthis).
-    */
- method callMethod(obj=Object, fieldId=int, args=Object[]) returns Object
-   if fieldId<0 then do
+  
+  /** PROXYINIT -- request to statically initialize a proxy class
+     Arg1 is the class index (unique integer for each local class)
+   */
+  method proxyInit(classId=int)
+    -- say '# proxy class init:' classid
+    info=rxt.classer.findclassbyid(classId)    -- find the right class
+    localclass=info.localclass
+    initializeProperties(localclass, null)     -- static initialize
+    return
+    
+  /** CALLMETHOD -- call a method or constructor from a proxy
+     Arg1 is the context object (null for a function, null for an
+     ordinary constructor, non-null instance for instance method,
+     or non-null parent for a dependent constructor)
+     Arg2 is the field index (unique integer for each local field)
+     Arg3 is the values array for the arguments (arguments suitably
+     wrapped for RxCode values)
+     returns the method result, suitably wrapped for an RxCode.value
+     (or null, for an empty return or null value)
+     
+     If Arg2 is negative, this is a precall for a constructor, in which
+     case the call simply collects the arguments for the super(...) call.
+     In this case an object array is returned with the evaluated
+     arguments (wrapped RxCode-style for primitives).
+     
+     We could be handling an Event.  In this case if we get an Exit then
+     we must not pass our event signal back up to the catcher; instead we
+     simply return a null reference.  We only need to worry about this
+     for methods with no (void) return type.
+     
+     Special handling of parent object in dependent constructors:
+     During precall, the context object (curthis) is the parent object.
+     During the body of the constructor, or in instance methods, the
+     parent object is in the 'this$n' field of the instance (referred
+     to by curthis).
+   */
+  method callMethod(obj=Object, fieldId=int, args=Object[]) returns Object
+    if fieldId<0 then do
      precall=boolean 1
      fieldId=-fieldId
      end

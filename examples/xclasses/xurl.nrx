@@ -1,0 +1,507 @@
+--       package:  xurl
+--       version:  1.000 beta
+--          date:  23 MAY 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--
+package xclasses
+class xurl 
+
+  properties public
+    line = Rexx('')           -- buffered I/O lines
+    referencelist             -- referenced URLs
+    lines                     -- number of lines
+    address
+    protocol
+    host
+    port
+    base
+
+  properties public static
+    default_status = 0
+
+  properties private static
+    rc        = 0       -- latest OP rc
+    BUFSIZE   = 4096    -- buffer size
+    trace     = 0       -- trace flag
+    info      = 1       -- display info line
+    replace   = 0       -- set it to 1 to replace existing files
+    status    = 0       -- display the status line
+    dinfop    = 1       -- pointer for display status line
+
+  properties private static
+    pversion  = 'v0r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: constructor
+-- purpose.....: create an XURL object (address is in the form "http://wwwcn.cern.ch")
+--
+  method xurl(addr=Rexx) public
+    rc = 0
+    trace = 0
+    if addr = ''
+      then xsys.die(101,'Missing remote URL address.')
+    this.address  = addr
+    do
+      purl = URL(addr)
+    catch er = MalformedURLException
+      xsys.die(102,'Error: Malformed URL "'er'".')
+    end
+    this.protocol = purl.getProtocol()
+    this.host     = purl.getHost()
+    this.port     = purl.getPort()
+
+    this.base = addr.substr(1,addr.lastpos('/'))
+    line[0] = 0
+    lines = line[0]
+    referencelist = ''
+    info = 0
+    replace = 0
+
+-- method......: options
+-- purpose.....: set the options (trace/notrace,replace/noreplace,etc. etc.)
+--
+  method options(optl=Rexx) public
+
+    -- parse the option list
+    --
+    list = optl.upper()
+    loop while list <> ''
+      parse list key list
+      select
+        when key='TRACE'     then trace = 1
+        when key='NOTRACE'   then trace = 0
+        when key='INFO'      then info = 1
+        when key='NOINFO'    then info = 0
+        when key='REPLACE'   then replace = 1
+        when key='NOREPLACE' then replace = 0
+        when key='STATUS'    then status = 1
+        when key='NOSTATUS'  then status = 0
+      end
+    end
+
+-- method......: readlines
+-- purpose.....: read an entire URL into the I/O array (obj.line[])
+--
+  method readlines() public
+    rc = 0
+
+    if trace then say 'Connecting to "'address'".'
+    do
+      urldes = URL(address)
+      urlcon = urldes.openConnection()
+      dis = BufferedReader(InputStreamReader(urlcon.getInputStream()));
+
+      i = 0
+      loop forever
+        inline  = dis.readLine
+        if inline = NULL then leave
+        i = i+1
+        line[i] = inline
+      end
+      line[0] = i
+      lines = line[0]
+    catch erm = MalformedURLException
+      say 'Problem URL "'address'".'
+      say 'Message is "'erm'".'
+      rc = 1
+    catch ero = IOException
+      say 'Problem URL "'address'".'
+      say 'Message is "'ero'".'
+      rc = 1
+    end
+
+-- method......: post
+-- purpose.....: sends data via a POST and then reads the result into an array (obj.line[])
+--
+  method post(string=Rexx) public
+    rc = 0
+
+    if trace then say '(post) connecting to "'address'".'
+    do
+      urldes = URL(address)
+      urlcon = urldes.openConnection()
+      urlcon.setDoOutput(1)
+      out = PrintStream(urlcon.GetOutputStream())
+
+      nstring = ''
+      loop while string <> ''
+        parse string key'='arg'&'string
+        nstring = nstring||key'='URLEncoder.encode(arg)'&'
+      end
+      nstring = nstring.substr(1,nstring.length()-1)
+
+      if trace then say '(post) Sending string "'nstring'".'
+      out.println(nstring)
+      out.close()
+
+      dis = BufferedReader(InputStreamReader(urlcon.getInputStream()));
+
+      i = 0
+      loop forever
+        inline  = dis.readLine
+        if inline = NULL then leave
+        i = i+1
+        line[i] = inline
+      end
+      line[0] = i
+      lines = line[0]
+    catch erm = MalformedURLException
+      say 'Problem URL "'address'".'
+      say 'Message is "'erm'".'
+      rc = 1
+    catch ero = IOException
+      say 'Problem URL "'address'".'
+      say 'Message is "'ero'".'
+      rc = 1
+    end
+
+-- method......: fetch
+-- purpose.....: fetches an URL from REMOTE location into LOCFID file
+--
+  method fetch(remote=rexx,locfid=rexx) public static 
+    rc = 0
+    -- now get the local fid if needed
+    --
+    if locfid = '' then
+      do
+        if remote.pos('/') = 0
+          then locfid = ''
+          else locfid = remote.substr(remote.lastpos('/')+1)
+      end
+    if xfile.fexist(locfid) & \replace then
+      do
+        say 'Local file "'locfid'" already exists.'
+        return 1
+      end
+
+    buf = byte[BUFSIZE]
+    fd  = File(locfid)
+    t1  = xclasses.xtimer()
+
+    do
+      if xurl.info
+        then xstring.ssay('Fetching "'remote'" into "'locfid'".')
+      urldes = URL(remote)
+      urlcon = urldes.openConnection()
+      dis = urlcon.getInputStream();
+      size = urlcon.getContentLength();
+      if size < 1 then
+        do
+          say '(xurl.fetch) Empty or missing URL "'remote'".'
+          return 2
+        end
+      fos  = FileOutputStream(fd)
+      out  = DataoutputStream(fos)
+
+      tot = 0
+      chunk = 0
+      loop forever
+        ll = dis.read(buf)
+        if ll < 0 then leave
+        out.write(buf,0,ll)
+        tot = tot + ll
+        if xurl.status | default_status then
+          do
+            chunk = chunk+ll
+            if chunk > BUFSIZE*4 then              -- display ONLY if we
+              do                                   -- tranfered a reasonable
+                chunk = 0                          -- amount of data
+                status_line(tot,size,'READING')    -- we want to avoid too many
+              end                                  -- terminal I/Os
+          end
+      end
+      out.flush()
+      out.close()
+      time = t1.elapsed()
+      speed = (tot/1024)/time
+      speed = speed.format(NULL,3)
+      if xurl.info then
+        do
+          msg = '"'locfid'" ready. Copied' xmath.dotify(tot) 'bytes. (' speed 'Kb/s).'
+          say msg.left(80)
+        end
+    catch erm = MalformedURLException
+      say 'Problem URL "'remote'".'
+      say 'Message is "'erm'".'
+      rc = 1
+    catch ero = IOException
+      say 'Problem URL "'remote'".'
+      say 'Message is "'ero'".'
+      rc = 1
+    end
+    return rc
+
+-- purpose.....: fetches an URL from REMOTE location, it will go to a FID with same name
+  method fetch(remote=rexx) public static
+    rc = fetch(remote,'')
+    return rc
+
+-- purpose.....: fetches the XURL, it will go to a FID with same name
+  method fetch() public
+    fetch(this.address,'')
+
+-- method......: fetchall
+-- purpose.....: fetch all the URLs pointed by URL, provided that their name matches mask
+--
+  method fetchall(mask=rexx) public 
+    getreferences()
+    list = referencelist
+    todo = ''
+    loop while list <> ''
+      parse list item list
+      if item.pos(mask) = 0 then iterate
+      todo = todo item
+    end
+    say 'Will fetch' todo.words() 'files.'
+    list = todo
+    loop while list <> ''
+      parse list item list
+      fetch(base||item,'')
+    end
+
+-- method......: esists
+-- purpose.....: checks if the url url_addr exists (returns 1=YES,0=NO)
+--
+  method exists(url_addr=rexx) public static
+    rc = 1
+    do
+      urldes = URL(url_addr)
+      urlcon = urldes.openConnection()
+      size = urlcon.getContentLength() -- usually -1 if missing
+      if size < 1 then rc = 0
+    catch erm = MalformedURLException
+      say '(exists) Problem URL "'url_addr'".'
+      say '(exists) Message is "'erm'".'
+      rc = 0
+    catch ero = IOException
+      say '(exists) Problem URL "'url_addr'".'
+      say '(exists) Message is "'ero'".'
+      rc = 0
+    end
+    return rc
+
+-- method......: esists
+-- purpose.....: like above, for an xurl object
+--
+  method exists() public 
+    return exists(this.address)
+
+-- method......: sockfetch
+-- purpose.....: just like fetch() but using pure sockets (debug tool)
+--
+  method sockfetch(remote=rexx,locfid=rexx) public static
+    parse remote fprotocol'://'fnode'/'fdocument
+    parse fnode fhost':'fport
+
+    -- basic checks
+    --
+    rc = 0
+    if fprotocol <> 'http' then
+      do
+        say '(fetch) E001: invalid protocol "'fprotocol'" specified.'
+        rc = 1
+        return
+      end
+    if fhost = '' then
+      do
+        say '(fetch) E002: missing remote HOST in URL.'
+        rc = 2
+        return
+      end
+    if fport = '' then fport = 80
+
+    -- now get the local fid if needed
+    --
+    if locfid = '' then
+      do
+        if remote.pos('/') = 0
+          then locfid = ''
+          else locfid = remote.substr(remote.lastpos('/')+1)
+      end
+    say locfid
+
+    buf = byte[BUFSIZE]
+    fd  = File(locfid)
+    t1  = xclasses.xtimer()
+    s = Socket null;
+    do
+      fos  = FileOutputStream(fd)
+      out  = DataoutputStream(fos)
+      s = Socket(fhost, fport);
+      sin   = s.getInputStream()
+      sout  = PrintWriter(s.getOutputStream(),1)
+      fline  = String
+      fline  = 'GET /'||fdocument 'HTTP/1.0' '\x0D\x0A\x0D\x0A'
+      sout.println(fline)
+      tot = 0
+      loop forever
+        ll = sin.read(buf)
+        if ll < 0 then leave
+        out.write(buf,0,ll)
+        tot = tot + ll
+      end
+      out.flush()
+      out.close()
+      time = t1.elapsed()
+      say 'Transfer completed. Total=' tot 'bytes. Speed=' (tot/1024)/time 'Kbytes/sec.'
+    catch e1 = IOException
+      say '# Error from Socket function.'
+      say '# Message is "'e1'".'
+      say '# Abending.'
+    finally 
+      do
+        if (s \= null) then s.close()
+      catch e1 = IOException
+        say '# Error from close.'
+        say '# Message is "'e1'".'
+        say '# Abending.'
+      end
+    end
+    return 
+
+  method sockfetch(remote=rexx) public static
+    sockfetch(remote,'')
+
+-- method......: socket_cmd
+-- purpose.....: send a command via sockets for VERY special cases
+--
+  method socket_cmd(htmlcmd=rexx) public 
+    parse address fprotocol'://'fnode'/'fdocument
+    parse fnode fhost':'fport
+
+    -- basic checks
+    --
+    rc = 0
+    if fprotocol <> 'http' then
+      do
+        say '(cmd) E001: invalid protocol "'fprotocol'" specified.'
+        rc = 1
+        return
+      end
+    if fhost = '' then
+      do
+        say '(cmd) E002: missing remote HOST in URL.'
+        rc = 2
+        return
+      end
+    if fport = '' then fport = 80
+
+    t1  = xclasses.xtimer()
+    s = Socket null;
+    do
+      s = Socket(fhost, fport);
+      sin   = s.getInputStream()
+      sout  = PrintWriter(s.getOutputStream(),1)
+      fline = String
+      fline = 'GET /'||fdocument 'HTTP/1.0' '\x0D\x0A\x0D\x0A'
+      sout.println(fline)
+      dis = BufferedReader(InputStreamReader(sin));
+
+      i = 0
+      loop forever
+        inline  = dis.readLine
+        if inline = NULL then leave
+        i = i+1
+        line[i] = inline
+      end
+      line[0] = i
+      lines = line[0]
+      time = t1.elapsed()
+      say 'Transfer completed. Total=' i   'lines. Time:' time'.'
+    catch e1 = IOException
+      say '# Error from Socket function.'
+      say '# Message is "'e1'".'
+      say '# Abending.'
+    finally 
+      do
+        if (s \= null) then s.close()
+      catch e1 = IOException
+        say '# Error from close.'
+        say '# Message is "'e1'".'
+        say '# Abending.'
+      end
+    end
+    return 
+
+-- method......: getreferences
+-- purpose.....: get the URLs referenced by a page
+--
+  method getreferences() public
+    if line[0] = 0 then
+      do
+        readlines()
+        if rc <> 0
+          then say 'WARNING: RC:'rc' fetching page lines.'
+      end
+    referencelist = ''
+    loop i = 1 to line[0]
+      tline = line[i]
+      loop while tline <> ''
+        if tline.pos('href=') <> 0
+          then parse tline 'href='what'>'tline
+          else parse tline 'HREF='what'>'tline
+        what = what.translate(' ','"')
+        if what <> '' then referencelist = referencelist what
+      end
+    end
+
+-- method......: status_line
+-- purpose.....: display the "nice" status line
+--
+  method status_line(i1=Rexx,i2=Rexx,rest=Rexx) private static
+    pt = dinfop//4 +1
+    f1 = '-\\|/'.substr(pt,1)
+    dinfop = dinfop+1
+    n1 = i1/i2*20
+    n2 = i1/i2*100
+    n1 = n1.format(3,0)
+    n2 = n2.format(3,0)
+    cu = '.'.copies(20)
+    cu = cu.overlay('*',1,n1,'*')
+    i1 = i1%1024
+    i2 = i2%1024
+    s1 = i1.right(4,'0')
+    str = f1 s1||'/'||i2.right(4,'0')' (Kb) ['cu'] -' rest
+    str = str.left(80)
+    System.out.print(str'\x0D')
+
+-- method......: version
+-- purpose.....: display the current XURL version
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: main
+-- purpose.....: just test the main functions simply running "java xclasses/xurl"
+--
+  method main(args=String[]) public static
+    arg = rexx(args)
+    parse arg remote
+
+    -- define an URL
+    page = xurl(remote)
+    page.options('notrace info')
+    page.fetchall('html')
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+

@@ -1,0 +1,153 @@
+-- deblock_tests
+
+/*
+  21/ 2/ 4 Finish output #5, remove #7. Jeff Hennick
+  19/09/26 Jeff Hennick
+*/
+
+/** deblock
+             +-Fixed--80------------------------+
+>>--DEBLOCK--+----------------------------------+---><
+             | +-Fixed-+                        |
+             +-+-------+-number-+-----------+---|
+             |                  +-FROMRIGHT-+   | (1)
+             |                  +-PAD-xorc--+   | (4)
+             +-Variable-------------------------| (1)
+             +-CMS------------------------------| (1)
+             +-CMS4-----------------------------| (1)
+             +-SF-------------------------------| (1)
+             +-SF4------------------------------| (1)
+             +-RDW--range--number-+-------+-----| (1)
+             |                    +-STRIP-+     |
+             +-RFC959---------------------------| (1)
+             +-ONEBYTE--------------------------| (1)
+             +-ADMSF----------------------------| (1)
+             +-GDForders------------------------| (1)
+             +-AWSTAPE--------------------------| (1)
+             +-DECIMAL--number--+-INCLUSIVE-+---| (1)
+             |                  +-EXCLUSIVE-+   |
+             +-NETdata--------------------------| (1)
+             +-TEXTUNIT-------------------------| (1)
+             +-MONITOR--------------------------| (1)
+             +-TEXTfile-------------------------| (1)
+             +-| PC-style |---------------------+
+ PC-style:
+|----+-C-----------------------+--+-----------+-----+------------------+----|
+     +-Java-(3)(4)-------------+  +-TERMinate-+ (2) |     +-3F---+ (1) |
+     |        +-15---+         |                    +-EOF-+------+-----+
+     +-LINEND-+------+---------+                          +-xorc-+
+     |        +-xorc-+         |
+     +-CRLF--------------------+
+     +-STRING--delimitedString-+
+
+   (1) CMS only, not njpipes
+   (2) in njpipes, TERMINATE can come before or after EOF, for historic compatability
+   (3) use Java line separator (system depenedent)
+   (4) njpipes only, not CMS
+
+*/
+pipe (deblock_tests1)
+
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- deblock c ?
+   literal 12323\n4345\n456567\n678 |
+   literal 123\n234345\n456567\n678 |
+   deblock c |
+   c1: compare any ~2# 1 deblock c ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123;234345;456567;67812323;4345;456567;678 |
+   split ; |
+   c1: ?
+
+-- deblock string dstring ?
+   literal 123 234 345.456 567 678 |
+   literal 123  234345456567  678 |
+   deblock string /45/ |
+   c2: compare any ~2# 2 deblock string /45/ ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123  2343; ;6567  678123 234 3;.;6 567 678 |
+   split ; |
+   c2: ?
+
+-- deblock fixed number ?
+   literal 123 234 345 456 567 678 |
+   literal 123 234 345 456 567 678 |
+   deblock fixed 10 |
+   c3: compare any ~2# 3 deblock fixed 10 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123 234 34;5 456 567;678123 234; 345 456 5;67 678 |
+   split ; |
+   c3: ?
+
+-- deblock fixed number pad xorc ?
+   literal 123 234 345 456 567 678 |
+   literal 123 234 345 456 567 678 |
+   deblock fixed 10 pad x |
+   c4: compare any ~2# 4 deblock fixed 10 pad x ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123 234 34;5 456 567;678123 234; 345 456 5;67 678xxxx |
+   split ; |
+   c4: ?
+
+-- deblock c eof xorc ?
+   literal 12323\n4345\nQ456567\n678 |
+   literal 123\n234345\n45\r67\n678 |
+   deblock c eof Q |
+   c5: compare any ~2# 5 deblock fixed 10 pad Q ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123;234345;45\r67;67812323;4345;Q456567;678 |
+   split ; |
+   c5: ?
+
+   literal 12323\n4345\n456567\n678 |
+   literal 123\n234345\n45\r67\n678 |
+   deblock c eof 0d terminate |
+   c6: compare any ~2# 6 deblock c eof 0d terminate ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123;234345;45\r67;67812323;4345;456567;678 |
+   split ; |
+   c6: ?
+
+--   literal ~~~ |
+--   deblock xxxx |
+--   c7: compare any ~2# 7 deblock xxxx ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+--   o: ?
+--   literal unknown or unsupported option xxxx rc=11 |
+--   split ; |
+--   c7: ?
+   literal 2# 7 unknown or unsupported option xxxx rc=11 *not tested* |
+   o: ?
+
+   literal 12323\n4345\n456567\n678 |
+   literal 123\n234345\n45\r67\n678 |
+   deblock c |
+   c8: compare any ~2# 8 deblock c ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123;234345;45\r67;67812323;4345;456567;678 |
+   split ; |
+   c8: ?
+
+   literal 12323\n4345\n456567\n678 |
+   literal 123\n234345\n45\r67\n678 |
+   deblock c terminate eof 0d  |
+   c9: compare any ~2# 9 deblock c terminate eof 0d ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123;234345;45\r67;67812323;4345;456567;678 |
+   split ; |
+   c9: ?
+
+   literal 12323\n4345\n456567\n678 |
+   literal 12323\n4345\n456567\n678 |
+   literal 12323\n4345\n456567\n678 |
+   literal 123\n234345\n45\r67\n678 |
+   deblock fixed |
+   c10: compare any ~2#10 deblock fixed ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 123\n234345\n45\r67\n67812323\n4345\n456567\n67812323\n4345\n456567\n67812323\n4345\n456567\n;678 |
+   split ; |
+   c10: ?

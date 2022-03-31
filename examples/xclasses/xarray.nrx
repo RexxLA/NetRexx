@@ -1,0 +1,291 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  3 MAY 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1998
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--       summary:  Handles operations on Rexx and Byte arrays
+--                 The arrays should be defined as follows:
+--                       NR_ARRAY  = rexx[NNN]
+--                       NR_ARRAY2 = rexx[MMM]
+--                       BARRAY    = byte[NNN]
+--                 It's essentially a collection of static methods
+--
+package xclasses
+class xarray
+  properties public
+  properties private static
+  properties private static
+    pversion  = 'v1r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: xarray
+-- purpose.....: constructor. No real use, since this is a collection of static methods.
+-- summary.....: This constructor has no use, since all the xarray
+--               functions are handled as static methods.
+--
+  method xarray public
+
+-- method......: version
+-- purpose.....: display the version of xarray
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: init
+-- purpose.....: init NR array's contents with VALUE
+--
+  method init(a=rexx[],value) public static
+    loop i = 0 to a.length -1
+      a[i] = value
+    end
+
+-- method......: copy
+-- purpose.....: copy array's contents A -> B
+--
+  method copy(a=rexx[],b=rexx[]) public static
+    System.arraycopy(a,0,b,0,a.length)
+
+-- method......: reverse
+-- purpose.....: reverse record nos, i.e. 1...N will become N...1
+--
+  method reverse(a=rexx[],nrec=rexx) public static
+    len = nrec
+    loop i = 1 to len%2
+      save = a[i]
+      a[i] = a[len-i]
+      a[len-i] = save
+    end
+
+-- method......: sort
+-- purpose.....: sorts an array. MODE=R will do reverse sorting
+--
+  method sort(a=rexx[],mode) public static
+    if mode.upper() <> 'R' then mode = ''
+    len = a.length
+    ws = len-1
+    incr = ws%2                                                    
+    loop while incr > 0
+      loop i = incr+1 for ws
+         j = i-incr                                        
+         loop while j > 0
+            k = j+incr                                     
+            if k > len-1 then k = len-1
+            wj = a[j]
+
+            wk = a[k]
+            if mode = 'R'                                  
+              then do ; If wj >= wk Then Leave ; end;
+              else do ; If wj <  wk  Then Leave ; end;
+            aa = a[j]
+            a[j] = a[k]
+            a[k] = aa
+            j = j-incr                                       
+         End                                                 
+      End                                                    
+      incr = incr%2                                          
+    End
+
+-- method......: sort
+-- purpose.....: sorts an array in ascending order
+--
+  method sort(a=rexx[]) public static
+    sort(a,'A')
+
+-- method......: dump
+-- purpose.....: dump array's contents. NAME=comment
+--
+  method dump(a=rexx[],name) public static
+    len = a.length
+    fil = name'(dim='len')'
+    fil = fil.left(10)
+    oval  = 'DUMMY'
+    skip  = 0
+    dosay = 0
+    loop i = 0 to len-1
+      if a[i] = NULL
+        then val = 'NULL'
+        else val = a[i]
+      dosay = 0
+      if val = oval 
+        then skip = skip+1
+        else dosay = 1
+      if i = len-1 then dosay = 1
+      if dosay then 
+        do
+          if skip > 0 then 
+            do
+              if (i = len - 1) then skip = skip - 1
+              if skip > 0 then say fil '(...' skip 'lines not displayed)'
+              if i <> len-1 then say fil '['i-1']' oval
+              skip = 0
+            end
+          say fil '['i']' val
+        end
+      oval = val
+      fil = ' '.copies(10)
+    end
+    say
+
+-- purpose.....: dump array's contents. NAME=''
+  method dump(a=rexx[]) public static
+    dump(a,'')
+
+-- method......: ba2x
+-- purpose.....: Returns a string after a conversion ByteArray to HEX
+--
+  method ba2x(a=byte[],start=rexx,length=rexx) public static
+    ostr = ''
+    loop i = start to start + length - 1
+      ch = rexx a[i]
+      xch = ch.d2x(2)
+      ostr = ostr||xch
+    end
+    return ostr
+
+-- method......: ba2c
+-- purpose.....: Like BA2X, but converting ByteArray to CHARS
+--
+  method ba2c(a=byte[],start=rexx,length=rexx) public static
+    ostr = ''
+    loop i = start to start + length - 1
+      ch = rexx a[i]
+      cch = ch.d2c()
+      ostr = ostr||cch
+    end
+    return ostr
+
+-- method......: ba2d
+-- purpose.....: Like BA2X but converting ByteArray to DEC
+--
+  method ba2d(a=byte[],start=rexx,length=rexx) public static
+    hexv = ba2x(a,start,length)
+    v = hexv.x2d()
+    return v
+
+-- method......: bagrepx
+-- purpose.....: grep SEARCH (an HEX qty) in a ByteArray, starting at byte START
+--
+  method bagrepx(a=byte[],search=rexx,start=rexx) public static
+    l = search.length()
+    b = byte[l/2]
+
+    -- convert the HEX string
+    -- to decimal
+    --
+    list = search
+    i = 0
+    loop while list <> ''
+      parse list nb +2 list
+      b[i] = nb.x2d(2)
+      i = i+1
+    end
+
+    lend = a.length - 1
+    match = 0
+    loop i = start to lend
+      if a[i] == b[0] then
+        do
+          match = 1
+          loop j = 1 to b.length - 1
+            if b[j] <> a[i+j] then
+              do
+                match = 0
+                leave
+              end
+          end
+          if match then leave
+        end
+    end
+    if match 
+      then return i
+      else return -1
+
+-- purpose.....: grep SEARCH (an HEX qty) in a ByteArray, starting at byte 1
+--
+  method bagrepx(a=byte[],search=rexx) public static
+   return bagrepx(a,search,1)
+
+-- method......: bahexline
+-- purpose.....: prepare a line
+--
+  method bahexline(buf=byte[],bs=rexx) public static
+    obh = ''
+    obc = ''
+
+    -- this logic is not perfect, might require rewriting
+    -- get 2 bytes a time, in HEX and in CHAR
+    --
+    loop j = 0 to 14 by 2
+      p1 = bs+j
+      p2 = bs+j+1
+      if p1 > buf.length - 1    -- past end of buffer
+        then c1 = '00'          --
+        else c1 = rexx buf[p1]
+      if p2 > buf.length - 1 
+        then c2 = '00'
+        else c2 = rexx buf[p2]
+      obh = obh||c1.d2x(2)||c2.d2x(2)' '
+      if c1 > 32 & c1 < 127     -- only char we can see
+        then c1 = c1.d2c()      -- please
+        else c1 = '.'
+      if c2 > 32 & c2 < 127     -- ditto
+        then c2 = c2.d2c()      --
+        else c2 = '.'
+      obc = obc||c1||c2
+    end
+
+    -- that's the full line
+    --
+    ptr = bs
+    ptr = 'd'ptr.right(7,'0')
+    l = ptr '-' obh '"'obc'"'
+    return l
+
+-- method......: bahexdump
+-- purpose.....: HEX dumps a BYTEARRAY
+--
+  method bahexdump(buf=byte[],lstart=rexx,lend=rexx) public static
+    loop i = lstart to lend by 16
+      l = bahexline(buf,i)
+      say l
+      if i+1 > buf.length then
+        do
+          say '<<< EOF >>>'
+          leave
+        end
+    end
+
+-- method......: main
+-- purpose.....: just test the main functions simply running "java xarray"
+--
+  method main(args=String[]) public static
+    args = args
+    aar = rexx[8]
+    xarray.init(aar,'test')
+    xarray.dump(aar,'aar')
+
+    fid = xfile('xarray.class')
+    rc = fid.readbuf()
+    rc = rc
+    xarray.bahexdump(fid.buffer,0,100)
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

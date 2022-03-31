@@ -1,0 +1,92 @@
+-- query.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2019 René Jansen
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/** query
+            +-VERSION------+
+ >>--Query--+--------------+-----------><
+            +-LEVEL--------+
+            +-SOURCE-(1)---+
+            +-MSGLEVEL-(2)-+
+            +-MSGLIST-(2)--+
+
+   Notes:
+   (1) Note that QUERY SOURCE (which needs a sink) is available
+   but not documented in CMS.
+   (2) Not njPipes
+*/
+
+/*
+  20/ 5/23 Use new isFirstStage(). Jeff Hennick
+  20/ 5/20 Test for first stage in pipe. Documentation. Jeff Hennick
+  19/  /   New. René Jansen
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+import org.netrexx.njpipes.pipes.
+import org.netrexx.process.
+
+class query extends stage
+
+  method run() public
+    if \isFirstStage() then
+      Emsg(87, getName() 'stage must be the first stage of a pipeline.')
+
+    do
+      w1 = rexx ''
+
+      parse arg() w1 args
+
+      w1 = w1.upper()
+
+      vv=''
+      if getClass().getPackage()\=null then vv=getClass().getPackage().getImplementationVersion()
+      parse vv 'build' vv
+      parse vv '-' vv
+
+      select case w1
+        when '' then do
+           a = NrVersion().getPipesVersion() '(Version.Release/Mod) - Generated' vv
+        end
+        when 'VERSION' then do
+           a = NrVersion().getPipesVersion() '(Version.Release/Mod) - Generated' vv
+        end
+        when 'LEVEL' then do
+           a = NrVersion().getPipesVersion()
+        end
+        when 'SOURCE' then do
+           a ="NetRexx"
+        end
+        when 'MSGLEVEL' then do
+           Emsg(11,'Error - 'getName()' MSGLEVEL is not implemented in njPipes')
+        end
+        when 'MSGLIST' then do
+           Emsg(11,'Error - 'getName()' MSGLIST is not implemented in njPipes')
+        end
+        otherwise
+           Emsg(11,'Error - 'getName()' option 'w1' is not recognized')
+      end
+      if args <> '' then
+        Emsg(11,'Error - 'getName()' option 'args' is not recognized')
+
+      output(a)
+      select
+        when outStreamNumber()=-99 then do
+          if w1 <> 'SOURCE' then say a
+          shortStreams()                  -- get out of the picture
+        end
+        when inStreamNumber()=-99 then
+          exit(0)                         -- just exit
+        otherwise
+          shortStreams()                  -- get out of the picture
+      end
+
+    catch StageError
+      rc = 0
+      exit(rc*(rc<>12))
+    end

@@ -1,22 +1,32 @@
 -- take.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998 - 2021  Jeffrey Hennick, Jeff [at] Jeff [dash] H [dot] com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 98/09/20 support secondary output streams.  ejt
--- 98/06/12 Up to CMS Documentation. JHennick
+
+/*
+ 21/ 2/ 3 Made res type Rexx. Jeff Hennick
+ 19/09/15 snumber; BYTEs; fix LAST BYTES
+          Bug fix for FIRST NUMBER; add secondary output streams
+          Major fixes in LAST and BYTES. Needs SECONDARY for BYTES. JH
+ 98/09/20 support secondary output streams.  ejt
+ 98/06/12 Up to CMS Documentation. JHennick
+*/
 
 /** take
 
 
-             +-FIRST-+  +-1------+
-   >>--TAKE--+-------+--+--------+--+-------+-----------------------------><
-             +-LAST--+  +-number-+  +-BYTES-+
-                        +-*------+
+             +-FIRST-+  +-1----------+
+   >>--TAKE--+-------+--+------------+--+----------+-----------------------------><
+             +-LAST--+  +-snumber(2)-+  +-BYTEs(1)-+
+                        +-*----------+
+  (1) CMS must be BYTES
+  (2) CMS only number; njpipe: minus reverses first/last
 
 */
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -26,40 +36,72 @@ import org.netrexx.njpipes.pipes.
 class take extends stage
 
 method run()
-
-   s1 = boolean 1
+   first = boolean 1
+   n = rexx 1
+   rc = rexx 0
 
    args = rexx arg().upper()
 
-   parse args type .
+   parse args type numb .
 
-   bytes = boolean (args.pos('BYTES') > 0)
-
-   first = boolean 0
-   n = rexx 1
-
-   select
-      when type = 'FIRST' then first = 1
-      when type = 'LAST' then nop
-      when type = '*' then n = 999999999
-      when type.datatype('W') then n = type
-      otherwise args = args '.'
+   bytes = boolean (args.pos('BYTE') > 0)
+   last = boolean (args.pos('LAST') > 0)
+   if last then do
+      first = 0
+      parse args . type .
    end
 
-   parse args . n . 1 args
+   select
+      when type = 'FIRST' then do
+         n = numb
+      end
+      when type = 'LAST' then do
+         first = 0
+         n = numb
+      end
+      when type = '*' then n = 9.copies(digits)
+      when type.datatype('W') then n = type
+      otherwise
+        args = args '.'
+   end
 
-   if n = '*' then n = 999999999
+   if n = '*' then n = 9.copies(digits)
    if \n.datatype('W') then n = 1
 
+   if n < 0 then do
+      first = \first
+      last = \last
+      n = -n
+   end
+
 select
+   when n = 0 then
+      do
+         selectoutput(1)
+         shortStreams()
+      catch StageError
+         rc = rc()
+      end
    when first & bytes then                                     -- FIRST BYTES
       do
-         loop i = rexx 0 to n
+         res = Rexx ''
+         outLength = 0
+         loop until outLength = n
             line = rexx peekto()
-            i = i + line.length()
-            if i > n then line = line.left( n)
+            if outLength + line.length() > n then do
+               cut = n - outLength + 1
+               parse line line =(cut) res
+            end
             output(line)
+            outLength = outLength  + line.length()
             readto()
+         catch StageError
+            rc = rc()
+         end
+         do
+            selectoutput(1)
+            if res \= '' then output(res)
+            shortStreams()
          catch StageError
             rc = rc()
          end
@@ -73,7 +115,7 @@ select
          catch StageError
             rc = rc()
          end
-         do 
+         do
             selectoutput(1)
             shortStreams()
          catch StageError
@@ -82,51 +124,99 @@ select
          end
       end
    when bytes then                                            -- LAST BYTES
-         do
-            rbuf = RingBuf(n)
-            do
-               loop forever
-                  l = rexx peekto()
-                  rbuf.PutRingBuf(l)
-                  readto()
-               end
-            end
-         catch StageError
-            rc = rc()
-            output(rbuf.GetRingBuf())
-         end
-   otherwise                                                 -- LAST records
       do
+         buf = Vector()
          do
-           selectOutput(1)
-         catch StageError
-           s1 = 0
-         end
-         buf = Vector(n+1,n+1)
-         do
-            loop for n
-               buf.addElement(readto())
-            end
             loop forever
                buf.addElement(readto())
-               obj = buf.firstElement()
-               if s1 then do
-                  output(obj)
-               catch StageError
-                  s1 = 0
-               end
-               buf.removeElement(obj)
             end
          catch StageError
             rc = rc()
             if rc<>12 then
                 signal StageError
          end
-         selectOutput(0)
-         loop for n while \buf.isEmpty()
-            aobj = buf.firstElement()
+
+         size = buf.size() - 1
+         line = Rexx ''
+         i = Rexx
+         loop i = size by -1 to 0
+            rec = Rexx buf.get(i)
+            line = line || rec
+            if line.length() >= n then leave
+         end
+         n = n.min(line.length)
+         i = i.max(0)
+         if line.length = n then do
+            do
+               selectoutput(0)
+               loop i = i to size
+                  output(buf.get(i))
+               end
+            catch StageError
+               rc = rc()
+            end
+            do
+               selectoutput(1)
+               loop i = 0 to i - 1
+                  output(buf.get(i))
+               end
+            catch StageError
+               rc = rc()
+            end
+         end
+         else do
+            do
+            rec = Rexx buf.get(i)
+            break = line.length - n + 1
+            parse rec res =(break) rec
+            selectoutput(0)
+            output(rec)
+            loop i = i + 1 to size
+               output(buf.get(i))
+            end
+         catch StageError
+            rc = rc()
+         end
+         do
+            selectoutput(1)
+            loop i = 0 to i - 1
+               output(buf.get(i))
+            end
+            output(res)
+         catch StageError
+               rc = rc()
+         end
+         end
+      end
+   otherwise                                                 -- LAST records
+      do
+         buf = Vector()
+         do
+            loop forever
+               buf.addElement(readto())
+            end
+         catch StageError
+            rc = rc()
+            if rc<>12 then
+                signal StageError
+         end
+
+         size = buf.size()
+         n = n.min(size)
+         cut = size - n
+         do
+            selectOutput(0)
+            loop i = cut to size - 1
+               aobj = rexx buf.get(i)
+               output(aobj)
+            end
+         catch StageError
+            rc = mrc()
+         end
+         selectOutput(1)
+         loop i = 0 to cut - 1
+            aobj = buf.get(i)
             output(aobj)
-            buf.removeElement(aobj)
          end
       catch StageError
          rc = mrc()
@@ -135,4 +225,3 @@ select
       rc = mrc()
    end
 exit(rc*(rc<>12))
-

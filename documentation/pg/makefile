@@ -8,7 +8,7 @@ PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
 NRX_SRC		:= $(wildcard *.nrx)
 NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
-LATEX_EXE	:= xelatex -shell-esc
+LATEX_EXE	:= xelatex -output-driver="xdvipdfmx -i dvipdfmx-unsafe.cfg -q -E" -shell-esc
 RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
 DOCNAME         := "NetRexx $(RELEASE) Programming Guide.pdf"
@@ -21,12 +21,12 @@ DOCNAME         := "NetRexx $(RELEASE) Programming Guide.pdf"
 all:	copy $(NRX_OBJS) $(PDFTARGET)
 
 .PHONY copy:
-	cp ../../../examples/jsr223/ListScriptingEngines.nrx .
-	cp ../../../examples/jsr223/ScriptDemo2.nrx .
-	cp ../../../examples/jsr223/ScriptDemo3.nrx .
-	cp ../../../examples/jsr223/RunAppleScript.nrx .
-	cp ../../../examples/jsr223/antscript.xml .
-	cp ../../../examples/jsr223/JSONDemo.nrx .	
+	cp ../../examples/jsr223/ListScriptingEngines.nrx .
+	cp ../../examples/jsr223/ScriptDemo2.nrx .
+	cp ../../examples/jsr223/ScriptDemo3.nrx .
+	cp ../../examples/jsr223/RunAppleScript.nrx .
+	cp ../../examples/jsr223/antscript.xml .
+	cp ../../examples/jsr223/JSONDemo.nrx .	
 
 
 $(TARGET).pdf: $(TEX_SRC)

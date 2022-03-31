@@ -1,0 +1,118 @@
+/** strip
+                              +-BOTH-----+
+   >>--STRIP--+------------+--+----------+--+-----+-->
+              +--| case |--+  +-LEADING--+  +-TO--+
+                              +-TRAILING-+  +-NOT-+
+
+      +-BLANK----------------------+
+   >--+----------------------------+--><
+      +--| target |--+----------+--+
+                     +--number--+
+
+  case:
+  |--+--------------+--|
+     +--ANYCase-----+
+     +--CASEANY-----+
+     +--CASEIGNORE--+
+     +--IGNORECASE--+
+     +--CASELESS----+
+
+  target:
+  |--+--xrange-------------------------+--|
+     +--+--STRing--+--delimitedString--+
+        +--ANYof---+
+*/
+
+/*
+  20/ 9/10 New. Jeff Hennick
+*/
+
+pipe (strip_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+   literal 1  "compare" ignores leading and trailing blanks, so these tests might not be true! |
+   o: ?
+
+-- strip (no options: " " Both) ?
+   literal    abc  ;   abc def  ; |
+   split ; |
+   strip |
+   c1: compare any ~2# 1 strip (no options: " " Both)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc; abc def; |
+   split ; |
+   c1: ?
+
+-- strip Leading (" ") ?
+   literal    abc  ;   abc def  ; |
+   split ; |
+   strip Leading |
+   c2: compare any ~2# 2 strip Leading (" ")~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc; abc def; |
+   split ; |
+   c2: ?
+
+-- strip Trailing (" ") ?
+   literal    abc  ;   abc def  ; |
+   split ; |
+   strip Trailing |
+   c3: compare any ~2# 3 strip Trailing (" ")~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc; abc def; |
+   split ; |
+   c3: ?
+
+-- strip Trailing string /x/ ?
+   literal    abcxx;   abc defxx; |
+   split ; |
+   strip Trailing string /x/ |
+   c4: compare any ~2# 4 strip Trailing string /x/~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc; abc def; |
+   split ; |
+   c4: ?
+
+-- strip Trailing anyof /xyz/) ?
+   literal    abcxx;   abc defzy;  z gh ij z kl  y; |
+   split ; |
+   strip Trailing anyof /xyz/ |
+   c5: compare any ~2# 5 strip Trailing anyof /xyz/~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc; abc def; gh ij z kl; |
+   split ; |
+   c5: ?
+
+-- strip Leading to anyof /agy/) ?
+   literal    abcxx;   abc defzy;  z gh ij z kl  y; |
+   split ; |
+   strip Leading to anyof /agy/ |
+   c6: compare any ~2# 6 strip Leading to anyof /agy/~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abcxx; abc defzy; z gh ij z kl  y; |
+   split ; |
+   c6: ?
+
+-- strip Leading not anyof /agy/) ?
+   literal    abcxx;   abc defzy;  z gh ij z kl  y; |
+   split ; |
+   strip Leading not anyof /agy/ |
+   c7: compare any ~2# 7 strip Leading not anyof /agy/~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abcxx; abc defzy; z gh ij z kl  y; |
+   split ; |
+   c7: ?
+
+-- strip Leading not anyof /agy/) ?
+   literal    abcxx;   abc defzy;  z gh ij z kl  y; |
+   split ; |
+   strip Leading not anyof /agy/ |
+   c8: compare any ~2# 8 strip Leading not anyof /agy/~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abcxx; abc defzy; z gh ij z kl  y; |
+   split ; |
+   c8: ?

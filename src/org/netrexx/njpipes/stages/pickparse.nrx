@@ -1,0 +1,259 @@
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** pickparse
+
+               +--ONE----------------+                          +--(2)---------------------------+
+>>--PICKPARSE--+---------------------+--parse_template_Dstring--v--+--------------------------+--+--><
+               +--ALL--+----------+--+                             +--logic_template_Dstring--+
+                       +--SINGLE--+                                +--ELSE_Dstring-(1)--------+
+
+ Records are parsed via the parse_template_delimited_string.
+ Variables are named $n, where n is 1 to 9. The variables $_n are available
+ for the logic; they are the values from the previous record. Initially they are "".
+ The values of the variables are put into the logic_template_delimited_string
+ replacing $n & $_n and evaluated.  If TRUE, the record is put out on the stream
+ numbered by the dstring's position. The stream for a Dstring of ELSE is
+ used if no previous logic Dstring is TRUE. If there is no specific ELSE,
+ there is an implied one at the end; if that stream is not connected, the
+ record is discarded.
+ If ONE then the record is put out on, at most, one stream: the first one
+ matched.  If ALL then the record is put out on all streams matched.
+ If SINGLE then only the primary output stream is used for all output, except
+ for ELSE.  A single copy is written even if it matches multiple expressions.
+ The parse_template and logic_template(s) follow normal NetRexx rules.
+ (1) Implied ELSE after last specified dstring.
+ (2) Up to 9 logic_Dstrings may be specified to go to up to 10 ouput streams
+     (including an implied ELSE).
+
+
+ Example:
+   pickparse  /. $1 $2 +3 ./ /$1 = 'UNCLE' & $2 = 'SAM'/ /$2 <> $_2/
+
+*/
+/*
+ 20/ 9/28 Added SINGLE option.  Jeff Hennick
+ 20/ 8/ 4 Added $_n variables, from the previous record.  Jeff Hennick
+ 20/ 7/31 Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class pickparse extends stage
+
+--trace results
+options = Rexx
+optionsup = Rexx
+
+
+
+  -- The run method of this stage should never get called
+
+method run()
+  rc = 16
+  exit(rc)
+
+
+  /*
+   * pInfo    = name of pipe,
+   * pInfo[1] = stage number in pipe
+   * pInfo[2] = stage label, null if no label
+   * pInfo[3] = stage name
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of pipe
+   * pInfo[6] = sep
+   * pInfo[7] = end
+   * pInfo[8] = not modifier active
+   * pInfo[9] = stage is a driver
+   * code     = ''
+   * code[0]  = 0
+   *
+   * When compilerExit returns with true, the compiler expects:
+   *
+   * pInfo[2] = stage label
+   * pInfo[3] = name of stage
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of the pipe
+   * code[0]  = number of lines generated
+   * code[n]  = line n
+   *
+   */
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean
+do
+--trace results
+  pid  = pInfo
+  name = pInfo[3]
+
+  args = pInfo[4]
+  parse args w1 rest
+
+  oneonly = 1
+  single = 0
+  notsingle = 1
+
+  if w1 = 'ALL' then do
+    oneonly = 0
+    parse args . w2 rest2
+    if w2 = 'SINGLE' then do
+      single = 1
+      notsingle = 0
+      rest = rest2
+    end
+    args = rest
+  end
+
+  if w1 = 'ONE' then do
+    args = rest
+  end
+
+  ptempl = DString(args)
+  pt = ptempl.String()
+
+  if pt = '' then do
+    -- Emsg(11, 'Pickparse -- no parse template found in' pInfo[4])
+    say 'Pickparse -- no parse template found in' pInfo[4] 'RC = 11'
+    exit 11
+  end
+
+                     /* What streams do we have logical expresions for? */
+  ltemp = Rexx ''
+
+  s = ptempl.Residue()
+  loop stream = 0 to 10 while s <> ''
+    ds = DString(s)
+    ltemp[stream] = ds.String()
+    if ltemp[stream] = 'ELSE' then ltemp[stream] = 'nput1'
+    s = ds.Residue()
+  end
+
+  if stream > 9 then do
+    -- Emsg(11, 'Pickparse -- too many templates found in' pInfo[4])
+    say 'Pickparse -- too many templates found in' pInfo[4] 'RC = 11'
+    exit 11
+  end
+
+  if s <> '' then do
+    -- Emsg(11, 'Pickparse -- Unknown extra:' s)
+    say 'Parse -- Unknown extra:' s 'RC = 11'
+    exit 11
+  end
+
+                    /* What streams are connected? */
+  constr = Rexx 0
+  loop ostream = 0 to stream
+    do
+      selectOutput(ostream)
+      constr[ostream] = 1
+    catch stageError
+      constr[ostream] = 0
+    end
+  end
+  selectOutput(0)
+
+                   /* Is there an implied ELSE? */
+  if ostream > stream then ltemp[ostream - 1] = 'nput'
+
+  /* make the generated stage */
+  n=0
+  cname = stageName(name,pid,pInfo[1])
+
+
+  n=n+1;o[n]= 'class 'cname' extends stage private'
+  n=n+1;o[n]= '--trace results'
+  n=n+1;o[n]= 'one = 1.d2c()'
+
+  n=n+1;o[n]= ''
+  n=n+1;o[n]= 'method run()'
+  n=n+1;o[n]= '  $1 = "";$2 = "";$3 = "";$4 = "";$5 = "";$6 = "";$7 = "";$8 = "";$9 = "";'
+  n=n+1;o[n]= '  $_1 = $1;$_2 = $2;$_3 = $3;$_4 = $4;$_5 = $5;$_6 = $6;$_7 = $7;$_8 = $8;$_9 = $9;'
+  n=n+1;o[n]= '  $_1 = $_1;$_2 = $_2;$_3 = $_3;$_4 = $_4;$_5 = $_5;$_6 = $_6;$_7 = $_7;$_8 = $_8;$_9 = $_9;'
+  n=n+1;o[n]= '  connect = Rexx 0'
+  n=n+1;o[n]= '  connect[0] =' constr[0]';connect[1] =' constr[1]';connect[2] =' constr[2]';connect[3] =' constr[3]';connect[4] =' constr[4]
+  n=n+1;o[n]= '  connect[5] =' constr[5]';connect[6] =' constr[6]';connect[7] =' constr[7]';connect[8] =' constr[8]';connect[9] =' constr[9]';connect[10] =' constr[10]
+
+  n=n+1;o[n]= 'loop forever'
+       /* See what input we have. */
+  n=n+1;o[n]= '  line = Rexx peekto()'
+  n=n+1;o[n]= '  line = line.changestr("$",one)'
+
+  n=n+1;o[n]= '  parse line' pt
+
+  n=n+1;o[n]= '  nput = 1'
+  n=n+1;o[n]= '  nskip = 1'
+  n=n+1;o[n]= '  outstream = 0'
+
+  n=n+1;o[n]= '  selectOutput(0)'
+  loop i = 0 to ostream - 1
+  n=n+1;o[n]= '-- loop i = 0 to' (ostream - 1) ':: i'
+  n=n+1;o[n]= '  if ('ltemp[i]') & connect['i'] & nskip then do'
+  n=n+1;o[n]= '    if' notsingle '|' i '=' (ostream -1) 'then do'
+  n=n+1;o[n]= '      outstream =' i
+  n=n+1;o[n]= '      selectOutput('i')'
+  n=n+1;o[n]= '    end'
+  n=n+1;o[n]= '    else do'
+  n=n+1;o[n]= '      outstream = 0'
+  n=n+1;o[n]= '      selectOutput(0)'
+  n=n+1;o[n]= '    end'
+  n=n+1;o[n]= '    output(line.changestr(one,"$"))'
+  n=n+1;o[n]= '    if' oneonly 'then nskip = 0'
+  n=n+1;o[n]= '    nput = 0'
+  n=n+1;o[n]= '    if' single 'then do'
+  n=n+1;o[n]= '    readto()'
+  n=n+1;o[n]= '    $_1 = $1;$_2 = $2;$_3 = $3;$_4 = $4;$_5 = $5;$_6 = $6;$_7 = $7;$_8 = $8;$_9 = $9;'
+  n=n+1;o[n]= '    iterate'
+  n=n+1;o[n]= '  end'
+  n=n+1;o[n]= '  catch stageError'
+  n=n+1;o[n]= '    connect[outstream] = 0'
+  n=n+1;o[n]= '  end'
+  n=n+1;o[n]= '-- end loop'
+  end
+  n=n+1;o[n]= ' '
+
+  n=n+1;o[n]= '  if nput then do'
+  n=n+1;o[n]= '    selectOutput('ostream')'
+  n=n+1;o[n]= '    output(line.changestr(one,"$"))'
+  n=n+1;o[n]= '  catch stageError'
+  n=n+1;o[n]= '  end'
+
+       /* Go on to the next one. */
+  n=n+1;o[n]= '  readto()'
+  n=n+1;o[n]= '  $_1 = $1;$_2 = $2;$_3 = $3;$_4 = $4;$_5 = $5;$_6 = $6;$_7 = $7;$_8 = $8;$_9 = $9;'
+  n=n+1;o[n]= 'catch StageError'  /* Most likely end of input */
+  n=n+1;o[n]= '  rc = rc()'
+  n=n+1;o[n]= 'end'
+
+  n=n+1;o[n]= 'exit(rc*(rc<>12))'
+
+  o[0] = n
+
+  pInfo[3] = cname
+  pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
+
+  /* show off the generated code */
+  trace off
+  sc = 0
+--  sc = 1 -- comment out to not show the code
+  sn = 0
+  sn = 1 -- comment out to not show line numbers
+  nn = Rexx
+  if sc then do
+    say "*************************************************************"
+    loop nn = 1 for o[0]
+      if sn then l = nn.right(3)" "
+      else l = ""
+      say l""o[nn]
+    end
+    say "*************************************************************"
+  end
+end
+return 1

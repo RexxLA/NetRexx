@@ -1,0 +1,389 @@
+--       package:  xstring
+--       version:  1.000 beta
+--          date:  21 MAY 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx/xclasses
+--
+package xclasses
+class xstring
+  properties public
+
+  properties private static
+    pversion  = 'v1r000 beta'
+    copyright = '(c) 1998 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: xstring
+-- purpose.....: constructor. Pretty useless since this is a collection of STATIC methods
+--
+  method xstring(options=Rexx) public
+    options = options
+
+-- method......: version
+-- purpose.....: display the current xstring version
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: ssay
+-- purpose.....: display a line without CR
+--
+  method ssay(str=Rexx) public static
+    str = str.left(80)
+    system.out.print(str '\x0D')
+
+-- method......: say_colum
+-- purpose.....: display a string in colums (a la UNIX "ls")
+--
+  method say_column(str=Rexx) public static
+    tmp = str
+    maxl = 1
+    linelen = 80
+    loop while tmp <> ''
+      parse tmp item tmp
+      if item.length() > maxl then maxl = item.length()
+    end
+    maxl = maxl+2
+    oline = ''
+    tmp = str
+    loop while tmp <> ''
+      parse tmp item tmp
+      oline = oline||item.left(maxl)
+      if oline.length() + maxl > linelen then
+        do
+          say oline
+          oline = ''
+        end
+    end
+    if oline <> '' then say oline
+
+-- method......: censure
+-- purpose.....: get totally rid of S2 sequence inside string S1, replace with CH
+--
+  method censure(s1=Rexx,s2=Rexx,ch=Rexx) public static
+    -- initialization
+    os = ''
+    repl = ''
+    if ch <> '' then
+      do
+        n = s2.length()
+        repl = ch.copies(n)
+      end
+
+    -- do the job: this is really easy with parse ()
+    loop while s1 <> ''
+      parse s1 p1(s2)s1
+      if s1 <> ''
+        then os = os||p1||repl
+        else os = os||p1
+    end
+
+    -- all done
+    return os
+
+-- purpose.....: get totally rid of S2 sequence inside string S1
+  method censure(s1=Rexx,s2=Rexx) public static
+    return censure(s1,s2,'')
+
+-- method......: listexpand
+-- purpose.....: expand a list (1.2 3-6)
+--
+  method listexpand(il=Rexx) public static
+    ol = ''                                                        
+    loop while il <> ''
+      parse il it il                                           
+      if it.pos('.') <> 0 then
+        do                                                         
+          parse it f'.'n                                       
+          loop i = f to f+n-1
+            if ol.pos(i) <> 0 then iterate i
+            ol = ol i                                              
+          end                                                      
+          iterate                                                  
+        end                                                        
+      if it.pos('-') <> 0 then
+        do                                                         
+          parse it f'-'l                                       
+          loop i = f to l
+            if ol.pos(i) <> 0 then iterate i
+            ol = ol i                                              
+          end                                                      
+          iterate                                                  
+        end                                                        
+       if ol.pos(it) <> 0 then iterate
+       ol = ol it                                                  
+    end                                                            
+    Return ol 
+
+-- method......: hash
+-- purpose.....: hash a string STR
+--
+  method hash(str=Rexx) public static
+    hash_size = 1023
+    t = 0                      -- zero total
+    l = str.length()           -- str length
+    loop while str <> ''       -- loop over all CHARS
+      parse str ch +1 str      --  get one
+      t = t+ch.c2d()           --  add to total
+    end                        --
+    out = (t*l)//hash_size     -- fold it to SIZE
+    return out
+
+-- method......: a2m
+-- purpose.....: Convert a string from ASCII to MIME
+--
+  method a2m(str=Rexx) public static
+    b64 = '\x00'.sequence('\X3F')
+    e64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" || -
+          "abcdefghijklmnopqrstuvwxyz" || -
+          "0123456789+/"                                             
+                                                                     
+    out = ''                                                         
+    loop while str <> ''
+      parse str bl +3 str                               /* 1 */
+      bit = c2x(bl).x2b()                               /* 2 , 3 */
+      parse bit p1 +6 p2 +6 p3 +6 p4                    /* 4 */
+      bitn = '00'p1'00'p2'00'p3'00'p4                   /* 5 */      
+      bln = x2c(bitn.b2x)                               /* 6 */
+      base = bln.translate(e64,b64)                     /* 7 */
+      if base.length()<>4 then
+        do
+          app = '='.copies(4-base.length())
+          base = base||app
+        end
+      out = out||base                                                
+    end                                                              
+    return out
+
+-- method......: m2a
+-- purpose.....: Convert a string from MIME to ASCII
+--
+  method m2a(str=Rexx) public static
+    b64 = '\x00'.sequence('\x3F')
+    e64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" || -
+          "abcdefghijklmnopqrstuvwxyz" || -
+          "0123456789+/"
+
+    out = ''
+    loop while str <> ''
+      parse str bl +4 str
+      base = bl.translate(b64,e64)
+      basex = c2x(base)
+      bit = basex.x2b()
+      parse bit 3 p1 9 11 p2 17 19 p3 25 27 p4 33
+      bitn = p1||p2||p3||p4
+      new = x2c(bitn.b2x())
+      out = out||new
+    end
+    return out
+
+-- method......: sort
+-- purpose.....: Sort a string (MODE A = ascending, R = reverse)
+--               A = Ascending: A B C D ...
+--               R = Reverse:   ... D C B A
+--
+  method sort(stri=Rexx,mode=Rexx) public static
+    if mode <> 'R' then mode = ''                                  
+    ws = stri.Words()
+    incr = ws%2                                                    
+    loop while incr > 0
+      loop i = incr+1 for ws
+         j = i-incr                                        
+         loop while j > 0
+            k = j+incr                                     
+            wj = stri.Word(j)
+            wk = stri.Word(k)
+            if mode = 'R'                                  
+              then do ; If wj >= wk Then Leave ; end;
+              else do ; If wj <  wk  Then Leave ; end;
+            stri = stri.Subword(1,j-1) wk     -
+                   stri.Subword(j+1,k-j-1) wj -
+                   stri.Subword(k+1)
+            j = j-incr                                       
+         End                                                 
+      End                                                    
+      incr = incr%2                                          
+    End
+    stri = stri.space()
+    Return stri
+
+-- method......: sort
+-- purpose.....: Sort a string ascending
+--               A = Ascending: A B C D ...
+--               R = Reverse:   ... D C B A
+--
+  method sort(stri=Rexx) public static
+    return xstring.sort(stri,'A')
+
+-- method......: c2x
+-- purpose.....: convert char to HEX
+--
+  method c2x(in=Rexx) public static
+    out = ''
+    loop while in <> ''
+      parse in ch +1 in
+      ou = ch.c2x()
+      ou = ou.right(2,'0')
+      out = out||ou
+    end
+    return out
+
+-- method......: x2c
+-- purpose.....: convert HEX to CHAR
+--
+  method x2c(in=Rexx) public static
+    out = ''
+    loop while in <> ''
+      parse in ch +2 in
+      out = out||ch.x2c()
+    end
+    return out
+
+-- method......: s2a
+-- purpose.....: converts a string to an array
+--
+  method s2a(str=Rexx,a=Rexx) public static
+    a = a
+    i = 0
+    loop while str <> ''
+      parse str nn str
+      i = i+1
+      a[i] = nn
+    end
+    a[0] = i
+
+-- method......: a2s
+-- purpose.....: converts a Rexx array to a string
+--
+  method a2s(a=Rexx) public static
+    a = a
+    out = ''
+    loop i = 1 to a[0]
+      out = out a[i]
+    end
+    return out
+
+-- method......: unique_char
+-- purpose.....: remove UCH duplicates from STRING [a****rn -> a*rn]
+--
+  method unique_char(string=Rexx,uch=Rexx) public static
+    nstring = ''                           -- empty new string
+    loop while string <> ''
+      parse string ch +1 string
+      if ch = uch then
+        do
+          loop while string <> ''
+            parse string ch +1 string
+            if ch = uch then iterate
+            string = ch||string
+            leave
+          end
+          ch = '*'
+        end
+      nstring = nstring||ch
+    end
+    return nstring
+
+-- method......: match
+-- purpose.....: string matching (using '*' and '?') [pattern = 'p*.txt' , '???.hlp']
+--
+  method match(string=Rexx,pattern=Rexx) public static
+    pattern = unique_char(pattern,'*')
+    loop while pattern <> ''
+      parse pattern pch +1 pattern
+      parse string sch +1 string
+      select
+        when pch = '?' then
+          do
+            if sch = '' then return 0
+            if pattern = '' & string <> '' then return 0
+            iterate
+          end
+        when pch = '*' then
+          do
+            if string = '' then return 1
+            if pattern = '' then return 1
+            tofind = ''
+            loop while pattern <> ''
+              parse pattern pch +1 pattern
+              if pch = '*' | pch = '?' then leave
+              tofind = tofind||pch
+            end
+            if string.pos(tofind) = 0 then return 0
+            if pattern = '' then
+              do
+                if string.substr(string.length()-tofind.length()) = tofind
+                  then return 1
+              end
+            parse string (tofind) string
+            rc =match(string,pattern)
+            return rc
+          end
+        otherwise
+          do
+            if pch <> sch then return 0
+          end
+      end
+    end
+    if string <> '' then return 0
+    return 1
+
+-- method......: main
+-- purpose.....: used to perform testing
+--
+  method main(args=String[]) public static
+    parse rexx(args) .
+    
+    -- test listexpand
+    --
+    say listexpand('3-5 9.2 15 77')
+
+    c = 'ABCD'
+    say c c2x(c)
+
+    -- test sort
+    --
+    str = 'Francesca Elisabetta Aurora Valeria Marta'
+    say sort(str,'A')
+
+    s1 = 'This is a test.'
+    s2 = a2m(s1)
+    s3 = m2a(s2)
+    say s1
+    say s2
+    say s3
+
+    say hash('penny')
+    say hash('toto')
+
+    list1 = 'afile.txt file.txt'
+    match = 'a* f*.txt info ?????.???'
+    loop while list1 <> ''
+      parse list1 item1 list1
+      list2 = match
+      loop while list2 <> ''
+        parse list2 item2 list2
+        say item1.right(10) item2.right(10) '->' match(item1,item2)
+      end
+    end
+
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+--

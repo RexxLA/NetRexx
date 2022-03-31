@@ -1,0 +1,170 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  23 JAN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+package xclasses
+class xcmdline
+
+  properties private
+    value         = 'NULL'      -- default value for an option
+    argumentlist                -- all the arguments as entered by the user
+
+  properties private static
+    versioni  = 'v1r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: cmdline
+-- purpose.....: command line parser
+--
+  method xcmdline(instr=Rexx,rules=Rexx) public
+
+    -- initial setup
+    --
+    olist  = ''        -- option_list
+    oinfo  = ''        -- option info
+    outstr = ''        -- that's the string that holds all BUT the
+                       -- options; we'll return this
+  
+    -- set the defaults
+    --
+    loop for rules.words()
+      parse rules rule rules
+      parse rule opt'/'info
+      olist = olist opt
+      oinfo[opt] = info
+      parse  info kin'/'nam'/'def
+      kin = kin.left(3).upper()
+      select
+        when kin = 'FLA' then
+          do
+            value[nam] = def
+          end
+        when kin = 'VAR' then
+          do
+            def = def.translate(' ','$')
+            value[nam] = def
+          end
+        otherwise
+          do
+            say '(parse) Internal error.'
+            say '(parse) kin was "'kin'".'
+            say '(parse) Aborted.'
+            exit 901
+          end
+      end
+    end
+   
+    -- get the options as entered
+    --
+    loop while instr <> ''
+      parse instr var instr
+      if var.left(1,1) <> '-' then
+        do
+          outstr = outstr var
+          Iterate
+        end
+      svar = var
+      var = var.substr(2,1)
+      if olist.wordpos(var) = 0 then
+        do
+          say 'Invalid option "'var'" selected.'
+          say 'Valid options are "'olist.space()'".'
+          say 'Program aborted.'
+          exit 902
+        end
+      info = oinfo[var]
+      parse info kin'/'nam'/'def
+      select
+        when kin = 'FLA' then
+          do
+            if def = '0'
+              then def = '1'
+              else def = '0'
+            value[nam] = def
+          end
+        when kin = 'VAR' then
+          do
+            def = def.translate(' ','$')
+            cho = ''
+            loop for def.words()
+              parse instr tt instr
+              if tt = '' then
+                do
+                  say 'Invalid argument for option "'var'".'
+                  say 'Should be a' def.words() 'words string.'
+                  say 'Like default "'def'".'
+                  say 'Program Aborted.'
+                  exit 903
+                end
+              cho = cho tt
+            end
+            value[nam] = cho.space()
+          end
+        otherwise NOP
+      end
+      -- here I deal with the case when one enters
+      -- -tf instead of -t -f
+      --
+      if svar.length() <> 2 then
+        do
+          ll = svar.length() - 2
+          oo = svar.substr(3,ll)
+          instr = '-'oo instr
+        end
+    end
+    argumentlist = outstr.space()
+
+-- method......: option
+-- purpose.....: returns value of option IN
+--
+  method option(in=Rexx) public
+    out = value[in]
+    return out
+
+-- method......: arguments
+-- purpose.....: returns the other arguments
+--
+  method arguments() public
+    return argumentlist
+
+-- method......: version
+-- purpose.....: just display this library's info
+--
+  method version() public static
+    say 'Version....:' versioni'.'
+    say 'Copyright..:' copyright'.'
+    say 'Contact....:' contact'.'
+
+-- method......: main
+-- purpose.....: try out the parser ('java xclasses/xcmdline ARGS OPTIONS')
+--
+  method main(args=String[]) public static
+    parse rexx(args) arg
+    cl = xcmdline(arg,'t/FLA/TRACE/0'           -
+                      'r/FLA/REPLACE/0'         -
+                      'o/VAR/OUTFID/test.out')
+
+    say cl.arguments()
+    say cl.option('TRACE')
+    say cl.option('OUTFID')
+    say cl.option('DUMMY')
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+--

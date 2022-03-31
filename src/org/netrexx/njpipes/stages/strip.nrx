@@ -1,0 +1,161 @@
+-- strip.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 21/ 2/ 3 record_out cast to Rexx; remove getAnycase() it is now in utils. Jeff Hennick
+ 20/ 9/16 number not implemented: documentation.  Jeff Hennick
+ 20/ 9/11 New. Jeff Hennick
+*/
+
+/** strip
+                              +-BOTH-----+
+   >>--STRIP--+------------+--+----------+--+-----+-->
+              +--| case |--+  +-LEADING--+  +-TO--+
+                              +-TRAILING-+  +-NOT-+
+
+      +-BLANK----------------------+
+   >--+----------------------------+--><
+      +--| target |--+----------+--+
+                     +--number--+ (1)
+
+  case:
+  |--+--------------+--|
+     +--ANYCase-----+
+     +--CASEANY-----+
+     +--CASEIGNORE--+
+     +--IGNORECASE--+
+     +--CASELESS----+
+
+  target:
+  |--+--xrange-------------------------+--|
+     +--+--STRing--+--delimitedString--+
+        +--ANYof---+
+
+ Notes:
+  (1) Not implemented in NetRexx Pipelines
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages   -- keep commented out if not in the "stages" directory
+
+import org.netrexx.njpipes.pipes.
+
+import java.util.regex.
+
+class strip extends stage uses DString
+
+method run()  -- this is the method the Pipeline scheudler calls
+
+  args = arg()
+
+  anycase = getAnycase(args)
+  if anycase then args = args.subword(2)
+
+  loc = ''
+  key = args.word(1).upper
+  select case key
+    when 'BOTH' then loc = 'B'
+    when 'LEADING' then loc = 'L'
+    when 'TRAILING' then loc = 'T'
+    otherwise nop
+  end
+  if loc = '' then loc = 'B'
+  else args = args.subword(2)
+
+  not = ''
+  key = args.word(1).upper
+  select case key
+    when 'TO' then not = 1
+    when 'NOT' then not = 1
+    otherwise nop
+  end
+  if not = '' then not = 0
+  else args = args.subword(2)
+
+  targ = ''
+  key = args.word(1).upper
+  select case key
+    when 'BLANK' then targ = 'BLANK'
+    when 'STR', 'STRI', 'STRIN', 'STRING' then targ = 'STRING'
+    when 'ANY', 'ANYO', 'ANYOF' then targ = 'ANY'
+    otherwise nop
+  end
+  if targ = '' then targ = 'XRANGE'
+  else args = args.subword(2)
+
+  dstrobj = Dstring(args)
+  dstr = dstrobj.String()
+  rest = dstrobj.Residue()
+
+  if rest <> '' then
+    Emsg(11, 'Unknown extra:' rest)
+
+  if dstr = '' & args <> '' then
+    Emsg(11, 'Unknown extra:' args)
+
+ if dstr == '' then
+   targ = 'BLANK'
+
+ qstr = Pattern.quote(dstr)
+
+ if targ = 'BLANK' then
+   qstr = ' '
+
+ if not then
+   qstr = '\\^'qstr
+
+ if targ = 'ANY' then
+   qstr = '['qstr']'
+
+ if anycase then
+   qstr = '(?i)' || qstr
+
+ qstr = '('qstr')*'
+
+     /* One time compile */
+  select case loc
+    when 'L' then
+      qstr =  '^' || qstr
+    when 'T' then
+      qstr = qstr || '$'
+    otherwise
+      qstr =  '(^' || qstr || ')|(' || qstr || '$)';
+  end
+
+  pat = Pattern.compile(qstr);
+
+  loop label Main forever
+    record_in = Rexx peekto()
+    record_out = Rexx pat.matcher(record_in).replaceAll('')
+    do
+      output(record_out)
+    catch stageError
+
+/* 9/11/2020 I am having problems with this triggering.
+             So will try a second time.  That is working for me.
+             I do not know why this is.  I'm thinking it is
+             in the COMPARE stage, which in my tests, follows
+             this stage. But COMPARE  works for all other stages.
+             In my tests, I get lots of the first message,
+             and none of the second.  Jeff Hennick
+*/
+--      say '******* Output problem with' record_out', re-trying ********'
+      do
+        output(record_out)
+      catch stageError
+--        say '********* Bad again,' record_out '*******'
+      end
+    end
+    readto()
+  catch stageError
+    rc = rc()
+  end Main
+  Exit(rc*(rc<>12))
+
+--method getAnycase(argstr)
+-- return ('ANYCASE ANYCAS ANYCA ANYC CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(argstr.word(1).upper)) > 0

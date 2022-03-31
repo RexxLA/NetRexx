@@ -37,6 +37,7 @@
 /* 2000.02.18 Provide a parsing cursor object, always updated         */
 /* 2013.07.12 Issue warning for unqualified properties statement      */
 /* 2016.01.01 support for NETREXX-122 (annotations)                   */
+/* 2021.01.15 support for ADDRESS instruction -- MRE                  */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -55,8 +56,8 @@ class RxParser uses RxCode
   indention   =int            -- indention to use for output code in pass2
   programstartchunk=int 0     -- where package/import statements will go
 
- properties shared
-  copyright=RxProcessor.copyright
+-- properties shared
+--  copyright=RxProcessor.copyright
 
  properties private
   rxt       =RxTranslator     -- super boss
@@ -124,6 +125,7 @@ class RxParser uses RxCode
     ass=boolean 0                                 -- assigny
     if tok2.type=RxToken.OP then if tok2.value[0]='=' then ass=1
 
+
     if tok.type=RxToken.SYM | tok.type=RxToken.AT then select label sym -- symbol
       when ass then nop                           -- not a keyword
       when tok2.type=RxToken.LPAR then nop        -- not a keyword
@@ -164,9 +166,11 @@ class RxParser uses RxCode
           end
         iterate; end
       when tok.type=RxToken.AT then do
-	if rxt.pass1 then do
-	  this.classAnnotation = this.classAnnotation tok.value
-	end
+      	if rxt.pass1 then do
+      	  this.classAnnotation = this.classAnnotation tok.value
+	  cursor.curclause.lookaside=NrAnnotate(rxt)
+	  --	  --cursor.curclass.setAnnotation(tok.value)
+  	end
       iterate; end
       when iskey(tok.value,'CLASS') then do
         if level>=1 then cursor.curclass.endclass() -- end previous class
@@ -301,16 +305,22 @@ class RxParser uses RxCode
       iterate mainloop
       end
 
-    /* process an annotation at class scope */
+    /* process an annotation */
     if rxt.pass2 then do
       if tok.type=RxToken.AT then do
-	rxt.program.streamer.out(tok.value)
+	--rxt.program.streamer.out(tok.value)
 	iterate mainloop
       end
     end
-  
+
     /* --- Here only for pass1 and pass2 --- */
-    if tok.type\=RxToken.SYM then if tok.type\=RxToken.AT then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
+   if tok.type\=RxToken.SYM then if tok.type\=RxToken.AT then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
+
+--   if tok.type\=RxToken.SYM then
+--     if tok.type\=RxToken.AT then do
+--       say '#MRE KEYWORD EXPECTED 2'
+--       signal RxQuit(rxt, tok, 'property.or.keyword.expected')
+--     end
 
     
     if willexec then do                 -- add clause to class chain
@@ -424,6 +434,13 @@ class RxParser uses RxCode
         end
         return 1
         end
+--MRE        
+      when rxt.address==1 & iskey(tok.value,'ADDRESS') then do 
+        o=NrAddress NrAddress(rxt)
+        o.scan(rxt.pass)
+        iterate
+        end     
+
       /* The next group are for better error messages */
       when iskey(tok.value,'OPTIONS') then NrOptions(rxt)
       when iskey(tok.value,'PACKAGE') then NrPackage(rxt)
@@ -715,8 +732,10 @@ class RxParser uses RxCode
       end
 
     /* expecting a keyword instruction */
-    if t\=RxToken.SYM then if t\=RxToken.AT then
-      signal RxError(rxt, tok, 'keyword.expected')
+    if t\=RxToken.SYM then 
+      if t\=RxToken.AT then do
+        if rxt.address==0 then signal RxError(rxt, tok, 'keyword.expected')  -- MRE allow if -address flag  
+      end  
       if t2\=RxToken.SP then
 	if t2\=RxToken.END then
 	  if t2\=RxToken.STR then
@@ -729,17 +748,23 @@ class RxParser uses RxCode
 
       /* Block-enders need not be reachable */
       /* [these also handle their own tracing] */
-      if iskey(tok.value,'END')     then do
-        item=NrEnd(rxt)
-        leave constructkeyword; end
-      if iskey(tok.value,'CATCH')   then do
-        item=NrCatch(rxt)
-        leave constructkeyword; end
-      if iskey(tok.value,'FINALLY') then do
-        item=NrFinally(rxt)
-        leave constructkeyword; end
-
-      reachcheck()                        -- ensure is reachable
+      if iskey(tok.value,'END')     then
+	do
+          item=NrEnd(rxt)
+          leave constructkeyword
+	end
+      if iskey(tok.value,'CATCH')   then
+	do
+          item=NrCatch(rxt)
+          leave constructkeyword
+	end
+      if iskey(tok.value,'FINALLY') then
+	do
+          item=NrFinally(rxt)
+          leave constructkeyword
+	end
+      
+      --reachcheck()                        -- ensure is reachable
 
       select
         /* The next group handle their own tracing for various reasons */
@@ -782,13 +807,22 @@ class RxParser uses RxCode
         when iskey(tok.value,'NUMERIC')    then do
           tracer.traceclause(cursor.curclause)
           item=NrNumeric(rxt); end
+
+        when rxt.address==1 & iskey(tok.value,'ADDRESS')    then do  -- MRE allow if -address
+-- say '#MRE ADDRESS'        
+          tracer.traceclause(cursor.curclause)
+          item=NrAddress(rxt); end
         when iskey(tok.value,'TRACE')      then do
           tracer.traceclause(cursor.curclause)
+	        item=cursor.curclause.lookaside          --it was constructed in the past
         end
-	when tok.type=RxToken.AT then do
-	  cursor.curmethod.setAnnotation(tok.value)
-	end
-	
+	      when tok.type=RxToken.AT then
+	      do
+	        item=NrAnnotate(rxt)
+	        cursor.curmethod.setAnnotation(tok.value)
+	       --leave constructkeyword
+      	end
+ 	
         /* The remainder are constructed for better error messages */
         when iskey(tok.value,'PROPERTIES') then NrProperties(rxt)
         when iskey(tok.value,'OPTIONS')    then NrOptions(rxt)
@@ -797,24 +831,38 @@ class RxParser uses RxCode
         otherwise
           /* Improved error message -- symbol unrecognised */
           var=rxt.program.pooler.findvar(cursor, tok.value, tok, 0, 0, 0)
-          select
-            when var=null                                then key='keyword.expected'
-            when (var.varatts & RxVariable.VAR_ARG)\=0   then key='bad.argument.use'
-            when (var.varatts & RxVariable.VAR_LOCAL)\=0 then key='bad.variable.use'
-            otherwise                                         key='bad.property.use'
-            end
-          signal RxQuit(rxt, tok, key)
+          if rxt.address==0 then do
+            select
+              when var=null                                then key='keyword.expected'
+              when (var.varatts & RxVariable.VAR_ARG)\=0   then key='bad.argument.use'
+              when (var.varatts & RxVariable.VAR_LOCAL)\=0 then key='bad.variable.use'
+              otherwise                                         key='bad.property.use'
+              end
+            signal RxQuit(rxt, tok, key)
+          end
+          else do
+            select
+              when var=null                                then key='keyword.expected'
+              when (var.varatts & RxVariable.VAR_ARG)\=0   then key='bad.argument.use'
+              when (var.varatts & RxVariable.VAR_LOCAL)\=0 then key='bad.variable.use'
+              otherwise 
+                key='bad.property.use'
+                signal RxQuit(rxt, tok, key)           -- MRE don't 'ADDRESS' properties 
+              end
+            tracer.traceclause(cursor.curclause)       -- MRE address it
+            item=NrAddress(rxt);
+          end
+
         end /* select certains */
       end constructkeyword
 
     /* Clause was constructed (parsed) OK.  Now action it. */
 
-	if tok.type\=RxToken.AT then 
-	  if item<=RxClauseParser then do
-	    cursor.curclause.lookaside=item
-	    item.scan(rxt.pass)
-	    if rxt.program.flag.java then item.generate()
-	  end
+	if item<=RxClauseParser then do
+	  cursor.curclause.lookaside=item
+	  item.scan(rxt.pass)
+	  if rxt.program.flag.java then item.generate()
+	end
 
     catch RxError
       -- simply move to next clause if a recoverable error seen
@@ -826,9 +874,6 @@ class RxParser uses RxCode
  /* DEFERREDCLASS -- handle any pending TRACE or NUMERIC instructions */
   method deferredClass private
 
-    /* first add class (program) level annotations */
-    cursor.curclass.setAnnotation(this.classAnnotation)
-    
   -- These have been deferred from the prologue so they can be scanned
   -- and generate code in the right place.  Note that they can reappear
   -- for the default class, as well as explicit ones.
@@ -983,12 +1028,12 @@ class RxParser uses RxCode
 
  /* REACHCHECK -- check clause is reachable */
  method reachcheck
-  /* Assure that (at current/new level) the clause can be reached */
-  -- if thislevel.terminal then do
-  --   thislevel.terminal=0         -- one error (here) only please
-  --   RxError(rxt, cursor.curclause.tokens[0], 'clause.unreachable')
-  --   end
-  -- return
+   /* Assure that (at current/new level) the clause can be reached */
+   if thislevel.terminal then do
+     thislevel.terminal=0         -- one error (here) only please
+     RxError(rxt, cursor.curclause.tokens[0], 'clause.unreachable')
+   end
+   return
 
  /* STATECHECK -- handle control structure state machines
     Arg1 is the next 'real' clause.  It may be null if it is not a
@@ -998,87 +1043,89 @@ class RxParser uses RxCode
     Ancient code, this .. not rigorous ['OTHERWISE=' accepted, for
     example .. but missed errors extremely rare and will be caught at
     end of construct] */
- method statecheck(nextclause=RxClause) private
-  tok=cursor.curclause.tokens[0]
-  if tok.type=RxToken.SYM then kw=Rexx tok.value
-                          else kw='?'
-  loop label ifnest
-    if thislevel.key=='IF' then select
-      when thislevel.ifstate=NrLevel.IF_THENEXP then do
-        if \iskey(kw, 'THEN') then signal RxQuit(rxt, tok, 'if.expects.then')
+  method statecheck(nextclause=RxClause) private
+    tok=cursor.curclause.tokens[0]
+    if tok.type=RxToken.SYM then kw=Rexx tok.value
+    else kw='?'
+    loop label ifnest
+      if thislevel.key=='IF' then select
+	when thislevel.ifstate=NrLevel.IF_THENEXP then do
+          if \iskey(kw, 'THEN') then signal RxQuit(rxt, tok, 'if.expects.then')
         end
-      when thislevel.ifstate=NrLevel.IF_THEN then do
-        /* ELSE may not follow immediately */
-        if iskey(kw, 'ELSE') then signal RxQuit(rxt, tok, 'unexpected.else')
-        thislevel.ifstate=NrLevel.IF_ELSEOK
+	when thislevel.ifstate=NrLevel.IF_THEN then do
+          /* ELSE may not follow immediately */
+          if iskey(kw, 'ELSE') then signal RxQuit(rxt, tok, 'unexpected.else')
+          thislevel.ifstate=NrLevel.IF_ELSEOK
         end
-      when thislevel.ifstate=NrLevel.IF_ELSEOK then do
-        /* just left THEN-instruction/block */
-        if \thislevel.terminal then thislevel.dropout=1
-        thislevel.lastterm=thislevel.terminal
-        thislevel.terminal=0       -- ELSE or following is reachable
-        if iskey(kw, 'ELSE')
-         then nop                  -- NrElse will make code
-         else do                   -- ending the if
-          thislevel.dropout=1      -- can always take (missing) ELSE path
+	when thislevel.ifstate=NrLevel.IF_ELSEOK then do
+          /* just left THEN-instruction/block */
+          if \thislevel.terminal then thislevel.dropout=1
+          thislevel.lastterm=thislevel.terminal
+          thislevel.terminal=0       -- ELSE or following is reachable
+          if iskey(kw, 'ELSE')
+            then nop                  -- NrElse will make code
+          else do                   -- ending the if
+            thislevel.dropout=1      -- can always take (missing) ELSE path
+            startif=NrIf thislevel.clause.lookaside
+            startif.endif(nextclause)-- complete the IF
+            iterate; end             -- maybe more
+          end
+	when thislevel.ifstate=NrLevel.IF_ELSE then
+          thislevel.ifstate=NrLevel.IF_DONE
+	when thislevel.ifstate=NrLevel.IF_DONE then do
+          /* just left ELSE-instruction/block */
+          if \thislevel.terminal then thislevel.dropout=1
+          thislevel.lastterm=thislevel.terminal
+          thislevel.terminal=0       -- [redundant, but be symmetrical]
           startif=NrIf thislevel.clause.lookaside
-          startif.endif(nextclause)-- complete the IF
-          iterate; end             -- maybe more
-        end
-      when thislevel.ifstate=NrLevel.IF_ELSE then
-        thislevel.ifstate=NrLevel.IF_DONE
-      when thislevel.ifstate=NrLevel.IF_DONE then do
-        /* just left ELSE-instruction/block */
-        if \thislevel.terminal then thislevel.dropout=1
-        thislevel.lastterm=thislevel.terminal
-        thislevel.terminal=0       -- [redundant, but be symmetrical]
-        startif=NrIf thislevel.clause.lookaside
-        startif.endif(nextclause)  -- complete the IF
-        iterate; end               -- maybe more
-      end
-    leave ifnest
-    end ifnest
+          startif.endif(nextclause)  -- complete the IF
+          iterate; end               -- maybe more
+	end
+	leave ifnest
+	end ifnest
+	
+	if thislevel.key=='SELECT' then do
+	  select
+	    when thislevel.selstate=NrLevel.SEL_WHENEXP then
+	      if \iskey(kw, 'WHEN') then signal RxQuit(rxt, tok, 'select.expects.when')
+	    when thislevel.selstate=NrLevel.SEL_THENEXP then
+	      if \iskey(kw, 'THEN') then signal RxQuit(rxt, tok, 'when.expects.then')
+	    when thislevel.selstate=NrLevel.SEL_THEN then do
+              if iskey(kw, 'WHEN') then signal RxQuit(rxt, tok, 'unexpected.when')
+              if iskey(kw, 'OTHERWISE') then signal RxQuit(rxt, tok, 'unexpected.otherwise')
+              if iskey(kw, 'CATCH') then signal RxQuit(rxt, tok, 'unexpected.catch')
+              if iskey(kw, 'FINALLY') then signal RxQuit(rxt, tok, 'unexpected.finally')
+              if iskey(kw, 'END') then signal RxQuit(rxt, tok, 'unexpected.end')
+              thislevel.selstate=NrLevel.SEL_ALLOK
+            end
+	    when thislevel.selstate=NrLevel.SEL_ALLOK then do
+              /* just had WHEN-THEN-instruction/block */
+              if \thislevel.terminal then thislevel.dropout=1
+              thislevel.lastterm=thislevel.terminal
+              thislevel.terminal=0       -- WHEN or following is reachable
+              if  \iskey(kw, 'WHEN') then
+		if \iskey(kw, 'OTHERWISE') then
+		  if \iskey(kw, 'CATCH') then
+		    if \iskey(kw, 'FINALLY') then
+		      if \iskey(kw, 'END') then
+			signal RxQuit(rxt, tok, 'select.when.otherwise.expected')
+            end
+	    otherwise nop  -- OTHERWISE block .. just like a DO group
+	  end
+	return; end
+	return
+	
 
-  if thislevel.key=='SELECT' then do
-    select
-      when thislevel.selstate=NrLevel.SEL_WHENEXP then
-       if \iskey(kw, 'WHEN') then signal RxQuit(rxt, tok, 'select.expects.when')
-      when thislevel.selstate=NrLevel.SEL_THENEXP then
-       if \iskey(kw, 'THEN') then signal RxQuit(rxt, tok, 'when.expects.then')
-      when thislevel.selstate=NrLevel.SEL_THEN then do
-        if iskey(kw, 'WHEN') then signal RxQuit(rxt, tok, 'unexpected.when')
-        if iskey(kw, 'OTHERWISE') then signal RxQuit(rxt, tok, 'unexpected.otherwise')
-        if iskey(kw, 'CATCH') then signal RxQuit(rxt, tok, 'unexpected.catch')
-        if iskey(kw, 'FINALLY') then signal RxQuit(rxt, tok, 'unexpected.finally')
-        if iskey(kw, 'END') then signal RxQuit(rxt, tok, 'unexpected.end')
-        thislevel.selstate=NrLevel.SEL_ALLOK
-        end
-      when thislevel.selstate=NrLevel.SEL_ALLOK then do
-        /* just had WHEN-THEN-instruction/block */
-        if \thislevel.terminal then thislevel.dropout=1
-        thislevel.lastterm=thislevel.terminal
-        thislevel.terminal=0       -- WHEN or following is reachable
-        if  \iskey(kw, 'WHEN') then
-         if \iskey(kw, 'OTHERWISE') then
-         if \iskey(kw, 'CATCH') then
-         if \iskey(kw, 'FINALLY') then
-         if \iskey(kw, 'END') then
-          signal RxQuit(rxt, tok, 'select.when.otherwise.expected')
-        end
-      otherwise nop  -- OTHERWISE block .. just like a DO group
-      end
-    return; end
-  return
-
- /* ENDBLOCK -- complete the ending of any of:
-     o Main block (body) of a construct
-     o Catch block
-     o Finally block
-  */
- method endblock
-  if thislevel.trystate=NrLevel.TRY_FINAL then do      -- in FINALLY block
-    if rxt.program.flag.diag then say '# try_final' thislevel.key 'drop, term:'-
-                       thislevel.dropout thislevel.terminal
+	
+	/* ENDBLOCK -- complete the ending of any of:
+	   o Main block (body) of a construct
+	   o Catch block
+	   o Finally block
+	 */
+  method endblock
+    if thislevel.trystate=NrLevel.TRY_FINAL then do      -- in FINALLY block
+      if rxt.program.flag.diag then say '# try_final' thislevel.key 'drop, term:'-
+         thislevel.dropout thislevel.terminal
     if thislevel.terminal then thislevel.dropout=0     -- FINALLY overrides
     return
     end

@@ -1,23 +1,27 @@
 -- joincont.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998-2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/06/26 New. JHennick
+
+/*
+ 20/ 5/28 DELAY added. Fix Netrexx logic; CASELESS. Jeff Hennick
+ 99/05/09  use mrc() instead of rc().  ejt
+ 98/06/26 New. JHennick
+*/
 
 /** joincont
 
 
                                        +-TRAILING----------+
-   >>--JOINCONT--+---------+--+-----+--+-------------------+--+-------+---->
-                 +-ANYCase-+  +-NOT-+  +-RANGE--inputRange-+  +-ANYof-+
+   >>--JOINCONT--+---------+--+-----+--+-------------------+--+-------+-->
+                 +-ANYCase-+  +-NOT-+  +-RANGE--inputRange-+  +-DELAY-+
                                        +-LEADING-----------+
 
-   >--delimitedString--+------+--+-----------------+----------------------><
-                       +-KEEP-+  +-delimitedString-+
+   >-+-------+-delimitedString--+------+--+-----------------+----------------------><
+     +-ANYof-+                  +-KEEP-+  +-delimitedString-+
 
 
 */
@@ -36,7 +40,7 @@ do
    parse args key rest
    key = key.upper
 
-   anycase = 'ANYCASE'.abbrev(key,4) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(key)
+   anycase = 'ANYCASE'.abbrev(key,4) | 'CASEANY IGNORECASE CASEIGNORE CASELESS'.wordpos(key) > 0
    if anycase then do
       args = rest
       parse args key rest
@@ -68,7 +72,18 @@ do
    key = key.upper
 
    anyof = 'ANYOF'.abbrev(key,3)
-   if anyof then args = rest
+   if anyof then do
+     args = rest
+     parse args key rest
+     key = key.upper
+   end
+                                                   -- DELAY
+   delay = 'DELAY' = key
+   if delay then do
+     args = rest
+     parse args key rest
+     key = key.upper
+   end
                                                    -- STRING
    ds = DString(args)
    ds1 = ds.String
@@ -104,8 +119,11 @@ do
                robj = robj || ds2 || robj2
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when trailing & anyof & notkey then          -- trailing  not anyof \keep
@@ -119,8 +137,11 @@ do
                robj = robj || ds2 || robj2
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when trailing & anyof & keep then            -- trailing  \not anyof keep
@@ -134,8 +155,11 @@ do
                robj = robj || ds2 || robj2
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when trailing & anyof then                   -- trailing  \not anyof \keep
@@ -150,8 +174,11 @@ do
                robj = robj || ds2 || robj2
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when trailing & notkey & keep then           -- trailing not \anyof keep
@@ -165,8 +192,11 @@ do
                robj = robj || ds2 || robj2
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when trailing & notkey then                  -- trailing not \anyof \keep
@@ -183,8 +213,11 @@ do
                robj = robj || ds2 || robj2
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when trailing & keep then                    -- trailing  \not  \anyof keep
@@ -198,8 +231,11 @@ do
                robj = robj || ds2 || robj2
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when trailing then                           -- trailing  \not  \anyof \keep
@@ -230,9 +266,12 @@ do
                robj = robj || ds2 || robj2
                readto()
             end
+            if delay then
+               readto()
             output(robj)
+            if \delay then
+               readto()
             robj = robj2
-            readto()
          catch StageError
             output(robj)
          end
@@ -406,8 +445,11 @@ do
                k = keyrange.SelIRange(robj2)
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when range & notkey then                     -- range not \anyof (keep)
@@ -422,8 +464,11 @@ do
                k = keyrange.SelIRange(robj2)
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       when range then                              -- range \not \anyof (keep)
@@ -438,8 +483,11 @@ do
                k = keyrange.SelIRange(robj2)
             catch StageError
             end
+            if delay then
+               readto()
             output(robj)
-            readto()
+            if \delay then
+               readto()
          catch StageError
          end
       otherwise rc(13)                             -- Unknown
@@ -450,4 +498,3 @@ end
 rc = mrc()
 if rc = 4 then rc = 0
 exit(rc*(rc<>12))
-

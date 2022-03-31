@@ -1,0 +1,56 @@
+<?xml version="1.0" ?>
+
+<project name="Hello Packages"
+	 default="nrccompile"
+	 basedir=".">
+  
+  <property environment="env"/>
+  <property name="ant.netrexxc.keepasjava"  value="true"/>
+  <property name="ant.netrexxc.replace"     value="true"/>
+  
+  <taskdef name="nrc"
+	   classname="org.apache.tools.ant.taskdefs.optional.NetRexx"
+	   classpath="${env.CLASSPATH}">
+  </taskdef>
+
+  <path id="project.class.path">
+    <pathelement location="war/WEB-INF/classes"/>
+    <pathelement location="${env.CLASSPATH}"/>
+    <fileset dir="war/WEB-INF/lib" includes="**/*.jar"/>
+  </path>
+
+  <target name="libs" description="Copy libs to WEB-INF/lib">
+    <mkdir dir="war/WEB-INF/lib" />
+    <mkdir dir="war/WEB-INF/classes"/>
+  </target>
+
+  <target name="nrccompile" depends="libs" description="Compile NetRexx source to Java">
+    <nrc srcDir="src" destDir="war/WEB-INF/classes"
+	 includes="**" compile="yes"
+	 classpath="${env.CLASSPATH}"/>
+    <copy todir="war/WEB-INF/classes">
+      <fileset dir="src" excludes="**/*.nrx"/>
+    </copy>
+  </target>
+
+    <target name="javacompile" depends="libs,nrccompile" description="Compile Java source to bytecode">
+    <javac srcdir="src" includes="**" encoding="utf-8"
+        destdir="war/WEB-INF/classes">
+      <classpath refid="project.class.path"/>
+    </javac>
+    <copy todir="war/WEB-INF/classes">
+      <fileset dir="src" excludes="**/*.java"/>
+    </copy>
+  </target>
+
+  <target name="war" depends="nrccompile,javacompile" description="Create a war file">
+    <zip destfile="Example.war" basedir="war"/>
+  </target>
+  
+  <target name="clean"
+	  description="Cleans this project">
+    <delete dir="war"
+	    failonerror="false" />
+  </target>
+
+</project>

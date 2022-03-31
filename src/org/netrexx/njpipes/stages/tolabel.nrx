@@ -1,5 +1,7 @@
 /*
- *  Copyright (C) 1997-2011 Ed Tomlinson
+
+ *  Copyright (C) -2021 Jeff Hennick  Jeff (at) Jeff (dash) H (dot) com
+ *  Copyright (C) 1997-2020 Ed Tomlinson
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -9,6 +11,12 @@
 
 /** tolabel
 
+ >>--TOLABEL-+---------+---><
+             +-string--+
+
+*/
+/**
+
   Purpose: read records up to a matching label (i.e. a string starting in column 1).
            copy all preceding records to stream 0.
            copy all following records (including the matched record) to stream 1
@@ -17,6 +25,14 @@
            a null argument causes all records to be shorted to output stream 1.
 
 **/
+
+/*
+  21/ 3/14 Move kluge from top to no-argument only, shortened from 10000. Jeff Hennick
+  21/ 3/13 Add anti-Deadlock kluge. Jeff Hennick
+  20/ 5/16 Documentation Jeff Hennick
+  97/  /   New. Ed Tomlinson
+*/
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -87,6 +103,12 @@ method run()
             end
        otherwise
             do
+
+zzzz = Rexx 0  -- kluge to avoid a possible race condition leading to Deadlock
+loop zzzz = 0 to 10
+ zzzz = zzzz + 1
+ zzzz = zzzz - 1
+end
                selectOutput(1)
                shortStreams()
 
@@ -96,4 +118,3 @@ method run()
    end
 
    exit(_rc * (_rc <> 12) )                          -- sever streams and leave with Colishaw (tm) retcode
-

@@ -7,10 +7,10 @@ PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
 NRX_SRC		:= $(wildcard *.nrx)
 NRX_OBJS	:= $(NRX_SRC:.nrx=.class)
-LATEX_EXE	:= xelatex -shell-esc
+LATEX_EXE	:= xelatex -output-driver="xdvipdfmx -i dvipdfmx-unsafe.cfg -q -E" -shell-esc
 RAIL_EXE	:= rail
 RELEASE		:= `java org.netrexx.process.NrVersion`
-DOCNAME         := "NetRexx $(RELEASE) Pipelines Reference.pdf"
+DOCNAME         := "NetRexx $(RELEASE) Pipelines Guide and Reference.pdf"
 
 .SUFFIXES: .nrx .nry .njp .class .skel .xsl .java .pdf
 
@@ -21,6 +21,7 @@ DOCNAME         := "NetRexx $(RELEASE) Pipelines Reference.pdf"
 all:	$(NRX_OBJS) $(PDFTARGET)
 
 $(TARGET).pdf: $(TEX_SRC)
+	wkhtmltopdf --minimum-font-size 25 --no-outline --page-width 10 -R 0 -L 3 stages.html stages.pdf
 	$(MAKE) -k $(TARGET).bbl
 	$(LATEX_EXE) $(TARGET).tex
 	$(RAIL_EXE) $(TARGET)
@@ -45,3 +46,5 @@ clean:
 	rm -f *.crossref
 	rm -f *.aux
 	rm -f *~
+	rm -f *.pdf
+

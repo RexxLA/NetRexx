@@ -1,24 +1,29 @@
 -- find.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998, 2019  Jeffrey Hennick, Jeff @ Jeff-H . com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 98/09/20 improved outstream logic.  ejt
--- 98/08/28 use mrc method to get correct rc.  ejt
--- 98/06/20 aobj; binary; Use "catch"; Case sensitivity; minor speedup. JHennick
--- 98/07/16 handle case where there is no stream0.  EJT
-
+/*
+  20/ 4/30 fixed handling of no argument.  Added note about leading/trailing spaces
+  19/11/23 added handling of no argument to be as though it is a single space: match any non-null, non-blank record
+  98/09/20 improved outstream logic.  ejt
+  98/08/28 use mrc method to get correct rc.  ejt
+  98/06/20 aobj; binary; Use "catch"; Case sensitivity; minor speedup. JHennick
+  98/07/16 handle case where there is no stream0.  EJT
+*/
 /** find
-
 
    >>--+-FIND--+--------+----------------------+--------------------------><
        |       +-string-+                      |
        +-STRFIND--+---------+--delimitedString-+
                   +-ANYcase-+
 
+  NOTE: njPipes *strips off* leading and trailing spaces from string.  Use STRFIND in this case.
+
 */
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -41,18 +46,23 @@ method run()
    s0 = boolean 1
    s1 = boolean 1
 
-   if  f_str.verify('_ ', 'M') > 0 then do  -- with Magic chars
-      start = f_str.verify(' ')  -- jump leading spaces
+   if f_str.verify('_ ', 'M') > 0 then do  -- with Magic chars
+      start = f_str.verify(' ')  -- jump leading spaces  -- not going to happen due to arg()
       loop forever
          yes = 1
          aobj = peekto()
          robj = rexx aobj
-         key = robj.left(len)
-         loop cc = start to len while yes
-            c = f_str.substr(cc, 1)
-            if c = ' ' then iterate
-            if c = '_' then c = ' '
-            if c \== key.substr(cc, 1) then yes = 0
+         if f_str = '' then do
+            yes = (robj == '') -- match null records
+         end
+         else do
+            key = robj.left(len)
+            loop cc = start to len while yes
+               c = f_str.substr(cc, 1)
+               if c = ' ' then iterate
+               if c = '_' then c = ' '
+               if c \== key.substr(cc, 1) then yes = 0
+            end
          end
          if yes then
             do
@@ -76,6 +86,31 @@ method run()
       end
    catch StageError
    end
+   else if f_str = '' then        -- null search, match all but null
+      loop forever
+         aobj = peekto()
+         robj = rexx aobj
+         if robj \== '' then
+            do
+               if s0 then do
+                  selectOutput(0)
+                  output(aobj)
+               catch StageError
+                  selectOutput(1)
+                  s0 = 0
+               end
+            end
+         else
+            if s1 then do
+               selectOutput(1)
+               output(aobj)
+            catch StageError
+               selectOutput(0)
+               s1 = 0
+            end
+         readto()
+      catch StageError
+      end
    else                            -- no Magic chars
    loop forever
       aobj = peekto()

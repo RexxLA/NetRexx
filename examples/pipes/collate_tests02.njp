@@ -1,0 +1,311 @@
+/** collate
+
+                           +-NOPAD----+ +-RESPECTCASE-(1)-+
+>>-COLLATE--+------------+-+----------+-+-----------------+-->
+            +-STOP-ANYOF-+ +-PAD-xorc-+ +-| anycase |-----+
+
+                                  +-MASTER-DETAIL---+
+>--+---------------------------+--+-----------------+-->
+   +-inputRange-+------------+-+  +-MASTER----------+
+                +-inputRange-+    +-DETAIL-+--------+
+                                           +-MASTER-+
+
+>--+----------------------------------+--><
+   +-SEParator-delimitedString-(1)(2)-+
+
+anycase:
+
+  +-RESPECTCASE-(1)-+
+|-+-----------------+-|
+  +-ANYcase---------+
+  +-CASEANY---------+
+  +-CASEIGNORE------+
+  +-CASELESS--------+
+  +-IGNORECASE------+
+
+(1) NetRexx Pipelines only.
+(2) delimitedString record is put before each Master Record
+    (or after if DETAIL MASTER order) on the primary output stream.
+
+*/
+
+/*
+  20/11/14 Jeff Hennick
+*/
+
+pipe (collate_tests02)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- collate (no range) ?
+   literal abc;bcd;def |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s10: collate  |
+   c10.0: compare any ~2#10.0 collate (no range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc;bcd;bcd;def |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s10: |
+   c10.1: compare any ~2#10.1 collate (no range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s10: |
+   c10.2: compare any ~2#10.2 collate (no range)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc;abc;bcd;bcd;bcd;def;def |  -- expected primary out |
+   split ; |
+   c10.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c10.1: ?
+   literal |   -- expected out tertiary |
+   split ; |
+   c10.2: ?
+
+-- collate (2 ranges)?
+   literal abc 1;bcd 1;def 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s11: collate  1-3  2-4 |
+   c11.0: compare any ~2#11.0 collate (2 ranges) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zabc 2;zbcd 4;zbcd 5;zdef 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s11: |
+   c11.1: compare any ~2#11.1 collate (2 ranges) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s11: |
+   c11.2: compare any ~2#11.2 collate (2 ranges) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc 1;zabc 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c11.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c11.1: ?
+   literal |   -- expected out tertiary |
+   split ; |
+   c11.2: ?
+
+-- collate (more masters)?
+   literal abc 1;bcd 1;def 1;ghi 1;jkl 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s12: collate 1-3  2-4 |
+   c12.0: compare any ~2#12.0 collate (more masters) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zabc 2;zbcd 4;zbcd 5;zdef 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s12: |
+   c12.1: compare any ~2#12.1 collate (more masters) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s12: |
+   c12.2: compare any ~2#12.2 collate (more masters) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc 1;zabc 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c12.0: ?
+   literal ghi 1;jkl 1 |   -- expected out secondary |
+   split ; |
+   c12.1: ?
+   literal |   -- expected out tertiary |
+   split ; |
+   c12.2: ?
+
+-- collate (more details)?
+   literal abc 1;bcd 1;def 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s13: collate 1-3  2-4 |
+   c13.0: compare any ~2#13.0 collate (more details) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zabc 2;zbcd 4;zbcd 5;zdef 6;zxyz 6;zxzz 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s13: |
+   c13.1: compare any ~2#13.1 collate (more details) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s13: |
+   c13.2: compare any ~2#13.2 collate (more details) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc 1;zabc 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c13.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c13.1: ?
+   literal zxyz 6;zxzz 6 |   -- expected out tertiary |
+   split ; |
+   c13.2: ?
+
+-- collate (stop anyof more masters)?
+   literal abc 1;bcd 1;def 1;ghi 1;jkl 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s14: collate stop anyof 1-3  2-4 |
+   c14.0: compare any ~2#14.0 collate (stop anyof more masters) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zabc 2;zbcd 4;zbcd 5;zdef 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s14: |
+   c14.1: compare any ~2#14.1 collate (stop anyof more masters) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s14: |
+   c14.2: compare any ~2#14.2 collate (stop anyof more masters) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc 1;zabc 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c14.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c14.1: ?
+   literal |   -- expected out tertiary |
+   split ; |
+   c14.2: ?
+
+-- collate (stop anyof more details)?
+   literal abc 1;bcd 1;def 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s15: collate stop anyof 1-3  2-4 |
+   c15.0: compare any ~2#15.0 collate (stop anyof more details) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zabc 2;zbcd 4;zbcd 5;zdef 6;zxyz 6;zxzz 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s15: |
+   c15.1: compare any ~2#15.1 collate (stop anyof more details) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s15: |
+   c15.2: compare any ~2#15.2 collate (stop anyof more details) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc 1;zabc 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c15.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c15.1: ?
+   literal |   -- expected out tertiary |
+   split ; |
+   c15.2: ?
+
+-- collate (more details at start)?
+   literal abc 1;bcd 1;def 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s16: collate 1-3  2-4 |
+   c16.0: compare any ~2#16.0 collate (more details at start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zaab 2;zaac 2;zabc 2;zbcd 4;zbcd 5;zdef 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s16: |
+   c16.1: compare any ~2#16.1 collate (more details at start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s16: |
+   c16.2: compare any ~2#16.2 collate (more details at start) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc 1;zabc 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c16.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c16.1: ?
+   literal zaab 2;zaac 2 |   -- expected out tertiary |
+   split ; |
+   c16.2: ?
+
+-- collate nopad ?
+   literal abc 1;bcd 1;def 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s17: collate nopad 1-3  2-4 |
+   c17.0: compare any ~2#17.0 collate nopad ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zaab 2;zaac 2;zabc 2;zbcd 4;zbcd 5;zdef 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s17: |
+   c17.1: compare any ~2#17.1 collate nopad ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s17: |
+   c17.2: compare any ~2#17.2 collate nopad ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc 1;zabc 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c17.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c17.1: ?
+   literal zaab 2;zaac 2 |   -- expected out tertiary |
+   split ; |
+   c17.2: ?
+
+-- collate pad xorc (short master) ?
+   literal ab 1;bcd 1;def 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s18: collate pad % 1-3  2-4 |
+   c18.0: compare any ~2#18.0 collate pad xorc (short master) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zaab 2;zaac 2;zab% 2;zbcd 4;zbcd 5;zdef 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s18: |
+   c18.1: compare any ~2#18.1 collate pad xorc (short master) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s18: |
+   c18.2: compare any ~2#18.2 collate pad xorc (short master) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal ab 1;zab% 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c18.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c18.1: ?
+   literal zaab 2;zaac 2 |   -- expected out tertiary |
+   split ; |
+   c18.2: ?
+
+-- collate pad xorc (short detail) ?
+   literal ab% 1;bcd 1;def 1 |   -- master input |
+   split ; |
+-- Primary 0 i/o |
+   s19: collate pad % 1-3  2-4 |
+   c19.0: compare any ~2#19.0 collate pad xorc (short detail) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal zaab 2;zaac 2;zab 2;zbcd 4;zbcd 5;zdef 6 |     -- detail input |
+   split ; |
+-- Secondary 1 i/o |
+   s19: |
+   c19.1: compare any ~2#19.1 collate pad xorc (short detail) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+-- Tertiary 2 i/o |
+   s19: |
+   c19.2: compare any ~2#19.2 collate pad xorc (short detail) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal ab% 1;zab 2;bcd 1;zbcd 4;zbcd 5;def 1;zdef 6 |  -- expected primary out |
+   split ; |
+   c19.0: ?
+   literal |   -- expected out secondary |
+   split ; |
+   c19.1: ?
+   literal zaab 2;zaac 2 |   -- expected out tertiary |
+   split ; |
+   c19.2: ?

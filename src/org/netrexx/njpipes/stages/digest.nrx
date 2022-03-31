@@ -1,0 +1,89 @@
+-- digest.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2020 rvj
+ *  based on Jeff's encode64 
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 2021-08-17 New. rvj
+*/
+
+/** digest
+                     +-MD5--+
+   >>--+-DIGEST-+--+-+-SHA1-+--><
+                     +-SHA256---+
+                     +-SHA384---+
+                     +-SHA512---+
+*/
+
+/*
+   NOTE: CMS has MD5, SHA1, SHA256, SHA384 and SHA 512
+   NetRexx Pipelines has (dependent on the JVM implementation)
+   MD2, MD5, SHA1, SHA224, SHA256, SHA384, SHA512, SHA512/224, SHA512/256
+   Netrexx Pipelines does not (yet) have APPEND, VERIFY and NOT
+   NetRexx Pipelines returns the bytearray as a HEX string
+   CMS returns a char array into the pipeline
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.security.MessageDigest
+
+class digest extends stage
+
+method run()
+  parse arg().upper opt restup
+  
+  if restup <> '' then do
+    parse arg() opt rest
+    Emsg(11, 'Extra argument found:' rest'.')
+  end
+
+  do
+    select case opt
+      when '', 'SHA1' then
+	md = MessageDigest.getInstance('SHA1')
+      otherwise
+	md = MessageDigest.getInstance(opt)
+    end
+  catch java.security.NoSuchAlgorithmException
+    say 'No such digest algorithm implemented'
+    Emsg(11, 'Unrecognised argument found:' arg()'.')
+    rc = 16
+  end -- do
+
+  do
+    loop forever
+      record_in = Rexx peekto()      -- get input
+      ba = record_in.toByteArray()   -- convert to ByteArray
+      md.update(ba)                  -- update the digest
+      readto()
+    catch org.netrexx.njpipes.pipes.StageError
+      rc = rc()
+    end -- do
+
+    end  
+  do
+    s=Rexx
+    opr = md.digest()           -- when done, compute digest
+    hexString = StringBuffer()
+    loop i=0 to opr.length-1
+      hex = Integer.toHexString(0xFF & opr[i])
+      if (hex.length() == 1) then do
+        hexString.append('0');
+      end
+      hexString.append(hex);
+    end
+    output(Rexx hexString)
+    -- output((String opr).getBytes())
+  catch org.netrexx.njpipes.pipes.StageError
+    rc = rc()
+  end -- do
+  
+  Exit(rc*(rc<>12))
+  

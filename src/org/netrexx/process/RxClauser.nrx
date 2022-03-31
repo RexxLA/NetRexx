@@ -29,6 +29,7 @@
 /* 2000.04.30 Get date from RxSource, not streamer                    */
 /* 2013.07.10 change Character.isLetter to .isJavaIdentifierStart     */
 /* 2016.01.01 allow @ as an operator for annotations NETREXX-122      */
+/* 2021.12.31 add RxModel - Jason Martin                              */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -48,6 +49,7 @@ class RxClauser
   tcount=int             -- tokens in current clause array
   tarray=RxToken[]       -- current clause array
   isif=boolean           -- clause is IF/WHEN
+  cmt=Rexx null          -- collects comments for RxModel
 
   /* Clause lookaside (clauses saved for later passes) */
   ccount=int 0           -- count of clauses in lookaside
@@ -337,6 +339,10 @@ class RxClauser
   carray[ccount]=clause
   ccount=ccount+1
   clause.clausenum=ccount          -- remember our number [for tracer]
+  if rxt.program.flag.model>0 then do
+    rxt.program.model.add(clause.toString(),cmt)
+    cmt=null
+  end
   return clause
 
  /** ADDTOKEN -- add token to the current clause array
@@ -423,20 +429,37 @@ class RxClauser
     if ctype='o' then do label opchar   -- operator character
       if pos>linelen then c2=BAD; else c2=line[pos-1]
       if cchar='-' then if c2='-' then /* line comment start */ do
-        nextpos=linelen+1
-        tok.type=RxToken.SP
-        leave collect; end
-
+        if rxt.program.flag.model=2 then do
+          cmt="--"
+          loop x=pos to (linelen-1)
+            cmt=cmt||line[x]
+          end
+          nextpos=linelen+1
+          tok.type=RxToken.SP
+          leave collect;
+        end
+        else do
+          nextpos=linelen+1
+          tok.type=RxToken.SP
+          leave collect;
+        end;
+      end;
+	
 	if cchar='@' then /* annotation start - NETREXX-122 */ do
-        nextpos=linelen+1
-        tok.type=RxToken.AT
-	tok.value = line
-	if rxt.superflag.diag then say '#RxClauser ' tok.value 'found for passthrough as annotation'
-        leave collect; end
-
-      if cchar='/' then if c2='*' then /* nest comment start */ do
-        pos=pos+1; nest=1
+          nextpos=linelen+1
+          tok.type=RxToken.AT
+	  tok.value = line
+	  if rxt.superflag.diag then say '#RxClauser ' tok.value 'found for passthrough as annotation'
+          leave collect; end
+	  
+	  if cchar='/' then if c2='*' then /* nest comment start */ do
+        if rxt.program.flag.model=2 then cmt="/*"
+            pos=pos+1; nest=1
         loop label comments forever
+          if rxt.program.flag.model=2 then do
+            if pos>linelen then cmt=cmt||Rexx(System.getProperty("line.separator"))
+            else if pos==linelen then cmt=cmt||line[pos-1]||Rexx(System.getProperty("line.separator"))
+          end
           if pos>=linelen then do       -- no room for comment end
             ctype=readline()
             if ctype=RxToken.EOS then do
@@ -447,20 +470,27 @@ class RxClauser
             iterate; end
           c1=line[pos-1]
           pos=pos+1
-          if c1\='*' then if c1\='/' then iterate -- no state change
+          if c1\='*' then if c1\='/' then do -- no state change
+            if rxt.program.flag.model=2 then cmt=cmt||c1
+            iterate
+          end
           c2=line[pos-1]
           if c1='*' then do
             if c2='/' then do
+              if rxt.program.flag.model=2 then cmt=cmt||c1||c2
               pos=pos+1
               if nest=1 then leave comments
               nest=nest-1
               end
+              else if rxt.program.flag.model=2 then cmt=cmt||c1
             end
            else do            -- c1 is '/'
             if c2='*' then do
+              if rxt.program.flag.model=2 then cmt=cmt||c1||c2
               pos=pos+1
               nest=nest+1
               end
+              else if rxt.program.flag.model=2 then cmt=cmt||c1
             end
           end comments
         nextpos=pos

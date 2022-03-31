@@ -1,0 +1,53 @@
+-- between_tests
+
+/** buffer
+
+>>--BUFFER--+---------------------------+------><-
+            +-number--+-----------------+--+
+                      +-delimitedString-+
+
+*/
+
+/*
+ 19/09/17 Jeff Hennick
+*/
+
+
+pipe (buffer_tests)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+   o: ?
+
+--  buffer ?
+   literal line 1.1;line 1.2 last;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   buffer |
+   take 3 |
+   c1: compare any ~2# 1 buffer ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 last;line 2.1 |
+   split ; |
+   c1: ?
+
+-- buffer number ?
+   literal r1.1;r1.2 last; ;r2.1;r2;R2.2;RE2.3 LAST; ;RECORD3.1 last |
+   split ; |
+   buffer 2 |
+   c2: compare any ~2# 2 buffer number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1.1;r1.2 last; ;r1.1;r1.2 last; ;r2.1;r2;R2.2;RE2.3 LAST; ;r2.1;r2;R2.2;RE2.3 LAST; ;RECORD3.1 last; ;RECORD3.1 last |
+   split ; |
+   c2: ?
+
+-- buffer number !string! ?
+   literal r1.1;r1.2 last; ;r2.1;r2;R2.2;RE2.3 LAST; ;RECORD3.1 last |
+   split ; |
+   buffer 2 /xyz/ |
+   c3: compare any ~2# 3 buffer number /string/ ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1.1;r1.2 last;xyz;r1.1;r1.2 last; ;r2.1;r2;R2.2;RE2.3 LAST;xyz;r2.1;r2;R2.2;RE2.3 LAST; ;RECORD3.1 last;xyz;RECORD3.1 last |
+   split ; |
+   c3: ?

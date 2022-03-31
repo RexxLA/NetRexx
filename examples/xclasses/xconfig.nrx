@@ -1,0 +1,104 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  23 JUN 1998
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1998
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx/xclasses
+--
+package xclasses
+class xconfig
+
+  properties private
+    invalue         = ''          -- default value for a variable
+    source                        -- is the configuration filename
+    ikeys            = ''          -- list of valid keys
+
+  properties private static
+    versioni  = 'v1r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: xconfig
+-- purpose.....: define a configuration file
+--
+  method xconfig(fid=Rexx) public
+    source = fid
+    this.refresh()
+
+-- method......: refresh
+-- purpose.....: (re-)reads the configuration file
+--
+  method refresh() public
+    if \xfile.fexist(source) 
+      then xsys.die(101,'(xconfig) Configuration file "'source'" does not exist.')
+    sf = xfile(source)
+    sf.read()
+    loop i = 1 to sf.line[0]
+      line = sf.line[i]
+      if line = '' then iterate
+      parse line flag rest
+      if flag = '#' then iterate
+      if ikeys.wordpos(flag) = 0
+        then ikeys = ikeys flag
+      if invalue[flag] <> ''
+       then invalue[flag] = invalue[flag] rest.space()
+       else invalue[flag] = rest.space()
+    end
+
+-- method......: value
+-- purpose.....: returns value of option IN
+--
+  method value(variable=Rexx) public
+    out = invalue[variable]
+    return out
+
+-- method......: keys
+-- purpose.....: returns the valid keys in the current config file
+--
+  method keys() public
+    return this.ikeys
+
+-- method......: dump
+-- purpose.....: dumps the current config file
+--
+  method dump() public
+    say 'Config file is....:' source'.'
+    list = ikeys
+    loop while list <> ''
+      parse list item list
+      say item '=' invalue[item]
+    end
+
+-- method......: version
+-- purpose.....: just display this library's info
+--
+  method version() public static
+    say 'Version....:' versioni'.'
+    say 'Copyright..:' copyright'.'
+    say 'Contact....:' contact'.'
+
+-- method......: main
+-- purpose.....: try out the reader ('java xclasses/xcmdline ARGS OPTIONS')
+--
+  method main(args=String[]) public static
+    parse rexx(args) arg
+    arg = arg
+    cf = xconfig('test.config')
+    say cf.value('authorized')
+    cf.dump()
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+--

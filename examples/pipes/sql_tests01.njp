@@ -1,0 +1,129 @@
+
+/** sql
+
+                                                          +-;-+
+>>--SQL--+-----------------+--+-------------------------+-+---+--><
+         +-(-| options |-)-+  +-sql_statement_string-(3)+
+
+OPTIONS:
+   +------------------------------------------------+
+ |-v-+--------------------------------------------+-+-|
+     |            +-/sql.properties/-------+      |
+     +-PROPERTIES-+-filename_Qword-(7)-----+-(5)+-+
+     | +-NOHEADERS-+                            |
+     +-+           +-(5)(6)(9)------------------+
+     | +-HEADERS---+                            |
+     +-COUNT2SECondary-(5)(11)------------------+
+     +-URL-Qword-(7)----------------------------+
+     +-JDBCDRIVER-Qword-(7)---------------------+
+     +-DBMS-Qword-(7)(8)------------------------+
+     +-DB_NAME-Qword-(7)(8)---------------------+
+     +-USER-Qword-(7)(8)(10)--------------------+
+     +-PASS-Qword-(7)(8)(10)--------------------+
+
+
+ uses jdbc to select from any jdbc enabled dbms
+
+ properties file ("sqlselect.properties" default) is read to find jdbcdriver name and url
+ sample properties file:
+
+ #JDBC driver name
+ #Tue Feb 03 23:29:43 GMT+01:00 1998
+ jdbcdriver=com.imaginary.sql.msql.MsqlDriver
+ url=jdbc:msql://localhost:1114/TESTDB
+ # the following are not needed for some DBMS, ex: SQLite
+ user=db_user_name
+ pass=password_for_db
+
+ if this file is not found default (compiled in) values are used
+
+ (1) when using a sql select * (all columns) from the commandline, quote the query
+ as in java pipes.compiler (query) "sql select * from dept | console"
+ (2) the netrexx/jdbc combination is extremely case sensitive for column and table names
+ (3) this sql_select_string executed, then statements are read from the primary input stream.
+     this is optional in NetRexx Pipelines only.
+ (4) CMS does not use the stream input
+ (5) NetRexx Pipelines only
+ (6) CMS Pipelines is implied HEADERS only.
+ (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
+ (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
+     DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
+     SQLite is the only one tested as of 8/15/20. MySQL might work too.
+ (9) the SQLSELECT stage uses HEADERS as the default.
+ (10) USER & PASS are needed for some DBMSs and not others, ex. SQLite.
+ (11) the count or other output from non-select statements goes to the secondary
+      output stream if connected, or is discarded.  Otherwise it goes to the primary.
+
+ Priority order for URL, JDBCDRIVER, DBMS, DB_NAME, USER, & PASS (first one found rules):
+   1. option in the SQL command string
+   2. from secondary input stream
+   3. from "sqlselect.properties" file
+      or from file specified by PROPERTIES option
+   4. Builtin
+*/
+
+/*
+  20/ 8/15 Jeff Hennick
+*/
+
+pipe (sql_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- from command line options ?
+   literal ,
+     drop table if exists person1; ,
+     create table person1 (id integer, name string); ,
+     insert into person1 values(1, 'leo-rexx'); ,
+     insert into person1 values(2, 'yui-rexx'); ,
+     update person1 set id = 3 where name = 'yui-rexx'; ,
+     select * from person1; ,
+     drop table person1 |
+   split ; |
+   sql ( dbms sqlite db_name flightroute-iata.sqb ) |
+   c1: compare any ~2#1 sql from command line options ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 0;0;1;1;1;1   leo-rexx;3   yui-rexx; 0 |
+   split ; |
+   c1: ?
+
+--  from secondary ?
+   literal ,
+     drop table if exists person2; ,
+     create table person2 (id integer, name string); ,
+     insert into person2 values(1, 'leo-rexx'); ,
+     insert into person2 values(2, 'yui-rexx'); ,
+     update person2 set id = 3 where name = 'yui-rexx'; ,
+     select * from person2; ,
+     drop table person2 |
+   split ; |
+   s2: sql |
+   c2: compare any ~2#2 sql from secondary ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 0;0;1;1;1;1   leo-rexx;3   yui-rexx; 0 |
+   split ; |
+   c2: ?
+   literal jdbcdriver=org.sqlite.JDBC;#jdbcdriver=sqlite-jdbc-3.30.1.jar;url=jdbc:sqlite:flightroute-iata.sqb |
+   split ; |
+   s2: ?
+
+-- from default file options ?
+   literal ,
+     drop table if exists person3; ,
+     create table person3 (id integer, name string); ,
+     insert into person3 values(1, 'leo-rexx'); ,
+     insert into person3 values(2, 'yui-rexx'); ,
+     update person3 set id = 3 where name = 'yui-rexx'; ,
+     select * from person3; ,
+     drop table person3 |
+   split ; |
+   sql |
+   c3: compare any ~2#3 sql from default file options ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 0;0;1;1;1;1   leo-rexx;3   yui-rexx; 0 |
+   split ; |
+   c3: ?
+

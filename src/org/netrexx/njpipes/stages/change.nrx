@@ -3,14 +3,18 @@
  *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
  *Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program. 
+ *  and distributing this program.
  */
--- 98/09/20 removed the StageExit, it was not helping much...  ejt
--- 98/07/30 SelIRange WAS correct...  ejt
--- 98/07/30 use StageError(13,... in stageExit.  ejt
--- 98/07/18 Sel1IRange should have been called instead of SelIRange.  ejt
--- 98/06/29 Fix for range of 2.1 .  JHennick
--- 98/06/12 DString.  IRange.  Up to CMS documentation.  JHennick
+
+/*
+  20/10/08 Added FROM, TO, FROMTO, and FOR optional keywords.  Jeff Hennick
+  98/09/20 removed the StageExit, it was not helping much...  ejt
+  98/07/30 SelIRange WAS correct...  ejt
+  98/07/30 use StageError(13,... in stageExit.  ejt
+  98/07/18 Sel1IRange should have been called instead of SelIRange.  ejt
+  98/06/29 Fix for range of 2.1 .  JHennick
+  98/06/12 DString.  IRange.  Up to CMS documentation.  JHennick
+*/
 
 /** change
 
@@ -19,11 +23,18 @@
                            |    <-------+    |
                            +-(----range-+--)-+
 
-  >--+-+ changeString +-----------------+--+-----------+-----------------><
-     +-delimitedString--delimitedString-+  +-numorstar-+
+        +-FROMTO-+
+  >--+--+--------+-| changeString |--------------------+-->
+     | +-FROM-+                 +-TO-+                 |
+     +-+------+-delimitedString-+----+-delimitedString-+
+
+  >---+-------------------+---><
+      | +-FOR-+           |
+      +-+-----+-numorstar-+
+
 
   changeString:
-  +--delimiter--string--delimiter--string--delimiter----------------------+
+  |--delimiter--string--delimiter--string--delimiter--|
 
 */
 options nostrictcase nostrictargs nostrictsignal nobinary
@@ -40,45 +51,88 @@ method run() public
 
    anyc = boolean 0
    args = Rexx ''
-   key = Rexx ''
-   rest = Rexx ''
+--   key = Rexx ''
+--   rest = Rexx ''
    outl = Rexx ''
    ri = IRange[]
 
-   parse arg() key rest
+--   parse arg() key rest
 
-   key = key.upper()
+--   key = key.upper()
+   args = arg()
 
-   if 'ANYCASE'.abbrev(key, 3) | key.wordpos('CASEANY IGNORECASE CASEIGNORE') > 0 then do
-      anyc = 1
-      args = rest
-   end
-   else args = arg()
+   anyc = getAnyCase(args, 3)
+   if anyc then parse args . args
+
+--   if 'ANYCASE'.abbrev(key, 3) | key.wordpos('CASEANY IGNORECASE CASEIGNORE') > 0 then do
+--      anyc = 1
+--      args = rest
+--   end
+--   else args = arg()
 
    ri = GetIRanges(args)
-   args = ri[0].Residue()
    nranges = ri[0].Number()
+   args = ri[0].Residue()
 
    cmax = args.word(args.words())
 
-   if cmax = '*' then cmax = infinity
-   if cmax.datatype('W') then args = args.delword(args.words())
+   if cmax = '*' then do
+     cmax = infinity
+   end
+   if cmax.datatype('W') then do
+     args = args.delword(args.words())
+     if args.word(args.words()) = 'FOR' then
+       args = args.delword(args.words())
+   end
    else cmax = infinity
 
    if cmax < 1 then do
       Emsg(11,'Error - 'getName()' number 'cmax' must be a positive numeric or "*"')
    end
 
-   args = args.strip()
-   parse args delim 2 .
-   if args.right(1) = delim & args.countstr(delim) = 3 then do
-     pd = args.pos(delim, 2)
-     args = args.insert(' 'delim, pd)
+   from_string = ''
+   to_string = ''
+
+   ftw = getKeyWord(args, 'FROMTO', 0, 'K')
+   if ftw[2] then do
+     parse args . args
+     parse args delim 2 fp (delim) tp (delim)
+     if args.right(1) = delim & args.countstr(delim) = 3 then do
+       from_string = fp
+       to_string = tp
+     end
    end
 
-   gds = DString(args)
-   from_str = gds.String
-   to_str = DString(gds.Residue()).String
+   fwk = getKeyWord(args, 'FROM', 0, 'D')
+   if fwk[2] <> '' then do
+     from_string = fwk[2]
+     args = fwk[1]
+   end
+
+   twk = getKeyWord(args, 'TO', 0, 'D')
+   if twk[2] <> '' then do
+     to_string = twk[2]
+     args = twk[1]
+   end
+
+   if args <> '' then do
+     args = args.strip()
+     parse args delim 2 fp (delim) tp (delim)
+     if args.right(1) = delim & args.countstr(delim) = 3 then do
+       from_string = fp
+       to_string = tp
+       args = ''
+     end
+   end
+
+   if args <> '' then do
+     fds = DString(args)
+     from_string = fds.String
+     tds = DString(fds.Residue)
+     to_string = tds.String
+     if tds.Residue <> '' then
+       Emsg(11, 'Change: extra unknown:' tds.Residue)
+   end
 
    sec_out = boolean 0              -- set flag if output 1 is connected AT START
    do
@@ -99,10 +153,10 @@ method run() public
    end
 
    select
-   when from_str == '' & to_str \== '' & (sr = 1 | nranges = 0 ) then -- only a "to_str" zone is col 1
+   when from_string == '' & to_string \== '' & (sr = 1 | nranges = 0 ) then -- only a "to_string" zone is col 1
    loop forever
       line = Rexx peekto()
-      outl = to_str || line
+      outl = to_string || line
       chang = 1
 
       if sec_out then do
@@ -119,7 +173,7 @@ method run() public
       readto()
    catch StageError
    end
-   when from_str == '' & to_str \== '' & sr = 0 then do   -- only a "to_str" in indertminate zone
+   when from_string == '' & to_string \== '' & sr = 0 then do   -- only a "to_string" in indertminate zone
       loop forever
          line = Rexx peekto()
 
@@ -130,11 +184,11 @@ method run() public
               outl = ''
               chang = 0
            end
-           when s = 1 & line \= '' then outl = to_str || line
+           when s = 1 & line \= '' then outl = to_string || line
            when s > line.length() then outl = line
            otherwise
               parse line l1 =(s) z
-              outl = l1 || to_str || z
+              outl = l1 || to_string || z
          end
 
          if sec_out then do
@@ -152,15 +206,15 @@ method run() public
       catch StageError
       end
    end
-   when from_str == '' & to_str \== '' then do   -- only a "to_str" in zone > 1
+   when from_string == '' & to_string \== '' then do   -- only a "to_string" in zone > 1
       sm = sr - 1
       loop forever
          chang = 1
          line = Rexx peekto()
          parse line l1 =(sr) z
          select
-            when z \= '' then outl = l1 || to_str || z
-            when line.length() = sm then outl = line || to_str
+            when z \= '' then outl = l1 || to_string|| z
+            when line.length() = sm then outl = line || to_string
             otherwise
                outl = l1
                chang = 0
@@ -181,13 +235,13 @@ method run() public
       catch StageError
       end
    end
-   when anyc then do               -- have an ANYCASE "from_str" and maybe a "to_str"
-                               -- How should to_str be capitalized?
+   when anyc then do               -- have an ANYCASE "from_string" and maybe a "to_string"
+                               -- How should to_string be capitalized?
       ul = 0
       ll = 0
 
-      loop i = 1 to from_str.length() until ul
-         ch = from_str.substr(i,1)
+      loop i = 1 to from_string.length() until ul
+         ch = from_string.substr(i,1)
          select
             when \ch.datatype('M') then nop
             when ch.datatype('U') then ul = 1
@@ -197,14 +251,14 @@ method run() public
 
       xcase = \ul | \ll
       if xcase then do
-         parse to_str t1 2 tr
+         parse to_string t1 2 tr
          tof = t1.upper() || tr.lower()
-         tou = to_str.upper()
-         tol = to_str.lower()
+         tou = to_string.upper()
+         tol = to_string.lower()
       end
 
-      from_str = from_str.upper()
-      add = from_str.length()
+      from_string = from_string.upper()
+      add = from_string.length()
       add1 = add + 1
 
       loop forever                        -- anycase
@@ -216,7 +270,7 @@ method run() public
             ml = ri[j].SelIRange(line).upper()
             p = 1 - add
             loop i = i while i <= cmax        -- find FROMs, from the left
-               p = ml.pos(from_str, p + add)
+               p = ml.pos(from_string, p + add)
                if p = 0 then leave
                if pl.wordpos(p) = 0 then pl = pl p + ri[j].StartChar() - 1
                else i = i - 1
@@ -233,13 +287,13 @@ method run() public
             if xcase then do
                parse line =(p) c1 +1 c2 +1
                select
-                  when (c1''c2).datatype('U') then to_str = tou
-                  when c1.datatype('U') then to_str = tof
-                  otherwise to_str = tol
+                  when (c1''c2).datatype('U') then to_string = tou
+                  when c1.datatype('U') then to_string = tof
+                  otherwise to_string = tol
                end
             end
 
-            outl = l || to_str || r1
+            outl = l || to_string || r1
          end
 
          if sec_out then do
@@ -258,8 +312,8 @@ method run() public
       end
 
    end
-   otherwise                               -- have an exact "from_str" and maybe a "to_str"
-      add = from_str.length()
+   otherwise                               -- have an exact "from_string" and maybe a "to_string"
+      add = from_string.length()
       add1 = add + 1
       loop forever
          line = Rexx peekto()
@@ -270,7 +324,7 @@ method run() public
             ml = ri[j].SelIRange(line)
             p = 1 - add
             loop i = i while i <= cmax        -- find FROMs, from the left
-               p = ml.pos(from_str, p + add)
+               p = ml.pos(from_string, p + add)
                if p = 0 then leave
 --               pp = p + ri[j].StartChar() - 2
                pp = p + ri[j].StartChar() - 1
@@ -286,7 +340,7 @@ method run() public
             if p < 2 then parse outl =(add1) r1
 --            else parse outl l +(p) . +(add) r1
             else parse outl l =(p) . +(add) r1
-            outl = l || to_str || r1
+            outl = l || to_string || r1
          end
 
          if sec_out then do

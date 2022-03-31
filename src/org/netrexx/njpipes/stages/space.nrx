@@ -1,0 +1,148 @@
+/*
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+/** space
+
+                                (1)
+           +-1------+  +-BLANK--------------+
+ >>--SPACE-+--------+--+--------------------+--->
+           +-number-+  +-xorc---------------+
+                       +-+--------+-dstring-+
+                         +-STRing-+
+
+           (2)
+    +-BLANK-----------------+
+ >--+-----------------------+--><
+    +-xorc------------------+
+    | +-ANYof-----+         |
+    +-+-----------+-dstring-+
+      +-ALLof-(3)-+
+
+ Notes:
+  (1) the replacement char/string
+  (2) the char/chars that will be stripped and replaced
+  (3) njPipes only, not CMS.  The dstring is treated as a single unit for stripping or replacing
+
+*/
+
+/*
+  20/ 5/23 Finish. Document. Add ALLOF.  Jeff Hennick
+  97/  /   Just Rexx SPACE. Ed Tomlin (?)
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.util.regex.
+
+class space extends stage
+
+method run()
+
+    a = arg()
+
+    replacer = Rexx ' '
+    special = 0
+    len = 1
+
+    if a.word(1).datatype('W') then do
+       len = a.word(1)
+       a = a.subword(2)
+    end
+
+    gotit = 0
+    if 'STRING'.abbrev(a.word(1).upper,3) then do
+       ds = dstring(a.subword(2))
+       replacer = ds.String
+       a = ds.Residue
+       gotit = 1
+       special = 1
+    end
+
+    if \gotit & a<>'' then do
+       parse a w1 rest
+       replacer = GetXorc(w1)
+       if replacer = null then do
+          ds = dstring(a)
+          replacer = ds.String
+          special = replacer \== ''
+          a = ds.Residue
+       end
+       else if replacer \== '' then
+         a = rest
+    end
+
+    anyof = 1
+    if 'ANYOF'.abbrev(a.word(1).upper,3) then do
+       anyof = 1
+       a = a.subword(2)
+    end
+    if 'ALLOF'.abbrev(a.word(1).upper,3) then do
+       anyof = 0
+       a = a.subword(2)
+    end
+
+    if a<>'' then do
+       parse a w1 rest
+       delims = GetXorc(w1)
+       if delims = null then do
+          ds = dstring(a)
+          delims = ds.String
+          a = ds.Residue
+       end
+       else if delims \== '' then
+         a = rest
+    end
+    else
+       delims = ' '
+
+   if delims \== ' ' | special then do -- non-single space
+     if anyof then do
+       fc = delims.left(1)
+       delims = '['delims']'
+     end
+     else
+       delims = Pattern.quote(delims)
+     exreplacer = replacer.copies(len)
+     line = Rexx
+     none = ""
+     loop forever
+       line = peekto().toString
+         -- clean left side
+       line = (String line).replaceAll("^("delims")*", none)
+         -- clean right side
+       line = (String line).replaceAll("("delims")*$", none)
+         -- reduce multiples
+       if anyof then do
+          line = (String line).replaceAll("("delims")+", fc)
+           -- replace
+          line = (String line).replaceAll(fc, exreplacer)
+       end
+       else
+          line = (String line).replaceAll("("delims")+", exreplacer)
+       output(line)
+       readto()
+     catch StageError
+       rc = rc()
+     end
+
+   end
+
+  -- the straightforward case only uses Rexx.space()
+   else do
+     loop forever
+       line = rexx peekto()
+       output(line.space(len, replacer))
+       readto()
+     end
+   catch StageError
+     rc = rc()
+   end
+
+   exit(rc*(rc<>12))

@@ -1,0 +1,150 @@
+/** strfind
+
+   >>----STRFIND--+------------+--delimitedString-+--------------------------><
+                  +-ANYcase----+
+                  +-CASEANY----+
+                  +-IGNORECASE-+
+                  +-CASEIGNORE-+
+
+*/
+/*
+  20/ 7/18 strfind_new -> strfind. Jeff Hennick
+  20/ 4/29 Jeff Hennick
+*/
+
+pipe (strfind_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+
+-- strfind string  ?
+   literal a1 2 a3 4 5 |
+   split |
+   strfind /a/ |
+   c1: compare any ~2# 1 strfind string  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1;a3; |
+   split ; |
+   c1: ?
+
+-- strfind string (space wildcard) ?
+   literal a1cx b2dx a3dx b4cx b5xx  |
+   split |
+   strfind /a d/ |
+   c2: compare any ~2# 2 strfind string (space wildcard)  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a3dx |
+   c2: ?
+
+-- strfind string (secondary) ?
+   literal a1 2 a3 4 5 |
+   split |
+   a3: strfind /a/ |
+   hole ?
+   a3: |
+   c3: compare any ~2# 3 strfind string (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2;4;5; |
+   split ; |
+   c3: ?
+
+-- strfind string (space wildcard secondary) ?
+   literal a1cx b2dx a3dx b4cx b5xx  |
+   split |
+   a4: strfind /a d/ |
+   hole ?
+   a4: |
+   c4: compare any ~2# 4 strfind string (secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1cx;b2dx;b4cx;b5xx; |
+   split ; |
+   c4: ?
+
+-- strfind string (secondary, null input) ?
+   literal a1cx;b2dx; ;a dx; b5cx;b6xx  |
+   split ; |
+   a5: strfind /a/ |
+   hole ?
+   a5: |
+   c5: compare any ~2# 5 strfind string (secondary, null input) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2dx;_; b5cx;b6xx; |
+   split ; |
+   change /_// |
+   c5: ?
+
+-- strfind string (secondary: strip nulls to primary) ?
+   literal a1cx;b2dx;_;a dx; b5cx;b6xx  |
+   split ; |
+   change /_// |
+   a6: strfind !! |
+   hole ?
+   a6: |
+   console |
+   c6: compare any ~2# 6 strfind string (secondary: strip nulls to primary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n!\\p!\nExpected:\n!\\s!\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal |
+   c6: ?
+
+-- strfind  ?
+   literal a1 2 a3 4 5 |
+   split |
+   strfind // |
+   c7: compare any ~2# 7 strfind [null] ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1 2 a3 4 5 |
+   split  |
+   c7: ?
+
+-- strfind ANYCASE string  ?
+   literal a1cx b2Dx a3dx b4cx b5xx  |
+   split |
+   strfind ANYCASE /  d/ |
+   c8: compare any ~2# 8 strfind ANYCASE string  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2Dx a3dx |
+   split |
+   c8: ?
+
+-- strfind ANY string  ?
+   literal a1cx b2Dx a3dx b4cx b5xx  |
+   split |
+   strfind ANY /  d/ |
+   c9: compare any ~2# 9 strfind ANY string  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2Dx a3dx |
+   split |
+   c9: ?
+
+-- strfind CASEANY string  ?
+   literal a1cx b2Dx a3dx b4cx b5xx  |
+   split |
+   strfind CASEANY /  d/ |
+   c10: compare any ~2#10 strfind CASEANY string  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2Dx a3dx |
+   split |
+   c10: ?
+
+-- strfind CASEIGNORE string  ?
+   literal a1cx b2Dx a3dx b4cx b5xx  |
+   split |
+   strfind CASEIGNORE /  d/ |
+   c11: compare any ~2#11 strfind CASEIGNORE string  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2Dx a3dx |
+   split |
+   c11: ?
+
+-- strfind IGNORECASE string  ?
+   literal a1cx b2Dx a3dx b4cx b5xx  |
+   split |
+   strfind IGNORECASE /  d/ |
+   c12: compare any ~2#12 strfind IGNORECASE string  ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2Dx a3dx |
+   split |
+   c12: ?

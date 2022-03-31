@@ -1,0 +1,121 @@
+/** locate
+
+>>--LOCATE-+---------+-+-----------+--+-------------+-+-------+--->
+           +-ANYcase-+ +-MIXED-(1)-+  +-inputRanges-+ +-ANYof-+
+                       +-ONEs--(1)-+
+                       +-ZEROs-(1)-+
+
+ >-+-----------------+---><
+   +-delimitedString-+
+
+ (1) Not in njpipes, yet.
+
+*/
+
+/*
+ 20/ 4/ 2 Added IBM examples
+ 19/11/26 Jeff Hennick
+*/
+
+pipe (locate_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- locate dstring ?
+   literal a1abc b2abc c3xyz a2xyz b3abc c1abc a3xyz b1xyz c2abc |
+   split |
+   locate /2/ |
+   c1: compare any ~2# 1 locate dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal b2abc;a2xyz;c2abc; |
+   split ; |
+   c1: ?
+
+-- locate anycase range dstring ?
+   literal a1abc b2Abc c3xyz a2xyz b3abc c1Abc a3xyz b1xyz c2abc |
+   split |
+   locate anycase 2-4 /a/ |
+   c2: compare any ~2# 2 locate anycase range dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1abc;b2Abc;b3abc;c1Abc;c2abc; |
+   split ; |
+   c2: ?
+
+-- locate anycase ranges dstring ?
+   literal a1abc b2Abc c3xyz a2xyz b3abc c1Abc a3xyz b1xyz c2abc |
+   split |
+   locate anycase (2-4 1.1) /a/ |
+   c3: compare any ~2# 3 locate anycase ranges dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1abc;b2Abc;a2xyz;b3abc;c1Abc;a3xyz;c2abc; |
+   split ; |
+   c3: ?
+
+-- locate ranges dstring ?
+   literal a1abc b2Abc c3xyz a2xyz b3abc c1Abc a3xyz b1xyz c2abc |
+   split |
+   locate (2-4 1.1) /a/ |
+   c4: compare any ~2# 4 locate ranges dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1abc;a2xyz;b3abc;a3xyz;c2abc; |
+   split ; |
+   c4: ?
+
+-- locate anyof dstring ?
+   literal a1abc b2Abc c3xyz a2xyz b3abc c1Abc a3xyz b1xyz c2abc |
+   split |
+   locate anyof /ax/ |
+   c5: compare any ~2# 5 locate anyof dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o:?
+   literal a1abc;c3xyz;a2xyz;b3abc;a3xyz;b1xyz;c2abc; |
+   split ; |
+   c5: ?
+
+-- locate dstring (secondary) ?
+   literal a1abc;b2abc; ;c3xyz;a2xyz;b3abc;c1abc;a3xyz;b1xyz;c2abc |
+   split ; |
+   a: locate /2/ |
+   hole ?
+   a: |
+   c6: compare any ~2# 6 locate dstring (secondary)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal a1abc; ;c3xyz;b3abc;c1abc;a3xyz;b1xyz |
+   split ; |
+   c6: ?
+
+-- from IBM p468 ex 1 ?
+   literal abc |
+   literal |
+   locate |
+   c7: compare any ~2# 7 from IBM p468 ex 1 ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abc |
+   split ; |
+   c7: ?
+
+-- from IBM p469 ex 2?
+   literal xaby |
+   literal xxyab |
+   locate 1.4 /ab/ |
+   c8: compare any ~2# 8 from IBM p469 ex 2~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal xaby |
+   split ; |
+   c8: ?
+
+-- from IBM p469 ex 3?
+   literal xaby abcd cdab |
+   split |
+   locate (1-2 3-4) /ab/ |
+   c9: compare any ~2# 9 from IBM p469 ex 3~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal abcd;cdab |
+   split ; |
+   c9: ?
+
+-- from IBM p469 ex 4?
+   literal 2#10 from IBM p469 ex 4 requires reading from their file |
+   o: ?

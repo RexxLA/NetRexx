@@ -1,0 +1,129 @@
+\section{The R\textsc{exx}Stream class}\label{refrexxstream}
+\index{netrexx.lang,R\textsc{exx}Stream class}
+
+The RexxStream class implements the Classic Rexx inspired I/O
+functions. Streams are identified by character string identifiers and
+provide for the reading and writing of data. In scripting mode (when
+the class definition is generated) a \keyword{uses RexxStream} statement is
+automatically included. All methods are \keyword{static}.
+
+\begin{description}
+  
+\item[charin(name, [start{]}, [length{]})] returns a string read from the stream named by the first
+argument.
+  \index{charin,Stream}
+\item[charout(name,[char{]},[start{]})] returns the count of characters remaining after attempting to
+write the second argument to the stream named by the first
+argument. For \emph{start}, only 1 is currently implemented (which
+rewrites the file, where the default is to append to an existing file). 
+  \index{charout,Stream}
+\item[chars(name)] indicates whether there are characters remaining in the named
+stream. Optionally, it returns a count of the characters remaining and
+immediately available.
+  \index{chars,Stream}
+\item[linein(name,string)] reads a line from the stream named by the first argument,
+unless the third argument is zero.
+  \index{linein,Stream}
+\item[lineout([name{]},[string{]},[line{]})] returns '1' or '0', indicating whether the
+  second argument has been successfully written to the stream named by
+  the first argument. A result of '1' means an unsuccessful write. The
+  line argument, when 1, causes the stream to be rewritten from the
+  start (line 1), where the default is to append to an existing stream. 
+  \index{lineout,Stream}
+\item[lines(name)] returns the number of lines remaining in the named stream.
+
+\item[stream(name, [operation{]}, [stream\_command{]})]   \index{stream,Stream} (Operations) returns a description of the state of, or the result of an
+operation upon, the stream named by the first argument. The first
+argument is a stream name, the second is either
+\begin{description}
+\item[C(ommand)]
+\item[D(escription]
+\item[S(tate)]
+\end{description}
+
+When used with the S(tate) option, STREAM
+returns one of the following strings:
+\begin{description}
+\item[ERROR]
+\item[NOTREADY]
+\item[READY]
+\item[UNKNOWN]
+\end{description}
+
+Commands are expressions that evaluate to the following command
+strings:
+\begin{description}
+  \item['OPEN'] opens the named stream. The default for 'OPEN' is to
+    open the stream for both reading and writing data. The STREAM function itself
+    returns 'READY' is succesfully opened.
+  \item['CLOSE'] closes the named stream. The STREAM function itself
+    returns 'READY' is succesfully closed.
+  \item['QUERY EXISTS'] returns the full path specification of the
+    named stream, if it exists, or a null string otherwise.
+  \item['QUERY SIZE'] returns the size in bytes of a persistent
+    stream.
+  \item['QUERY DATETIME'] returns the date and time stamps of a
+    persistent stream. This has a 2-digit year format.
+  \item['QUERY TIMESTAMP'] returns the date and time stamps of a
+    persistent stream in ISO-format. (This has a 4-digit year format).
+  \end{description}
+\end{description}
+
+The methods \keyword{charin} and \keyword{charout} work on UTF
+characters, in practice this means that what is read with
+\keyword{charin}, needs to be written with \keyword{charout}.
+
+
+\subsection{Examples}
+\index{examples,Stream}
+\begin{lstlisting}[label=datessexample,caption=Example of using Date()]
+-- write two lines to the file testdata.txt
+lineout('testdata.txt','the first quick brown fox')
+lineout('testdata.txt','jumps over the first lazy dog')
+
+-- write two lines to the file testdata2.txt
+lineout('testdata2.txt','the second quick brown fox')
+lineout('testdata2.txt','jumps over the second lazy dog')
+
+-- close the file
+stream('testdata.txt','c','CLOSE')
+
+-- show the lines() function - loop until eof
+loop i=1 while lines('testdata.txt') > 0
+  say linein('testdata.txt') i
+end
+
+-- see if it exists. Returns the full path
+say stream('testdata.txt','c','QUERY EXISTS')
+-- query its size. Should be 56 bytes
+say stream('testdata.txt','c','QUERY SIZE')
+
+-- display lines from different files 
+say linein('testdata.txt')
+say linein('testdata2.txt')
+say linein('testdata.txt')
+
+-- show the charout function, which outputs UTF
+loop for 15
+  charout('testdata.dat','a')
+end
+
+-- read back these 15 characters
+loop for 15
+  say charin('testdata.dat') 'from loop 15'
+end
+
+-- close the file
+stream('testdata.dat','c','CLOSE')
+
+-- use the chars() function to loop until EOF
+loop i=i while chars('testdata.dat') > 0
+  say charin('testdata.dat') 'from chars' i
+end
+
+-- display the last modified date of the last file
+say stream('testdata.dat','c','QUERY DATETIME')
+-- in the post-2000 era
+say stream('testdata.dat','c','QUERY TIMESTAMP')
+
+\end{lstlisting}

@@ -1,21 +1,30 @@
 -- strfrlabel.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Jeffrey Hennick, JHennick@Delphi.Com
+ *  Copyright (C) 1998-2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 98/ 6/12  DString.  New; from FRLABLE.  JHennick
+
+/*
+  20/ 5/30 Documentation Jeff Hennick
+  20/ 5/23 Fix Netrexx logic change bug. Add CASELESS, INCLUSIVE, EXCLUSIVE. Jeff Hennick
+  98/ 6/12 DString.  New; from FRLABLE.  JHennick
+*/
 
 /** strfrlable
 
-       +-FRLABEL--+--------+----------------------+
-       |          +-string-+                      |
-   >>--+-STRFRLABEL--+---------+--delimitedString-+-----------------------><
-                     +-ANYcase-+
+       +--STRFROMLABEL--+                  +-INCLUSIVe-+
+   >>--+--STRFRLABel----+--+------------+--+-----------+--delimitedString---><
+                           +-ANYcase----+  +-EXCLUSIVe-+
+                           +-CASEANY----+
+                           +-IGNORECASE-+
+                           +-CASEIGNORE-+
+                           +-CASELESS---+
 
   Purpose: read records searching for a string starting in column 1. copy all records
-           thereafter (including the record containing the label) to stream 0.
+           thereafter (INCLUSIVE: including / EXCLUSIVE ecluding the record containing
+           the label) to stream 0.
            copy all preceding records to stream 1 (if it exists).
 
            a null argument causes stream 0 to be shorted to output (0).
@@ -38,6 +47,7 @@ method run()
    _Label_len    = int      0
    _output1      = boolean  1
    _output0      = boolean  1
+   exclusive     = boolean  0
 
    args          = rexx     ''
    anyc          = boolean  0
@@ -47,8 +57,19 @@ method run()
 
    parse arg() args
    parse args.upper() w1 .
-   anyc = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASEIGNORE'.wordpos(w1)
+   anyc = 'ANYCASE'.abbrev(w1,3) | 'CASEANY IGNORECASE CASEIGNORE CASELESS'.wordpos(w1) > 0
    if anyc then parse args . args
+
+   parse args w1 .
+   inclusive = 'INCLUSIVE'.abbrev(w1,8)
+   if inclusive then do
+      exclusive = 0
+      parse args . args
+   end
+
+   parse args w1 .
+   exclusive = 'EXCLUSIVE'.abbrev(w1,8) -- overrides INCLUSIVE
+   if exclusive then parse args . args
 
    Label = DString(args).String
    if anyc then Label = Label.upper()
@@ -81,6 +102,12 @@ method run()
                if Label = _record.left(_Label_len).upper() then
                   do
                      _labelFound = 1
+                     if exclusive & _output1 then do
+                        selectOutput(1)
+                        output(_record)
+                     catch StageError
+                        _rc = rc()
+                     end
                      selectOutput(0)
                      shortStreams()
 
@@ -111,6 +138,17 @@ method run()
                if Label = _record.left(_Label_len) then
                   do
                      _labelFound = 1
+                     if exclusive then do
+                       if _output1 then do
+                         selectOutput(1)
+                         output(_record)
+                       catch StageError
+                         _rc = rc()
+                       end
+                       readto()
+                     catch StageError
+                       _rc = rc()
+                     end
                      selectOutput(0)
                      shortStreams()
 
@@ -145,4 +183,3 @@ method run()
    end
 
    exit(_rc * (_rc <> 12) )        -- sever streams and leave with Colishaw (tm) retcode
-

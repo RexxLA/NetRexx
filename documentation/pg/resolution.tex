@@ -1,10 +1,4 @@
 \section{Method resolution}
-Until version 3.01 of the \nr{} translator a slightly different way of
-method resolution was used. The chances that this will ever impact your program are
-very small, but for the sake of history preservation (and to clarify
-the process that is used) the way in which the translator looks up and
-decides to find methods in the inheritance tree are documented here.
-
 % Javac MSA Algorithm
 
 % If more than one member method is both accessible and applicable to a method invocation, it is necessary to choose one to provide the descriptor for the run-time method dispatch. The Java programming language uses the rule that the most specific method is chosen.
@@ -49,28 +43,42 @@ decides to find methods in the inheritance tree are documented here.
 % NetRexx Method Resolution
 
 % Method resolution (search order)
-% Method resolution in NetRexx proceeds as follows:
-% • If the method invocation is the first part (stub) of a term, then:
-% 1. The current class is searched for the method (see below for details of searching).
-% 2. If not found in the current class, then the superclasses of the current class are searched, starting with the class that the current class extends.
-% 3. If still not found, then the classes listed in the uses phrase of the class instruction are searched for the method, which in this case must be a static method (see page 99). Each class from the list is searched for the method, and then its superclasses are searched upwards from the class; this process is repeated for each of the classes, in the order specified in the list.
-% 4. If still not found, the method invocation must be a constructor (see below) and so the method name, which may be qualified by a package name, should match the name of a primitive type or a known class (type). The specified class is then searched for a constructor that matches the method invocation.
-% • If the method invocation is not the first part of the term, then the evaluation of the parts of the term to the left of the method invocation will have resulted in a value (or just a type), which will have a known type (the continuation type). Then:
-% 1. The class that defines the continuation type is searched for the method (see below for details of searching).
-% 2. If not found in that class, then the superclasses of that class are searched, starting with the class that that class extends.
-% If the search did not find a method, an error is reported.
-% If the search did find a method, that is the method which is invoked, except in one case:
-% ◦ If the evaluation so far has resulted in a value (an object), then that value may have a type which is a subclass of the continuation type. If, within that subclass, there is a method that exactly overrides (see page 55) the method that was found in the search, then the method in the subclass is invoked.
-% This case occurs when an object is earlier assigned to a variable of a type which is a superclass of the type of the object. This type simplification hides the real type of the object from the language processor, though it can be determined when the program is executed.
-% Searching for a method in a class proceeds as follows:
-% 1. Candidate methods in the class are selected. To be a candidate method:
-% ◦ the method must have the same name as the method invocation (independent of the case (see page 44) of the letters of the name)
-% ◦ the method must have the same number of arguments as the method invocation (or more arguments, provided that the remainder are shown as optional in the method definition)
-% ◦ it must be possible to assign the result of each argument expression to the type of the corresponding argument in the method definition (if strict type checking is in effect, the types must match exactly).
-% 2. If there are no candidate methods then the search is complete; the method was not found.
-% 3. If there is just one candidate method, that method is used; the search is complete.
-% 4. If there is more than one candidate method, the sum of the costs of the conversions (see page 60) from the type of each argument expression to the type of the corresponding argument defined for the method is computed for each candidate method.
-% 5. The costs of those candidates (if any) whose names match the method invocation exactly, including in case, are compared; if one has a lower cost than all others, that method is used and the search is complete.
-% 6. The costs of all the candidates are compared; if one has a lower cost than all others, that method is used and the search is complete.
-% 7. If there remain two or more candidates with the same minimum cost, the method invocation is ambiguous, and an error is reported.
-% Note: When a method is found in a class, superclasses of that class are not searched for methods, even though a lower-cost method may exist in a superclass.
+Method resolution in NetRexx proceeds as follows:
+\begin{itemize}
+\item If the method invocation is the first part (stub) of a term, then:
+  \begin{enumerate}
+\item The current class is searched for the method (see below for details of searching).
+\item If not found in the current class, then the superclasses of the current class are searched, starting with the class that the current class extends.
+\item If still not found, then the classes listed in the uses phrase of the class instruction are searched for the method, which in this case must be a static method. Each class from the list is searched for the method, and then its superclasses are searched upwards from the class; this process is repeated for each of the classes, in the order specified in the list.
+\item If still not found, the method invocation must be a constructor (see below) and so the method name, which may be qualified by a package name, should match the name of a primitive type or a known class (type). The specified class is then searched for a constructor that matches the method invocation.
+\end{enumerate}
+\item If the method invocation is not the first part of the term, then the evaluation of the parts of the term to the left of the method invocation will have resulted in a value (or just a type), which will have a known type (the continuation type). Then:
+  \begin{enumerate}
+  \item The class that defines the continuation type is searched for the method (see below for details of searching).
+\item If not found in that class, then the superclasses of that class are searched, starting with the class that that class extends.
+If the search did not find a method, an error is reported.
+If the search did find a method, that is the method which is invoked, except in one case:
+\item If the evaluation so far has resulted in a value (an object), then that value may have a type which is a subclass of the continuation type. If, within that subclass, there is a method that exactly overrides the method that was found in the search, then the method in the subclass is invoked.
+\end{enumerate}
+\end{itemize}
+This case occurs when an object is earlier assigned to a variable of a type which is a superclass of the type of the object. This type simplification hides the real type of the object from the language processor, though it can be determined when the program is executed.
+Searching for a method in a class proceeds as follows:
+\begin{enumerate}
+\item Candidate methods in the class are selected. To be a candidate method:
+ \begin{itemize}
+\item the method must have the same name as the method invocation (independent of the case (see page 44) of the letters of the name)
+\item the method must have the same number of arguments as the method invocation (or more arguments, provided that the remainder are shown as optional in the method definition)
+\item it must be possible to assign the result of each argument expression to the type of the corresponding argument in the method definition (if strict type checking is in effect, the types must match exactly).
+\end{itemize}
+\item If there are no candidate methods then the search is complete; the method was not found.
+\item If there is just one candidate method, that method is used; the search is complete.
+\item If there is more than one candidate method, the sum of the costs of the conversions from the type of each argument expression to the type of the corresponding argument defined for the method is computed for each candidate method.
+\item The costs of those candidates (if any) whose names match the method invocation exactly, including in case, are compared; if one has a lower cost than all others, that method is used and the search is complete.
+\item The costs of all the candidates are compared; if one has a lower cost than all others, that method is used and the search is complete.
+\item If there remain two or more candidates with the same minimum cost, the method invocation is ambiguous, and an error is reported.
+Note: When a method is found in a class, superclasses of that class are not searched for methods, even though a lower-cost method may exist in a superclass.
+\end{enumerate}
+
+Note that until version 3.01 of the \nr{} translator a slightly different way of
+method resolution was used. There is a very small (and almost improbable) chance of encountering differences when recompiling very old sources.
+

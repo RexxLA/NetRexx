@@ -39,6 +39,7 @@
 /* 2011.08.22 skip rename of java to .keep if keepasjava requested - Kermit Kiser       */
 /* 2015.05.02 add jsr199 support per issue #90 -- KK		*/
 -- 2015.06.11 -- jsr199 support -- no need to check output file exists if not writing java
+/* 2021.12.31 add RxModel - Jason Martin                              */
 /* ------------------------------------------------------------------ */
 
 import javax.tools.		--	2015.05.02 switch javac use to jsr199 java compiler api -- KK
@@ -75,6 +76,9 @@ class RxStreamer
   xrffile  =Rexx ''                -- crossref file name (generated)
   xrffileob=File                   -- crossref file fileob
   xrfhandle=OutputStreamWriter     -- crossref file handle, non-null if open
+  modfile=Rexx ''                  -- model file name (generated)
+  modfileob=File                   -- model file fileob
+  modhandle=OutputStreamWriter     -- model file handle, non-null if open
 
   -- Miscellaneous things
   rxt=RxTranslator                 -- the usual
@@ -100,8 +104,12 @@ class RxStreamer
     directory.  This only affects the .class files (others go to source
     directory anyway), and is effected by RxTranslator.
     */
-  method openfiles(outname=Rexx, xrfname=Rexx)
-    if \program.flag.java then if \program.flag.crossref then return
+  method openfiles(outname=Rexx,xrfname=Rexx,modname=Rexx)
+    if\program.flag.java then do
+      if\program.flag.crossref then do
+        if program.flag.model<1 then return
+      end
+    end
     inname=Rexx program.source.getName()              -- get the real name
     inpath=program.source.getPath()                   -- .. and path
     if inpath=null then inpath=''                   -- so can concatenate
@@ -124,6 +132,7 @@ class RxStreamer
       outfileob=File(outfilefull)                   -- handle
 --      else javainmemory=StringBuilder(4096)
     end -- if program
+    modfileob=this.createModelFile(modname)
     xrffileob = this.createCrossrefFile(xrfname)
     return
     
@@ -144,6 +153,23 @@ class RxStreamer
       xrffileob=File(inpath||xrffile)
     end
     return xrffileob
+
+  method createModelFile(modname=Rexx) returns File
+    /* Create model file name and file if needed */
+    if program.flag.model>0 then do
+      inname=Rexx program.source.getName()              -- get the real name
+      inpath=program.source.getPath()                   -- .. and path
+      if inpath=null then inpath=''                     -- so can concatenate
+      /* Find the name stub for the program */
+      lastdot=inname.lastpos(".").toint()
+      if lastdot=0 then instub=inname
+      else instub=inname.left(lastdot-1)
+      if modname==null then modfile=instub".mod"        -- default model file
+      else modfile=modname
+      if modfile.pos(".").toint()=0 then modfile=modfile".mod"  -- be kind
+      modfileob=File(inpath||modfile)
+    end
+    return modfileob
     
  /* -----------------------------------------------------------------
     OUTINSERT and OUTINSERTPART -- add an insert to the chunks' list
@@ -308,7 +334,7 @@ class RxStreamer
   if outhandle=null then                -- first call
     do                                  -- open the file
       if outfileob=null then return     -- file invalidated
-      if rxt.keep, rxt.keepasjava then -   					--		add jsr199 support 2015.05.02 KK      
+      if rxt.keep, rxt.keepasjava then -   		--		add jsr199 support 2015.05.02 KK      
       outstream=FileOutputStream(outfileob)
       byteoutstream=ByteArrayOutputStream(5000)		--		add jsr199 support 2015.05.02 KK
       outhandle=OutputStreamWriter(byteoutstream)	--		add jsr199 support 2015.05.02 KK
@@ -528,8 +554,8 @@ class RxStreamer
     end c
   do; outhandle.close(); catch IOException; end     -- close [ignore error]
   	
-  if rxt.keep, rxt.keepasjava then -   					--		add jsr199 support 2015.05.02 KK
-  do;byteoutstream.writeTo(outstream);outstream.close(); catch IOException; end 		--		add jsr199 support 2015.05.02 KK
+  if rxt.keep, rxt.keepasjava then -   	   --		add jsr199 support 2015.05.02 KK
+  do;byteoutstream.writeTo(outstream);outstream.close(); catch IOException; end
   	
   outhandle=null    -- no longer open
   chunklist=null    -- used all chunks
@@ -549,7 +575,8 @@ class RxStreamer
      accidental overwrite.
      This is not called until the first class is started, so OPTIONS
      REPLACE can work */
-  if \rxt.keep & \rxt.keepasjava then return 		-- 2015.06.11 -- jsr199 support -- no need to check output file exists if not writing java
+   if \rxt.keep & \rxt.keepasjava then return  -- 2015.06.11 -- jsr199 support
+					       -- no need to check output file exists if not writing java
   if outfileob=null then return /* we're not even going to write it */
   if \outfileob.exists() then return /* no problem */
   if \program.flag.replace then do
@@ -605,7 +632,32 @@ class RxStreamer
     catch e=IOException
       signal RxQuit(rxt, null, 'error.writing.file', xrffile, e.getMessage())
     end
-    
+
+/* MODEL -- write a line to the model file
+    Arg1 is string to write as a line
+    */
+
+  method model(line=Rexx)
+    if modhandle=null then do                     -- first call
+      do
+        modstream=FileOutputStream(modfileob)
+       catch NullPointerException
+        RxWarn(rxt,null,"conflicting.model.options",outfile)
+        modfileob=this.createModelFile(null)
+        modstream=FileOutputStream(modfileob)
+      end
+      modhandle=OutputStreamWriter(modstream)
+     catch e=IOException
+      signal RxQuit(rxt,null,"error.opening.file",modfile,e.getMessage())
+    end
+    else line=linesep||line                       -- subsequent calls
+    do
+      chars=line.toCharArray()
+      modhandle.write(chars,0,chars.length)
+     catch e=IOException
+      signal RxQuit(rxt,null,"error.writing.file",modfile,e.getMessage())
+    end
+   
   /* [File is closed by closefiles] */
 
  /* CLOSEFILES -- close any open files */
@@ -615,6 +667,11 @@ class RxStreamer
     outhandle.close();
     catch IOException              -- [ignore error]
     finally outhandle=null
+    end
+  if modhandle\=null then do
+    modhandle.close();
+    catch IOException              -- [ignore error]
+    finally modhandle=null
     end
   if xrfhandle\=null then do
     xrfhandle.close();

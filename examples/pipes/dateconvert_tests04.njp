@@ -1,0 +1,148 @@
+/** dateconvert
+                              (3)
+                 +-- 1-* ------------------------+
+>>--DATECONVert--+-------------------------------+--------------------------->
+                 +-| Separator |--| Inputrange |-+
+
+    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
+>---+---------------------------------------+--+-----------------------+------>
+    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
+    +-| Inputformat |----+------------------+  +-BASEYEAR--yearnumber--+
+                         +-| Outputformat |-+
+
+                  +--MIDNIGHT--(4)-+
+>--+-----------+--+----------------+---------------------------------------->>
+   +--TIMEOUT--+  +--NOON--(4)-----+
+
+*/
+
+/*
+  20/ 6/26 Jeff Hennick
+*/
+
+pipe (dateconvert_tests04)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- ISO TIMEOUT ?
+   literal 44-07-31 04:55:22.123000; 44-07-31 04:55:22.999888; 1944-07-31 04:55:22.999888;  |
+   split ; |
+   dateconvert ISO TIMEOUT |
+   c1: compare any ~2# 1 ISO TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888 |
+   split ; |
+   c1: ?
+
+-- ISODATE TIMEOUT ?
+   literal 44-07-31 04:55:22.123000; 44-07-31 04:55:22.999888;  |
+   split ; |
+   dateconvert ISODATE TIMEOUT |
+   c2: compare any ~2# 2 ISODATE TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888|
+   split ; |
+   c2: ?
+
+-- ISO_SHORT TIMEOUT ?
+   literal 44-07-31 04:55:22.123000; 44-07-31 04:55:22.999888;  |
+   split ; |
+   dateconvert ISO_SHORT TIMEOUT |
+   c3: compare any ~2# 3 ISO_SHORT TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888|
+   split ; |
+   c3: ?
+
+-- DB2 TIMEOUT ?
+   literal 44-07-31-04.55.22.123000; 44-07-31-04.55.22.999888; 1944-07-31-04.55.22.999888;  |
+   split ; |
+   dateconvert DB2 TIMEOUT |
+   c4: compare any ~2# 4 DB2 TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888|
+   split ; |
+   c4: ?
+
+-- REXX_DATE_E TIMEOUT ?
+   literal 31/07/44 04:55:22.123000; 31/07/44 04:55:22.999888;31/07/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert REXX_DATE_E TIMEOUT |
+   c5: compare any ~2# 5 REXX_DATE_E TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888|
+   split ; |
+   c5: ?
+
+-- RE TIMEOUT ?
+   literal 31/07/44 04:55:22.123000; 31/07/44 04:55:22.999888;31/07/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert RE TIMEOUT |
+   c6: compare any ~2# 6 RE TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888|
+   split ; |
+   c6: ?
+
+-- REXX_DATE_E_LONG TIMEOUT ?
+   literal 31/07/44 04:55:22.123000; 31/07/44 04:55:22.999888;31/07/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert REXX_DATE_E_LONG TIMEOUT |
+   c7: compare any ~2# 7 REXX_DATE_E_LONG TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888|
+   split ; |
+   c7: ?
+
+-- REXX_DATE_N TIMEOUT ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert REXX_DATE_N TIMEOUT |
+   c8: compare any ~2# 8 REXX_DATE_N TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888 |
+   split ; |
+   c8: ?
+
+-- RN TIMEOUT ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert RN TIMEOUT |
+   c9: compare any ~2# 9 RN TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888 |
+   split ; |
+   c9: ?
+
+-- NORMAL TIMEOUT ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert NORMAL TIMEOUT |
+   c10: compare any ~2#10 NORMAL TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888 |
+   split ; |
+   c10: ?
+
+-- REXX_DATE_N_SHORT TIMEOUT ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert REXX_DATE_N_SHORT TIMEOUT |
+   c11: compare any ~2#11 REXX_DATE_N_SHORT TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888 |
+   split ; |
+   c11: ?
+
+-- RN_SHORT TIMEOUT ?
+   literal 31 Jul 44 04:55:22.123000; 31 Jul 44 04:55:22.999888; 31 Jul 1944 04:55:22.999888  |
+   split ; |
+   dateconvert RN_SHORT TIMEOUT |
+   c12: compare any ~2#12 RN_SHORT TIMEOUT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31 04:55:22.123;2044-07-31 04:55:22.999888;1944-07-31 04:55:22.999888 |
+   split ; |
+   c12: ?

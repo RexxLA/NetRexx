@@ -1,0 +1,122 @@
+-- tests for TAKE stage
+
+/** take
+
+             +-FIRST-+  +-1----------+
+   >>--TAKE--+-------+--+------------+--+----------+-----------------------------><
+             +-LAST--+  +-snumber(2)-+  +-BYTEs(1)-+
+                        +-*----------+
+  (1) CMS must be BYTES
+  (2) CMS only number; njpipe: minus reverses first/last
+
+*/
+
+-- 19/09/15
+
+pipe (take_tests3)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- take number bytes   (mid record, secondary)  ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   t20: take last 5 bytes ?
+   t20: |
+   c20: compare any ~2# 20 take last 5 bytes (mid record, secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1;r2;r3;r |
+   split ; |
+   c20: ?
+
+-- take -number ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take -1 |
+   c21: compare any ~2# 21 take -number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r6; |
+   split ; |
+   c21: ?
+
+-- take 0  ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take 0 |
+   c22: compare any ~2# 22 take 0~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+--   literal |
+--   split ; |
+   c22: ?
+
+-- take 1 byte ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take 1 byte |
+   c23: compare any ~2# 23 take 1 byte~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r |
+   split ; |
+   c23: ?
+
+-- take 2 bytes (first record length) ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take 2 bytes |
+   c24: compare any ~2# 24 take 2 bytes (first record length)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1 |
+   split ; |
+   c24: ?
+
+-- take 3 bytes (first of second record) ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take 3 bytes |
+   c25: compare any ~2# 25 take 3 bytes (first of second record)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1;r |
+   split ; |
+   c25: ?
+
+-- take 4 bytes (full second record)?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take 4 bytes |
+   c26: compare any ~2# 26 4 bytes (full second record) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1;r2 |
+   split ; |
+   c26: ?
+
+-- take take 24 bytes (more than input) ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take 24 bytes |
+   c27: compare any ~2# 27 take 24 bytes (more than input) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   c27: ?
+
+-- take last 1 byte ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take last 1 byte |
+   c28: compare any ~2# 28 take last 1 byte ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 6 |
+   split ; |
+   c28: ?
+
+-- take last 2 bytes  (last full record) ?
+   literal r1;r2;r3;r4;r5;r6 |
+   split ; |
+   take last 2 bytes |
+   c29: compare any ~2# 29 last 2 bytes (last full record)) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal r6 |
+   split ; |
+   c29: ?

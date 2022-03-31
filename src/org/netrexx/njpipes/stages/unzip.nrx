@@ -1,0 +1,86 @@
+/*
+ *  Copyright (C) 2019  R.V. Jansen
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ *
+ */
+options nostrictcase nostrictargs nostrictsignal nobinary
+package org.netrexx.njpipes.stages
+import org.netrexx.njpipes.pipes.
+import java.util.
+
+class unzip extends stage
+
+  properties private
+  zipEntries = ArrayList
+  zipFileName = ''
+  --trace results
+  method run()
+
+    a = arg()
+    do
+      if a = '' then a = Rexx readto()
+    catch StageError
+      say 'unzip error'
+    end
+
+    a = arg()
+    if a <> '' then
+      do
+	this.zipFileName=a
+      end
+
+      do
+	this.zipEntries=ArrayList()
+	loop forever
+          line = Rexx peekto()
+	  this.zipEntries.add(line)
+          readto()
+	catch StageError
+	  rc = rc()
+	end -- loop forever
+      end
+
+      do
+	extractFilesFromZip(this.zipFileName,this.zipEntries)
+      catch FileNotFoundException
+	say 'file not found'
+      catch IOException
+	say 'I/O Exception'
+      end
+      exit(rc*(rc<>12))
+    
+  method extractFilesFromZip(archive_,a=ArrayList) signals FileNotFoundException,IOException
+    buffer = byte[1024]
+    zis = ZipInputStream(FileInputStream(archive_))
+    zipEntry_ = zis.getNextEntry()
+    loop while zipEntry_ <> null
+      if a.contains(Rexx zipEntry_.getName()) then
+	do
+	  nop
+	end
+      else
+	do
+	  zipEntry_ = zis.getNextEntry()
+	  iterate
+	end
+      newFile = File(zipEntry_.getName())
+      fos = FileOutputStream(newFile)
+      len = zis.read(buffer)
+      loop while len>0
+        fos.write(buffer, 0, len)
+	len = zis.read(buffer)
+      end
+      fos.close()
+      do
+	output(zipEntry_.getName())
+      catch s=StageError
+	say s.getMessage()
+      catch q=ThreadQ
+	say q.getMessage()
+      end
+      zipEntry_ = zis.getNextEntry()
+    end
+    zis.closeEntry()
+    zis.close()

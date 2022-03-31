@@ -1,5 +1,6 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 2020 Jeffrey Hennick  Jeff (at) Jeff (dash) H (dot) com
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -7,16 +8,23 @@
  *
  */
 
-/**
+/** sortrexx
+
+                    +-A-+
+>>--SORTREXX--size--+---+--term--+----------+--><
+                    +-D-+        +-SINGLEOK-+
 
 An implementation for sortClass for rexx objects.  Part of the logic to generate
 sortClass stages is in sort's stageExit.
 
 */
 
--- 99/10/07 fix order of args.  ejt
--- 98/07/23 no longer requires a constructor other than ().  ejt
--- 98/07/20 exploit IRange.  ejt
+/*
+ 20/ 6/13 Add SINGLEOK option. Jeff Hennick
+ 99/10/07 fix order of args.  ejt
+ 98/07/23 no longer requires a constructor other than ().  ejt
+ 98/07/20 exploit IRange.  ejt
+*/
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
@@ -41,7 +49,15 @@ method run()
 
    i = int
 
-   parse arg().upper() sz ad term .
+   args = arg().upper()
+
+   singleok = args.wordpos('SINGLEOK')
+   if singleok > 0 then do
+     args = args.delword(singleok)
+     singleok = 1
+   end
+
+   parse args sz ad term .
 
    a = table(sz)
 
@@ -77,8 +93,9 @@ method run()
          Emsg(11,'Error - Array for sort to small')
       end
 
-      if max=-1 then              -- too many entries
-         Emsg(11,'Error - Array for sort to small')
+      if max=-1 then              -- too few entries
+         if \singleok then
+            Emsg(11,'Error - Array for sort to small')
 
       s = qsort(a)
       s.quicksort(0,max)
@@ -118,5 +135,3 @@ method compGT(a=object) returns boolean
 
 method get returns object
    return this.data
-
-

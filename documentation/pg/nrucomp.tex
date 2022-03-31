@@ -1,0 +1,428 @@
+%%%%%% .* ------------------------------------------------------------------
+% .* \nr{} User's Guide                                              mfc
+% .* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.
+% .* ------------------------------------------------------------------
+
+\index{compiling, \nr{} programs}
+\index{using the translator, as a Compiler}
+
+\chapter{Using the translator}
+\index{using the translator}
+This section of the document tells you how to use the
+translator package.
+
+The \nr{} translator may be used as a compiler or as an interpreter
+(or it can do both in a single run, so parsing and syntax checking are
+only carried out once).  It can also be used as simply a syntax checker.
+
+When used as a compiler, the intermediate Java source code may be
+retained, if desired.  Automatic formatting, and the inclusion of comments
+from the \nr{} source code are also options.
+
+\section{Using the translator as a compiler}
+The installation instructions for the \nr{} translator describe how to
+use the package to compile and run a simple \nr{} program
+(\emph{hello.nrx}).  When using the translator in this way (as a
+compiler), the translator parses and checks the \nr{} source code, and
+if no errors were found then generates Java source code.  This Java
+code is then compiled into bytecodes
+(\emph{.class} files) using a Java compiler, in a process called AOT
+compilation. By default,
+the \emph{javac} compiler in the Java toolkit is used.
+
+This section explains more of the options available to you when using
+the translator as a compiler.
+% .*
+\section{The translator command}
+\index{command, for compiling}
+
+\index{\nr{}C, class}
+The translator is invoked by running a Java program (class) which is
+called 
+\begin{verbatim}
+org.netrexx.process.NetRexxC
+\end{verbatim}  
+(\code{\nr{}C}, for short). This can be run by using the Java interpreter, for example,
+by the command:
+\begin{verbatim}
+java org.netrexx.process.NetRexxC
+\end{verbatim}
+\index{scripts, \nr{}C}
+\index{\nr{}C, scripts}
+\index{scripts, nrc}
+\index{nrc scripts}
+or by using a system-specific script (such as \emph{\nr{}C.cmd}.
+or \emph{nrc.bat}).  In either case, the compiler invocation is followed
+by one or more file specifications (these are the names of the files
+containing the \nr{} source code for the programs to be compiled).
+
+\index{file specifications}
+File specifications may include a path; if no path is given then
+\nr{}C will look in the current (working) directory for the file.
+\nr{}C will add the extension \emph{.nrx} to input program names (file
+specifications) if no extension was given.
+
+So, for example, to compile \emph{hello.nrx} in the current directory,
+you could use any of:
+\begin{verbatim}
+java org.netrexx.process.NetRexxC hello
+java org.netrexx.process.NetRexxC hello.nrx
+NetRexxC hello.nrx
+nrc hello
+\end{verbatim}
+(the first two should always work, the last two require that the
+system-specific script be available).  The resulting \emph{.class} file
+is placed in the current directory, and the \emph{.crossref}
+(cross-reference) file is placed in the same directory as the source
+file (if there are any variables and the compilation has no errors).
+
+Here is an example of compiling two programs, one of which is in the
+directory \emph{d:\textbackslash myprograms}:
+\begin{verbatim}
+nrc hello d:\myprograms\test2.nrx
+\end{verbatim}
+
+In this case, again, the \emph{.class} file for each program is placed
+in the current directory.
+
+Note that when more than one program is specified, they are all compiled
+within the same class context.  That is, they can see the
+classes, properties, and methods of the other programs being compiled,
+much as though they were all in one file.
+\footnote{The programs do, however, maintain their independence (that is, they may
+have different \textbf{options}, \textbf{import}, and \textbf{package}
+instructions).}
+This allows mutually interdependent programs and classes to be compiled
+in a single operation.
+Note that if you use the \textbf{package} instruction you should also
+read the more detailed \emph{Compiling multiple
+programs} section.% \ref{multiple} on page \pageref{multiple}.
+
+\index{completion codes, from translator}
+\index{return codes, from translator}
+On completion, the \nr{}C class will exit with one of three return
+values: 0 if the compilation of all programs was successful, 1 if there
+were one or more Warnings, but no errors, and 2 if there were one or
+more Errors. The result can be forced to 0 for warnings only with the
+\emph{-warnexit0} option.
+
+\index{option words}
+\index{flags}
+As well as file names, you can also specify various option words, which
+are distinguished by the word being prefixed with \emph{-}.  These
+flagged words (or flags) may be any of the option words allowed
+on the \nr{} \textbf{options} instruction (see the \nr{} languagen
+documentation, and the below paragraph).  These options words can be freely mixed with file
+specifications.  To see a full list of options, execute the \nr{}C with the --help option
+command without specifying any files. As this command states, all options may have prefix 'no' added for the inverse effect.
+
+\subsection{Options}
+\index{compiling,options}
+
+Here are some examples:
+\begin{verbatim}
+java org.netrexx.process.NetRexxC hello -keep -strictargs
+java org.netrexx.process.NetRexxC -keep hello wordclock
+java org.netrexx.process.NetRexxC hello wordclock -nocompile
+nrc hello
+nrc hello.nrx
+nrc -run hello
+nrc -run Spectrum -keep
+nrc hello -binary -verbose1
+nrc hello -noconsole -savelog -format -keep
+\end{verbatim}
+
+Option words may be specified in lowercase, mixed case, or uppercase.
+File specifications are platform-dependent and may be case sensitive,
+though \nr{}C will always prefer an exact case match over a mismatch.
+
+\textbf{Note:} The \emph{-run} option is implemented by a script (such
+as \emph{nrc.bat} or \emph{\nr{}C.cmd}), not by the translator; some
+scripts (such as the \emph{.bat} scripts) may require that
+the \emph{-run} be the first word of the command arguments, and/or be in
+lowercase.  They may also require that only the name of the file be
+given if the \emph{-run} option is used.  Check the commentary at the
+beginning of the script for details.
+
+\section{Compiling multiple programs and using packages}
+\index{compiling,multiple programs}
+
+When you specify more than one program for \nr{}C to compile, they are
+all compiled within the same class context: that is, they can see
+the classes, properties, and methods of the other programs being
+compiled, much as though they were all in one file.
+
+This allows mutually interdependent programs and classes to be compiled
+in a single operation.  For example, consider the following two programs
+(assumed to be in your current directory, as the files \emph{X.nrx}
+and \emph{Y.nrx}):
+\begin{lstlisting}[label=dependencies,caption=Dependencies]
+/* X.nrx */
+class X
+  why=Y null
+
+/* Y.nrx */
+class Y
+  exe=X null
+\end{lstlisting}
+Each contains a reference to the other, so neither can be compiled in
+isolation.  However, if you compile them together, using the command:
+\begin{verbatim}
+nrc X Y
+\end{verbatim}
+ the cross-references will be resolved correctly.
+
+The total elapsed time will be significantly less, too, as the classes
+on the CLASSPATH need to be located only once, and the class files used
+by the \nr{}C compiler or the programs themselves will also only be
+loaded (and JIT-compiled) once.
+
+\index{projects, compiling}
+\index{packages, compiling}
+\index{compiling,packages}
+This example works as you would expect for programs that are not in
+packages.  There is a restriction, though, if the classes you are
+compiling \emph{are} in packages (that is, they include a
+\textbf{package} instruction).  \nr{}C uses either the \emph{javac}
+compiler or the Eclipse batch compiler \emph{ecj} to generate the \emph{.class} files, and for mutually-dependent
+files like these; both require the source files to be in the
+Java \emph{CLASSPATH}, in the sub-directory described by the \textbf{package}
+instruction.
+
+
+So, for example, if your project is based on the tree:
+
+\texttt{D:\textbackslash myproject}
+
+ if the two programs above specified a package, thus:
+\begin{lstlisting}[label=packagedep,caption=Package Dependencies]
+/* X.nrx */
+package foo.bar
+class X
+  why=Y null
+
+/* Y.nrx */
+package foo.bar
+class Y
+  exe=X null
+\end{lstlisting}
+
+
+\begin{enumerate}
+\item
+You should put these source files in the directory:
+\emph{D:\textbackslash myproject\textbackslash foo\textbackslash bar}
+\item
+The directory \emph{D:\textbackslash myproject} should appear in your CLASSPATH
+setting (if you don't do this, \emph{javac} will complain that it cannot
+find one or other of the classes).
+\item
+You should then make the current directory be \emph{D:\textbackslash
+myproject\textbackslash foo\textbackslash bar}
+and then compile the programs using the command \emph{nrc X Y},
+as above.
+\end{enumerate}
+
+With this procedure, you should end up with the \emph{.class} files in
+the same directory as the \emph{.nrx} (source) files, and therefore also
+on the CLASSPATH and immediately usable by other packages.  In general,
+this arrangement is recommended whenever you are writing programs that
+reside in packages.
+
+\textbf{Notes:}
+\begin{enumerate}
+\item
+When \emph{javac} is used to generate the \emph{.class} files, no
+new \emph{.class} files will be created if any of the programs being
+compiled together had errors - this avoids accidentally generating
+mixtures of new and old \emph{.class} files that cannot work with each
+other.
+\item
+If a class is abstract or is an adapter class then it should be placed
+in the list before any classes that extend it (as otherwise any
+automatically generated methods will not be visible to the subclasses).
+\end{enumerate}
+
+% \nr{}C can be used in a program, to compile \nr{} programs from files,
+% or to compile from strings in memory. 
+
+% \section{Compiling from memory strings}
+% Programs may also be compiled from memory strings by passing an array
+% of strings containing programs to the translator using these methods:
+
+% \begin{lstlisting}[label=frommemory,caption=From Memory]
+% method main(arg=Rexx, programarray=String[], log=PrintWriter null) static returns int
+% method main2(arg=String[], programarray=String[], log=PrintWriter null) static returns int
+% \end{lstlisting}
+
+% Any programs passed as strings must be named in the arg parameter before any programs contained in files are named.
+% For convenience when compiling a single program, the program can be
+% passed directly to the compiler as a String with this method:
+
+% \begin{lstlisting}[label=string,caption=With String argument]
+% method main(arg=Rexx, programstring=String, logfile=PrintWriter null) constant returns int
+% \end{lstlisting}
+
+% Here is an example of compiling a \nr{} program from a string in
+% memory:
+
+% \begin{lstlisting}[label=memexample,caption=Example of compiling from String]
+% import org.netrexx.process.NetRexxC
+% program = "say 'hello there via NetRexxC'"
+% NetRexxC.main("myprogram",program)
+% \end{lstlisting}
+% This will generate a myprogram.class file on disk.
+
+% \section{Compile, load and go}
+% There is also a \marginnote{\color{gray}3.08} possibility to generate a program dynamically, compile it from a string, and
+% execute the resulting class(es) without writing intermediate class
+% files to disk. In this case, even the classfile is executed from
+% memory with a special classloader, the RxMapClassLoader. The compile,
+% load and go method calls the main method of the generated class,
+% without arguments. This method is used to dynamically generate and
+% execute NetRexx Pipelines. An example:
+
+% \begin{lstlisting}[label=memloadgoexample,caption=Example of compile-load-go]
+% nrxsrc  = "say 'hello dynamic world'"
+% clsName = 'helloDyn'
+% org.netrexx.process.NetRexxC.clgMain(clsName,nrxsrc)
+% \end{lstlisting}
+
+% \section{Using the generated classfiles array}
+% There is an overloaded main method in NetRexxC that does the compile
+% in-memory and fills a specified collection with the compiled classfile
+% images. This is in fact what clgMain() does. The generated classfile,
+% including their classloader, are then usable in your own code.
+
+% \begin{lstlisting}[label=memclasslistexample,caption=Example of using the classes collection]
+% classList = ArrayList()
+%     rc = main(arg' -nologo -verbose0',[String programstring],null,classList)
+%     mapLoader = RxMapClassLoader classList.get(0)
+%     do
+%       c = mapLoader.findClass(arg)
+%       paramTypes = Class[1]
+%       paramTypes[0] = String[].class
+%       methodName = String "main"
+%       m = c.getMethod(methodName, paramTypes)
+%       params = Object[1]
+%       params[0] = String[0]
+%       m.invoke(null, params)
+%     catch e=Exception
+%       say 'Reflection exception encountered:'
+%       say e.getMessage()
+%     end
+% \end{lstlisting}
+
+
+% \section{JSR199}
+% NetRexx uses the jsr-199 way of invoking the compiler, and a .java
+% file is not written to disk by default. \marginnote{\color{gray}3.04} The following program
+% illustrates how a complete program can be compiled and executed
+% without anything being written to disk.
+
+% \begin{lstlisting}[label=jsr199,caption=JSR199 example]
+% import org.netrexx.
+
+% pname="jsr199hello"                                --        program name
+% nrp=' say "hello"\n say arg \n say "program complete" '             --        NetRexx program code
+
+% classlist=ArrayList()        --    this requests a class loader and class files returned in memory
+% NetRexxC.main(pname "-verbose0", nrp, null, classlist) --        ask NetRexxC to compile from string nrp
+% loader=ClassLoader classlist.get(0)    --        find class loader build by NetRexx translator
+% pclass=loader.loadClass(pname)        --        load our class file into the jvm
+% pclass.getMethod("main", [Class -
+% String[0].getClass()]).invoke(null,[Object [String 'argument
+% string']])        --        locate main, call it with reflection = all done!
+% \end{lstlisting}
+
+% Programmatic use of the translator - the compiler(NetRexxC) and the
+% interpreter (NetRexxA) - used to be in this chapter, but the options
+% to do this have multiplied over the years, and are now beyond the scope
+% of this Quick Start Guide. They are documented in the \emph{Programming Guide}.
+
+\index{build systems}
+
+\chapter{Using build systems - ANT}
+\index{ant}
+
+From the command line, different build systems can be used to build an
+entire project in one go. This chapter explains how to use ANT, one of
+the early Java cross-platform build tools. With \emph{ant}, the
+specification for the build needs to be provided in an \emph{.xml} file; the
+default is \emph{build.xml}. \nr{} itself is built using \emph{ant};
+its build.xml can be checked out in the git repository. Two scenarios
+for building with \emph{ant} are mentioned in the
+following sections. Unlike \emph{make}, ant does not work with command
+lines, but with specialized Java tasks, to make this build system
+platform independent. A special \nr{} ant task (written in \nr{}) is packaged in the
+NetRexxC.jar and NetRexxF.jar files, this needs to be specified in the
+build file; the small ant-netrexx.jar file also can be used.
+
+The official Apache package for \emph{ant} has the original \nr{}
+optional task written in the Java language; this can be used, but is
+not up to date with the RexxLA version.
+
+Note that when building \nr{} from source, there are two bootstrapping
+situations: \nr{} is written in itself, and is built using the
+optional \nr{} \emph{ant} task, written in \nr{}, using \emph{ant}.
+
+\section{In-source, no packages}
+In this scenario, the build is in-source, this means the program
+source files and the class files are interspersed in the same
+directory; this is often the case with small projects that only have a
+few source files and no package structure. This situation enables a
+very small buildfile, with only two 'build goals' in it: prepare compile and clean, identified by \texttt{<target>} XML tags. In this case, the
+'compile' goal is the default, as indicated on the \texttt{<project>}
+tag, \texttt{default=} attribute. We also need to include a
+\texttt{<taskdef>} tag for ant to find the \nr{} task.
+
+Also, we assume that the environment settings for the current user are
+in effect, notably the one for \texttt{CLASSPATH}. Larger projects
+will probably package their own libraries, and possibly need to
+specify build- and runtime classpaths; these are not needed here.
+
+\lstinputlisting[label=in-source-build,caption=In-source
+build]{../../examples/ant-task/in-source-build/build.xml}
+
+This build process will be run when the user enters the \texttt{ant} command,
+and the result is a number of class files - if there are no errors. In
+case of errors, no class files are produced. On subsequent runs, only
+the classes of which the source files are newer than the class files,
+will be compiled - this makes for an efficient build process.
+
+\section{With package structure}
+For a slightly larger project, which has its own package structure, we
+can use a slightly more complicated build file, that will serve a lot
+of projects of this kind. In this scenario, the source files are in a
+\emph{src} directory, and the class files will be compiled to a file
+system directory structure based on the package names. As an example,
+if the file hello.nrx is in a src subdirectory of the project, and its
+package name is org.rexxla.examples, the hello.class file will be in a
+subdirectory <project>/war/WEB-INF/classes/org/rexxla/examples/.
+
+For universal usability, e.g. in a JEE webserver as Tomcat, Jetty or
+JBoss, we use the WAR file structure, as is the standard for these
+application servers..
+
+Next to the environment, we define two properties for the \nr{}
+optional \emph{ant} task: we tell it to generate Java source files ('keepasjava'), and
+to replace Java source that is already there without asking.
+
+\lstinputlisting[label=in-source-build,caption=With-packages
+build]{../../examples/ant-task/with-packages/build.xml}
+
+In an analogous way, we compile the sources there might be in .java
+files in a larger project with the \emph{javac} task. 
+
+In the \emph{libs} target we create the output directories as
+indicated in the standard. The compile task then translates the .nrx
+source files to the \emph{respective} files in the target
+directories, by using a compile and a copy task. This enables us to
+have the same package structure in the source and target directories,
+which then are ready to be compressed - and packaged - into a .war
+file, which is a standard \emph{web archive}, with the \texttt{ant war} command.
+
+
+The \emph{clean} task deletes the whole directory tree that starts
+with \texttt{war}, which is a very efficient way to clean out all
+built objects (except the compressed war file itself).

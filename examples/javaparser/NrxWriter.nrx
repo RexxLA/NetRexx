@@ -1,0 +1,1961 @@
+/*
+ * Copyright (c) 2022 Jason Martin <agrellum@gmail.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+package com.github.javaparser.printer
+
+import com.github.javaparser.
+import com.github.javaparser.ast.ArrayCreationLevel
+import com.github.javaparser.ast.CompilationUnit
+import com.github.javaparser.ast.ImportDeclaration
+import com.github.javaparser.ast.Modifier
+import com.github.javaparser.ast.Node
+import com.github.javaparser.ast.Node.Parsedness.UNPARSABLE
+import com.github.javaparser.ast.NodeList
+import com.github.javaparser.ast.PackageDeclaration
+import com.github.javaparser.ast.body.AnnotationDeclaration
+import com.github.javaparser.ast.body.AnnotationMemberDeclaration
+import com.github.javaparser.ast.body.BodyDeclaration
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
+import com.github.javaparser.ast.body.CompactConstructorDeclaration
+import com.github.javaparser.ast.body.ConstructorDeclaration
+import com.github.javaparser.ast.body.EnumConstantDeclaration
+import com.github.javaparser.ast.body.EnumDeclaration
+import com.github.javaparser.ast.body.FieldDeclaration
+import com.github.javaparser.ast.body.InitializerDeclaration
+import com.github.javaparser.ast.body.MethodDeclaration
+import com.github.javaparser.ast.body.Parameter
+import com.github.javaparser.ast.body.ReceiverParameter
+import com.github.javaparser.ast.body.RecordDeclaration
+import com.github.javaparser.ast.body.TypeDeclaration
+import com.github.javaparser.ast.body.VariableDeclarator
+import com.github.javaparser.ast.comments.BlockComment
+import com.github.javaparser.ast.comments.Comment
+import com.github.javaparser.ast.comments.JavadocComment
+import com.github.javaparser.ast.comments.LineComment
+import com.github.javaparser.ast.expr.AnnotationExpr
+import com.github.javaparser.ast.expr.ArrayAccessExpr
+import com.github.javaparser.ast.expr.ArrayCreationExpr
+import com.github.javaparser.ast.expr.ArrayInitializerExpr
+import com.github.javaparser.ast.expr.AssignExpr
+import com.github.javaparser.ast.expr.BinaryExpr
+import com.github.javaparser.ast.expr.BooleanLiteralExpr
+import com.github.javaparser.ast.expr.CastExpr
+import com.github.javaparser.ast.expr.CharLiteralExpr
+import com.github.javaparser.ast.expr.ClassExpr
+import com.github.javaparser.ast.expr.ConditionalExpr
+import com.github.javaparser.ast.expr.DoubleLiteralExpr
+import com.github.javaparser.ast.expr.EnclosedExpr
+import com.github.javaparser.ast.expr.Expression
+import com.github.javaparser.ast.expr.FieldAccessExpr
+import com.github.javaparser.ast.expr.InstanceOfExpr
+import com.github.javaparser.ast.expr.IntegerLiteralExpr
+import com.github.javaparser.ast.expr.LambdaExpr
+import com.github.javaparser.ast.expr.LongLiteralExpr
+import com.github.javaparser.ast.expr.MarkerAnnotationExpr
+import com.github.javaparser.ast.expr.MemberValuePair
+import com.github.javaparser.ast.expr.MethodCallExpr
+import com.github.javaparser.ast.expr.MethodReferenceExpr
+import com.github.javaparser.ast.expr.Name
+import com.github.javaparser.ast.expr.NameExpr
+import com.github.javaparser.ast.expr.NormalAnnotationExpr
+import com.github.javaparser.ast.expr.NullLiteralExpr
+import com.github.javaparser.ast.expr.ObjectCreationExpr
+import com.github.javaparser.ast.expr.PatternExpr
+import com.github.javaparser.ast.expr.SimpleName
+import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr
+import com.github.javaparser.ast.expr.StringLiteralExpr
+import com.github.javaparser.ast.expr.SuperExpr
+import com.github.javaparser.ast.expr.SwitchExpr
+import com.github.javaparser.ast.expr.TextBlockLiteralExpr
+import com.github.javaparser.ast.expr.ThisExpr
+import com.github.javaparser.ast.expr.TypeExpr
+import com.github.javaparser.ast.expr.UnaryExpr
+import com.github.javaparser.ast.expr.VariableDeclarationExpr
+import com.github.javaparser.ast.modules.ModuleDeclaration
+import com.github.javaparser.ast.modules.ModuleExportsDirective
+import com.github.javaparser.ast.modules.ModuleOpensDirective
+import com.github.javaparser.ast.modules.ModuleProvidesDirective
+import com.github.javaparser.ast.modules.ModuleRequiresDirective
+import com.github.javaparser.ast.modules.ModuleUsesDirective
+import com.github.javaparser.ast.nodeTypes.NodeWithName
+import com.github.javaparser.ast.nodeTypes.NodeWithTraversableScope
+import com.github.javaparser.ast.nodeTypes.NodeWithTypeArguments
+import com.github.javaparser.ast.nodeTypes.NodeWithVariables
+import com.github.javaparser.ast.nodeTypes.SwitchNode
+import com.github.javaparser.ast.stmt.AssertStmt
+import com.github.javaparser.ast.stmt.BlockStmt
+import com.github.javaparser.ast.stmt.BreakStmt
+import com.github.javaparser.ast.stmt.CatchClause
+import com.github.javaparser.ast.stmt.ContinueStmt
+import com.github.javaparser.ast.stmt.DoStmt
+import com.github.javaparser.ast.stmt.EmptyStmt
+import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt
+import com.github.javaparser.ast.stmt.ExpressionStmt
+import com.github.javaparser.ast.stmt.ForEachStmt
+import com.github.javaparser.ast.stmt.ForStmt
+import com.github.javaparser.ast.stmt.IfStmt
+import com.github.javaparser.ast.stmt.LabeledStmt
+import com.github.javaparser.ast.stmt.LocalClassDeclarationStmt
+import com.github.javaparser.ast.stmt.LocalRecordDeclarationStmt
+import com.github.javaparser.ast.stmt.ReturnStmt
+import com.github.javaparser.ast.stmt.Statement
+import com.github.javaparser.ast.stmt.SwitchEntry
+import com.github.javaparser.ast.stmt.SwitchStmt
+import com.github.javaparser.ast.stmt.SynchronizedStmt
+import com.github.javaparser.ast.stmt.ThrowStmt
+import com.github.javaparser.ast.stmt.TryStmt
+import com.github.javaparser.ast.stmt.UnparsableStmt
+import com.github.javaparser.ast.stmt.WhileStmt
+import com.github.javaparser.ast.stmt.YieldStmt
+import com.github.javaparser.ast.type.ArrayType
+import com.github.javaparser.ast.type.ClassOrInterfaceType
+import com.github.javaparser.ast.type.IntersectionType
+import com.github.javaparser.ast.type.PrimitiveType
+import com.github.javaparser.ast.type.ReferenceType
+import com.github.javaparser.ast.type.Type
+import com.github.javaparser.ast.type.TypeParameter
+import com.github.javaparser.ast.type.UnionType
+import com.github.javaparser.ast.type.UnknownType
+import com.github.javaparser.ast.type.VarType
+import com.github.javaparser.ast.type.VoidType
+import com.github.javaparser.ast.type.WildcardType
+import com.github.javaparser.ast.visitor.Visitable
+import com.github.javaparser.ast.visitor.VoidVisitor
+import com.github.javaparser.printer.SourcePrinter
+import com.github.javaparser.printer.configuration.ConfigurationOption
+import com.github.javaparser.printer.configuration.DefaultConfigurationOption
+import com.github.javaparser.printer.configuration.PrinterConfiguration
+import com.github.javaparser.utils.PositionUtils.sortByBeginPosition
+import com.github.javaparser.utils.Utils.isNullOrEmpty
+import com.github.javaparser.utils.Utils.normalizeEolInTextBlock
+import com.github.javaparser.utils.Utils.trimTrailingSpaces
+import java.util.ArrayList
+import java.util.Iterator
+import java.util.LinkedList
+import java.util.List
+import java.util.Optional
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Outputs the AST as formatted Java source code.
+ *
+ */
+
+class NrxWriter public implements VoidVisitor
+
+
+  properties inheritable
+    configuration=PrinterConfiguration
+
+  properties inheritable
+    printer=SourcePrinter
+
+  --trace all
+
+  method NrxWriter(xconfiguration=PrinterConfiguration)
+    this(xconfiguration,SourcePrinter(xconfiguration))
+
+  method NrxWriter(xconfiguration=PrinterConfiguration,xprinter=com.github.javaparser.printer.SourcePrinter)
+    this.configuration=xconfiguration
+    this.printer=xprinter
+
+  method toString returns String
+    return printer.toString()
+
+  method printModifiers(modifiers=NodeList) shared
+    if modifiers.size()>0 then do
+      collect=""
+      i=modifiers.stream().iterator()
+      loop while i.hasNext()
+        m=Modifier i.next()
+        collect=collect||(Rexx m.getKeyword().asString()).strip||" "
+      end
+      printer.print(collect)
+    end
+
+  method printMembers(members=NodeList,arg=Void) shared
+    i=members.iterator()
+    loop while i.hasNext()
+      member=BodyDeclaration i.next()
+      printer.println()
+      member.accept(this,arg)
+      printer.println()
+    end
+
+  method printMemberAnnotations(annotations=NodeList,arg=Void) shared
+    if annotations.isEmpty() then do
+      return
+    end
+    i=annotations.iterator()
+    loop while i.hasNext()
+      a=AnnotationExpr i.next()
+      a.accept(this,arg)
+      printer.println()
+    end
+
+  method printAnnotations(annotations=NodeList,prefixWithASpace=boolean,arg=Void) shared
+    if annotations.isEmpty() then do
+      return
+    end
+    if prefixWithASpace then do
+      printer.print(" ")
+    end
+    i=annotations.iterator()
+    loop while i.hasNext()
+      annotation=AnnotationExpr i.next()
+      annotation.accept(this,arg)
+      printer.print(" ")
+    end
+
+  method printTypeArgs(nodeWithTypeArguments=NodeWithTypeArguments,arg=Void) shared
+    typeArguments=NodeList nodeWithTypeArguments.getTypeArguments().orElse(null)
+    if\Utils.isNullOrEmpty(typeArguments) then do
+      printer.print("<")
+      i=typeArguments.iterator()
+      loop while i.hasNext()
+        t=Type i.next()
+        t.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+      printer.print(">")
+    end
+
+  method printTypeParameters(args=NodeList,arg=Void) shared
+    if\Utils.isNullOrEmpty(args) then do
+      printer.print("<")
+      i=args.iterator()
+      loop while i.hasNext()
+        t=TypeParameter i.next()
+        t.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+      printer.print(">")
+    end
+
+  method printArguments(args=NodeList,arg=Void) shared
+    printer.print("(")
+    if\Utils.isNullOrEmpty(args) then do
+      columnAlignParameters=args.size()>1&getOption(DefaultPrinterConfiguration.ConfigOption.COLUMN_ALIGN_PARAMETERS).isPresent()
+      if columnAlignParameters then do
+        printer.indentWithAlignTo(printer.getCursor().column)
+      end
+      i=args.iterator()
+      loop while i.hasNext()
+        e=Expression i.next()
+        e.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(",")
+          if columnAlignParameters then do
+            printer.println()
+          end
+          else do
+            printer.print(" ")
+          end
+        end
+      end
+      if columnAlignParameters then do
+        printer.unindent()
+      end
+    end
+    printer.print(")")
+
+  method printPrePostFixOptionalList(args=NodeList,arg=Void,prefix=String,separator=String,postfix=String) shared
+    if\args.isEmpty() then do
+      printer.print(prefix)
+      i=args.iterator()
+      loop while i.hasNext()
+        v=Visitable i.next()
+        v.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(separator)
+        end
+      end
+      printer.print(postfix)
+    end
+
+  method printPrePostFixRequiredList(args=NodeList,arg=Void,prefix=String,separator=String,postfix=String) shared
+    printer.print(prefix)
+    if\args.isEmpty() then do
+      i=args.iterator()
+      loop while i.hasNext()
+        v=Visitable i.next()
+        v.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(separator)
+        end
+      end
+    end
+    printer.print(postfix)
+
+  method printComment(comment=Optional,arg=Void) shared
+    if (comment.isPresent()) then do
+      c=comment.get()
+      (com.github.javaparser.ast.comments.Comment c).accept(this,arg)
+    end
+
+  method visit(n=CompilationUnit,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getParsed()==Node.Parsedness.UNPARSABLE then do
+      printer.println("???")
+      return
+    end
+    if n.getPackageDeclaration().isPresent() then do
+      (PackageDeclaration n.getPackageDeclaration().get()).accept(this,arg)
+    end
+    n.getImports().accept(this,arg)
+    if\n.getImports().isEmpty() then do
+      printer.println()
+    end
+    i=n.getTypes().iterator()
+    loop while i.hasNext()
+      (TypeDeclaration i.next()).accept(this,arg)
+      printer.println()
+      if i.hasNext() then do
+        printer.println()
+      end
+    end
+    if n.getModule().isPresent() then do
+      (ModuleDeclaration n.getModule().get()).accept(this,arg)
+    end
+    printOrphanCommentsEnding(n)
+
+  method visit(n=PackageDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printer.print("package ")
+    n.getName().accept(this,arg)
+    printer.println(";")
+    printer.println()
+    printOrphanCommentsEnding(n)
+
+  method visit(n=NameExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getName().accept(this,arg)
+    printOrphanCommentsEnding(n)
+
+  method visit(n=Name,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getQualifier().isPresent() then do
+      (Name n.getQualifier().get()).accept(this,arg)
+      printer.print(".")
+    end
+    printer.print(n.getIdentifier())
+    printOrphanCommentsEnding(n)
+
+  method visit(n=SimpleName,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print(n.getIdentifier())
+
+  method visit(n=ClassOrInterfaceDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    if n.isInterface() then do
+      printer.print("interface ")
+    end
+    else do
+      printer.print("class ")
+    end
+    n.getName().accept(this,arg)
+    printTypeParameters(n.getTypeParameters(),arg)
+    if\n.getExtendedTypes().isEmpty() then do
+      printer.print(" extends ")
+      i=n.getExtendedTypes().iterator()
+      loop while i.hasNext()
+        c=ClassOrInterfaceType i.next()
+        c.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    if\n.getImplementedTypes().isEmpty() then do
+      printer.print(" implements ")
+      i=n.getImplementedTypes().iterator()
+      loop while i.hasNext()
+        c=ClassOrInterfaceType i.next()
+        c.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.println(" {")
+    printer.indent()
+    if\Utils.isNullOrEmpty(n.getMembers()) then do
+      printMembers(n.getMembers(),arg)
+    end
+    printOrphanCommentsEnding(n)
+    printer.unindent()
+    printer.print("}")
+
+  method visit(n=RecordDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    printer.print("record ")
+    n.getName().accept(this,arg)
+    printTypeParameters(n.getTypeParameters(),arg)
+    printer.print("(")
+    if\Utils.isNullOrEmpty(n.getParameters()) then do
+      i=n.getParameters().iterator()
+      loop while i.hasNext()
+        p=Parameter i.next()
+        p.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print(")")
+    if\n.getImplementedTypes().isEmpty() then do
+      printer.print(" implements ")
+      i=n.getImplementedTypes().iterator()
+      loop while i.hasNext()
+        c=ClassOrInterfaceType i.next()
+        c.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.println(" {")
+    printer.indent()
+    if\Utils.isNullOrEmpty(n.getMembers()) then do
+      printMembers(n.getMembers(),arg)
+    end
+    printOrphanCommentsEnding(n)
+    printer.unindent()
+    printer.print("}")
+
+  method visit(n=JavadocComment,obj=Object)
+    printOrphanCommentsBeforeThisChildNode(n)
+    if getOption(DefaultPrinterConfiguration.ConfigOption.PRINT_COMMENTS).isPresent()&getOption(DefaultPrinterConfiguration.ConfigOption.PRINT_JAVADOC).isPresent() then do
+      printer.println("/**")
+      commentContent=Utils.normalizeEolInTextBlock(n.getContent(),(ConfigurationOption getOption(DefaultPrinterConfiguration.ConfigOption.END_OF_LINE_CHARACTER).get()).asString())
+      lines=commentContent.split("\\R")
+      strippedLines=ArrayList()
+      loop line over lines
+        trimmedLine=String line.trim()
+        if trimmedLine.startsWith("*") then do
+          line=trimmedLine.substring(1)
+        end
+        line=Utils.trimTrailingSpaces(line)
+        strippedLines.add(line)
+      end
+      skippingLeadingEmptyLines=boolean 1
+      prependEmptyLine=boolean 0
+      i=strippedLines.iterator()
+      loop while i.hasNext()
+        line=String i.next()
+        if line.isEmpty() then do
+          if\skippingLeadingEmptyLines then do
+            prependEmptyLine=1
+          end
+        end
+        else do
+          skippingLeadingEmptyLines=0
+          if prependEmptyLine then do
+            printer.println(" *")
+            prependEmptyLine=0
+          end
+          printer.print(" *")
+          if (\line.isEmpty()&\line.startsWith(" ")) then do
+            printer.print(" ")
+          end
+          printer.println(line)
+        end
+      end
+      printer.println(" */")
+    end
+
+  method visit(n=ClassOrInterfaceType,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getScope().isPresent() then do
+      (ClassOrInterfaceType n.getScope().get()).accept(this,arg)
+      printer.print(".")
+    end
+    printAnnotations(n.getAnnotations(),0,arg)
+    n.getName().accept(this,arg)
+    if n.isUsingDiamondOperator() then do
+      printer.print("<>")
+    end
+    else do
+      printTypeArgs(n,arg)
+    end
+
+  method visit(n=TypeParameter,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),0,arg)
+    n.getName().accept(this,arg)
+    if\Utils.isNullOrEmpty(n.getTypeBound()) then do
+      printer.print(" extends ")
+      i=n.getTypeBound().iterator()
+      loop while i.hasNext()
+        c=ClassOrInterfaceType i.next()
+        c.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(" & ")
+        end
+      end
+    end
+
+  method visit(n=PrimitiveType,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),1,arg)
+    printer.print(n.getType().asString())
+
+  method visit(n=ArrayType,obj=Object)
+    arg=Void obj
+    arrayTypeBuffer=LinkedList()
+    nrx_type=Type n
+    loop while nrx_type<=ArrayType
+      nrx_arrayType=ArrayType nrx_type
+      arrayTypeBuffer.add(nrx_arrayType)
+      nrx_type=nrx_arrayType.getComponentType()
+    end
+    nrx_type.accept(this,arg)
+    loop nrx_arrayType over arrayTypeBuffer
+      printAnnotations(nrx_arrayType.getAnnotations(),1,arg)
+      printer.print("[]")
+    end
+
+  method visit(n=ArrayCreationLevel,obj=Object)
+    arg=Void obj
+    printAnnotations(n.getAnnotations(),1,arg)
+    printer.print("[")
+    if n.getDimension().isPresent() then do
+      (Expression n.getDimension().get()).accept(this,arg)
+    end
+    printer.print("]")
+
+  method visit(n=IntersectionType,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),0,arg)
+    isFirst=boolean 1
+    i=n.getElements().iterator()
+    loop while i.hasNext()
+      element=ReferenceType i.next()
+      if isFirst then do
+        isFirst=0
+      end
+      else do
+        printer.print(" & ")
+      end
+      element.accept(this,arg)
+    end
+
+  method visit(n=UnionType,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),1,arg)
+    isFirst=boolean 1
+    i=n.getElements().iterator()
+    loop while i.hasNext()
+      element=ReferenceType i.next()
+      if isFirst then do
+        isFirst=0
+      end
+      else do
+        printer.print(" | ")
+      end
+      element.accept(this,arg)
+    end
+
+  method visit(n=WildcardType,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),0,arg)
+    printer.print("?")
+    if n.getExtendedType().isPresent() then do
+      printer.print(" extends ")
+      (ReferenceType n.getExtendedType().get()).accept(this,arg)
+    end
+    if n.getSuperType().isPresent() then do
+      printer.print(" super ")
+      (ReferenceType n.getSuperType().get()).accept(this,arg)
+    end
+
+  method visit(n=UnknownType,obj=Object)
+
+  -- Nothing to print
+
+  method visit(n=FieldDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    if\n.getVariables().isEmpty() then do
+      maximumCommonType=n.getMaximumCommonType()
+      if maximumCommonType.isPresent() then do
+        (Type maximumCommonType.get()).accept(this,arg)
+      end
+      if\maximumCommonType.isPresent() then do
+        printer.print("???")
+      end
+    end
+    printer.print(" ")
+    i=n.getVariables().iterator()
+    loop while i.hasNext()
+      nrx_var=VariableDeclarator i.next()
+      nrx_var.accept(this,arg)
+      if i.hasNext() then do
+        printer.print(", ")
+      end
+    end
+    printer.print(";")
+
+  method visit(n=VariableDeclarator,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getName().accept(this,arg)
+    if n.findAncestor(NodeWithVariables.class).isPresent() then do
+      ancestor=n.findAncestor(NodeWithVariables.class)
+      if ancestor.isPresent() then do
+        if (NodeWithVariables ancestor.get()).getMaximumCommonType().isPresent() then do
+          commonType=Type ((NodeWithVariables ancestor.get()).getMaximumCommonType().get())
+          nrx_type=n.getType()
+          nrx_arrayType=ArrayType null
+          i=int commonType.getArrayLevel()
+          loop while i<nrx_type.getArrayLevel()
+            if (nrx_arrayType==null) then do
+              nrx_arrayType=ArrayType nrx_type
+            end
+            else do
+              nrx_arrayType=ArrayType nrx_arrayType.getComponentType()
+            end
+            printAnnotations(nrx_arrayType.getAnnotations(),1,arg)
+            printer.print("[]")
+            i=i+1
+          end
+        end
+      end
+    end
+    if n.getInitializer().isPresent() then do
+      printer.print(" = ")
+      (Expression n.getInitializer().get()).accept(this,arg)
+    end
+
+  method visit(n=ArrayInitializerExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("{")
+    if\Utils.isNullOrEmpty(n.getValues()) then do
+      printer.print(" ")
+      i=n.getValues().iterator()
+      loop while i.hasNext()
+        expr=Expression i.next()
+        expr.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+      printer.print(" ")
+    end
+    printOrphanCommentsEnding(n)
+    printer.print("}")
+
+  method visit(n=VoidType,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),0,arg)
+    printer.print("void")
+
+  method visit(n=VarType,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),0,arg)
+    printer.print("var")
+
+  method visit(n=Modifier,obj=Object)
+    printer.print(n.getKeyword().asString())
+    printer.print(" ")
+
+  method visit(n=ArrayAccessExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getName().accept(this,arg)
+    printer.print("[")
+    n.getIndex().accept(this,arg)
+    printer.print("]")
+
+  method visit(n=ArrayCreationExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("new ")
+    n.getElementType().accept(this,arg)
+    i=n.getLevels().iterator()
+    loop while i.hasNext()
+      level=ArrayCreationLevel i.next()
+      level.accept(this,arg)
+    end
+    if n.getInitializer().isPresent() then do
+      printer.print(" ")
+      (ArrayInitializerExpr n.getInitializer().get()).accept(this,arg)
+    end
+
+  method visit(n=AssignExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getTarget().accept(this,arg)
+    if getOption(DefaultPrinterConfiguration.ConfigOption.SPACE_AROUND_OPERATORS).isPresent() then do
+      printer.print(" ")
+    end
+    printer.print(n.getOperator().asString())
+    if getOption(DefaultPrinterConfiguration.ConfigOption.SPACE_AROUND_OPERATORS).isPresent() then do
+      printer.print(" ")
+    end
+    n.getValue().accept(this,arg)
+
+
+  /**
+   * work in progress for issue-545
+   */
+
+  method visit(n=BinaryExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getLeft().accept(this,arg)
+    if getOption(DefaultPrinterConfiguration.ConfigOption.SPACE_AROUND_OPERATORS).isPresent() then do
+      printer.print(" ")
+    end
+    printer.print(n.getOperator().asString())
+    if getOption(DefaultPrinterConfiguration.ConfigOption.SPACE_AROUND_OPERATORS).isPresent() then do
+      printer.print(" ")
+    end
+    n.getRight().accept(this,arg)
+
+  method visit(n=CastExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("(")
+    n.getType().accept(this,arg)
+    printer.print(") ")
+    n.getExpression().accept(this,arg)
+
+  method visit(n=ClassExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getType().accept(this,arg)
+    printer.print(".class")
+
+  method visit(n=ConditionalExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getCondition().accept(this,arg)
+    printer.print(" ? ")
+    n.getThenExpr().accept(this,arg)
+    printer.print(" : ")
+    n.getElseExpr().accept(this,arg)
+
+  method visit(n=EnclosedExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("(")
+    n.getInner().accept(this,arg)
+    printer.print(")")
+
+  method visit(n=FieldAccessExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getScope().accept(this,arg)
+    printer.print(".")
+    n.getName().accept(this,arg)
+
+  method visit(n=InstanceOfExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getExpression().accept(this,arg)
+    printer.print(" instanceof ")
+    n.getType().accept(this,arg)
+    if n.getName().isPresent() then do
+      printer.print(" ")
+      (SimpleName n.getName().get()).accept(this,arg)
+    end
+
+  method visit(n=PatternExpr,obj=Object)
+    arg=Void obj
+    (ReferenceType n.getType()).accept(this,arg)
+    printer.print(" ")
+    (SimpleName n.getName()).accept(this,arg)
+
+  method visit(n=CharLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("\'")
+    printer.print(n.getValue())
+    printer.print("\'")
+
+  method visit(n=DoubleLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print(n.getValue())
+
+  method visit(n=IntegerLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print(n.getValue())
+
+  method visit(n=LongLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print(n.getValue())
+
+  method visit(n=StringLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("\"")
+    printer.print(n.getValue())
+    printer.print("\"")
+
+  method visit(n=TextBlockLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("\"\"\"")
+    printer.indent()
+    i=n.stripIndentOfLines().iterator()
+    loop while i.hasNext()
+      line=String i.hasNext()
+      printer.println()
+      printer.print(line)
+    end
+    printer.print("\"\"\"")
+    printer.unindent()
+
+  method visit(n=BooleanLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print(String.valueOf(n.getValue()))
+
+  method visit(n=NullLiteralExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("null")
+
+  method visit(n=ThisExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getTypeName().isPresent() then do
+      (Name n.getTypeName().get()).accept(this,arg)
+      printer.print(".")
+    end
+    printer.print("this")
+
+  method visit(n=SuperExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getTypeName().isPresent() then do
+      (Name n.getTypeName().get()).accept(this,arg)
+      printer.print(".")
+    end
+    printer.print("super")
+
+  method visit(n=MethodCallExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    columnAlignFirstMethodChain=AtomicBoolean()
+    if getOption(DefaultPrinterConfiguration.ConfigOption.COLUMN_ALIGN_FIRST_METHOD_CHAIN).isPresent() then do
+      if n.findAncestor(Statement.class).isPresent() then do
+        tmp=Statement n.findAncestor(Statement.class).get()
+        if tmp.isReturnStmt()|tmp.isThrowStmt()|tmp.isAssertStmt()|tmp.isExpressionStmt() then do
+          c=Node n
+          p=c.getParentNode()
+          loop while p.isPresent()&p.get()<=NodeWithTraversableScope&((NodeWithTraversableScope p.get()).traverseScope()).equals(c)
+            c=Node p.get()
+            p=c.getParentNode()
+          end
+          columnAlignFirstMethodChain.set(\(p.isPresent()&p.get()<=MethodCallExpr))
+        end
+      end
+    end
+    lastMethodInCallChain=AtomicBoolean(1)
+    if columnAlignFirstMethodChain.get() then do
+      q_node=Node n
+      loop while q_node.getParentNode().get()<=NodeWithTraversableScope&((NodeWithTraversableScope q_node.getParentNode().get()).traverseScope()).equals(q_node)
+        if\q_node.getParentNode().isPresent() then do
+          signal AssertionError
+        end
+        if q_node<=MethodCallExpr then do
+          lastMethodInCallChain.set(0)
+          leave
+        end
+      end
+    end
+    methodCallWithScopeInScope=AtomicBoolean()
+    if columnAlignFirstMethodChain.get() then do
+      s=n.getScope()
+      loop while s.isPresent()&s.get()<=NodeWithTraversableScope
+        parentScope=(NodeWithTraversableScope s.get()).traverseScope()
+        if (s.isPresent()&s.get()<=MethodCallExpr)&parentScope.isPresent() then do
+          methodCallWithScopeInScope.set(1)
+          leave
+        end
+        s=parentScope
+      end
+    end
+    if n.getScope().isPresent() then do
+      (Expression n.getScope().get()).accept(this,arg)
+      if columnAlignFirstMethodChain.get() then do
+        if methodCallWithScopeInScope.get() then do
+          printer.println()
+        end
+        else if\lastMethodInCallChain.get() then do
+          printer.reindentWithAlignToCursor()
+        end
+      end
+      printer.print(".")
+    end
+    printTypeArgs(n,arg)
+    n.getName().accept(this,arg)
+    printer.duplicateIndent()
+    printArguments(n.getArguments(),arg)
+    printer.unindent()
+    if columnAlignFirstMethodChain.get()&methodCallWithScopeInScope.get()&lastMethodInCallChain.get() then do
+      printer.reindentToPreviousLevel()
+    end
+
+  method visit(n=ObjectCreationExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.hasScope() then do
+      (Expression n.getScope().get()).accept(this,arg)
+      printer.print(".")
+    end
+    printer.print("new ")
+    printTypeArgs(n,arg)
+    if n.getTypeArguments().isPresent() then do
+      if\(Utils.isNullOrEmpty(Collection n.getTypeArguments().get())) then do
+        printer.print(" ")
+      end
+    end
+    n.getType().accept(this,arg)
+    printArguments(n.getArguments(),arg)
+    if n.getAnonymousClassBody().isPresent() then do
+      printer.println(" {")
+      printer.indent()
+      printMembers((NodeList n.getAnonymousClassBody().get()),arg)
+      printer.unindent()
+      printer.print("}")
+    end
+
+  method visit(n=UnaryExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getOperator().isPrefix() then do
+      printer.print(n.getOperator().asString())
+    end
+    n.getExpression().accept(this,arg)
+    if n.getOperator().isPostfix() then do
+      printer.print(n.getOperator().asString())
+    end
+
+  method visit(n=ConstructorDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    printTypeParameters(n.getTypeParameters(),arg)
+    if n.isGeneric() then do
+      printer.print(" ")
+    end
+    n.getName().accept(this,arg)
+    printer.print("(")
+    if\n.getParameters().isEmpty() then do
+      i=n.getParameters().iterator()
+      loop while i.hasNext()
+        p=Parameter i.next()
+        p.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print(")")
+    if\Utils.isNullOrEmpty(n.getThrownExceptions()) then do
+      printer.print(" throws ")
+      i=n.getThrownExceptions().iterator()
+      loop while i.hasNext()
+        nrx_name=ReferenceType i.next()
+        nrx_name.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print(" ")
+    n.getBody().accept(this,arg)
+
+  method visit(n=CompactConstructorDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    printTypeParameters(n.getTypeParameters(),arg)
+    if n.isGeneric() then do
+      printer.print(" ")
+    end
+    n.getName().accept(this,arg)
+    if\Utils.isNullOrEmpty(n.getThrownExceptions()) then do
+      printer.print(" throws ")
+      i=n.getThrownExceptions().iterator()
+      loop while i.hasNext()
+        nrx_name=ReferenceType i.next()
+        nrx_name.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print(" ")
+    n.getBody().accept(this,arg)
+
+  method visit(n=MethodDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    printTypeParameters(n.getTypeParameters(),arg)
+    if\Utils.isNullOrEmpty(n.getTypeParameters()) then do
+      printer.print(" ")
+    end
+    n.getType().accept(this,arg)
+    printer.print(" ")
+    n.getName().accept(this,arg)
+    printer.print("(")
+    if n.getReceiverParameter().isPresent() then do
+      (ReceiverParameter n.getReceiverParameter().get()).accept(this,arg)
+      if\Utils.isNullOrEmpty(n.getParameters()) then do
+        printer.print(", ")
+      end
+    end
+    if\Utils.isNullOrEmpty(n.getParameters()) then do
+      i=n.getParameters().iterator()
+      loop while i.hasNext()
+        p=Parameter i.next()
+        p.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print(")")
+    if\Utils.isNullOrEmpty(n.getThrownExceptions()) then do
+      printer.print(" throws ")
+      i=n.getThrownExceptions().iterator()
+      loop while i.hasNext()
+        nrx_name=ReferenceType i.next()
+        nrx_name.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    if\n.getBody().isPresent() then do
+      printer.print(";")
+    end
+    else do
+      printer.print(" ")
+      (BlockStmt n.getBody().get()).accept(this,arg)
+    end
+
+  method visit(n=Parameter,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),0,arg)
+    printModifiers(n.getModifiers())
+    n.getType().accept(this,arg)
+    if n.isVarArgs() then do
+      printAnnotations(n.getVarArgsAnnotations(),0,arg)
+      printer.print("...")
+    end
+    if\(n.getType()<=UnknownType) then do
+      printer.print(" ")
+    end
+    n.getName().accept(this,arg)
+
+  method visit(n=ReceiverParameter,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printAnnotations(n.getAnnotations(),0,arg)
+    n.getType().accept(this,arg)
+    printer.print(" ")
+    n.getName().accept(this,arg)
+
+  method visit(n=ExplicitConstructorInvocationStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.isThis() then do
+      printTypeArgs(n,arg)
+      printer.print("this")
+    end
+    else do
+      if n.getExpression().isPresent() then do
+        (Expression n.getExpression().get()).accept(this,arg)
+        printer.print(".")
+      end
+      printTypeArgs(n,arg)
+      printer.print("super")
+    end
+    printArguments(n.getArguments(),arg)
+    printer.print(";")
+
+  method visit(n=VariableDeclarationExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getParentNode().isPresent() then do
+      if (Node n.getParentNode().get())<=ExpressionStmt then do
+        condition=1
+      end
+      else condition=0
+    end
+    if condition then do
+      printMemberAnnotations(n.getAnnotations(),arg)
+    end
+    else do
+      printAnnotations(n.getAnnotations(),0,arg)
+    end
+    printModifiers(n.getModifiers())
+    if\n.getVariables().isEmpty() then do
+      if n.getMaximumCommonType().isPresent() then do
+        (Type n.getMaximumCommonType().get()).accept(this,arg)
+      end
+    end
+    printer.print(" ")
+    i=n.getVariables().iterator()
+    loop while i.hasNext()
+      v=VariableDeclarator i.next()
+      v.accept(this,arg)
+      if i.hasNext() then do
+        printer.print(", ")
+      end
+    end
+
+  method visit(n=LocalClassDeclarationStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getClassDeclaration().accept(this,arg)
+
+  method visit(n=LocalRecordDeclarationStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getRecordDeclaration().accept(this,arg)
+
+  method visit(n=AssertStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("assert ")
+    n.getCheck().accept(this,arg)
+    if n.getMessage().isPresent() then do
+      printer.print(" : ")
+      (Expression n.getMessage().get()).accept(this,arg)
+    end
+    printer.print(";")
+
+  method visit(n=BlockStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.println("{")
+    if n.getStatements()\==null then do
+      printer.indent()
+      i=n.getStatements().iterator()
+      loop while i.hasNext()
+        s=Statement i.next()
+        s.accept(this,arg)
+        printer.println()
+      end
+    end
+    printOrphanCommentsEnding(n)
+    printer.unindent()
+    printer.print("}")
+
+  method visit(n=LabeledStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getLabel().accept(this,arg)
+    printer.print(": ")
+    n.getStatement().accept(this,arg)
+
+  method visit(n=EmptyStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print(";")
+
+  method visit(n=ExpressionStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getExpression().accept(this,arg)
+    printer.print(";")
+
+  method visit(n=SwitchStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printSwitchNode(n,arg)
+
+  method visit(n=SwitchExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printSwitchNode(n,arg)
+
+  method printSwitchNode(n=SwitchNode,arg=Void) private
+    printComment(n.getComment(),arg)
+    printer.print("switch(")
+    n.getSelector().accept(this,arg)
+    printer.println(") {")
+    if n.getEntries()\==null then do
+      indentIf(getOption(DefaultPrinterConfiguration.ConfigOption.INDENT_CASE_IN_SWITCH).isPresent())
+      i=n.getEntries().iterator()
+      loop while i.hasNext()
+        e=SwitchEntry i.next()
+        e.accept(this,arg)
+      end
+      unindentIf(getOption(DefaultPrinterConfiguration.ConfigOption.INDENT_CASE_IN_SWITCH).isPresent())
+    end
+    printer.print("}")
+
+  method visit(n=SwitchEntry,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if (n.getType()==com.github.javaparser.ast.stmt.SwitchEntry.Type.STATEMENT_GROUP) then do
+      separator=":"
+    end
+    else do
+      separator=" ->"
+    end
+    if Utils.isNullOrEmpty(n.getLabels()) then do
+      printer.print("default"||separator)
+    end
+    else do
+      printer.print("case ")
+      i=n.getLabels().iterator()
+      loop while i.hasNext()
+        label=Expression i.next()
+        label.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+      printer.print(separator)
+    end
+    printer.println()
+    printer.indent()
+    if n.getStatements()\==null then do
+      i=n.getStatements().iterator()
+      loop while i.hasNext()
+        s=Statement i.next()
+        s.accept(this,arg)
+        printer.println()
+      end
+    end
+    printer.unindent()
+
+  method visit(n=BreakStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("break")
+    if n.getLabel().isPresent() then do
+      printer.print(" ")
+      printer.print((SimpleName n.getLabel().get()).getIdentifier())
+    end
+    printer.print(";")
+
+  method visit(n=YieldStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("yield ")
+    n.getExpression().accept(this,arg)
+    printer.print(";")
+
+  method visit(n=ReturnStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("return")
+    if n.getExpression().isPresent() then do
+      printer.print(" ")
+      (Expression n.getExpression().get()).accept(this,arg)
+    end
+    printer.print(";")
+
+  method visit(n=EnumDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    printer.print("enum ")
+    n.getName().accept(this,arg)
+    if\n.getImplementedTypes().isEmpty() then do
+      printer.print(" implements ")
+      i=n.getImplementedTypes().iterator()
+      loop while i.hasNext()
+        c=ClassOrInterfaceType i.next()
+        c.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.println(" {")
+    printer.indent()
+    if n.getEntries().isNonEmpty() then do
+      check_how_to_align=boolean (n.getEntries().size()>((ConfigurationOption getOption(DefaultPrinterConfiguration.ConfigOption.MAX_ENUM_CONSTANTS_TO_ALIGN_HORIZONTALLY).get()).asInteger()).intValue())
+      check_for_comment=n.getEntries().iterator()
+      loop while check_for_comment.hasNext()
+        ecd=EnumConstantDeclaration check_for_comment.next()
+        if ecd.getComment().isPresent() then do
+          one_has_comment=boolean 1
+          leave
+        end
+      end
+      alignVertically=check_how_to_align|one_has_comment
+      printer.println()
+      i=n.getEntries().iterator()
+      loop while i.hasNext()
+        e=EnumConstantDeclaration i.next()
+        e.accept(this,arg)
+        if i.hasNext() then do
+          if alignVertically then do
+            printer.println(",")
+          end
+          else do
+            printer.print(", ")
+          end
+        end
+      end
+    end
+    if\n.getMembers().isEmpty() then do
+      printer.println(";")
+      printMembers(n.getMembers(),arg)
+    end
+    else do
+      if\n.getEntries().isEmpty() then do
+        printer.println()
+      end
+    end
+    printer.unindent()
+    printer.print("}")
+
+  method visit(n=EnumConstantDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    n.getName().accept(this,arg)
+    if\n.getArguments().isEmpty() then do
+      printArguments(n.getArguments(),arg)
+    end
+    if\n.getClassBody().isEmpty() then do
+      printer.println(" {")
+      printer.indent()
+      printMembers(n.getClassBody(),arg)
+      printer.unindent()
+      printer.println("}")
+    end
+
+  method visit(n=InitializerDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.isStatic() then do
+      printer.print("static ")
+    end
+    n.getBody().accept(this,arg)
+
+  method visit(n=IfStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("if (")
+    n.getCondition().accept(this,arg)
+    thenBlock=n.getThenStmt()<=BlockStmt
+    if thenBlock then do
+      printer.print(") ")
+    end
+    else do
+      printer.println(")")
+      printer.indent()
+    end
+    n.getThenStmt().accept(this,arg)
+    if\thenBlock then do
+      printer.unindent()
+    end
+    if n.getElseStmt().isPresent() then do
+      if thenBlock then do
+        printer.print(" ")
+      end
+      else do
+        printer.println()
+      end
+      nrx_elseIf=boolean
+      if n.getElseStmt().get()<=IfStmt then nrx_elseIf=1
+      else nrx_elseIf=0
+      elseBlock=boolean
+      if n.getElseStmt().get()<=BlockStmt then elseBlock=1
+      else elseBlock=0
+      if nrx_elseIf|elseBlock then do
+        printer.print("else ")
+      end
+      else do
+        printer.println("else")
+        printer.indent()
+      end
+      if n.getElseStmt().isPresent() then do
+        (Statement n.getElseStmt().get()).accept(this,arg)
+      end
+      if\(nrx_elseIf|elseBlock) then do
+        printer.unindent()
+      end
+    end
+
+  method visit(n=WhileStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("while (")
+    n.getCondition().accept(this,arg)
+    printer.print(") ")
+    n.getBody().accept(this,arg)
+
+  method visit(n=ContinueStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("continue")
+    if n.getLabel().isPresent() then do
+      printer.print(" ")
+      printer.print((SimpleName n.getLabel().get()).getIdentifier())
+    end
+    printer.print(";")
+
+  method visit(n=DoStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("do ")
+    n.getBody().accept(this,arg)
+    printer.print(" while (")
+    n.getCondition().accept(this,arg)
+    printer.print(");")
+
+  method visit(n=ForEachStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("for (")
+    n.getVariable().accept(this,arg)
+    printer.print(" : ")
+    n.getIterable().accept(this,arg)
+    printer.print(") ")
+    n.getBody().accept(this,arg)
+
+  method visit(n=ForStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("for (")
+    if n.getInitialization()\==null then do
+      i=n.getInitialization().iterator()
+      loop while i.hasNext()
+        e=Expression i.next()
+        e.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print("; ")
+    if n.getCompare().isPresent() then do
+      (Expression n.getCompare().get()).accept(this,arg)
+    end
+    printer.print("; ")
+    if n.getUpdate()\==null then do
+      i=n.getUpdate().iterator()
+      loop while i.hasNext()
+        e=Expression i.next()
+        e.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print(") ")
+    n.getBody().accept(this,arg)
+
+  method visit(n=ThrowStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("throw ")
+    n.getExpression().accept(this,arg)
+    printer.print(";")
+
+  method visit(n=SynchronizedStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("synchronized (")
+    n.getExpression().accept(this,arg)
+    printer.print(") ")
+    n.getBody().accept(this,arg)
+
+  method visit(n=TryStmt,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("try ")
+    if\n.getResources().isEmpty() then do
+      printer.print("(")
+      resources=n.getResources().iterator()
+      first=boolean 1
+      loop while resources.hasNext()
+        (Expression resources.next()).accept(this,arg)
+        if resources.hasNext() then do
+          printer.print(";")
+          printer.println()
+          if first then do
+            printer.indent()
+          end
+        end
+        first=0
+      end
+      if n.getResources().size()>1 then do
+        printer.unindent()
+      end
+      printer.print(") ")
+    end
+    n.getTryBlock().accept(this,arg)
+    i=n.getCatchClauses().iterator()
+    loop while i.hasNext()
+      c=CatchClause i.next()
+      c.accept(this,arg)
+    end
+    if n.getFinallyBlock().isPresent() then do
+      printer.print(" finally ")
+      (BlockStmt n.getFinallyBlock().get()).accept(this,arg)
+    end
+
+  method visit(n=CatchClause,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print(" catch (")
+    n.getParameter().accept(this,arg)
+    printer.print(") ")
+    n.getBody().accept(this,arg)
+
+  method visit(n=AnnotationDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    printer.print("@interface ")
+    n.getName().accept(this,arg)
+    printer.println(" {")
+    printer.indent()
+    if n.getMembers()\==null then do
+      printMembers(n.getMembers(),arg)
+    end
+    printer.unindent()
+    printer.print("}")
+
+  method visit(n=AnnotationMemberDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printMemberAnnotations(n.getAnnotations(),arg)
+    printModifiers(n.getModifiers())
+    n.getType().accept(this,arg)
+    printer.print(" ")
+    n.getName().accept(this,arg)
+    printer.print("()")
+    if n.getDefaultValue().isPresent() then do
+      printer.print(" default ")
+      (Expression n.getDefaultValue().get()).accept(this,arg)
+    end
+    printer.print(";")
+
+  method visit(n=MarkerAnnotationExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("@")
+    n.getName().accept(this,arg)
+
+  method visit(n=SingleMemberAnnotationExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("@")
+    n.getName().accept(this,arg)
+    printer.print("(")
+    n.getMemberValue().accept(this,arg)
+    printer.print(")")
+
+  method visit(n=NormalAnnotationExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("@")
+    n.getName().accept(this,arg)
+    printer.print("(")
+    if n.getPairs()\==null then do
+      i=n.getPairs().iterator()
+      loop while i.hasNext()
+        m=MemberValuePair i.next()
+        m.accept(this,arg)
+        if i.hasNext() then do
+          printer.print(", ")
+        end
+      end
+    end
+    printer.print(")")
+
+  method visit(n=MemberValuePair,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    n.getName().accept(this,arg)
+    printer.print(" = ")
+    n.getValue().accept(this,arg)
+
+  method visit(n=LineComment,obj=Object)
+    if\getOption(DefaultPrinterConfiguration.ConfigOption.PRINT_COMMENTS).isPresent() then do
+      return
+    end
+    printer.print("// ").println(Utils.normalizeEolInTextBlock(n.getContent(),"").trim())
+
+  method visit(n=BlockComment,obj=Object)
+    if\getOption(DefaultPrinterConfiguration.ConfigOption.PRINT_COMMENTS).isPresent() then do
+      return
+    end
+    commentContent=Utils.normalizeEolInTextBlock(n.getContent(),(ConfigurationOption getOption(DefaultPrinterConfiguration.ConfigOption.END_OF_LINE_CHARACTER).get()).asString())
+    lines=commentContent.split("\\R",-1)
+    printer.print("/*")
+    i=int 0
+    loop while i<(lines.length-1)
+      printer.print(lines[i])
+      printer.print(String (ConfigurationOption getOption(DefaultPrinterConfiguration.ConfigOption.END_OF_LINE_CHARACTER).get()).asValue())
+      i=i+1
+    end
+    printer.print(lines[lines.length-1])
+    printer.println("*/")
+
+  method visit(n=LambdaExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    parameters=NodeList
+    parameters=n.getParameters()
+    printPar=n.isEnclosingParameters()
+    if printPar then do
+      printer.print("(")
+    end
+    i=parameters.iterator()
+    loop while i.hasNext()
+      p=Parameter i.next()
+      p.accept(this,arg)
+      if i.hasNext() then do
+        printer.print(", ")
+      end
+    end
+    if printPar then do
+      printer.print(")")
+    end
+    printer.print(" -> ")
+    body=n.getBody()
+    if body<=ExpressionStmt then do
+      (ExpressionStmt body).getExpression().accept(this,arg)
+    end
+    else do
+      body.accept(this,arg)
+    end
+
+  method visit(n=MethodReferenceExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    scope=n.getScope()
+    identifier=n.getIdentifier()
+    if scope\==null then do
+      n.getScope().accept(this,arg)
+    end
+    printer.print("::")
+    printTypeArgs(n,arg)
+    if identifier\==null then do
+      printer.print(identifier)
+    end
+
+  method visit(n=TypeExpr,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    if n.getType()\==null then do
+      n.getType().accept(this,arg)
+    end
+
+  method visit(n=NodeList,obj=Object)
+    arg=Void obj
+    if getOption(DefaultPrinterConfiguration.ConfigOption.ORDER_IMPORTS).isPresent() then do
+      if n.size()>0 then do
+        if n.get(int 0)<=ImportDeclaration then do
+          modifiableList=NodeList(n)
+          --FIXME modifiableList.sort(comparingInt((ImportDeclaration i) -> i.isStatic() ? 0 : 1).thenComparing(NodeWithName::getNameAsString));
+          i=modifiableList.iterator()
+          loop while i.hasNext()
+            xnode=i.next()
+            (Node xnode).accept(this,arg)
+          end
+        end
+      end
+    end
+    else do
+      i=n.iterator()
+      loop while i.hasNext()
+        xnode=i.next()
+        (Node xnode).accept(this,arg)
+      end
+    end
+
+  method visit(n=ImportDeclaration,obj=Object)
+    arg=Void obj
+    printOrphanCommentsBeforeThisChildNode(n)
+    printComment(n.getComment(),arg)
+    printer.print("import ")
+    if n.isStatic() then do
+      printer.print("static ")
+    end
+    n.getName().accept(this,arg)
+    if n.isAsterisk() then do
+      printer.print(".*")
+    end
+    printer.println(";")
+    printOrphanCommentsEnding(n)
+
+  method visit(n=ModuleDeclaration,obj=Object)
+    arg=Void obj
+    printMemberAnnotations(n.getAnnotations(),arg)
+    if n.isOpen() then do
+      printer.print("open ")
+    end
+    printer.print("module ")
+    n.getName().accept(this,arg)
+    printer.println(" {").indent()
+    n.getDirectives().accept(this,arg)
+    printer.unindent().println("}")
+
+  method visit(n=ModuleRequiresDirective,obj=Object)
+    arg=Void obj
+    printer.print("requires ")
+    printModifiers(n.getModifiers())
+    n.getName().accept(this,arg)
+    printer.println(";")
+
+  method visit(n=ModuleExportsDirective,obj=Object)
+    arg=Void obj
+    printer.print("exports ")
+    n.getName().accept(this,arg)
+    printPrePostFixOptionalList(n.getModuleNames(),arg," to ",", ","")
+    printer.println(";")
+
+  method visit(n=ModuleProvidesDirective,obj=Object)
+    arg=Void obj
+    printer.print("provides ")
+    n.getName().accept(this,arg)
+    printPrePostFixRequiredList(n.getWith(),arg," with ",", ","")
+    printer.println(";")
+
+  method visit(n=ModuleUsesDirective,obj=Object)
+    arg=Void obj
+    printer.print("uses ")
+    n.getName().accept(this,arg)
+    printer.println(";")
+
+  method visit(n=ModuleOpensDirective,obj=Object)
+    arg=Void obj
+    printer.print("opens ")
+    n.getName().accept(this,arg)
+    printPrePostFixOptionalList(n.getModuleNames(),arg," to ",", ","")
+    printer.println(";")
+
+  method visit(n=UnparsableStmt,obj=Object)
+    printer.print("???;")
+
+  method printOrphanCommentsBeforeThisChildNode(node=Node) private
+    i=int
+    if\getOption(DefaultPrinterConfiguration.ConfigOption.PRINT_COMMENTS).isPresent() then do
+      return
+    end
+    if node<=Comment then do
+      return
+    end
+    if node.getParentNode().isPresent() then do
+      xparent=com.github.javaparser.ast.Node node.getParentNode().get()
+    end
+    else do
+      return
+    end
+    everything=List ArrayList(xparent.getChildNodes())
+    PositionUtils.sortByBeginPosition(everything)
+    positionOfTheChild=int-1
+    i=0
+    loop while i<everything.size()
+      if everything.get(i)==node then do
+        positionOfTheChild=i
+        leave
+      end
+      i=i+1
+    end
+    if positionOfTheChild==-1 then do
+      signal AssertionError("I am not a child of my parent.")
+    end
+    positionOfPreviousChild=int-1
+    i=positionOfTheChild-1
+    loop while i>=0&positionOfPreviousChild==-1
+      if\(everything.get(i)<=Comment) then do
+        positionOfPreviousChild=i
+      end
+      i=i-1
+    end
+    i=positionOfPreviousChild+1
+    loop while i<positionOfTheChild
+      nodeToPrint=com.github.javaparser.ast.Node everything.get(i)
+      if\(nodeToPrint<=Comment) then do
+        signal RuntimeException("Expected comment, instead "||nodeToPrint.getClass()||". Position of previous child: "||positionOfPreviousChild||", position of child "||positionOfTheChild)
+      end
+      nodeToPrint.accept(this,null)
+      i=i+1
+    end
+
+  method printOrphanCommentsEnding(node=Node) private
+    if\getOption(DefaultPrinterConfiguration.ConfigOption.PRINT_COMMENTS).isPresent() then do
+      return
+    end
+    everything=ArrayList(node.getChildNodes())
+    PositionUtils.sortByBeginPosition(everything)
+    if everything.isEmpty() then do
+      return
+    end
+    commentsAtEnd=int 0
+    findingComments=boolean 1
+    loop while findingComments&commentsAtEnd<everything.size()
+      last=com.github.javaparser.ast.Node everything.get(everything.size()-1-commentsAtEnd)
+      findingComments=(last<=Comment)
+      if findingComments then do
+        commentsAtEnd=commentsAtEnd+1
+      end
+    end
+    i=int 0
+    loop while i<commentsAtEnd
+      (com.github.javaparser.ast.Node everything.get(everything.size()-commentsAtEnd+i)).accept(this,null)
+      i=i+1
+    end
+
+  method indentIf(expr=boolean) private
+    if expr then do
+      printer.indent()
+    end
+
+  method unindentIf(expr=boolean) private
+    if expr then do
+      printer.unindent()
+    end
+
+  method getOption(cOption=com.github.javaparser.printer.configuration.DefaultPrinterConfiguration.ConfigOption) private returns Optional
+    return configuration.get(DefaultConfigurationOption(cOption))
+
+  method print(node=com.github.javaparser.ast.Node) returns String
+    visitor=VoidVisitor this
+    node.accept(visitor,null)
+    return visitor.toString()
+
+  method main(args=String[]) static
+    cu=StaticJavaParser.parse(File(args[0]))
+    nrxprinter=NrxWriter(DefaultPrinterConfiguration(),SourcePrinter(DefaultPrinterConfiguration()))
+    say nrxprinter.print(cu)

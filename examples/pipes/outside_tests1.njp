@@ -1,0 +1,126 @@
+/** outside
+
+>>--OUTSIDE--+----------------+--+-delimitedString1-+-+-delimitedString2-+---><-
+             +-ANYcase-(1)----+  +-Xhexstring1------+ +-Xhexstring2------+
+                                 +-Hhexstring1------+ +-Hhexstring2------+
+                                 +-Bbinstring1------+ +-Bbinstring2------+
+                                                      +-n----------------+
+ (1) CASEANY, CASEIGNORE, CASELESS, and IGNORECASE are all synonyms for ANYCASE.
+
+  FRLABLE Contributed by Chuck Moore.
+**/
+
+/*
+  20/ 5/ 4 Jeff Hennick
+*/
+
+pipe (outside_tests1)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+   literal 1# 0 "outside dstring1 dstring2 extra" gives rc=11, not tested here. |
+   literal 1. |
+   o: ?
+
+-- outside dstring1 dstring2 ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside /ccc/ /rrr/ |
+   c1: compare any ~2# 1 outside dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;bbbccc;aaabbb |
+   split ; |
+   c1: ?
+
+-- outside dstring1 number ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside /ccc/ 2 |
+   c2: compare any ~2# 2 outside dstring number ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;bbbccc;aaabbb;eeefff |
+   split ; |
+   c2: ?
+
+-- outside Xhexstring1 dstring2 ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside x6262 /ccc/ |
+   c3: compare any ~2# 3 outside Xhexstring1 dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c3: ?
+
+-- outside Hhexstring3 dstring2 ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside h6262 /ccc/ |
+   c4: compare any ~2# 4 outside Hhexstring1 dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c4: ?
+
+-- outside Binstring dstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside b01100010 /ccc/ |
+   c5: compare any ~2# 5 outside Bbinstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c5: ?
+
+-- outside dstring Xhexstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside /bb/ X6363 |
+   c6: compare any ~2# 6 outside dstring Xhexstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c6: ?
+
+-- outside dstring Hhexstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside /bb/ h6363 |
+   c7: compare any ~2# 7 outside dstring Hhexstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c7: ?
+
+-- outside dstring Bbinstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside /bb/ b01100011 |
+   c8: compare any ~2# 8 outside dstring Bbinstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c8: ?
+
+-- outside ANYCASE dstring dstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside anyCASE /Bb/ /cCc/ |
+   c9: compare any ~2# 9 outside ANYCASE dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c9: ?
+
+-- outside ANYCASE dstring Bbinstring ?
+   literal aaabbb;bbbccc;aaabbb;cccddd;dddeee;eeefff |
+   split ; |
+   outside anyCASE /Bb/ b01100011 |
+   c10: compare any ~2#10 outside ANYCASE dstring Bbinstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aaabbb;dddeee;eeefff |
+   split ; |
+   c10: ?

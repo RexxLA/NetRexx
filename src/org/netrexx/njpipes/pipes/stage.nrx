@@ -1,49 +1,51 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *
+ *  Copyright (C) 2011-2020 Rexx Language Association
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  *
  */
 
--- 01/05/12 fix Emsg to iterrupt the stage too - we cannot let the stage run...  ejt
--- 01/05/11 fix exit logic to commit to -1 and report init errors.  ejt
--- 01/05/10 fix sever/autocommit logic so severs have priority.  ejt
--- 01/05/09 added severCallback for carefull use in threaded stages.  ejt
--- 01/05/07 fix counter() method logic so testing via counter(0) works.  ejt
--- 99/12/22 fixed checkOut to show correct rc for eofReport EITHER.  ejt
--- 99/12/21 selectInput and Output logic corrected (errors on W9x).  ejt
--- 99/05/12 selectInput and Output logic enhanced (remember reportEOF).  ejt
--- 99/05/09 REVERTED selectInput and Output no longer report rc=4, just 12.  ejt
--- 99/05/07 fixed a problem setting T and going.  ejt
--- 99/05/04 added reuse() method to override to reset static elements.  ejt
--- 98/12/06 use a hashtable to pass args.  ejt
--- 98/09/08 commit should have returned the pipes current return code.  ejt
--- 98/09/03 fixed protect logic in selectAnyInput.  ejt
--- 98/08/28 added the mrc methods and code as an alternate way to track the rc.  ejt
--- 98/08/28 selectInput/output now raise a stageerror if reselecting a severed stream.  ejt
--- 98/08/28 fix output to correctly protect its nullpointerexception routine.  ejt
--- 98/08/27 exit nolonger does commit(-1).  ejt
--- 98/08/27 support new stage error code, added Error method.  ejt
--- 98/08/27 work stage vars for peekto/readto.  ejt
--- 98/08/26 any debug options cause threads to be named.  ejt
--- 98/08/26 removed dead code in severOutput.  ejt
--- 98/08/26 added either option to eofReport (tested with selectanyinput).  ejt
--- 98/08/25 selectAnyInput now see all severs (eofReport needs this).  ejt
--- 98/08/25 eofReport state is not reset when stage is reused.  ejt
--- 98/08/25 improved stall setting logic.  ejt
--- 98/08/23 added dynamic arguement and doSetup() logic.  ejt
--- 98/08/23 startThread no longer uses a name.  ejt
--- 98/08/13 all interal peekto/readto/output force the class to stage.  ejt
--- 98/08/13 optimized rc logic.  ejt
--- 98/08/12 optimized runaway logic.  ejt
--- 98/08/11 optimized code.  ejt
--- 98/08/03 all stage instance objects now reused.  ejt
--- 98/08/02 deadlock between readto/peekto and commit fixed.  ejt
--- 98/08/02 commit logic fixed.  ejt
--- 98/08/01 handle poolable stages.  ejt
--- 98/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
+-- 2020/05/23 added isFirstStage(). Jeff Hennick
+-- 2019/08/02 remove all jitcache references. rvj
+-- 2001/05/12 fix Emsg to iterrupt the stage too - we cannot let the stage run...  ejt
+-- 2001/05/11 fix exit logic to commit to -1 and report init errors.  ejt
+-- 2001/05/10 fix sever/autocommit logic so severs have priority.  ejt
+-- 2001/05/09 added severCallback for carefull use in threaded stages.  ejt
+-- 2001/05/07 fix counter() method logic so testing via counter(0) works.  ejt
+-- 1999/12/22 fixed checkOut to show correct rc for eofReport EITHER.  ejt
+-- 1999/12/21 selectInput and Output logic corrected (errors on W9x).  ejt
+-- 1999/05/12 selectInput and Output logic enhanced (remember reportEOF).  ejt
+-- 1999/05/09 REVERTED selectInput and Output no longer report rc=4, just 12.  ejt
+-- 1999/05/07 fixed a problem setting T and going.  ejt
+-- 1999/05/04 added reuse() method to override to reset static elements.  ejt
+-- 1998/12/06 use a hashtable to pass args.  ejt
+-- 1998/09/08 commit should have returned the pipes current return code.  ejt
+-- 1998/09/03 fixed protect logic in selectAnyInput.  ejt
+-- 1998/08/28 added the mrc methods and code as an alternate way to track the rc.  ejt
+-- 1998/08/28 selectInput/output now raise a stageerror if reselecting a severed stream.  ejt
+-- 1998/08/28 fix output to correctly protect its nullpointerexception routine.  ejt
+-- 1998/08/27 exit nolonger does commit(-1).  ejt
+-- 1998/08/27 support new stage error code, added Error method.  ejt
+-- 1998/08/27 work stage vars for peekto/readto.  ejt
+-- 1998/08/26 any debug options cause threads to be named.  ejt
+-- 1998/08/26 removed dead code in severOutput.  ejt
+-- 1998/08/26 added either option to eofReport (tested with selectanyinput).  ejt
+-- 1998/08/25 selectAnyInput now see all severs (eofReport needs this).  ejt
+-- 1998/08/25 eofReport state is not reset when stage is reused.  ejt
+-- 1998/08/25 improved stall setting logic.  ejt
+-- 1998/08/23 added dynamic arguement and doSetup() logic.  ejt
+-- 1998/08/23 startThread no longer uses a name.  ejt
+-- 1998/08/13 all interal peekto/readto/output force the class to stage.  ejt
+-- 1998/08/13 optimized rc logic.  ejt
+-- 1998/08/12 optimized runaway logic.  ejt
+-- 1998/08/11 optimized code.  ejt
+-- 1998/08/03 all stage instance objects now reused.  ejt
+-- 1998/08/02 deadlock between readto/peekto and commit fixed.  ejt
+-- 1998/08/02 commit logic fixed.  ejt
+-- 1998/08/01 handle poolable stages.  ejt
+-- 1998/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
 
 /* Futures 98/11/30 ejt.
 
@@ -60,7 +62,7 @@ stage implementations.  One would work like the current class, the other
 would use method calls.  Not all stages could exploit the second type of
 stage.  A pipe would use stages of both types and would allocate threads only
 when necessary.  Note this implies that all data sources must be threaded
-stages. 
+stages.
 
 I think that a pipe dispatcher could be used to allow stages, at least threaded
 ones, to keept the same syntax.  The dispatcher would know when to call methods
@@ -86,7 +88,7 @@ properties public
 
 T     = Thread            -- the thread for this stage
 
-properties public 
+properties public
 
 p      = pipe             -- main pipe of this stage
 top    = pipe             -- top pipe in this pipeline
@@ -134,7 +136,7 @@ INCREMENT    = int  256
 
 -- Build an unconnected stage
 
-method stage() 
+method stage()
 
    isPipe = 0             -- can be viewed as a pipe object
 
@@ -188,12 +190,11 @@ method reuse()            -- override in stages to reset static stage elements
 -- Build an argument from a Java command string
 
 method buildArg(a=String[]) returns Rexx static
-
-   work = Rexx(a)
-   work[0] = work.words()
-   loop i=1 to work[0]
-      work[i] = work.word(i)
-   end
+  work = Rexx(a)
+  work[0] = work.words()
+  loop i=1 to work[0]
+    work[i] = work.word(i)
+  end
 
 return work
 
@@ -271,10 +272,10 @@ method Emsg(n=int,s=String) signals ThreadQ
       _mrc = n
 
    _err = StageError(n,s)
- 
+
    p.T.Interrupt()   -- kill the pipe
 
-   Exit(n) 
+   Exit(n)
 
 
 -- set Priority
@@ -298,11 +299,16 @@ method setName(n=String)
 
 -- get the thread name
 
-
 method getName() returns String
 
    return _name
 
+-- get if this stage is first working stage in pipe fragment.  Ignores precedding COMMENT stage(s)
+--  added 2020/ 5/23 Jeff Hennick
+
+method isFirstStage() returns boolean
+
+   return (this.sin = -99) -- means the input stream is not connected to any other stage
 
 -- set stall time
 
@@ -462,7 +468,7 @@ method commit(n=int) returns int signals ThreadQ
 
    if (p._debug&16)<>0 then
       if (flag&AUTO_COMMIT)<>0 then
-         say 'Autocommiting '_name p' to 'n
+         say 'Autocommitting '_name p' to 'n
       else
          say 'Committing '_name p' to 'n
 
@@ -923,12 +929,12 @@ method shortStreams signals StageError, ThreadQ
 -- ie. you only see a sever once for a stream/connection pair.
 
 -- This method is not final so a Threaded stage output class can be created
--- if needed.  Do do it properly each thread probably should have its
+-- if needed.  To do it properly each thread probably should have its
 -- own current input and output streams (maybe)...
 
 method output(d=Object) signals StageError, ThreadQ
    do
---x   say 'output 'this' 'd
+--     say 'output 'this' 'd.getClass().getName() d
       do
          do protect outn.outs
             flag = flag+INCREMENT
@@ -1293,119 +1299,124 @@ do protect this
 
 end
 
-if severed<>-99 then 
+if severed<>-99 then
    work.outs.severCallback(0,severed)
-   
+
 
 -- exit a stage severing all output streams
 
-method exit(c=int) signals ThreadQ
+  method exit(c=int) signals ThreadQ
 
-  if (p._debug&8)<>0 then
+    if (p._debug&8)<>0 then
       say 'Preparing to stop' _name p c p._active
 
-  loop while super.in<>null         -- sever inputs
+    loop while super.in<>null         -- sever inputs
       do
-         inn = findin(super.in.sout)
-         sin = super.in.sout
-         severInput()
+        inn = findin(super.in.sout)
+        sin = super.in.sout
+        severInput()
       catch StageError
       end
-   end
+    end
 
-   loop while super.out<>null       -- sever outputs
+    loop while super.out<>null       -- sever outputs
       do
-         outn = findout(super.out.sin)
-         sout = super.out.sin
-         severOutput()
+        outn = findout(super.out.sin)
+        sout = super.out.sin
+        severOutput()
       catch StageError
       end
-   end
+    end
 
-   _rc = c
-  
-   do protect this          -- wakeup anyone waiting on us
+    _rc = c
+
+    do protect this          -- wakeup anyone waiting on us
       commit(-1)
       notifyAll()
-   end
+    end
 
-   do protect p             -- let pipe know stage is ending
+    do protect p             -- let pipe know stage is ending
       if _rc>p._rc then do
-         p._rc = rc
-         p._err = _err 
+	p._rc = rc
+	p._err = _err
       end
-      p._active = p._active-going       -- just incase exit called twice
-      going = 0
+      do
+	p._active = p._active-going       -- just incase exit called twice
+	going = 0
+      catch NullPointerException
+	p.notifyAll()
+	signal ThreadQ
+      end
       if (p._debug&8)<>0 then
-         say 'Stopping' _name p c p._active
+	say 'Stopping' _name p c p._active
       p.notifyAll()
-   end
+    end
 
-   signal ThreadQ                       -- make sure exit is always safe...
+    signal ThreadQ                       -- make sure exit is always safe...
 
 
 
--- replace output of stage with link
+    -- replace output of stage with link
 
-method inStream(nn=int,l=link,s=boolean) protect signals StageError
+  method inStream(nn=int,l=link,s=boolean) protect signals StageError
 
-   if nn<0 then
+    if nn<0 then
       Error(13,'inStream no stream selected')
 
-   n = findin(nn)                      -- does this stream exist?
-   if l.input() then
+    n = findin(nn)                      -- does this stream exist?
+    if l.input() then
       do                    -- *in: !
-/* */    f = l.stage                   -- track outputs for eofReport
-         do protect f
-            if f._findout(l.stream())=null then
-               f._o = f._o+1
-         end
-         if n=null then
-            p.connect(l,this,nn,0)     -- add it to this stage
-         else do
-            super.in = n.nin           -- unchain from 2
-            if s then
-               n.pushOut()             -- change the connection
-            work = l.stage()
-            n.sout = l.stream()
-            n.outs = work
-            do protect work
-               n.nin = work.in         -- link into stage lists
-               work.in = n
-            end
-         end
+	/* */    f = l.stage                   -- track outputs for eofReport
+        do protect f
+          if f._findout(l.stream())=null then
+            f._o = f._o+1
+        end
+        if n=null then
+          p.connect(l,this,nn,0)     -- add it to this stage
+        else do
+          super.in = n.nin           -- unchain from 2
+          if s then
+            n.pushOut()             -- change the connection
+          work = l.stage()
+          n.sout = l.stream()
+          n.outs = work
+          do protect work
+            n.nin = work.in         -- link into stage lists
+            work.in = n
+          end
+        end
       end
-   else                     -- ... ! *in:
-      do
-         if s then do                  -- this is a callpipe...
-            _rc = 11
-            say 'Error - '_name' impossible link'
-            signal StageError
-         end
-/* */    f = l.stage()                 -- track outputs for eofReport
-         do protect f
-            if f._findout(l.stream())=null then
-               f._o = f._o+1
-         end
-         if n<>null then do
-            super.in = n.nin
-            n.outs = null
-         end
-         p.connect(l,this,nn,0)        -- use a new pnode so buffered
-         if sin=nn then do
-            if (flag&LEAVE_NULL)<>0 then
-               inn = null
-            else
-               inn = findin(nn)        -- data will not be lost or
-         end
---       in either case sent outn null to show sever...???
+    else                     -- ... ! *in:
+    do
+      if s then do                  -- this is a callpipe...
+        _rc = 11
+        say 'Error - '_name' impossible link'
+        signal StageError
       end
-   notifyAll()                         -- allow pending outputs to switch outs
+      /* */    f = l.stage()                 -- track outputs for eofReport
+      do protect f
+        if f._findout(l.stream())=null then
+          f._o = f._o+1
+      end
+      if n<>null then do
+        super.in = n.nin
+        n.outs = null
+      end
+      p.connect(l,this,nn,0)        -- use a new pnode so buffered
+      if sin=nn then do
+        if (flag&LEAVE_NULL)<>0 then
+          inn = null
+        else
+          inn = findin(nn)        -- data will not be lost or
+      end
+      --       in either case sent outn null to show sever...???
+    end
+    notifyAll()                         -- allow pending outputs to switch outs
 
 
--- replace input of a stage with link
+    -- replace input of a stage with link
 
-method outStream(nn=int,l=link,s=boolean) protect signals StageError
+  method outStream(nn=int,l=link,s=boolean) protect signals StageError
 
    if nn<0 then
       Error(13,'outStream no stream selected')
@@ -1498,20 +1509,11 @@ method getDebug() returns int
 
    return p._debug
 
-
-method setJITCache(c=Hashtable) returns pipe
-
-  return p.setJITCache(c)
-
-method getJITCache() returns Hashtable
-
-   return p.JITCache
-
 method getPipeName()
 
    return p.getName()
 
-method pipStop signals ThreadQ 
+method pipStop signals ThreadQ
 
    p.T.Interrupt()
-   exit(12)  
+   exit(12)

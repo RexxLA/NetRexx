@@ -1,0 +1,115 @@
+--       package:  xclasses
+--       version:  1.000 beta
+--          date:  23 JAN 1997
+--        author:  P.A.Marchesini
+--     copyright:  (c) P.A.MArchesini, 1997
+--  latest vers.:  http://wwwcn.cern.ch/news/netrexx
+--
+--
+package xclasses
+class xhistory
+  properties public
+
+  properties private static
+    maxrec    = 100        -- history default length
+    record    = rexx('')   -- buffer for the history
+    lastrec   = 0
+
+  properties private static
+    pversion  = 'v1r000 beta'
+    copyright = '(c) 1997 Pierantonio Marchesini, ETH Zurich'
+    contact   = 'Pierantonio.Marchesini@cern.ch'
+
+-- method......: constructor
+-- purpose.....: builds an history object with history depth=N
+--
+  method xhistory(n=Rexx) public
+    maxrec = n
+
+-- purpose.....: ditto, history depth=100
+  method xhistory() public
+    this(maxrec)
+
+-- method......: counter
+-- purpose.....: returns the value of the counter
+--
+  method counter() public returns Rexx
+    return lastrec
+
+-- method......: dump
+-- purpose.....: dumps the history records
+--
+  method dump(n=Rexx) public
+    first = lastrec - n + 1
+    loop i=first to lastrec
+      k = i// maxrec
+      if record[k] = NULL then iterate
+      if record[k] = ''   then iterate
+      say i.right(5) record[k]
+    end
+
+-- method......: retrieve
+-- purpose.....: retrieve an history item
+--
+  method retrieve(n=Rexx) public returns Rexx
+    if n < lastrec - maxrec then return ''
+    if n > lastrec then return ''
+    k = n// maxrec
+    return record[k]
+
+-- method......: save
+-- purpose.....: save a line in the history buffer
+--
+  method save(entry=Rexx) public
+    k = lastrec // maxrec
+    if record[k] <> NULL then
+      do
+        if entry = record[k]
+          then return
+      end
+    lastrec = lastrec+1
+    k = lastrec // maxrec
+    record[k] = entry
+
+-- method......: version
+-- purpose.....: display the version
+--
+  method version() public static
+    say 'Program version.....:' pversion
+    say 'Copyright...........:' copyright
+    say 'Contact.............:' contact
+
+-- method......: main
+-- purpose.....: just test the functions simply running "java xhistory"
+--
+  method main(args=String[]) public static
+    args = args
+
+    h = xhistory(100)
+    loop i = 1 to 189
+      h.save('this is command number "'i'".' )
+    end
+    say '>>> dump example.'
+    h.dump(10)
+    say '>>> (end).'
+    say
+    say '#200' h.retrieve(200)
+    say '#195' h.retrieve(195)
+    say '#140' h.retrieve(140)
+    say '#300' h.retrieve(300)
+
+    exit 0
+
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free  Software  Foundation;  either version 2 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the  implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A  PARTICULAR  PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with  this  program;  if not,  write  to  the Free Software
+--  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.

@@ -1,0 +1,86 @@
+/*
+ *  Copyright (C) 2019  R.V. Jansen
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.  
+ *
+ */
+options nostrictcase nostrictargs nostrictsignal nobinary
+package org.netrexx.njpipes.stages
+import org.netrexx.njpipes.pipes.
+import java.util.
+
+class zip extends stage
+
+  properties private
+  zipEntries = ArrayList
+  zipFileName = ''
+  --trace results
+  method run()
+
+    a = arg()
+    do
+      if a = '' then a = Rexx readto()
+    catch StageError
+      say 'unzip error'
+    end
+
+    a = arg()
+    if a <> '' then
+      do
+	this.zipFileName=a
+      end
+
+      do
+	this.zipEntries=ArrayList()
+	loop forever
+          line = Rexx peekto()
+	  this.zipEntries.add(line)
+          readto()
+	catch StageError
+	  rc = rc()
+	end -- loop forever
+      end
+
+      do
+	create()
+      catch FileNotFoundException
+	say 'file not found'
+      catch IOException
+	say 'I/O Exception'
+      end
+      exit(rc*(rc<>12))
+    
+  /**
+   * method create() does the actual work of creating the zipfile with
+   * an entry for every file and copying to the zipoutputstream
+   */
+  method create() signals IOException
+    len          = int
+    do
+      i	 = this.zipEntries.iterator()
+      out	 = ZipOutputStream(FileOutputStream(this.zipFileName))
+      loop while i.hasNext()
+	infile = String(Rexx i.next())
+	in	 = FileInputStream(infile)
+	out.putNextEntry(ZipEntry(infile))
+	buf	 = byte[1024]
+	len	 = in.read(buf)
+	loop while (len > 0)
+	  out.write(buf,0,len)
+	  len	 = in.read(buf)
+	end
+	do
+	  output(infile)
+	catch s=StageError
+	  say s.getMessage()
+	catch q=ThreadQ
+	  say q.getMessage()
+	end
+      end
+    catch ioex = IOException
+      say ioex.getMessage()
+    end
+    out.close()
+    return
+    

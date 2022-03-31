@@ -1,6 +1,7 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *  Copyright (C) 1998  Jeffrey Hennick 
+ *  Copyright (C) 1998  Jeffrey Hennick
+ *  Copyright (C) 2020  Jeffrey Hennick
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -8,7 +9,18 @@
  *
  */
 
--- 98/07/23 added the unprotected methods _findin and _findout.  ejt
+/*
+ 21/ 2/ 3 xrangerx() was xrange(). Jeff Hennick
+ 21/ 2/ 3 in xrange(), Use sequence to fix for last.  Jeff Hennick
+ 20/11/13 in getAnyCase, declare ret to be Rexx.  Jeff Hennick
+ 20/10/12 getAnyCase: Added length parameter to accomodate various CMS stages. Jeff Hennick
+ 20/ 9/18 getanyCase. Jeff Hennick
+ 20/ 9/18 sortInsertInto: Added strict option. Jeff Hennick
+ 20/ 9/15 sortInsertInto. Jeff Hennick
+ 20/ 9/13 added xrange(); overhauled getXrange(). Jeff Hennick
+ 20/ 9/ 3 added getKeyWord. Jeff Hennick
+ 98/07/23 added the unprotected methods _findin and _findout.  ejt
+*/
 
 package org.netrexx.njpipes.pipes
 
@@ -18,359 +30,648 @@ options binary nostrictargs nostrictmethods nostrictcase
 
 class utils private extends Object
 
-properties constant
+  properties constant
 
-WAIT_OUT     = int     1
-CLEAR_OUT    = int   (-2)
-WAIT_READ    = int     2
-CLEAR_READ   = int   (-3)
-WAIT_ANY     = int     4
-CLEAR_ANY    = int   (-5)
-WAIT_COMMIT  = int     8
-CLEAR_COMMIT = int   (-9)
-SEVER        = int    16
-CLEAR_SEVER  = int  (-17)
-AUTO_COMMIT  = int    32
-LEAVE_NULL   = int    48
-CLEAR_AUTO   = int  (-33)
-RUNNING      = int  (-16)
-WAITING      = int    15
+  WAIT_OUT     = int     1
+  CLEAR_OUT    = int   (-2)
+  WAIT_READ    = int     2
+  CLEAR_READ   = int   (-3)
+  WAIT_ANY     = int     4
+  CLEAR_ANY    = int   (-5)
+  WAIT_COMMIT  = int     8
+  CLEAR_COMMIT = int   (-9)
+  SEVER        = int    16
+  CLEAR_SEVER  = int  (-17)
+  AUTO_COMMIT  = int    32
+  LEAVE_NULL   = int    48
+  CLEAR_AUTO   = int  (-33)
+  RUNNING      = int  (-16)
+  WAITING      = int    15
 
-INCREMENT    = int  256
+  INCREMENT    = int  256
 
-properties shared
+  properties shared
 
-in   = pnode              -- input stream pnodes
-out  = pnode              -- output stream pnodes
-
-
--- build the basic object
-
-method utils()
-
-in  = null
-out = null
+  in   = pnode              -- input stream pnodes
+  out  = pnode              -- output stream pnodes
 
 
--- find input strean by number
+  -- build the basic object
 
-method findin(stream=int) returns pnode protect shared
-curr = pnode
-prev = pnode
+  method utils()
 
-do                                        -- move to front search
-   if in.sout<>stream then do
-      prev = in
-      curr = in.nin
-      loop forever
-         if curr.sout=stream then do
+    in  = null
+    out = null
+
+
+    -- find input stream by number
+
+  method findin(stream=int) returns pnode protect shared
+
+    curr = pnode
+    prev = pnode
+
+    do                                        -- move to front search
+      if in.sout<>stream then do
+	prev = in
+	curr = in.nin
+	loop forever
+          if curr.sout=stream then do
             prev.nin = curr.nin
             curr.nin = in
             in = curr
             leave
-         end
-         prev = curr
-         curr = curr.nin
+          end
+          prev = curr
+          curr = curr.nin
+	end
       end
-   end
-   return in
-catch NullPointerException
-   return null
-end
+      return in
+    catch NullPointerException
+      return null
+    end
 
 
--- find output stream by number
+    -- find output stream by number
 
-method findout(stream=int) returns pnode protect shared
-curr = pnode
-prev = pnode
+  method findout(stream=int) returns pnode protect shared
+    curr = pnode
+    prev = pnode
 
-do
-   if out.sin<>stream then do
-      prev = out
-      curr = out.nout
-      loop forever
-         if curr.sin=stream then do
+    do
+      if out.sin<>stream then do
+	prev = out
+	curr = out.nout
+	loop forever
+          if curr.sin=stream then do
             prev.nout = curr.nout
             curr.nout = out
             out = curr
             leave
-         end
-         prev = curr
-         curr = curr.nout
+          end
+          prev = curr
+          curr = curr.nout
+	end
       end
-   end
-   return out
-catch NullPointerException
-   return null
-end
+      return out
+    catch NullPointerException
+      return null
+    end
 
 
--- find input strean by number (unprotected, no move to front)
+    -- find input stream by number (unprotected, no move to front)
 
-method _findin(stream=int) returns pnode shared
-curr = pnode
-do                                        -- move to front search
-   if in.sout<>stream then do
-      curr = in.nin
-      loop forever
-         if curr.sout=stream then
+  method _findin(stream=int) returns pnode shared
+    curr = pnode
+    do                                        -- move to front search
+      if in.sout<>stream then do
+	curr = in.nin
+	loop forever
+          if curr.sout=stream then
             return curr
-         curr = curr.nin
+          curr = curr.nin
+	end
       end
-   end
-   return in
-catch NullPointerException
-   return null
-end
+      return in
+    catch NullPointerException
+      return null
+    end
 
 
--- find output stream by number (unprotected, no move to front)
+    -- find output stream by number (unprotected, no move to front)
 
-method _findout(stream=int) returns pnode shared
-curr = pnode
-do
-   if out.sin<>stream then do
-      curr = out.nout
-      loop forever
-         if curr.sin=stream then
+  method _findout(stream=int) returns pnode shared
+    curr = pnode
+    do
+      if out.sin<>stream then do
+	curr = out.nout
+	loop forever
+          if curr.sin=stream then
             return curr
-         curr = curr.nout
+          curr = curr.nout
+	end
       end
+      return out
+    catch NullPointerException
+      return null
+    end
+
+
+    /*
+     * This method is an exit called by the compiler.  With it you can change
+     * the unprocessed pipe definition, the definition of the current stage,
+     * and you can pass generated code back to the compiler.  To use it override
+     * it.  See stages\append, stages\prefix and stages\specs for examples of its
+     * use.
+     *
+     * stageExit is ONLY called for stages in the stage directory
+     *
+     * pInfo     = name of pipe,
+     * pInfo[1]  = stage number in pipe
+     * pInfo[2]  = stage label, null if no label
+     * pInfo[3]  = stage name
+     * pInfo[4]  = stage arguments
+     * pInfo[5]  = rest of pipe
+     * pInfo[6]  = sep
+     * pInfo[7]  = end
+     * pInfo[8]  = not modifier active
+     * pInfo[9]  = stage is a driver (no input streams)
+     * pInfo[10] = stage is a sink (no output streams)
+     * pInfo[12] = cont
+     *
+     * code      = ''
+     * code[0]   = 0
+     *
+     * When compilerExit returns with true, the compiler expects:
+     *
+     * pInfo[2]  = stage label
+     * pInfo[3]  = name of stage
+     * pInfo[4]  = stage arguments - note 'arg(_)' is magic and passes the pipe's
+     *             argument to the stage unchanged.  See the specs stage.
+     * pInfo[5]  = rest of the pipe
+     * pInfo[8]  = not modifier active.   See nfind, nlocate.
+     * pInfo[11] = IF you change the name of THIS stage to an existing stage, call
+     *             the stageExit in pInfo[11].  The current stage should not be
+     *             generating code and the new stage might.  See nfind, nlocate.
+     * code[0]   = number of lines generated for classes
+     * code[n]   = line n of generated code
+     *
+     */
+
+  method stageExit(pInfo=Rexx,code=Rexx) returns boolean signals StageError
+
+    if pInfo='' then
+      signal StageError('Error - pipes must be named')   -- to avoid warning
+    return 0
+
+  /**
+   * The compiler needs to know when the argument of a stage is a rexx object.
+   * The rexxArg() method returns the number of rexx object arguments.  See
+   * stem, stema, over and var.
+   *
+   */
+    -- 98/07/15 definition changed. ejt
+
+  method rexxArg(a=Rexx) returns Rexx
+    return ''
+
+
+  /**
+   * The compiler needs to know when the argument of a stage is a stage(s).
+   * The stageArg() method returns the position where the stages start.  See
+   * prefix and append.
+   *
+   */
+    -- 98/07/15 definition changed. ejt
+
+  method stageArg(a=Rexx) returns Rexx
+    return ''
+
+
+  /**
+   *
+   * Insert static shared methods after this comment please
+   *
+   **/
+
+
+    -- create an intelligent class name for a stageExit
+    -- 98/08/25  initial.  ejt
+
+  method stageName(a=Rexx,pid=Rexx,n=Rexx) returns Rexx static
+    w = a.changestr(pid,'').changestr(n,'')
+    w = pid'_'w'_'n
+    w = w.changestr('__','_')
+    return w
+
+
+  method GetXorc(xorc) returns Rexx static
+    --  GetXorc NJPipe Method
+    -- 98/06/17 JHennick
+
+  /** GetXorc(xorc)
+     Returns a Rexx character
+
+     A character specified as itself (a one-character word) or its
+     hexadecimal representation (a two-character word).  The blank is
+     represented by the keyword BLANK, which has the synonym SPACE, or with
+     its hex value, X'40'.  The default horizontal tabulate character (X'05')
+     is represented by the keyword TABULATE, which can be abbreviated down to
+     TAB.
+   */
+
+    xl = xorc.length()
+
+    select
+      when xl = 1 then s = xorc
+      when xl = 2 then s = xorc.x2c()
+      when xorc = 'BLANK' then s = ' '
+      when xorc = 'SPACE' then s = ' '
+      when 'TABULATE'.abbrev(xorc.upper,3) then s = '\t'
+      otherwise s = null
+    end
+    return s
+
+method xrangerx(fc = Rexx '',lc = Rexx '') static returns Rexx
+/* Just like classic Rexx.
+   Returns a string of characters in the collating order
+   inclusive of the first and last.
+   Wraps around 0xFF to 0x00 if needed.
+*/
+/*
+ 21/ 2/ 3 Use sequence to fix for last.  Jeff Hennick
+ 20/ 9/13 Jeff Hennick
+*/
+   o = Rexx ''
+   if fc == '' then fc = 0.d2c
+   if lc == '' then lc = 255.d2c
+   if fc > lc then do
+     o = fc.sequence(255.d2c)
+     fc = 0.d2c
    end
-   return out
-catch NullPointerException
-   return null
-end
+   o = o''fc.sequence(lc)
+   return o
+
+method GetXRange(argstr = Rexx '') static returns rexx
+/* Inspects the first word of argstr.
+   Returns a string of characters in the collating order
+   inclusive of the first and last. (xorc can be the word BLANK.)
+   Returns '' if first word is not a valid XRange.
+   xrange:
+   |--+--xorc---------+--|
+      +--xorc-xorc----+
+      +--xorc.number--+
+ */
+ /*
+  20/ 9/13 Major overhaul Jeff Hennick
+  98/06/17 JHennick
+ */
+--trace results
+  startc = Rexx ''
+  endc = Rexx ''
+  ret = Rexx null
+
+  xrc = argstr.word(1)
+  parse xrc fc +1 1 dfp '-' dsp 1 pfp '.' psp
+  parse xrc.upper dfpu '-' dspu 1 pfpu '.' pspu
+
+  if dfpu = 'BLANK' then dfp = ' '
+  if dspu = 'BLANK' then dsp = ' '
+  if pfpu = 'BLANK' then pfp = ' '
+  if pspu = 'BLANK' then psp = ' '
+
+  if psp <> '' then do        --  start . number
+    if \psp.datatype('W') then do
+      ret = ''
+    end
+    else psp = psp // 256
+  end
+
+  if fc = '-' then do  -- literal -
+    if dsp.left(1) = '-' then do  -- literal --
+      dfp = '-'
+      dsp = dsp.substr(2)
+    end
+    else if dsp.left(1) = '.' then do -- literal -.
+      pfp = '-'
+      psp = dsp.substr(2)
+      dsp = ''
+    end
+  end
+
+  select
+    when dsp || psp == '' then do -- single character, no - or .
+      if dfp.length = 1 then  -- single literal character
+        ret = dfp
+      else do               -- single hex number
+        ret = dfp.x2c
+      catch BadArgumentException
+        ret = ''
+      end
+    end
+    when dsp \== '' then do  -- we have a -
+      if dfp.length = 1 then  -- single literal character
+        startc = dfp
+      else                -- single hex number
+        startc = dfp.x2c
+      if dsp.length = 1 then  -- single literal character
+        endc = dsp
+      else                -- single hex number
+        endc = dsp.x2c
+    end
+    when ret \= null then
+      nop
+    when psp \== '' then do  -- start . number
+      if pfp.length = 1 then  -- single literal character
+        startc = pfp
+      else                -- single hex number
+        startc = pfp.x2c
+      endc = (startc.c2d + psp - 1).d2c
+    end
+    otherwise
+      ret = ''
+  end
+
+  if ret = null then
+    ret = xrangerx(startc, endc)
+
+  return ret
+
+
+    -- convert an object to Rexx if possible
+    -- 99/05/28  fix array logic tests.  eht
+    -- 98/09/07  add byte[] logic.  eht
+    -- 98/08/23  add toSting to otherwise logic.  ejt
+    -- 98/08/13  initial.  ejt
+
+  method object2rexx(a=java.lang.Object) returns Rexx static signals StageError
+
+    select
+      when a=null then             -- encapsulated classes from
+        return Rexx('')           -- java.lang can be added
+      when a<=Rexx then
+        return (Rexx a)
+      when [byte 0].getClass().isInstance(a) then
+        return Rexx(String(byte[] a,0,(byte[] a).length))
+      when [Char '0'].getClass().isInstance(a) then
+        return Rexx(char[] a)
+      when [String ' '].getClass().isInstance(a) then
+        return Rexx(string[] a)
+      when a<=String then
+        return Rexx(String a)
+      otherwise
+        return Rexx(a.toString())
+    catch NoSuchMethodError
+      signal StageError(8,'Error - cannot convert object to rexx')
+    end
+
+
+    -- convert an object to a string if possible
+    -- 99/05/28  fix array logic tests.  eht
+    -- 99/05/25  added byte[].  ejt
+    -- 98/08/13  initial.  ejt
+
+  method object2string(a=java.lang.Object) returns String static signals StageError
+
+    select
+      when a<=String then            -- encapsulated classes from
+        return (String a)           -- java.lang can be added
+      when [byte 0].getClass().isInstance(a) then
+        return String(byte[] a,0,(byte[] a).length)
+      otherwise
+        return a.toString()
+    catch NoSuchMethodError
+      signal StageError(8,'Error - no toString method, cannot convert object')
+    end
+
+
+  method pos(h=byte[],n=byte[]) returns int static
+
+    if h=null | n=null then
+      return -1
+
+    if n.length>h.length then
+      return -1
+
+    loop i=0 to h.length-n.length
+      if h[i]=n[0] then do
+	loop j=1 to n.length-1
+          k = i+j
+          if h[k]<>n[j] then
+            iterate i
+	end j
+      return i
+      end
+    end i
+
+    return -1
 
 
 /*
- * This method is an exit called by the compiler.  With it you can change
- * the unprocessed pipe definition, the definition of the current stage,
- * and you can pass generated code back to the compiler.  To use it override
- * it.  See stages\append, stages\prefix and stages\specs for examples of its
- * use.
- *
- * stageExit is ONLY called for stages in the stage directory
- *
- * pInfo     = name of pipe,
- * pInfo[1]  = stage number in pipe
- * pInfo[2]  = stage label, null if no label
- * pInfo[3]  = stage name
- * pInfo[4]  = stage arguments
- * pInfo[5]  = rest of pipe
- * pInfo[6]  = sep
- * pInfo[7]  = end
- * pInfo[8]  = not modifier active
- * pInfo[9]  = stage is a driver (no input streams)
- * pInfo[10] = stage is a sink (no output streams)
- * pInfo[12] = cont
- *
- * code      = ''
- * code[0]   = 0
- *
- * When compilerExit returns with true, the compiler expects:
- *
- * pInfo[2]  = stage label
- * pInfo[3]  = name of stage
- * pInfo[4]  = stage arguments - note 'arg(_)' is magic and passes the pipe's
- *             argument to the stage unchanged.  See the specs stage.
- * pInfo[5]  = rest of the pipe
- * pInfo[8]  = not modifier active.   See nfind, nlocate.
- * pInfo[11] = IF you change the name of THIS stage to an existing stage, call
- *             the stageExit in pInfo[11].  The current stage should not be
- *             generating code and the new stage might.  See nfind, nlocate.
- * code[0]   = number of lines generated for classes
- * code[n]   = line n of generated code
- *
- */
+   getKeyWord(argString, keyword, minKeyLength = 0, type = 'K')
 
-method stageExit(pInfo=Rexx,code=Rexx) returns boolean signals StageError
+This searches a string for a word or its abbreviation.  It is for
+searching argument strings for key words.  A minKeyLength of '' or 0
+means the full length is needed.  The search is case independent.  What
+it returns depends on the type.
 
-   if pInfo='' then
-      signal StageError('Error - pipes must be named')   -- to avoid warning
-   return 0
+ Type values (Only the first character is used):
+  -- Key: return boolean exists;
+  -- Subword: return next word;
+  -- Dstring: return DString
+  -- Qword: return QWord
 
-/**
-  * The compiler needs to know when the argument of a stage is a rexx object.
-  * The rexxArg() method returns the number of rexx object arguments.  See
-  * stem, stema, over and var.
-  *
-  */
--- 98/07/15 definition changed. ejt
+It returns a Rexx Indexed string of what it found including the original
+string with the keyword (and Subword, Dstring, or Qword) removed.  If
+the key word is not found the original string is returned.
 
-method rexxArg(a=Rexx) returns Rexx
-   return ''
+A key of "" and type of "DString" will search for a Dstring at the
+beginning of the argString.
 
+Note:  This version, when searching for a keyword, does not respect
+quoted strings or delimited strings.  It simply finds the first word
+that matches.
 
-/**
-  * The compiler needs to know when the argument of a stage is a stage(s).
-  * The stageArg() method returns the position where the stages start.  See
-  * prefix and append.
-  *
-  */
--- 98/07/15 definition changed. ejt
-
-method stageArg(a=Rexx) returns Rexx
-   return ''
-
-
-/**
-  *
-  * Insert static shared methods after this comment please
-  *
-  **/
-
-
--- create an intelligent class name for a stageExit
--- 98/08/25  initial.  ejt
-
-method stageName(a=Rexx,pid=Rexx,n=Rexx) returns Rexx static
-   w = a.changestr(pid,'').changestr(n,'')
-   w = pid'_'w'_'n
-   w = w.changestr('__','_')
-   return w
-
-
-method GetXorc(xorc) returns Rexx static
---  GetXorc NJPipe Method
--- 98/06/17 JHennick
-
-/** GetXorc(xorc)
-    Returns a Rexx character
-
-       A character specified as itself (a one-character word) or its
-       hexadecimal representation (a two-character word).  The blank is
-       represented by the keyword BLANK, which has the synonym SPACE, or with
-       its hex value, X'40'.  The default horizontal tabulate character (X'05')
-       is represented by the keyword TABULATE, which can be abbreviated down to
-       TAB.
+ returns:
+ [0] 5 -- number of return strings
+ [1] the argString without the keyword & subkeyword(s)
+ [2] the subkeyword(s) value
+     (or for type Key 1: keyword found | 0: keyword not found)
+ [3] the actual keyword found, this may be an abbreviation or mixed case
+ [4] the delimiter for types Dstring and Qword
+ [5] the word number of the keyword, 0 for not found
 */
 
-xl = xorc.length()
+/*
+  20/ 9/ 3 getKeyWord: New. Jeff Hennick
+  20/ 9/ 3 New. Jeff Hennick
+*/
+
+method getKeyWord(argString = Rexx, keyword = Rexx, minKeyLength = Rexx 0, type = Rexx 'K') static returns Rexx
+
+retindex = Rexx ''
+retindex[4] = '' -- delimiter
+ret = Rexx  -- subkeyword value
+retw = Rexx ''
+del2 = 1
+
+argStringUp = argString.upper
+keyword = keyword.strip
+if keyword = "''" | keyword = '""' then keyword = ''
+keywordUp = keyword.upper
+minKeyLength = minKeyLength.strip
+if \minKeyLength.datatype('W') | minKeyLength = 0 then minKeyLength = keyword.length
+
+type = type.strip.left(1).upper
+
+if keyword = '' then do
+  wp = 0
+end
+else if minKeyLength = keyword.length then
+  loop wp = 1 to argStringUp.words()
+    if keywordUp = argStringUp.word(wp) then leave
+  end
+else
+  loop wp = 1 to argStringUp.words()
+    if keywordUp.abbrev(argStringUp.word(wp), minKeyLength) then leave
+  end
+if wp > argString.words() then wp = 0
+
+retindex[5] = wp
+
+ret = wp > 0      -- key word found
+
+if ret then retindex[3] = argString.word(wp)
+else retindex[3] = ''
 
 select
-   when xl = 1 then s = xorc
-   when xl = 2 then s = xorc.x2c()
-   when xorc = 'BLANK' then s = ' '
-   when xorc = 'SPACE' then s = ' '
-   when 'TABULATE'.abbrev(xorc.upper,3) then s = '\t'
-   otherwise s = null
+when type = 'S' & ret then do       -- Suboption word
+  retw = argString.word(wp + 1)
+  del2 = 1
+  argString = argString.delword(wp, 2)
 end
-return s
+when type = 'D' & (ret | keyword = '') then do        -- DString
+  if keyword = '' then do
+    opt = argString
+    first = ''
+  end
+  else do
+    opt = argString.subword(wp + 1)
+    first = argString.subword(1, wp - 1)
+  end
+  ds = DString(opt)
+  if ds.String() =  '' & ds.Delimiter() = '' then do -- not found
+    ret = ''
+    retindex[4] = ''
+  end
+  else do
+    retw = ds.String()
+    argString = first ds.Residue
+    argStringUp = argString.upper
+    retindex[4] = ds.Delimiter()
+  end
+end
+when type = 'Q' & ret then do        -- possibly quoted "word"
+  opt = argString.subword(wp + 1)
+  if opt = '' then do
+    ret = ''
+  end
+  else do
+    fc = opt.left(1)
+    if fc = '"' | fc = "'" then do
+      ds = DString(opt)
+      retw = ds.String()
+      argString = argString.subword(1, wp - 1) ds.Residue
+    end
+    else do
+      fc = ''
+      retw = argString.word(wp + 1)
+      argString = argString.delword(wp, 2)
+    end
+    argStringUp = argString.upper
+    retindex[4] = fc
+  end
+end
+when type = 'D' | type = 'Q' then   -- no keyword found
+  ret = ''
+when ret > 0 then do
+  w = 1
+  if type \= 'K' & del2 then w = 2     -- Keyword alone
+  argString = argString.delword(wp,w)
+  argStringUp = argStringUp.delword(wp,w)
+end
+otherwise
+  nop
+end
+
+if type \= 'K' & retw <> '' then ret = retw
+
+retindex[0] = 5 -- number of returned indexed strings
+retindex[1] = argString   -- without what we found
+retindex[2] = ret         -- what we were looking for
+-- 3 actual keyword found
+-- 4 delimiter
+-- 5 word position
+return retindex  -- getKeyWord
 
 
-method GetXRange(xr) returns Rexx signals StageError static
---  GetXRange NJPipe Method
--- 98/06/17 JHennick
+method sortInsertInto(list = Rexx, new = Rexx, strict = Rexx 0) static returns Rexx
+/* Insert a new item into a sorted list in a Rexx indexed variable.
+   Returns the list with new inserted.
+   Indexed by integers from 1.
+   Index 0 is a count of the other values.
+   If strict = 1 or the first character is 'S' or 's', then strict
+   compare, <<, is used, otherwise normal compare, <, is used.
 
-/** GetXRrange
+   Example:
 
-      returns Rexx string of characters in the xrange
-      signals Error:  BadXRange
+    mylist = Rexx '' -- new empty list
+    mylist[0] = 0  -- number of items in the list
 
+    sortInsertInto(mylist, 'first')     -- into empty list
+    sortInsertInto(mylist, 'early')     -- before anything in the list
+    sortInsertInto(mylist, 'last')      -- after everyting in the list
+    sortInsertInto(mylist, 'inserted')  -- somewhere in the middle of the list, the typical case
 
-      xrange:
-                  +--+-xorc--------+-------------------------+
-                     +-xorc-xorc---+
-                     +-xorc.number-+
+    loop i = 0 to list[0]
+      say i ':' list[i]
+    end
+
+0 : 4
+1 : early
+2 : first
+3 : inserted
+4 : last
 
 */
+/*
+ 20/ 9/18 Added strict option.  Jeff Hennick
+ 20/ 9/15 Jeff Hennick
+*/
 
-r = GetXorc(xr)
-if r = null then do
-   parse xr x1 '-' x2
+-- find the ones smaller than new
+-- should strict compare be used?
+if strict = 1, strict.left(1) = 's' then
+  loop i = 1 to list[0] while list[i] << new
+  end
+else
+  loop i = 1 to list[0] while list[i] < new
+  end
 
-   c = 1
-   if x2 \= '' then c = 0
-   else parse xr x1 '.' e
-
-   s = GetXorc(x1)
-   if s = null then signal StageError('BadXrange')
-
-   if c then do
-      e = s.c2d + e - 1
-      if e > 255 then e = e - 256
-      e = e.d2c
-   end
-   else do
-      e = GetXorc(x2)
-      if s = null then signal StageError('BadXrange')
-   end
-
-   if e > s then r = s.sequence(e)
-   else r = s.sequence('\xff') || '\0'.sequence(e)
+-- now i points to the first item bigger than the new one
+-- move up all the bigger ones
+loop j = list[0]+1 to i by -1
+  list[j] = list[j-1]
 end
 
-return r -- GetXRange
+-- put the new one into its right place
+list[i] = new
+list[0] = list[0] + 1
+return list    -- sortInsertInto
 
+method getAnyCase(argstr = Rexx '', length = 3) returns rexx
+/* Checks first word of argstr for ANYCASE or alias, uses caseless compare.
+   Optional length is how many characters of ANYCASE are needed to match.
+   Returns 1 = found ANYCASE
+           0 = not found
+          -1 = found RESPECTCASE
 
--- convert an object to Rexx if possible
--- 99/05/28  fix array logic tests.  eht
--- 98/09/07  add byte[] logic.  eht
--- 98/08/23  add toSting to otherwise logic.  ejt
--- 98/08/13  initial.  ejt
-
-method object2rexx(a=java.lang.Object) returns Rexx static signals StageError
-
-   select
-      when a=null then             -- encapsulated classes from
-         return Rexx('')           -- java.lang can be added
-      when a<=Rexx then
-         return (Rexx a)
-      when [byte 0].getClass().isInstance(a) then
-         return Rexx(String(byte[] a,0,(byte[] a).length))
-      when [Char '0'].getClass().isInstance(a) then
-         return Rexx(char[] a)
-      when [String ' '].getClass().isInstance(a) then
-         return Rexx(string[] a)
-      when a<=String then
-         return Rexx(String a)
-      otherwise
-         return Rexx(a.toString())
-   catch NoSuchMethodError
-      signal StageError(8,'Error - cannot convert object to rexx')
-   end
-
-
--- convert an object to a string if possible
--- 99/05/28  fix array logic tests.  eht
--- 99/05/25  added byte[].  ejt
--- 98/08/13  initial.  ejt
-
-method object2string(a=java.lang.Object) returns String static signals StageError
-
-   select
-      when a<=String then            -- encapsulated classes from
-         return (String a)           -- java.lang can be added
-      when [byte 0].getClass().isInstance(a) then
-         return String(byte[] a,0,(byte[] a).length)
-      otherwise
-         return a.toString()
-   catch NoSuchMethodError
-      signal StageError(8,'Error - no toSting method, cannot convert object')
-   end
-
-
-method pos(h=byte[],n=byte[]) returns int static
-
-if h=null | n=null then
-   return -1
-
-if n.length>h.length then
-   return -1
-
-loop i=0 to h.length-n.length
-   if h[i]=n[0] then do
-      loop j=1 to n.length-1
-         k = i+j
-         if h[k]<>n[j] then
-            iterate i
-      end j
-      return i
-   end
-end i
-
-return -1
-
-
+  20/10/12 Added length parameter to accomodate various CMS stages. Jeff Hennick
+  20/ 9/18 Jeff Hennick
+*/
+ ret = Rexx
+ w1 = argstr.word(1).upper
+ select case length
+   when 3 then
+     ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC ANY CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+   when 4 then
+     ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+   when 7 then
+     ret = Rexx ('ANYCASE CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+   otherwise
+     ret = Rexx ('ANYCASE ANYCAS ANYCA ANYC CASEANY CASEIGNORE CASELESS IGNORECASE'.wordpos(w1)) > 0
+ end
+ if ret = 0 then do
+   ret = - (w1 = 'RESPECTCASE')
+ end
+ return ret

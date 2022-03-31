@@ -1,0 +1,672 @@
+/* dc */
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *Distributed under the ICU 1.8.1 License with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the license and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 20/ 9/12 Fixed NOW. Jeff Hennick
+ 20/ 8/22 Added NOW. Jeff Hennick
+ 20/ 6/26 Added NOON & MIDNIGHT options. Jeff Hennick
+*/
+
+/** dateconvert
+                              (3)
+                 +-- 1-* ------------------------+
+>>--DATECONVert--+-------------------------------+--------------------------->
+                 +-| Separator |--| Inputrange |-+
+
+    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
+>---+---------------------------------------+--+-----------------------+------>
+    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
+    +-| Inputformat |-+--+------------------+  +-BASEYEAR--yearnumber--+
+    +--NOW--(5)-------+  +-| Outputformat |-+
+
+                  +--MIDNIGHT--(4)-+
+>--+-----------+--+----------------+---------------------------------------->>
+   +--TIMEOUT--+  +--NOON--(4)-----+
+
+
+Separator:  (3)
+
+|--+---------------------------------------+--|
+   +--+--WORDSEParator---+--+--char-----+--+
+      +--WS--------------+  +--hexchar--+
+      +--FIELDSEparator--+  +--BLANK----+
+      +--FS--------------+  +--SPACE----+
+
+Inputrange:  (3)
+|--+--Words-(1)-wnumberrange---+--|
+   +--Fields-(1)-fnumberrange--+
+   +--cnumberrange-------------+
+
+(1): SPACE is optional here.
+(3): NetRexx Pipelines uses IRange which gives a superset of range options.
+(4): NetRexx Pipelines only. What time to assume if blank time on input.
+(5): NetRexx Pipelines only. Do NOT read input stream. Use current local date time.
+     Any Inputrange is ignored.
+
+Inputformat, Outputformat:
+SHOrtdate     }   mm/dd/yy hh:mm:ss.uuuuuu
+USA_SHORT     }
+REXX_DATE_U   }
+
+FULldate      }   mm/dd/yyyyyyy hh:mm:ss.uuuuuu
+USA           }
+
+ISO_SHORT         yy-mm-dd hh:mm:ss.uuuuuu
+ISOdate           yyyyyyy-mm-dd hh:mm:ss.uuuuuu
+DB2_SHORT         yy-mm-dd-hh.mm.ss.uuuuuu
+DB2               yyyyyyy-mm-dd-hh.mm.ss.uuuuuu
+VMDATE  (2)
+NORMAL            dd mmm yyyyyyy hh:mm:ss.uuuuuu
+CSL_SHORT     }   yy/mm/dd hh:mm:ss.uuuuuu
+REXX_DATE_O   }
+CSL               yyyyyyy/mm/dd hh:mm:ss.uuuuuu
+PIPE_SHORT        yymmddhhmmssuuuuuu
+PIPE          }   yyyymmddhhmmssuuuuuu
+REXX_DATE_S   }
+EURSHORT          dd.mm.yy hh:mm:ss.uuuuuu
+EUR               dd.mm.yyyyyyy hh:mm:ss.uuuuuu
+JULIAN_SHORT      yy.ddd hh:mm:ss.uuuuuu
+JULIAN            yyyyyyy.ddd hh:mm:ss.uuuuuu
+TOD_ABSOLUTE }  (2)
+TODABS       }  (2)
+SCIENTIFIC_ABSOLUTE }  (2)
+SCIABS              }  (2)
+POSIX             ssssssss
+TOD_RELATIVE }  (2)
+TODREL       }  (2)
+SCIENTIFIC_RELATIVE }  (2)
+SCIREL              }  (2)
+MET  (2)
+
+The following can be REXX_DATE_x, REXXx, or Rx
+REXX_DATE_B  (2)
+REXX_DATE_C  (2)
+REXX_DATE_D       ddd hh:mm:ss.uuuuuu
+REXX_DATE_E       dd/mm/yy hh:mm:ss.uuuuuu
+REXX_DATE_E_LONG  dd/mm/yyyyyyy hh:mm:ss.uuuuuu
+REXX_DATE_J       yyddd hh:mm:ss.uuuuuu
+REXX_DATE_J_LONG  yyyyddd hh:mm:ss.uuuuuu
+REXX_DATE_M       mmmmmmmmm (output only)
+REXX_DATE_N_SHORT dd mmm yy hh:mm:ss.uuuuuu
+REXX_DATE_N       dd mmm yyyy hh:mm:ss.uuuuuu
+REXX_DATE_W       wwwwwwwww (output only)
+
+(2) Not implemented in NetRexx Pipelines at this time; mainly mainframe useful only.
+
+Bad date records out on secondary, NetRexx Pipelines is more forgiving on input format:
+ _LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the
+ format; leading zeros/blanks can be ignored except where there is no punctuation.
+
+*/
+
+options nostrictcase nostrictargs nostrictsignal nobinary
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.text.SimpleDateFormat
+
+class dateconvert extends stage uses IRange
+
+timeout = boolean 0
+daysInMonth =  '31 28 31  30  31  30  31  31  30  31  30  31'
+
+  -- The run method of this stage should never get called
+
+method run()
+  rc = 16
+  exit(rc)
+
+
+  /*
+   * pInfo    = name of pipe,
+   * pInfo[1] = stage number in pipe
+   * pInfo[2] = stage label, null if no label
+   * pInfo[3] = stage name
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of pipe
+   * pInfo[6] = sep
+   * pInfo[7] = end
+   * pInfo[8] = not modifier active
+   * pInfo[9] = stage is a driver
+   * code     = ''
+   * code[0]  = 0
+   *
+   * When compilerExit returns with true, the compiler expects:
+   *
+   * pInfo[2] = stage label
+   * pInfo[3] = name of stage
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of the pipe
+   * code[0]  = number of lines generated
+   * code[n]  = line n
+   *
+   */
+
+method stageExit(pInfo=Rexx,o=Rexx) returns boolean
+do
+  pid  = pInfo
+  name = pInfo[3]
+  args = pInfo[4]
+  noon = 0
+  isRange = boolean
+
+  /* Process stage arguments here for passing to the generated stage */
+
+                                       /* input RANGE */
+  r = GetIRanges(args)
+  args = r[0].Residue
+  isRange = r[0].Number > 0
+
+
+  wpw = args.upper.wordpos('WINDOW')
+  if wpw > 0 then do
+    windowYear = args.word(wpw + 1)
+    args = args.delword(wpw,2)
+    if \windowYear.datatype('N') then Emsg(3,'Error - Unknown window number:' windowYear)
+  end
+  else windowYear = -50
+
+  bpw = args.upper.wordpos('BASEYEAR')
+  if bpw > 0 then do
+    lowYr = args.word(bpw + 1)
+    args = args.delword(bpw,2)
+  end
+  else do
+    parse Date() . . . . . nowYr .    -- 2020
+    lowYr = nowYr + windowYear   -- 1970
+  end
+  lowC = lowYr.left(lowYr.length()-2)
+  highC = lowC + 1         -- 20
+  lowY = lowYr.right(2)    -- 70
+
+                                         /* TIMEOUT */
+  tpw = args.upper.wordpos('TIMEOUT')
+  if tpw > 0 then do
+    timeout = 1
+    args = args.delword(tpw,1)
+  end
+
+                                                        /* MIDNIGHT / NOON */
+  mpw = args.upper.wordpos('MIDNIGHT') -- really ignore
+  if mpw > 0 then do
+    noon = 0
+    args = args.delword(mpw,1)
+  end
+
+  npw = args.upper.wordpos('NOON')
+  if npw > 0 then do
+    noon = 1
+    args = args.delword(npw,1)
+  end
+
+                                                         /* INPUT and OUTPUT DATE FORMATS */
+  parse args inF outf .
+  parse getInFormat(inF) inFormat ',' typei
+  parse getOutFormat(outf) outFormat ',' typeo
+
+  if 'JULIAN JULIAN_SHORT RB RC RD'.wordpos(typeo) > 0 | 'JULIAN JULIAN_SHORT RB RC RD'.wordpos(typei) > 0 then procJul = 1
+  else procJul = 0
+
+
+  /* make the generated stage */
+  n=0
+  cname = stageName(name,pid,pInfo[1])
+
+  if isRange then uIR = "uses IRange"
+  else uIR = ""
+  n=n+1;o[n]= 'class 'cname' extends stage private' uIR
+  n=n+1;o[n]= '--trace results'
+  n=n+1;o[n]= 'properties public'
+  n=n+1;o[n]= 'year = Rexx 0'
+  n=n+1;o[n]= 'month = Rexx 0'
+  n=n+1;o[n]= 'mname = Rexx ""'
+  n=n+1;o[n]= 'day = Rexx 0'
+  n=n+1;o[n]= 'doc = Rexx 0'
+  n=n+1;o[n]= 'doy = Rexx 0'
+  n=n+1;o[n]= 'dzero = Rexx 0'
+  n=n+1;o[n]= 'hour = Rexx 0'
+  n=n+1;o[n]= 'min = Rexx 0'
+  n=n+1;o[n]= 'sec = Rexx 0'
+  n=n+1;o[n]= 'secf = Rexx 0'
+  n=n+1;o[n]= 'psec = Rexx 0'
+  n=n+1;o[n]= 'pad = 0'
+  n=n+1;o[n]= 'padpad = pad""pad'
+  if procJul then do
+    n=n+1;o[n]= 'daysInMonthList = Rexx "'daysInMonth'"'
+    n=n+1;o[n]= "daysInMonthCumList = Rexx '0 31 59 90 120 151 181 212 243 273 304 334 365'"
+    n=n+1;o[n]= 'daysInMonth = Rexx 0'
+    n=n+1;o[n]= 'daysInMonthCum = Rexx 0'
+  end
+  n=n+1;o[n]= 'noon =' noon
+  n=n+1;o[n]= 'inF = Rexx "'inF'"'
+  n=n+1;o[n]= ''
+  n=n+1;o[n]= 'method run()'
+
+  /* process arguments */
+
+  if procJul then do
+    n=n+1;o[n]= 'getDaysInMonthCum()'
+  end
+
+  if isRange then do
+    n=n+1;o[n]='r = GetIRanges("'pInfo[4]'")'
+  end
+
+  /* Main Loop */
+
+  n=n+1;o[n]= 'loop forever'
+  if typei = 'NOW' then do
+    n=n+1;o[n]= '  formatter= java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z")'
+    n=n+1;o[n]= '  aobj = formatter.format(Date())'
+  end
+  else do
+    n=n+1;o[n]= '  aobj = peekto()'
+  end  
+  n=n+1;o[n]= '  robj = Rexx aobj'
+  /* process line */
+
+  if isRange then do
+    n=n+1;o[n]='  robj = r[1].SelIRange(robj," ")'
+  end
+
+  n=n+1;o[n]= '  parse robj' inFormat
+
+  n=n+1;o[n]= '  if year.length = 2 then do'
+  n=n+1;o[n]= '    if year <' lowY 'then year =' highC'""year'
+  n=n+1;o[n]= '    else year =' lowC'""year'
+  n=n+1;o[n]= '  end'
+
+  n=n+1;o[n]= '  if sec <> "" then sec = sec / 1'
+
+  n=n+1;o[n]= '  if \\(year""month""day).datatype("D") then do'
+  n=n+1;o[n]= '    unknown(aobj)'
+  n=n+1;o[n]= '    iterate'
+  n=n+1;o[n]= '  end'
+
+  if 'PIPE PIPE_SHORT'.wordpos(typei) > 0 then do
+    n=n+1;o[n]= "  sec = (sec'.'secf) / 1"
+  end
+
+  if 'JULIAN JULIAN_SHORT'.wordpos(typei) > 0 then do
+    n=n+1;o[n]='  parse JulianAdjDays(year, doy) year "." doy'
+    n=n+1;o[n]='  parse MDFromJulianDay(doy, isLeapYear(year)) month day'
+  end
+
+  if 'RB' = typei then do
+    n=n+1;o[n]='  dzero = JulianFromDays(doc)'
+  end
+
+  if 'RC' = typei then do
+    n=n+1;o[n]='  parse JulianFromDays(doc) year "." doy'
+    n=n+1;o[n]='  parse MDFromJulianDay(doy, isLeapYear(year)) month day'
+  end
+
+  if 'ISO_SHORT RO'.wordpos(typeo) > 0 then do
+    n=n+1;o[n]= '  year = (pad""year).right(2)'
+  end
+
+  if typei = 'RN' then do
+    n=n+1;o[n]= "  month = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.wordpos(mname)"
+  end
+
+  if typeo = 'RM' then do
+    n=n+1;o[n]= "  mname = 'January February March April May June July August September October November December'.word(month)"
+  end
+  else do
+   n=n+1;o[n]= '  day = (pad""day).right(2)'
+   n=n+1;o[n]= '  month = (pad""month).right(2)'
+   n=n+1;o[n]= '  if hour""min""sec = "" & noon then hour = 12'
+   n=n+1;o[n]= '  hour = (padpad""hour).right(2)'
+   n=n+1;o[n]= '  min = (padpad""min).right(2)'
+   n=n+1;o[n]= '  parse sec s "." f'
+   n=n+1;o[n]= '  s = (padpad""s).right(2)'
+   n=n+1;o[n]= '  if f <> "" then sec = s"."f'
+   n=n+1;o[n]= '  else sec = s'
+   if 'PIPE PIPE_SHORT'.wordpos(typeo) > 0  then do
+     n=n+1;o[n]= '  sec = s""(f).strip("T","0")'
+   end
+  end
+
+  if 'JULIAN JULIAN_SHORT RD'.wordpos(typeo) > 0 then do
+    n=n+1;o[n]= 'month=month;day=day;year=year'
+    n=n+1;o[n]= 'doy = dayOfYear(day, month, year)'
+  end
+
+  if 'USA RE RO PIPE_SHORT EUR_SHORT JULIAN_SHORT'.wordpos(typeo) > 0 then do  -- 2 digit year
+    n=n+1;o[n]= '  year = year.right(2)'
+  end
+
+  if typeo = 'RB' then do
+    n=n+1;o[n]= '  basedays = gregDayNumber(day, month, year)'
+  end
+
+  if typeo = 'RC' then do
+    n=n+1;o[n]='doy = dayOfYear(day, month, year)'
+    n=n+1;o[n]='ld = year.right(2) % 4'
+    n=n+1;o[n]='doc = year.right(2) * 365 + ld + doy'
+  end
+
+  n=n+1;o[n]= '  oline =' outFormat
+
+  if isRange then do
+    n=n+1;o[n]='  line = Rexx aobj'
+    n=n+1;o[n]='  parse getPrePostRange(r[1], line) left "," right'
+    n=n+1;o[n]='  oline = left""oline""right'
+  end
+
+  n=n+1;o[n]= '  output(oline)'
+  if typei = 'NOW' then do
+    n=n+1;o[n]= '  leave'
+  end 
+  else do
+    n=n+1;o[n]= '  readto()'
+  end  
+  n=n+1;o[n]= 'catch StageError'
+  n=n+1;o[n]= '  rc = rc()'
+  n=n+1;o[n]= 'end'
+  n=n+1;o[n]= 'exit(rc*(rc<>12))'
+
+  n=n+1;o[n]= 'method unknown(aobj = java.lang.Object) signals ThreadQ'
+  n=n+1;o[n]= '  do'
+  n=n+1;o[n]= '    selectOutput(1)'
+  n=n+1;o[n]= '    output(aobj)'
+  n=n+1;o[n]= '    selectOutput(0)'
+  n=n+1;o[n]= '    readto()'
+  n=n+1;o[n]= '  catch stageError'
+  n=n+1;o[n]= '    say "Could not convert date:"" "aobj""" to" inF"."'
+  n=n+1;o[n]= '    exit 11'
+  n=n+1;o[n]= '  end'
+
+  if isRange then do
+    /* this method should/will be incorporated into IRange, but for now has to be here */
+    n=n+1;o[n]= 'method getPrePostRange(ro=IRange, line)'
+    n=n+1;o[n]= '  sc = ro.startChar()'
+    n=n+1;o[n]= '  ec = ro.endChar() + 1'
+    n=n+1;o[n]= '  parse line left =(sc) . =(ec) right'
+    n=n+1;o[n]= '  return left","right'
+  end
+
+  if procJul then do
+    n=n+1;o[n]= 'method gregDayNumber(d, m, y)'
+    n=n+1;o[n]= '  if m < 3 then y=y-1'
+    n=n+1;o[n]= '  if m < 3 then m=m+12'
+    n=n+1;o[n]= '  return Math.floor(365.25*y)-Math.floor(y/100)+Math.floor(y/400)+Math.floor(30.6*(m+1))+d-62'
+
+    n=n+1;o[n]='method getDaysInMonthCum()'
+    n=n+1;o[n]='  loop i = 1 to 12'
+    n=n+1;o[n]='    daysInMonthCum[i,0] = daysInMonthCumList.word(i)'
+    n=n+1;o[n]='    daysInMonthCum[i,1] = daysInMonthCumList.word(i)'
+    n=n+1;o[n]='    daysInMonth[i] = daysInMonthList.word(i)'
+    n=n+1;o[n]='  end'
+    n=n+1;o[n]='  loop i = 3 to 12'
+    n=n+1;o[n]='    daysInMonthCum[i,1] = daysInMonthCum[i,1] + 1'
+    n=n+1;o[n]='  end'
+
+    n=n+1;o[n]='method dayOfYear(daya, montha, yeara)'
+    n=n+1;o[n]='  doy = daysInMonthCum[montha / 1, isLeapYear(yeara)] + daya'
+    if typeo = 'RD' then do
+      n=n+1;o[n]='  doy = doy / 1'
+    end
+    else do
+      n=n+1;o[n]='  doy = ("000"doy).right(3)'
+    end
+    n=n+1;o[n]='  return doy'
+
+    n=n+1;o[n]='method isLeapYear(yeara)'
+    n=n+1;o[n]='  if yeara // 400 = 0 then return 1'
+    n=n+1;o[n]='  if (yeara // 4 = 0) & (yeara // 100 <> 0) then return 1'
+    n=n+1;o[n]='  return 0'
+
+    n=n+1;o[n]='method LeapDaysBefore(yeara)'
+    n=n+1;o[n]='  return ((yeara-1)%4 - (yeara-1)%100 + (yeara-1)%400);'
+
+    n=n+1;o[n]='method JulianAdjDays(years, days)'
+    n=n+1;o[n]='  loop'
+    n=n+1;o[n]='    diy = 365'
+    n=n+1;o[n]='    if isLeapYear(years) then diy = 366'
+    n=n+1;o[n]='    if days < diy then leave'
+    n=n+1;o[n]='    days = days - diy'
+    n=n+1;o[n]='    years = years + 1'
+    n=n+1;o[n]='  end'
+    n=n+1;o[n]='  loop'
+    n=n+1;o[n]='    diy = 365'
+    n=n+1;o[n]='    if isLeapYear(years - 1) then diy = 366'
+    n=n+1;o[n]='    if days > 0 then leave'
+    n=n+1;o[n]='    days = days + diy'
+    n=n+1;o[n]='    years = years - 1'
+    n=n+1;o[n]='  end'
+    n=n+1;o[n]='  return years"."days'
+
+    n=n+1;o[n]='method JulianFromDays(days = Rexx)'
+    n=n+1;o[n]='  DAYS_IN_400_YEARS = (400*365) + 97'
+    n=n+1;o[n]='  years4 = (days % DAYS_IN_400_YEARS) * 400;'
+    n=n+1;o[n]='  days = days // DAYS_IN_400_YEARS'
+    n=n+1;o[n]='  DAYS_IN_100_YEARS = (100*365) + 24'
+    n=n+1;o[n]='  if days < DAYS_IN_100_YEARS then short = 1'
+    n=n+1;o[n]='  else short = 0'
+    n=n+1;o[n]='  years = years4 + 100 * (days % DAYS_IN_100_YEARS) + short'
+    n=n+1;o[n]='  return years"."days'
+
+    n=n+1;o[n]='method MDFromJulianDay(jd,isleap)'
+    n=n+1;o[n]='  list = daysInMonth'
+    n=n+1;o[n]='  if isleap then list[2] = 29'
+    n=n+1;o[n]='  loop m = 1 to 12 while jd > 0'
+    n=n+1;o[n]='    jd = jd - list[m]'
+    n=n+1;o[n]='  end'
+    n=n+1;o[n]='  m = m - 1'
+    n=n+1;o[n]='  jd = jd + list[m]'
+    n=n+1;o[n]='  list[2] = 28'
+    n=n+1;o[n]='  return m jd'
+
+  end
+
+
+  /* End of code */
+
+  o[0] = n
+
+  pInfo[3] = cname
+  pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
+
+  /* show off the generated code */
+  trace off
+  sc = 0
+--  sc = 1 -- comment out to not show the code
+  sn = 0
+  sn = 1 -- comment out to not show line numbers
+  if sc then do
+    say '*************************************************************'
+    loop n = 1 for o[0]
+      if sn then l = n.right(3)' '
+      else l = ''
+      say l''o[n]
+    end
+    say '*************************************************************'
+  end
+catch ThreadQ
+end
+return 1
+
+method getInFormat(name) --signals ThreadQ
+  type = name.upper
+  select case type
+    when '', 'SHORTDATE', 'SHORTDAT', 'SHORTDA', 'SHORTD', 'SHORT', 'SHOR', 'SHO', 'USA_SHORT', 'REXX_DATE_U', 'REXXU', 'RU', 'FULLDATE', 'USA'
+      then p = "month . '/' day . '/' year hour . ':' min . ':' sec ." -- mm/dd/yy hh:mm:ss.uuuuuu
+    when 'ISODATE', 'ISODAT', 'ISODA', 'ISOD', 'ISO', 'ISO_SHORT', 'NOW'
+      then p = "year . '-' month . '-' day hour . ':' min . ':' sec ."  -- yy . '-' mm . '-' dd hh . ':' mm . ':' ss.uuuuuu
+    when 'DB2', 'DB2_SHORT'
+      then p = "year . '-' month . '-' day . '-' hour . '.' min . '.' sec ."  -- yy . '-' mm . '-' dd . '-' hh.mm.ss.uuuuuu
+/* not working   6/2020
+    when 'REXX_DATE_B', 'REXXB', 'RB'
+      then do
+        p = "doc hour . ':' min . ':' sec ." -- daydddddddd hh . ':' mm . ':' ss.uuuuuu
+        type = 'RB'
+      end
+*/
+    when 'REXX_DATE_C', 'REXXC', 'RC'
+      then do
+        p = "doc . '/' hour . ':' min . ':' sec ." -- daydddddddd/hh . ':' mm . ':' ss.uuuuuu
+        type = 'RC'
+      end
+    when 'REXX_DATE_D', 'REXXD', 'RD'
+      then do
+        p = "doy hour . ':' min . ':' sec ."  -- dayd hh . ':' mm . ':' ss.uuuuuu
+        type = 'RD'
+      end
+    when 'REXX_DATE_E', 'REXXE', 'RE', 'REXX_DATE_E_LONG', 'REXXE_LONG', 'RE_LONG'
+      then p = "day . '/' month . '/' year hour . ':' min . ':' sec" -- mm/dd/yy hh:mm:ss.uuuuuu
+    when 'REXX_DATE_J', 'REXXJ', 'RJ'
+      then p = "year +2 doy +3 hour . ':' min . ':' sec ." -- mm/dd/yy hh:mm:ss.uuuuuu
+    when 'REXX_DATE_J_LONG', 'REXXJ_LONG', 'RJ_LONG'
+      then p = "year +4 doy +3 hour . ':' min . ':' sec ." -- mm/dd/yy hh:mm:ss.uuuuuu
+    when 'NORMAL', 'REXX_DATE_N', 'REXXN', 'RN', 'REXX_DATE_N_SHORT', 'REXXN_SHORT', 'RN_SHORT'
+      then do
+        p = "day mname year hour . ':' min . ':' sec ." -- dd mmm yy hh . ':' mm . ':' ss.uuuuuu
+        type = 'RN'
+      end
+    when 'REXX_DATE_O', 'REXXO', 'RO', 'REXX_DATE_O_LONG', 'REXXO_LONG', 'RO_LONG', 'CSL', 'CSL_SHORT'
+      then p = "year . '/' month . '/' day hour . ':' min . ':' sec ." -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+    when 'REXX_DATE_S_LONG', 'REXXS_LONG', 'RS_LONG', 'PIPE'
+      then do
+        p = "year +4 month +2 day +2 hour +2 min +2 sec +2 secf ."
+        type = 'PIPE'
+      end
+    when 'PIPE_SHORT'
+      then p = "year +2 month +2 day +2 hour +2 min +2 sec +2 secf ."
+    when 'EUR', 'EUR_SHORT'
+      then p = "day . '.' month . '.' year hour . ':' min . ':' sec ." -- dd.mm.yy hh . ':' mm . ':' ss.uuuuuu
+    when 'JULIAN', 'JULIAN_SHORT'
+      then p = "year . '.' doy hour . ':' min . ':' sec ." -- yy.dayd hh . ':' mm . ':' ss.uuuuuu
+    when 'POSIX'
+      then do
+        p = "psec"
+        type = 'POSIX'
+      end
+    otherwise
+      say 'DateConvert Input format' name 'is not recognized.'
+      exit 11
+  end
+  return p','type
+
+method getOutFormat(name)
+  type = name.upper
+  select case type
+    when 'SHORTDATE', 'SHORTDAT', 'SHORTDA', 'SHORTD', 'SHORT', 'SHOR', 'SHO', 'USA_SHORT', 'REXX_DATE_U', 'REXXU', 'RU', 'FULLDATE', 'USA'
+      then do
+        if timeout then
+          p = "month'/'day'/'year hour':'min':'sec"  -- mm/dd/yy hh:mm:ss.uuuuuu
+        else
+          p = "month'/'day'/'year"  -- mm/dd/yy hh:mm:ss.uuuuuu
+        type = 'USA'
+      end
+    when 'ISO_SHORT'
+      then if timeout then
+        p = "year'-'month'-'day hour':'min':'sec"  --  yyyyyyy-mm-dd hh:mm:ss.uuuuuu
+      else
+        p = "year'-'month'-'day"  --  yyyyyyy-mm-dd hh:mm:ss.uuuuuu
+    when '', 'ISODATE', 'ISODAT', 'ISODA', 'ISOD', 'ISO'
+      then if timeout then
+        p = "year'-'month'-'day hour':'min':'sec"  --  yyyyyyy-mm-dd hh:mm:ss.uuuuuu
+      else
+        p = "year'-'month'-'day"  --  yyyyyyy-mm-dd hh:mm:ss.uuuuuu
+/* not working 6/2020
+    when 'REXX_DATE_B', 'REXXB', 'RB'
+      then do
+        if timeout then
+          p = "basedays hour':'min':'sec"
+        else
+          p = 'basedays'
+        type = 'RB'
+      end
+*/
+    when 'REXX_DATE_C', 'REXXC', 'RC'
+      then do
+        if timeout then
+          p = "doc'/'hour':'min':'sec"
+        else
+          p = 'doc'
+        type = 'RC'
+      end
+    when 'REXX_DATE_D', 'REXXD', 'RD'
+      then do
+        if timeout then
+          p = "doy hour':'min':'sec"
+        else
+          p = 'doy'
+        type = 'RD'
+      end
+    when 'REXX_DATE_E', 'REXXE', 'RE'
+      then do
+        if timeout then
+          p = "day'/'month'/'year hour':'min':'sec" -- mm/dd/yy hh:mm:ss.uuuuuu
+        else
+          p = "day'/'month'/'year" -- mm/dd/yy hh:mm:ss.uuuuuu
+        type = 'RE'
+      end
+    when 'REXX_DATE_E_LONG', 'REXXE_LONG', 'RE_LONG'
+      then do
+        if timeout then
+          p = "day'/'month'/'year hour':'min':'sec" -- mm/dd/yy hh:mm:ss.uuuuuu
+        else
+          p = "day'/'month'/'year" -- mm/dd/yy hh:mm:ss.uuuuuu
+        type = 'RE_LONG'
+      end
+    when 'REXX_DATE_M', 'REXXM', 'RM'
+      then do
+        p = "mname" -- mmmmmmmmmmmmm
+        type = 'RM'
+      end
+    when 'REXX_DATE_O', 'REXXO', 'RO', 'CSL_SHORT'
+      then do
+        if timeout then
+          p = "year'/'month'/'day hour':'min':'sec" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        else
+          p = "year'/'month'/'day" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        type = 'RO'
+      end
+    when 'REXX_DATE_O_LONG', 'REXXO_LONG', 'RO_LONG'
+      then do
+        if timeout then
+          p = "year'/'month'/'day hour':'min':'sec" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        else
+          p = "year'/'month'/'day" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        type = 'RO_LONG'
+      end
+    when 'CSL'
+      then do
+        if timeout then
+          p = "year'/'month'/'day hour':'min':'sec" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        else
+          p = "year'/'month'/'day" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+      end
+    when 'REXX_DATE_S_LONG', 'REXXS_LONG', 'RS_LONG', 'PIPE', 'PIPE_SHORT', 'REXX_DATE_S', 'REXXS', 'RS'
+      then do
+        if timeout then
+          p = "year''month''day''hour''min''sec" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        else
+          p = "year''month''day" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+      end
+    when 'EUR', 'EUR_SHORT'
+      then do
+        if timeout then
+          p = "day'.'month'.'year' 'hour':'min':'sec" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        else
+          p =  "day'.'month'.'year" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+      end
+    when 'JULIAN', 'JULIAN_SHORT'
+      then do
+        if timeout then
+          p = "year'.'doy' 'hour':'min':'sec" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+        else
+          p = "year'.'doy" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
+      end
+    otherwise
+      say 'DateConvert Output format' name 'is not recognized.'
+      exit 11
+    end
+  return p',' type

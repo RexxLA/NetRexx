@@ -1,1 +1,1 @@
-@java -cp "%NETREXX_HOME%\lib\NetRexxF.jar;%CLASSPATH%" org.netrexx.njpipes.pipes.compiler %*
+@java -cp "%NETREXX_HOME%\lib\NetRexxF.jar;%CLASSPATH%" org.netrexx.njpipes.pipes.runner %*

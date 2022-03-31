@@ -23,7 +23,7 @@ This version differs from the current Apache version (as of 2011/10/24) in the f
 
 (4) A new option "javaDir" allows the translated java files to be kept separate from the source and class files.
 
-(5) Options "warnexit0", "java", "exec", and "arg" can be passed to the translator now.
+(5) Options "warnexit0", "java", "exec", "annotations", "address", and "arg" can be passed to the translator now.
 
 (6) A new option "removeSourceCopies" will delete the duplicate copies of the source files made during processing.
 
@@ -40,5 +40,5 @@ This version differs from the current Apache version (as of 2011/10/24) in the f
     Then you can use "nrc" in place of "netrexxc" to run this version of the task rather than the old version.
         
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
-This package structure will be built upon in the coming releases. For remarks, corrections and suggestions, please use developers@netrexx.kenai.com.
+This package structure will be built upon in the coming releases. For remarks, corrections and suggestions, please use the developers mailing list.
 

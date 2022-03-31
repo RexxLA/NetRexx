@@ -1,0 +1,577 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 1996, 2000.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NrAddress                                                          */
+/*                                                                    */
+/*   An object that represents a parsed Address clause                */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2020.01.11 Initial                                                 */
+/* 2020.02.04 use SYSTEM default if address not set                   */
+/* 2022.02.25 ooRexx-like ADDRESS WITH stem implementation            */
+/* 2022.03.02 ooRexx-like ADDRESS WITH stream implementation          */
+/* 2022.03.05 exit(9) upon RexAddress exception                       */
+/* 2022.03.07 exit(9) removed, user must check RC for exceptions      */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary decimal strictcase strictargs
+--options nobinary nostrictcase nostrictargs
+
+import lang.netrexx.address 
+
+
+/**
+
+Upon direct ADDRESS instruction (parser)
+  if 'ADDRESS addressee'
+    self.addr = addressee
+    if class context  (pass1) --TBD
+      we store addressee on rxt.program.parser.cursor.curclass.curaddres
+    if method context (pass2)
+      we store addressee on rxt.program.parser.cursor.curmethod.curaddress
+    else fail (no ADDRESS support in program context)  
+  if 'ADDRESS addressee command'
+    self.addr = addressee
+
+Upon direct ADDRESS invocation (exec or run)
+  if 'ADDRESS addressee'
+    nop
+  if 'ADDRESS addressee command'
+    we use self.addr and execute 
+
+Upon indirect ADDRESS instruction (parser)
+  'command'
+    we collect curaddres from method, class, or SYSTEM address, in that order 
+    self.addr = curaddres
+
+Upon indirect ADDRESS invocation (exec or run) 
+  'command'
+    we use self.addr and execute 
+
+**/
+
+/**   An object that represents a parsed ADDRESS clause                    */
+/*  loosely based on SAY                                                   */
+class NrAddress implements RxClauseParser uses RxCode, RxExpr
+ properties private
+  rxt    =RxTranslator   -- root
+  parser =RxParser       -- local reference
+  tokens =RxToken[]      -- local reference
+
+  expr   =RxExpr         -- expression [null if none]
+  code   =RxCode         -- code
+  addr   =Rexx           -- addressee
+                         -- addr['with'] holds with stem if permanent
+
+  tmethod =RxMethod null
+  tclass  =RxClass  null
+
+  addressing = boolean 0
+  
+  -- store 'with' arguments if present
+  with = Rexx ''
+  -- with['input','stem'] = stem
+  -- with['input','stream'] = stream (not yet)
+  -- with['output','stem'] = stem
+  -- with['output','stream'] = stream (not yet)
+  -- with['error','stem'] = stem
+  -- with['error','stream'] = stream (not yet)
+  -- with['output','append'] = 'APPEND' ('replace' is default)
+  -- with['error','append'] = 'APPEND'  ('replace' is default)
+  
+
+ /** Construct an object from the current clause */
+ method NrAddress(newrxt=RxTranslator)
+  rxt    =newrxt                                  -- the boss
+  parser =rxt.program.parser
+  tokens =parser.cursor.curclause.tokens
+
+
+ /** Pass processing */
+ method scan(pass=int)
+--  say '# NrAddress scan pass ' pass
+--  say '--tokens'
+--  say 'tokens=' parser.cursor.curclause.showtokens()
+
+ 
+  if tokens[0].value \== null then do
+    t = Rexx tokens[0].value
+    if t.upper()=='ADDRESS' then do
+      addressing = 1
+    end
+    else do
+      if pass<2 then signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+    end  
+  end  
+
+
+  if addressing==1 then do  
+-- this is a clause starting with ADDRESS
+--   say 'tokens=' parser.cursor.curclause.showtokens()
+
+-- 'ADDRESS'
+    if tokens[1].type=RxToken.END then do
+      signal RxQuit(rxt, tokens[0], 'keyword.or.literal.expected')
+    end
+
+-- starts with 'ADDRESS addressee'
+    tok=tokens[2]
+    endtoken=3
+
+    if tok.type=RxToken.STR then do                -- literal
+      addr=tok.value
+    end 
+    else if tok.type=RxToken.SYM then do           -- symbol, could be addr or VALUE
+      addr=''
+      t =  Rexx tok.value
+      t = t.upper()
+      if t=='VALUE' then do
+        if tokens[endtoken].type\=RxToken.END then do
+          tok=tokens[4]
+          endtoken=5
+        end
+      end
+      else if t=='SYSTEM' then do
+        addr=getSystemAddressee()                                         -- OS hard-coded environments
+      end
+
+      if addr=='' then do
+        rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
+
+        if rxvar==null then do
+          addr=tok.value
+        end
+        else if rxvar.islocal() | rxvar.isargument() then do
+          addr=Rexx rxvar.varvalue
+        end
+        else do
+          addr=tok.value
+        end
+      end  
+    end
+    else do                                        -- we expect a symbol or literal
+      signal RxQuit(rxt, tokens[0], 'keyword.or.literal.expected')
+    end
+
+    if tokens[endtoken].type==RxToken.END then do
+-- 'ADDRESS addressee' or 'ADDRESS VALUE addressee' or 'ADDRESS value'   
+      tclass=parser.cursor.curclass
+      tmethod=parser.cursor.curmethod
+
+      if tmethod \== null then do 
+          if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr' to method 'tclass.classname '-' tmethod.methodname 
+          tmethod.curaddress = addr
+      end
+      else if tclass \== null then do
+        if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr' to class 'tclass.classname  
+        tclass.curaddress = addr
+      end
+      else do
+        signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+      end
+    end
+    else do
+-- 'ADDRESS addressee 'do something''
+
+      if pass<2 then signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+
+      if rxt.program.flag.diag then say '# NrAddress: DIRECT ADDRESS'
+
+      tt = tokens[4]                          -- check if WITH permanently set 
+      t = Rexx tt.value
+      t = t.upper()
+      if t = 'WITH' then do
+        if tokens[5].type == RxToken.END then do 
+          signal RxQuit(rxt, tokens[5], 'address.with.expected')
+        end
+ 
+-- 'ADDRESS addressee WITH ..'        
+        scanWITH(6)                           -- scan it
+
+        addr['with'] = with                   -- store it on addr
+
+        tclass=parser.cursor.curclass
+        tmethod=parser.cursor.curmethod
+        if tmethod \== null then do 
+            if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr'['with'] to method 'tclass.classname '-' tmethod.methodname 
+            tmethod.curaddress = addr
+        end
+        else if tclass \== null then do
+          if rxt.program.flag.diag then say '# NrAddress: SET ADDRESS 'addr'['with'] to class 'tclass.classname  
+          tclass.curaddress = addr
+        end
+        else do
+          signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+        end
+
+        with = ''                             -- nullify
+      end
+      else do    
+                                              -- parse expression until word 'WITH'
+        endwords = 'WITH'
+        code=rxt.eparser.parseexpr(parser.cursor, 0, 4, null, endwords)
+        expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
+        endtoken = endtoken + 2
+
+--        say 'CODE 'code
+--        say 'EXPR 'expr
+--        code.dump()
+--        say parser.cursor.curclause.showtokens()
+
+        if tokens[endtoken].type\=RxToken.END then do 
+-- 'ADDRESS addressee 'do something' WITH ..'
+
+          nexttoken = endtoken+1
+          tok = tokens[nexttoken]
+          t = Rexx tok.value
+
+          if t \= 'WITH' | tokens[nexttoken+1].type == RxToken.END then do
+            signal RxQuit(rxt, tokens[nexttoken], 'address.with.expected')
+          end
+          scanWITH(nexttoken+2)
+        end  
+      end
+    end 
+  end  
+  else do  
+-- this is a clause not starting with ADDRESS, we do 'indirectly' address addressee  
+-- basically, anything not parsed by the parser will come here
+
+    if pass<2 then signal RxQuit(rxt, tokens[0], 'address.no.method', 'NrAddress', pass)
+
+    tclass=parser.cursor.curclass
+    tmethod=parser.cursor.curmethod
+       
+    if tmethod \== null then do 
+      addr = tmethod.curaddress
+      if addr==null then do
+         addr = tclass.curaddress
+         if addr==null then do
+            addr = getSystemAddressee()                -- use SYSTEM default
+         end
+         if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from class 'tclass.classname  
+      end 
+      else 
+        if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from method 'tclass.classname '-' tmethod.methodname 
+    end 
+    else if tclass \== null then do
+      addr = tclass.curaddress
+      if addr==null then do
+        signal RxQuit(rxt, tokens[0], 'address.unknown', 'ADDRESS not set', pass)
+      end
+      else 
+        if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from class 'tclass.classname  
+    end
+    else do
+      signal RxQuit(rxt, tokens[0], 'address.unknown', 'ADDRESS not set', pass)
+    end  
+
+    code=rxt.eparser.parseexpr(parser.cursor,0, 0, null, null)
+    expr=RxExpr(rxt, parser.cursor, SAY_EXPR, code)
+  end
+
+/**
+Recursively parse WITH redirection
+**/
+
+method scanWITH(nexttoken)
+  tok = tokens[nexttoken]
+  t = Rexx tok.value
+
+  append=Rexx null
+  
+  if t = 'INPUT' & tokens[nexttoken+1].type \= RxToken.END then do
+    next = 2
+  end
+  else if t = 'OUTPUT' & tokens[nexttoken+1].type \= RxToken.END then do
+    if Rexx tokens[nexttoken+2].value = 'REPLACE' & tokens[nexttoken+3].type \= RxToken.END then do
+      next = 4
+    end
+    else if Rexx tokens[nexttoken+2].value = 'APPEND' & tokens[nexttoken+3].type \= RxToken.END then do
+      append='APPEND'
+      next = 4
+    end    
+    else 
+      next = 2
+  end   
+  else if t = 'ERROR' & tokens[nexttoken+1].type \= RxToken.END then do     
+    if Rexx tokens[nexttoken+2].value = 'REPLACE' & tokens[nexttoken+3].type \= RxToken.END then do
+      next = 4
+    end
+    else if Rexx tokens[nexttoken+2].value = 'APPEND' & tokens[nexttoken+3].type \= RxToken.END then do
+      append='APPEND'
+      next = 4
+    end
+    else 
+      next = 2   
+  end  
+  else do
+    if tokens[nexttoken+1].type == RxToken.END then do
+      signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.what.expected')
+    end
+    else do
+      signal RxQuit(rxt, tokens[nexttoken], 'address.with.expected')
+    end
+  end
+
+  scanWithWhat(nexttoken+next, t, append)  
+  
+  if tokens[nexttoken+next+3].type \= RxToken.END then do
+     scanWITH(nexttoken+next+4)
+  end 
+
+
+method scanWithWhat(nexttoken, with_, append)
+
+  tok = tokens[nexttoken]
+  t = Rexx tok.value
+
+  if t = 'STEM' then do
+    if tokens[nexttoken+1].type == RxToken.END then 
+      signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.stem.expected')
+    else do
+      nexttoken = nexttoken+2
+
+--      scode=rxt.tparser.parseterm(parser.cursor, nexttoken, 0)
+--      say 'MRE' scode.javacode
+    
+      tok = tokens[nexttoken]
+      rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
+      if rxvar == null then do
+         signal RxQuit(rxt, tokens[nexttoken], 'variable.name.expected')
+      end
+      if rxvar.vartype \= RxType.REXX_TYPE then do 
+        signal RxQuit(rxt, tokens[nexttoken], 'address.not.a.stem')  
+      end
+      if with[with_].exists('stream') then do
+        signal RxQuit(rxt, tokens[nexttoken-2], 'address.with.duplicate', with_, 'STREAM' )  
+      end
+
+      with[with_, 'stem'] = rxvar.varname
+      with[with_, 'append'] = append
+    end  
+  end
+  else if t = 'STREAM' then do 
+    if tokens[nexttoken+1].type == RxToken.END then 
+      signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.stream.expected')
+    else do
+
+      nexttoken= nexttoken+2
+      endwords = 'INPUT OUTPUT ERROR'
+      strcode=rxt.eparser.parseexpr(parser.cursor, 0, nexttoken, null, endwords)
+
+      if with[with_].exists('stem') then do
+        signal RxQuit(rxt, tokens[nexttoken-2], 'address.with.duplicate', with_, 'STEM' )  
+      end
+    
+      with[with_, 'stream'] = String strcode.value.toString()
+      with[with_, 'append'] = append
+    end
+  end   
+  else do
+    signal RxQuit(rxt, tokens[nexttoken], 'address.with.what.expected')
+  end
+
+  
+
+/** get default addressee per OS */
+method getSystemAddressee returns Rexx
+
+  os=Rexx System.getProperty('os.name')
+  os=os.lower()
+  sysaddr = Rexx
+
+  if      os.pos('linux')   >> 0 then sysaddr=System.getenv('SHELL')
+  else if os.pos('macos')   >> 0 then sysaddr=System.getenv('SHELL')
+  else if os.pos('windows') >> 0 then do 
+                                      sysaddr=System.getenv('COMSPEC')
+                                      sysaddr=sysaddr.changestr('\\', '/')  -- freaking backslash ..
+  end  
+  else                                sysaddr='/bin/sh'
+
+  return sysaddr
+
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** code generation [only] */
+ method generate
+  if expr\==null then do
+
+    jcode=String expr.code.javacode
+    addressee = addr
+ 
+    with_arg=''
+    if addr.exists('with') then do      -- use with stored on address if existing
+      with=addr['with']
+    end
+ 
+    if with['input'].exists('stem') then do
+      istem = Rexx with['input','stem']
+      with_arg='(Object)'istem','
+    end
+    else if with['input'].exists('stream') then do
+      istream = String with['input','stream']
+      with_arg='(Object)"'istream'",'
+    end  
+    else do
+      with_arg='(Object)null,'
+    end
+
+    if with['output'].exists('stem') then do
+      ostem = Rexx with['output','stem']
+      if with['output'].exists('append') then 
+        with_arg=with_arg'(Object)'ostem',1,'
+      else 
+        with_arg=with_arg'(Object)'ostem',0,'
+    end
+    else if with['output'].exists('stream') then do
+      ostream = String with['output','stream']
+      if with['output'].exists('append') then 
+        with_arg=with_arg'(Object)"'ostream'",1,'
+      else
+        with_arg=with_arg'(Object)"'ostream'",0,'
+    end  
+    else do
+      with_arg=with_arg||'(Object)null,0,'
+    end
+
+    if with['error'].exists('stem') then do
+      estem = Rexx with['error','stem']
+      if with['error'].exists('append') then 
+        with_arg=with_arg'(Object)'estem',1'
+      else 
+        with_arg=with_arg'(Object)'estem',0'
+    end
+    else if with['error'].exists('stream') then do
+      estream = String with['error','stream']
+      if with['error'].exists('append') then 
+        with_arg=with_arg'(Object)"'estream'",1'
+      else
+        with_arg=with_arg'(Object)"'estream'",0'
+    end  
+    else do
+      with_arg=with_arg||'(Object)null,0'
+    end    
+
+--    say '#MRE  with_arg:' with_arg
+
+--#MRE we agreed not to throw exceptions and not to exit upon error
+--     user must check RC, when '' an exception occurred
+
+
+    rxt.program.streamer.out('{try{')
+    rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg');')
+    rxt.program.streamer.out('}catch (java.io.IOException $1){')
+    rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: IOException \'"+$1.getMessage()+"\' occurred during ADDRESS invocation");')
+--    rxt.program.streamer.out('throw new java.io.IOException($1);')  
+--    rxt.program.streamer.out('java.lang.System.exit(9);')           
+    rxt.program.streamer.out('}catch (java.lang.InterruptedException $2){')
+    rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: InterruptedException occurred during ADDRESS invocation");')
+--    rxt.program.streamer.out('throw new java.lang.InterruptedException();')
+--    rxt.program.streamer.out('java.lang.System.exit(9);')
+    rxt.program.streamer.out('}}')
+
+  end 
+  if addr.exists('with') then do
+    with=''
+  end
+
+  return 
+
+ 
+ /** Interpretation */
+ method interpret(cursor=RxCursor null) 
+  if expr\==null then do
+
+    code=expr.evaluate(cursor)          -- re-evaluate as needed
+    addressee = addr
+ 
+    istem=Rexx null
+    ostem=Rexx null
+    estem=Rexx null
+    istream=String null
+    ostream=String null
+    estream=String null
+    
+    i = Object null
+    o = Object null
+    e = Object null
+
+    oappend=0
+    eappend=0
+
+    if addr.exists('with') then do  -- use with stored on address if existing
+      with=addr['with']
+    end
+
+    if with['input'].exists('stem') then do
+      st = Rexx with['input','stem']
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      istem = Rexx rxvar.varvalue
+      i = Object istem
+    end
+    else if with['input'].exists('stream') then do
+      istream = String with['input','stream']
+      i = Object istream
+    end
+
+    if with['output'].exists('stem') then do
+      st = Rexx with['output','stem']
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      ostem = Rexx rxvar.varvalue
+      o = Object ostem
+    end
+    else if with['output'].exists('stream') then do
+      ostream = String with['output','stream']
+      o = Object ostream
+    end
+    if with['output'].exists('append') then 
+      oappend=1
+ 
+    if with['error'].exists('stem') then do
+      st = Rexx with['error','stem']
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      estem = Rexx rxvar.varvalue
+      e = Object estem
+    end
+    else if with['error'].exists('stream') then do
+      estream = String with['error','stream']
+      e = Object estream
+    end
+    if with['error'].exists('append') then 
+      eappend=1
+
+--#MRE we agreed not to throw exceptions and not to exit upon error
+--     user must check RC, when '' an exception occurred
+
+    do     
+      netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(code), i, o, oappend, e, eappend)
+    catch iox=IOException         -- this also catches FileNotFound
+--      signal RxQuit(rxt, null, 'address.exception', 'IOException', iox.getMessage() )
+      say '     +++ Error: IOException '''iox.getMessage()''' occurred during ADDRESS invocation'
+--      System.exit(9)
+--      signal IOException(iox)  
+    catch InterruptedException
+--      signal RxQuit(rxt, null, 'address.exception', 'InterruptedException', '' )
+      say '     +++ Error: InterruptedException occurred during ADDRESS invocation'
+--      System.exit(9)
+--      signal InterruptedException()
+    end
+  end
+  if addr.exists('with') then do
+    with=''
+  end
+
+  return
+
+ 

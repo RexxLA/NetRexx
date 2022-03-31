@@ -1,24 +1,53 @@
 -- timestamp.nrx NJPipe Stage
 /*
- *  Copyright (C) 1998  Rene V. Jansen
+ *  Copyright (C) 1998-2020  Rene V. Jansen
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  */
--- 98/06/24 timestamp stage conforming to GC28-1641 p 395. rvjansen
--- 98/06/25 report 100th of a second, keep output class as rexx.  ejt
-/**
-timestamp--Prefix the Date and Time to Records
+
+/*
+ 21/ 2/ 3 Fixed %j from D to DDD for leading zeros per CMS.  Jeff Hennick
+ 20/ 5/25 Added second number, all of the word arguments & STRING; documentation. Jeff Hennick
+ 98/06/24 timestamp stage conforming to GC28-1641 p 395. rvjansen
+ 98/06/25 report 100th of a second, keep output class as rexx.  ejt
+*/
+
+/** timestamp
 
 timestamp  prefixes  each  record with a timestamp showing when the record was read by timestamp.
 
-+------------------------------------------------------------------------+
-|                                                                        |
-|                +-8------+                                              |
-| >>--TIMEstamp--+--------+------------------------------------------->< |
-|                +-number-+                                              |
-|                                                                        |
-+------------------------------------------------------------------------+
+                         (1)          (2)
+  >>--TIMEstamp--+--+--------------------------+--+-------><
+                 |  |  +-8------+              |  |
+                 |  +--+-number-+--+--------+--+  |
+                 |                 +-number-+     |
+                 +-SHOrtdate----------------------+  ( 3/09/46 23:59:59)
+                 +-ISOdate------------------------+  (1946-03-09 23:59:59)
+                 +-FULLdate-----------------------+  ( 3/09/1946 23:59:59)
+                 +-STAndard-----------------------+  (19460309235959)
+                 +-STRing--dstring--(3)-----------+
+  Notes:
+   (1) First character, from right, to include, <= 16
+   (2) Count of characters to include. <= 16 - (1). Default = (1)
+   (3)
+       %% A single %.
+       %Y Four digits year including century (0000-9999).
+       %y Two-digit year of century (00-99).
+       %m Two-digit month (01-12).
+       %n Two-digit month with initial zero changed to blank ( 1-12).
+       %d Two-digit day of month (01-31).
+       %e Two-digit day of month with initial zero changed to blank ( 1-31).
+       %j Julian day of year (001-366).
+       %H Hour, 24-hour clock (00-23).
+       %k Hour, 24-hour clock with leading zero blank ( 0-23).
+       %M Minute (00-59).
+       %S Second (00-60).
+       %F Equivalent to %Y-%m-%d (the ISO 8601 date format).
+       %T Short for %H:%M:%S.
+       %t Tens and hundredth of a second (00-99).
+
+
 Type:  Filter.
 
 
@@ -27,10 +56,11 @@ Syntax Description:  The arguments are optional.  The default is 8.
 
 Operation:  A 16-character timestamp is developed whenever  a  record  has been  read.
 It consists of the year (including the century), the month, day, hour, minute, second,
-and hundredth  of  a  second.  Unlike CMS, the java interface reports hundredths of a
+and hundredth  of  a  second.  As in CMS, the java interface reports hundredths of a
 second.  The  specified number of characters are taken from the right-hand side of this
 number and prefixed to the input record.
 */
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -39,26 +69,125 @@ import java.text.
 
 class timestamp extends stage
 
-method run()
-   length=arg()
-   if length = '' then length=8
-   if (length < 1) | (length > 16) then
-      say "Error --" getName() "syntax error"
+  method run()
 
-   loop forever
+    /* handle options */
+
+
+    /* arg1 is optional
+     * it is one of
+     * SHOrtdate
+     * ISOdate
+     * FULdate
+     * STAndard
+     * STRing
+     */
+
+    -- if arg1 is numeric and not string, it is arg2 (length)
+    count = 0
+    spacemonth = 0
+
+    a = arg()
+    parse a arg1 arg2
+
+    length=arg1
+    if length = '' then length=8
+
+    if length.datatype('W') then do
+      if (length < 1) | (length > 16) then
+        Emsg(13, "Error --" getName() "syntax error")
+      form = SimpleDateFormat("yyyyMMddHHmmssSSS")
+      if arg2 = '' then count = length
+      else if arg2.datatype('W') then count = arg2
+    end
+    else do
+      length = 0
+      arg = arg1.upper
+      select
+        when 'ISODATE'.abbrev(arg,3) > 0 then
+          form = SimpleDateFormat("yyyy'-'MM'-'dd' 'HH':'mm':'ss")
+        when 'FULLDATE'.abbrev(arg,3) > 0 then do
+          form = SimpleDateFormat("MM'/'dd'/'yyyy' 'HH':'mm':'ss")
+          spacemonth = 1
+        end
+        when 'SHORTDATE'.abbrev(arg,3) > 0 then do
+          form = SimpleDateFormat("MM'/'dd'/'yy' 'HH':'mm':'ss")
+          spacemonth = 1
+        end
+        when 'STANDARD'.abbrev(arg,3) > 0 then
+          form = SimpleDateFormat("yyyyMMddHHmmss")
+        when 'STRING'.abbrev(arg,3) > 0 then
+          form = SimpleDateFormat(strform(arg2))
+        otherwise
+          Emsg(13, "Error --" getName() "unknown option:" arg1)
+      end
+    end
+
+    x2 = 2.x2c
+    x3 = 3.x2c
+
+    loop forever
       line = Rexx peekto()
-      output(prefixtimestamp(length,line))
+
+      ts = prefixtimestamp(length,form,spacemonth)
+      ts = ts.changestr(x2'0', ' ')
+      ts = ts.changestr(x2, '')
+      if ts.pos(x3) > 0 then do
+        parse ts lef (x3) n (x3) rig
+        n1 = n % 10
+        ts = lef || ('0'n1).right(2) || rig
+      end
+      if count > 0 then ts = ts.left(count)
+
+      output(ts line)
       readto()
-   catch StageError
+    catch StageError
       rc = rc()
-   end
- Exit(rc*(rc<>12))
+    end
+    Exit(rc*(rc<>12))
 
-method prefixtimestamp(length=int, line=Rexx)
-  today = Date()
-  df = SimpleDateFormat("yyyyMMddHHmmssSSS")
-  longdate = rexx(df.format(today))
-  return longdate.substr(17-length,length) line
+  method prefixtimestamp(length=int, form=SimpleDateFormat, spmo)
+    today = Date()
+    longdate = rexx(form.format(today))
+    if spmo then do
+      if longdate.substr(1,1) = '0' then
+        longdate = longdate.overlay(Rexx ' ')
+    end
+    if length > 0 then
+      longdate = longdate.substr(17-length,length)
+    return longdate
 
-
-
+  method strform(st=rexx)
+    ret = Rexx ""
+    if st.left(1) \= '%' then ret = "'"
+    loop i=1 to st.length
+      c = st.substr(i,1)
+      n = st.substr(i+1,1)
+      if c = "'" then ret = ret"'" -- this will double it up
+      if c \= '%' then ret = ret||c
+      else do
+        select case n
+          when "%" then ret = ret||"%"
+          when "Y" then ret = ret||"YYYY"
+          when "y" then ret = ret||"YY"
+          when "m" then ret = ret||"MM"
+          when "n" then ret = ret||2.x2c"MM"
+          when "d" then ret = ret||"dd"
+          when "e" then ret = ret||2.x2c"dd"
+          when "j" then ret = ret||"DDD"
+          when "H" then ret = ret||"HH"
+          when "k" then ret = ret||2.x2c"kk"
+          when "M" then ret = ret||"mm"
+          when "S" then ret = ret||"ss"
+          when "F" then ret = ret||"YYYY'-'MM'-'dd"
+          when "T" then ret = ret||"HH':'mm':'ss"
+          when "t" then ret = ret||3.x2c"SS"3.x2c
+          otherwise
+            ret = ret||c
+        end
+        i = i + 1
+      end
+    end
+    q = ret.countstr(Rexx "'") // 2
+    if q = 1 then ret = ret"'"
+    return ret

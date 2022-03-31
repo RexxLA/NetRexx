@@ -1,0 +1,123 @@
+/** dateconvert
+                              (3)
+                 +-- 1-* ------------------------+
+>>--DATECONVert--+-------------------------------+--------------------------->
+                 +-| Separator |--| Inputrange |-+
+
+    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
+>---+---------------------------------------+--+-----------------------+------>
+    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
+    +-| Inputformat |-+--+------------------+  +-BASEYEAR--yearnumber--+
+    +-NOW-------------+  +-| Outputformat |-+
+
+                  +--MIDNIGHT--(4)-+
+>--+-----------+--+----------------+---------------------------------------->>
+   +--TIMEOUT--+  +--NOON--(4)-----+
+
+*/
+
+/*
+  20/ 8/23 Added NOW. Jeff Hennick
+  20/ 6/26 Jeff Hennick
+*/
+
+pipe (dateconvert_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+-- SHORTDATE ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888;  |
+   split ; |
+   dateconvert SHORTDATE |
+   c1: compare any ~2# 1 SHORTDATE in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c1: ?
+
+-- SHO  ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888;  |
+   split ; |
+   dateconvert SHO |
+   c2: compare any ~2# 2 SHO in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c2: ?
+
+-- USA_SHORT  ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888;  |
+   split ; |
+   dateconvert USA_SHORT |
+   c3: compare any ~2# 3 USA_SHORT in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c3: ?
+
+-- REXX_DATE_U  ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888;  |
+   split ; |
+   dateconvert REXX_DATE_U |
+   c4: compare any ~2# 4 REXX_DATE_U in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c4: ?
+
+-- REXXU  ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888;  |
+   split ; |
+   dateconvert REXXU |
+   c5: compare any ~2# 5 REXXU in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c5: ?
+
+-- RU  ?
+   literal 07/31/44 04:55:22.123000; 07/31/44 04:55:22.999888;  |
+   split ; |
+   dateconvert RU |
+   c6: compare any ~2# 6 RU in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2044-07-31;2044-07-31 |
+   split ; |
+   c6: ?
+
+-- FULLDATE  ?
+   literal 07/31/1944 04:55:22.123000; 07/31/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert FULLDATE |
+   c7: compare any ~2# 7 FULLDATE in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1944-07-31;1944-07-31 |
+   split ; |
+   c7: ?
+
+-- USA  ?
+   literal 07/31/1944 04:55:22.123000; 07/31/1944 04:55:22.999888;  |
+   split ; |
+   dateconvert USA |
+   c8: compare any ~2# 8 USA in~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1944-07-31;1944-07-31 |
+   split ; |
+   c8: ?
+
+-- NOW  ?
+   dateconvert now |
+   c9: compare any ~2# 9 NOW \nActual:\n\\p\nExpected:\n Today's Date Year-Month-Day~|
+   o: ?
+   literal ** |
+   c9: ?
+
+-- NOW USA ?
+   dateconvert now usa |
+   c10: compare any ~2#10 NOW USA\nActual:\n\\p\nExpected:\n Today's Date Month/Day/Year~|
+   o: ?
+   literal ** |
+   c10: ?

@@ -1,0 +1,79 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* Venta language processor                                       mfc */
+/* Copyright (c) IBM Corporation 1996, 1998.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxPersistClass                                                     */
+/*                                                                    */
+/*   An object that persists class files.                             */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2018.08.21 Adapted from RxFixup but without Fixups                 */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+class RxPersistClass
+  sourcename=Rexx              -- name of the source file
+  data=byte[]                  -- class file data
+  conoffset=int[]              -- constant index -> offset table
+  rxt=RxTranslator                 -- the usual  
+  
+  /** Construct a Persister
+     Arg1 is the name of the .nrx (source) file, including extension
+            (with no path information)
+   */
+  method RxPersistClass(name=Rexx, dir=Rexx '.',translator=RxTranslator null)
+    sourcename=name
+    rxt=translator
+    data=null
+
+  /** Persist a class file
+     Arg1 is the fully qualified name of the .class file to persist
+     Arg2 is the fully qualified name of the persisted .class file [by
+     default the same as the input file]
+   */
+  method persist(classname=String, outname=String classname, ba=byte[] null) returns int
+    -- say classname '||' outname
+    data=ba
+    cfileob=File(classname)
+    ofileob=File(outname)
+    do
+      -- process the class file
+      -- if data=null then
+      -- 	do
+      -- 	  inhandle=FileInputStream(cfileob)
+      -- 	  size=inhandle.available()
+      -- 	  data=byte[size]
+      -- 	  inhandle.read(data, 0, size)
+      -- 	  inhandle.close()
+      -- 	  inhandle=null                       -- done with stream
+      -- 	end
+      -- else size=data.length
+
+      size=data.length
+      
+      if byte2char(data[0])\='\xCA' then return 0
+      if byte2char(data[1])\='\xFE' then return 0
+      -- now write the output file [quite possibly to the same place]
+      if rxt.classlist=null then do
+	outhandle=FileOutputStream(ofileob)
+	outhandle.write(data, 0, size)      -- [must rewrite the whole]
+	outhandle.close()
+	outhandle=null  
+      end		
+      else rxt.classlist.add(data)	--	allow return of class files to caller in memory
+      
+    catch IOException                     -- any failure caught here
+      return 0
+    end
+    return 1
+    
+  /** Convert byte to low-8 bits of a char */
+  method byte2char(b=byte) private static returns char
+    return char(b & 255)
+    

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 1997-2020 Ed Tomlinson
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -9,16 +9,22 @@
 
 /** insert
 
+insert
+
 insert a string into a record.  Will be much more effecient than specs espically
 if the input is a Byte[]
 
-                              +-BEFORE-+
- >>--INSERT--delimitedString--+--------+----->>
-                              +-AFTER--+
-
+                                  +-BEFORE-+
+ >>--INSERT--| delimitedString |--+--------+---+-------------+--->>
+                                  +-AFTER--+   +-inputRange--+
 
 */
--- 99/05/29  initial.  ejt
+
+/*
+ 20/ 5/28  inputRange; rethink bytearray logic; documentation. Jeff Hennick
+ 15/07/27  add '' as synonym for BEFORE; help tags in documentation. Jeff Hennick
+ 99/05/29  initial.  ejt
+*/
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -28,7 +34,7 @@ import org.netrexx.njpipes.pipes.
 
 /* To use methods in pipes/utils.nrx  add 'uses utils' to the class statement */
 
-class insert extends stage uses java.lang.System
+class insert extends stage uses java.lang.System, IRange
 
 /* objects shared between the ...setup and run methods */
 
@@ -38,6 +44,9 @@ before = boolean
 str    = rexx
 bstr   = byte[]
 bcls   = Class
+ir     = rexx  0
+st     = rexx  0
+ed     = rexx  0
 
 /* method to initialize a stage.  Only called once unless the arg() changes */
 
@@ -50,13 +59,24 @@ method insert_setup() private
    a   = ds.Residue().upper()
 
    select
-      when a='BEFORE' then
+      when a.word(1)='BEFORE', a='' then
          before = 1
-      when a='AFTER' then
+      when a.word(1)='AFTER' then
          before = 0
       otherwise
-         Emsg(11,'Error - insert found invalid parm 'a)
+         a = '.' a
+--         Emsg(11,'Error - insert found invalid parm 'a)
    end
+
+   parse a . a
+
+   if a <> '' then do
+     ri = Get1IRange(a)
+     st = ri.StartCol()
+     ed = ri.EndCol() +1
+     ir = 1
+   end
+   else ir = 0
 
    bstr = str.toString().getBytes()
    bcls = bstr.getClass()
@@ -86,18 +106,30 @@ method run()
 
       if before then
          loop forever
+            bs = 0
             o = peekto()
             if bcls.isInstance(o) then
                do
-                  b = byte[(byte[] o).length+bstr.length]
-                  arraycopy(bstr,0,b,0,bstr.length)
-                  arraycopy(o,0,b,bstr.length,(byte[] o).length)
-                  output(b)
+                  bs = 1
+ --                 b = byte[(byte[] o).length+bstr.length]
+ --                 arraycopy(bstr,0,b,0,bstr.length)
+ --                 arraycopy(o,0,b,bstr.length,(byte[] o).length)
+ --                 output(b)
                end
-            else
+ --           else
                do
                   ro = rexx o
-                  output(str||ro)
+                  if ir then do
+                     parse ro l =(st) r
+                     oo = l || str || r
+                     if bs then output(oo.toString().getBytes())
+                     else output(oo)
+                  end
+                  else do
+                     oo = str||ro
+                     if bs then output(oo.toString().getBytes())
+                     else output(oo)
+                  end
                end
             readto()
          catch ClassCastException
@@ -105,18 +137,37 @@ method run()
          end
       else
          loop forever
+            bs = 0
             o = peekto()
             if bcls.isInstance(o) then
                do
-                  b = byte[(byte[] o).length+bstr.length]
-                  arraycopy(o,0,b,0,(byte[] o).length)
-                  arraycopy(bstr,0,b,(byte[] o).length,bstr.length)
-                  output(b)
+                  bs = 1
+--                  b = byte[(byte[] o).length+bstr.length]
+--                  arraycopy(o,0,b,0,(byte[] o).length)
+--                  arraycopy(bstr,0,b,(byte[] o).length,bstr.length)
+--                  output(b)
                end
-            else
+--            else
                do
                   ro = rexx o
-                  output(ro||str)
+                  if ir then do
+                     if ed = '*' then do
+                        oo = ro||str
+                        if bs then output(oo.toString().getBytes())
+                        else output(oo)
+                     end
+                     else do
+                        parse ro l =(ed) r
+                        oo = l || str || r
+                        if bs then output(oo.toString().getBytes())
+                        else output(oo)
+                     end
+                  end
+                  else do
+                     oo = ro || str
+                     if bs then output(oo.toString().getBytes())
+                     else output(oo)
+                  end
                end
             readto()
          catch ClassCastException
@@ -129,4 +180,3 @@ method run()
    rc = mrc()
 
 exit(rc*(rc<>12))
-
