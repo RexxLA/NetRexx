@@ -1,12 +1,22 @@
-NetRexx 4.03 BETA [01 Apr 2022]
+# NetRexx 4.04 alpha [23 Aug 2022]
+
+- non-oo notation for scripting mode (René Vincent Jansen) enables more Classic Rexx source compatible scripts
+- a new nr command for scripting purposes
+- releasenotes are in Markdown syntax
+- use of colour in language processor messages enabled (but optional,  opt-out)
+- long and short form of options
+
+# NetRexx 4.03 BETA [01 Apr 2022]
 
 - ADDRESS WITH implemented (Marc Remes)
 - a fix for NETREXX-24 (was 148): ITERATE without label is not inside LOOP construct message (Marc Remes)
 - a small fix for the MOD option (Jason Martin)
-- correct slightly erroneous DataIO2.nrx example from NrxRedBk (René Jansen) (Thank you Terry Fuller)
+- correct slightly erroneous DataIO2.nrx example from NrxRedBk (René
+  Vincent Jansen) (Thank you Terry Fuller)
 - a fix for JavaFX usage with the JPMS (and any other imported module) (Marc Remes) (Thank you Terry Fuller)
 - a new sample how to address https by Ruurd J. Idenburg
 - A Classic Rexx inspired Stream I/O implementation (René V. Jansen)
+  (Thank you Leslie Turiff for testing and issue reports)
 - A new example of how to use a Swing Gui by Ruurd J. Idenburg
 - Start of a new organisation of the examples directory by function
 - a 'scripting mode' application adds 'uses RexxDate, RexxStream' to the generated class definition
@@ -16,7 +26,7 @@ NetRexx 4.03 BETA [01 Apr 2022]
 - in scripting mode, 'parse pull' can be used as an equivalent of 'parse ask' 
 
 
-NetRexx 4.02 GA [Januari 24, 2022]
+# NetRexx 4.02 GA [Januari 24, 2022]
 
 - for building NetRexx 4.0.2, Java 8 is now the lowest supported version
 - tested and buildable from Java 8 up to and including Java 19ea
@@ -38,7 +48,7 @@ Pipeline additions, improvements:
 - a small CMS-compatibility improvement for stage LITERAL (Jeff Hennick)
 - a new pipr script that is guaranteed to work in a Docker container (Marc Remes)
 
-NetRexx 4.01 GA [March 20th, 2021]
+# NetRexx 4.01 GA [March 20th, 2021]
 
 - the first NetRexx release compatible with the JDK >=9 module system, thanks to Marc Remes
 - contains all 3.11 GA functionality
@@ -60,7 +70,7 @@ a bug in NetRexx. For example, starting with JDK 11, the whole of JEE has been r
 that could be included, has been included with NetRexx 4.01 .
 
 
-NetRexx 3.11 GA [December 23rd, 2020]
+# NetRexx 3.11 GA [December 23rd, 2020]
 
 - 3.10 is skipped as a release number, to avoid confusion with 3.01
 - Diskr and diskw stages:enhanced detection of Windows-type path strings
@@ -83,7 +93,7 @@ NetRexx 3.11 GA [December 23rd, 2020]
   in light of NetRexx 4.01 becoming available 
 
 
-NetRexx 3.09 GA [October 1st, 2020]
+# NetRexx 3.09 GA [October 1st, 2020]
 
 - fix for ANSI escapes/colors in nrws on Windows operating systems
 - bump version level of included JLine implementation
@@ -133,8 +143,7 @@ NetRexx 3.09 GA [October 1st, 2020]
 - PAD stage add MODULO option (Jeff Hennick)
 
 
-
-Netrexx 3.08 GA [September 5th, 2019]
+# Netrexx 3.08 GA [September 5th, 2019]
 
 - restore OS/2 and Java 6 compatibility
 - fixes a serious translator problem introduced in 3.07 - some classes ended up in the wrong files
@@ -173,7 +182,7 @@ Netrexx 3.08 GA [September 5th, 2019]
   - updated, rewrote and expanded the Pipelines Quick Start Guide (renamed)
   - Docker image added to standard distribution
 
-NetRexx 3.07 [Oct 1st, 2018]
+# NetRexx 3.07 [Oct 1st, 2018]
 
 - Rexx() constructor no more package private (for use in other languages)
 - Additions to RexxIO runtime class for more flexibility in say
@@ -186,11 +195,11 @@ NetRexx 3.07 [Oct 1st, 2018]
 - documentation corrections by Gustavo Mindreau
 - fix for class file image corruption problem with ecj compiles
 
-NetRexx 3.06 [December 10th, 2017]
+# NetRexx 3.06 [December 10th, 2017]
 
 - Method level annotations will pass through to Java source.
 
-NetRexx 3.05 [April 27th, 2017]
+# NetRexx 3.05 [April 27th, 2017]
 
 - First release after Kermit Kiser's passing. He will be remembered fondly for all his work.
 - NetRexx has moved to Git on SourceForge for version management
@@ -203,7 +212,7 @@ NetRexx 3.05 [April 27th, 2017]
 - A fix for the RexxComparator class
 - Various fixes and additions to documents.
 
-NetRexx 3.04 [June 1st, 2015]
+# NetRexx 3.04 [June 1st, 2015]
 
 - a jsr 199 compliant way of calling the java compiler
     - Java source is saved on disk by the 3.04 translator if options -keep or -keepasjava are specified just as in release 3.03 of NetRexx. However NetRexx 3.04 does not write java to disk otherwise since it is no longer required in order to produce class files.
@@ -247,9 +256,8 @@ The nrx.compiler property can also be set directly in Ant builds or via the Ant 
 
 The Pipes for NetRexx documentation is not ready yet, but previews will be available from the NetRexx website.
 
-______________________________________________
 
-NetRexx 3.03 [May 23th, 2014]
+# NetRexx 3.03 [May 23th, 2014]
 
 Changes are:
 
@@ -273,9 +281,7 @@ Changes are:
   to the ecj compiler so its classes are found.
 
 
-______________________________________________
-
-NetRexx 3.02 [June 25th, 2013]
+# NetRexx 3.02 [June 25th, 2013]
 
 Changes are:
 
@@ -392,8 +398,8 @@ Note: When a method that is not an exact match to a call is found in a class, su
 NetRexx now allows covariant return types such as have been allowed in Java since the version 1.5 release. Prior to Java 1.5, in order for a method to override or implement a method from another class, the return type of the methods had to be an exact match. Since the Java 1.5 release, methods which override a superclass method or implement an interface class method are allowed to have a return type which is a subclass of the return type of the method replaced or implemented. An exact match is no longer required.
 
 A fix for issue NETREXX-100 in which unknown program options were silently ignored. Now, there is a warning issued, analogous to what happens with a unknown command line option.
-______________________________________________
-NetRexx 3.01 [23 Aug 2012]
+
+# NetRexx 3.01 [23 Aug 2012]
 
 The 3.01 release will mark the first official RexxLA release. Changes are:
 
@@ -434,8 +440,8 @@ support for the eclipse batch compiler is turned on by placing the ecj-4.2.0.jar
 
 This package structure will be built upon in the coming releases.
 
-______________________________________________
-NetRexx 3.00 [11 Jun 2011]
+
+# NetRexx 3.00 [11 Jun 2011]
 
 The 3.00 prototype release is the first build of the sourcecode by RexxLA. Changes with regard to the last IBM release (2.05) are:
 
@@ -443,18 +449,18 @@ The 3.00 prototype release is the first build of the sourcecode by RexxLA. Chang
 - small source changes to make the translator compilable with Java 1.5 and higher
 - addition of ICU copyright notices to the source files
 
-______________________________________________
-NetRexx  2.02 [22 May 2001] 
+
+# NetRexx  2.02 [22 May 2001] 
 
 This is a maintenance release; loop i=a to b until x incorrectly optimized the control variable test in some circumstances. No other changes are included.
 
-______________________________________________
-NetRexx 2.01 [1 Apr 2001] 
+
+# NetRexx 2.01 [1 Apr 2001] 
 
 This is a maintenance release which corrects excessive memory usage when large numbers of files are imported and the -prompt option is used. No other changes are included.
 
-______________________________________________
-NetRexx  2.00 [26 Aug 2000] 
+
+# NetRexx  2.00 [26 Aug 2000] 
 
 This is a major new release, which consolidates the changes of NetRexx 1.1 and adds the NetRexx interpreter and improved documentation. The enhancements are:
 The various installation and user documents have been consolidated into a new expanded and indexed User's Guide, available in both HTML and PDF (Acrobat) formats.
@@ -467,13 +473,13 @@ The compact option for compact error messages has now been documented (see the N
 The documentation was inconsistent as regards the file name generated when -nocompile was specified; the intent was that NetRexx should never leave a plain .java file on disk, as this prevents the next compilation if unprocessed. The documentation and code have been fixed to ensure that -nocompile exactly implies -keep.
 Several performance optimizations have been added.
 
-NetRexx 1.1xx
+# NetRexx 1.1xx
 
 The following changes are those which were made in NetRexx 1.1xx releases. NetRexx 1.1xx releases require Java 1.1.0 (or later).
 Updates:
 
-______________________________________________
-NetRexx 1.160 [10 Feb 2000] 
+
+# NetRexx 1.160 [10 Feb 2000] 
 
 This release has some language enhancements, along with some problem fixes and other improvements:
 The if clause in the if instruction and the when clause in the select instruction have both been enhanced to accept multiple expressions, separated by commas. These are evaluated in turn from left to right, and if the result of any evaluation is 1 (or equals the case expression for a when clause in a select case instruction) then the test has succeeded and the instruction following the associated then clause is executed.
@@ -501,16 +507,15 @@ Calls to super() in dependent classes may now be qualified by parent. as well as
 Classpaths containing multiple quoted segments are now handled correctly, and various other minor problems have been fixed.
 Several optimizations and improvements to formatting have been added.
 
-______________________________________________
-NetRexx 1.151 [3 Sep 1999] 
+
+# NetRexx 1.151 [3 Sep 1999] 
 
 This refresh has some minor enhancements:
 The 'direct call from Java' entry points have been enhanced to allow paths with embedded blanks to be specified. See the NetRexx User's Guide (Using the translator as a Compiler).
 Several improvements in code generation when incrementing and decrementing integers.
 This release has been tested under the first Java 1.3 beta; no problems were found and no changes from earlier NetRexx 1.1 releases were necessary.
 
-______________________________________________
-NetRexx 1.150 [23 Jul 1999]
+# NetRexx 1.150 [23 Jul 1999]
 
 This release is a maintenance update with some minor enhancements:
 New unused modifier on the properties instruction may be used (in conjunction with private only) to indicate that a private property is not used. This keyword will stop the compiler warning that a property is not used. For example:
@@ -536,16 +541,16 @@ An explicit class import will now disambiguate short references. For example, af
 Several improvements in code generation, including the treatment of small integers as, for example, byte without need for explicit casts.
 The format method in the Rexx class has been corrected to completely follow the ANSI X3-274 definition and the NetRexx specification.
 
-______________________________________________
-NetRexx 1.144 [21 Oct 1998]
+
+# NetRexx 1.144 [21 Oct 1998]
 
 This maintenance release primarily allows more explicit control over the compiler, for working with 'minimal' virtual machines.
 New strictimport compiler option prevents any automatic class imports (even java.lang.Object). This can be useful when compiling programs for reduced-function JVMs for embedded systems and palm-sized devices.
 The package java.math is no longer imported automatically.
 Occasional incorrect loop termination when trace is in use has been corrected.
 
-______________________________________________
-NetRexx 1.142 [1 Sep 1998] 
+
+# NetRexx 1.142 [1 Sep 1998] 
 This version is a maintenance release, primarily to support changes in the Java Development Kit (JDK) introduced for Java 1.2. Please see the NetRexx User's Guide for details for additions to the class path needed to run under Java 1.2.
 The other changes are:
 A type on the left hand side of an operator that could be a prefix operator (+, -, or \) is now assumed to imply a cast, rather than being an error.
@@ -556,8 +561,8 @@ The arithmetic routines have slightly improved performance, and provide accurate
 More robust handling of import, and import from classpath root segments generalized
 Improved error messages when an indirect property is initialized with a forward reference.
 
-______________________________________________
-NetRexx 1.140 [26 May 1998]
+
+# NetRexx 1.140 [26 May 1998]
 
 Three enhancements have been made to tracing:
 The new var option on trace lets changes to named variables be traced selectively. For example:
@@ -580,13 +585,12 @@ Several related problems with loading minor classes from directories and zip fil
 Parentheses around sub-expressions were incorrectly optimized out in some situations; they are now preserved.
 A work-around for a problem caused by empty directories on the CLASSPATH in Linux has been added.
 
-______________________________________________
-NetRexx 1.132 [15 Apr 1998]
+# NetRexx 1.132 [15 Apr 1998]
 
 This version includes one major enhancement: support for Minor and Dependent classes - Java's Nested and Member (inner) classes, using simplified syntax and concepts.
 
-______________________________________________
-NetRexx  1.130 [8 Mar 1998]
+
+# NetRexx  1.130 [8 Mar 1998]
 
 The new copyIndexed method on the Rexx class allows the sub-values (indexed strings) of one Rexx object to be merged into the sub-value collection of another Rexx object [available in runtime since NetRexx 1.120].
 The '$' character is now permitted in variable and other names.
@@ -594,8 +598,8 @@ It is now an error to attempt to use a concatenate operator on an array (unless 
 The methods generated for indirect properties are no longer inhibited by methods of the same name in superclasses.
 The NetRexx Supplement has been updated to document changes since August 1997.
 
-______________________________________________
-NetRexx 1.128 [14 Feb 1998]
+
+# NetRexx 1.128 [14 Feb 1998]
 
 The new linecomment example is a small command-line application that processes a text file. It demonstrates the use of Readers and Writers, and exception handling.
 A workaround for a bug in javac in JDK1.2b2 has been included.
@@ -603,53 +607,53 @@ Retry of a failing do instruction as a loop instruction now works.
 '\1a' (EOF) characters no longer need to follow line-end sequences in order to be ignored.
 Import of package hierarchies from .zip or .jar files now works correctly (previously it only worked for the standard imports)
 
-______________________________________________
-NetRexx  1.125 [10 Jan 1998]
+
+# NetRexx  1.125 [10 Jan 1998]
 
 The new sourcedir option requests that all .class files be placed in the same directory as the source file from which they are compiled. Other output files are already placed in that directory. Note that using this option will prevent -run from working unless the source directory is the current directory.
 The new explicit option indicates that all local variables must be explicitly declared (by assigning them a type but no value) before assigning any value to them.
 Indexed strings are now serializable (can be made persistent).
 Minor improvements to generated code.
 
-______________________________________________
-NetRexx 1.122 [27 Nov 1997]
+
+# NetRexx 1.122 [27 Nov 1997]
 
 A workaround for a JIT bug in Java 1.1.4 (showing as an exception in an optioncheck method during compilation) has been included.
 Formatting for the Java code when the comments option is used has been improved.
 strictcase and nostrictcase programs can now be safely mixed in a single compilation.
 Minor improvements to generated code and performance.
 
-______________________________________________
-NetRexx 1.121 [21 Oct 1997]
+
+# NetRexx 1.121 [21 Oct 1997]
 
 The new experimental comments option copies comments from the NetRexx source program through to the .java output file, which may be saved using the keep command option.
 Decimal addition has been updated to conform to ANSI X3-274 arithmetic and the NetRexx documentation (this is a very minor change: an addition such as 77+1E-999 now pads with zeros).
 An abstract method in an abstract class was incorrectly reported as error.
 Minor improvements to error messages, formatting, and performance.
 
-______________________________________________
-NetRexx 1.120 [1 Sep 1997]
+
+# NetRexx 1.120 [1 Sep 1997]
 
 Minor improvements to error messages, signals handling, and performance.
 Redesigned web pages and improved documentation.
 
-______________________________________________
-NetRexx 1.113 [3 Aug 1997]
+
+# NetRexx 1.113 [3 Aug 1997]
 
 Multiple .java files are compiled using a single call to javac, giving improved performance and interdependency resolution.
 Individual methods may be designated as binary, using the binary keyword.
 Numerous 'cosmetic' improvements in error messages, formatting, etc.
 
-______________________________________________
-NetRexx 1.104 [22 Jul 1997]
+
+# NetRexx 1.104 [22 Jul 1997]
 
 Whole numbers may now be expressed in a hexadecimal or binary notation, for example: 0xbeef 2x81 8b10101010 - see the Supplement for details.
 Conversions from String to Rexx (etc.) now 'pass through' nulls, rather than raising NullPointerException.
 options symbols may be used to include debugging information (a symbol table) in the generated .class files.
 Numerous 'cosmetic' improvements in error messages, formatting, etc.
 
-______________________________________________
-NetRexx 1.103 [3 Jul 1997]
+
+# NetRexx 1.103 [3 Jul 1997]
 
 A new modifier, adapter, for classes has been introduced. This makes it easy to use Java 1.1 events, without the complexity and extra nesting of Java Inner Classes. Please see the Supplement for details, and the new Scribble sample for a simple example.
 Compressed Zip files as produced by the Java 1.1 jar utility ('jar files') can now be used for class file collections. The current NetRexxC.zip file is such a file.
@@ -660,22 +664,22 @@ The NetRexxC.properties (error messages) file is now included as a resource in t
 The Pinger and Spectrum sample applications have been updated to use the Java 1.1 event model; Pinger has also had some other minor improvements.
 Performance improvements reduce start-up time when compiling with a long CLASSPATH or with class directories with large numbers of files.
 
-______________________________________________
-NetRexx 1.0x
+
+# NetRexx 1.0x
 
 This release is the reference implementation for NetRexx 1.00, as published in The NetRexx Language Definition, and later updates. NetRexx 1.0x updates will run on Java 1.0.1 or any later releases, though certain new features may require a Java 1.1 compiler to compile the generated Java code.
 Updates:
 
-______________________________________________
-NetRexx 1.02 [25 Jun 1997]
+
+# NetRexx 1.02 [25 Jun 1997]
 
 You can now add the shared keyword to the method or properties instructions to indicate that the method or a following property has shared access (that is, is accessible to other classes in the same package, but not to other classes). This corresponds to the Java 1.1 'default access' visibility. Please see the NetRexx Supplement for details.
 The new sourceline special name may be used to return the line number of the current clause in the program. Please see the NetRexx Supplement for details.
 Array initializers have been added. These allow arrays to be created and assigned an initial value, for example: x=['one','two','three'] Note that Java 1.1 is needed to use this enhancement. Please see the NetRexx Supplement for details.
 The property and method access rules have been enforced according to the current Java specification, along with enhanced error messages when the rules are infringed.
 
-______________________________________________
-NetRexx 1.01 [15 Jun 1997]
+
+# NetRexx 1.01 [15 Jun 1997]
 
 The NetRexx Supplement has been added. This documents language enhancements and the netrexx.lang package.
 NetRexxC now displays a warning when it encounters any deprecated (out-of-date or no longer recommended) class, method, or property for the first time in a program.
@@ -684,8 +688,8 @@ You can now add the deprecated keyword to the class, method, or properties instr
 Methods and properties with the same name are now permitted (and can be accessed).
 An import of one of the standard packages (for example, java.io) no longer causes the classpath to be searched. This makes redundant standard imports much faster.
 
-______________________________________________
-NetRexx  1.00 [24 May 1997] 
+
+# NetRexx  1.00 [24 May 1997] 
 
 Cosmetic changes:
 Methods listed during compilation now have their argument types listed (if any)
@@ -720,8 +724,8 @@ Minor improvements to error messages, progress messages, and code generation.
 Minor cosmetic and performance improvements over 0.90.
 NetRexxC.bat and nrc.bat have been added to the NetRexx package.
 
-______________________________________________
-NetRexx 0.90 [17 Dec 1996]
+
+# NetRexx 0.90 [17 Dec 1996]
 
 This release is the 'gamma' release prior to NetRexx 1.00. The main changes are in packaging and installation.
 
@@ -733,8 +737,8 @@ Reports of variables that are set but not used are now reported as Warnings, rat
 A defined entry-point in NetRexxC allows the compiler to be invoked directly from NetRexx or Java programs.
 Several cosmetic improvements, notably to tracing of loop instructions.
 
-______________________________________________
-NetRexx 0.88 [1 Dec 1996]
+
+# NetRexx 0.88 [1 Dec 1996]
 
 With this release the full function intended for NetRexx 1.00 is available.
 
@@ -746,8 +750,8 @@ Forward references from the class instruction to other classes in a program are 
 The generated Java source code no longer includes import instructions (i.e., all class references are now qualified).
 options compact may be used to request compact warnings and error messages, intended for use by editing environments. Please consider this an 'experimental' option; the format may change.
 
-______________________________________________
-NetRexx 0.86 [14 Nov 1996]
+
+# NetRexx 0.86 [14 Nov 1996]
 
 The major change in this release is the new error message processing.
 
@@ -757,8 +761,8 @@ Interface classes should now use the implements keyword for extending other inte
 Various problems with import and qualified class references have been resolved; in particular, you should now be warned about ambiguous class references again.
 options trace1 may be used to redirect trace output to stdout instead of stderr. Please consider this an 'experimental' option.
 
-______________________________________________
-NetRexx 0.84 [29 Oct 1996]
+
+# NetRexx 0.84 [29 Oct 1996]
 
 Local variables now have a defined initial value, consistent with properties (variables of primitive type are initialized to 0, all others to null).
 The Rexx class now has a new sequence(final) method for generating a sequence of characters. This serves the same purpose as the Rexx and Object Rexx xrange function.
@@ -770,8 +774,8 @@ Interface classes may now be extended, and methods in Interface classes may now 
 The source and version special words now always return strings of class Rexx.
 Many improvements and clarifications in the documentation.
 
-______________________________________________
-NetRexx 0.82 [26 Sep 1996]
+
+# NetRexx 0.82 [26 Sep 1996]
 
 Unicode characters (accented characters, non-arabic numerals, etc.) are now allowed for identifiers (variable and other names) and numeric symbols (numbers in programs). By default, characters in the source file are assumed to be in the "Latin-1" character set (the first 256 Unicode characters).
 The new utf8 option indicates that the source file is encoded with UTF-8 encoding. This allows the full range of up to 65536 Unicode characters to be used in NetRexx programs (including in literal strings and comments). To make best use of this you'll need an editor or utility that can produce files in UTF-8 format.
@@ -782,8 +786,8 @@ The Rexx class has now got a new exists(name) method for testing whether an inde
   fred[3]=null  -- fred.exists('3') is now 0
 Improved error messages.
 
-______________________________________________
-NetRexx 0.81 [7 Sep 1996]
+
+# NetRexx 0.81 [7 Sep 1996]
 
 The translator now parses .class files directly, so no longer uses the Agent debugging class. This gives the translator full information about classes and methods, and has allowed the removal of several restrictions.
 The translator can now track 'checked exceptions', and will automatically add those that are not caught to the signals list for each method. When this is done, the added exceptions are listed by the translator.
@@ -800,8 +804,8 @@ A method called 'main' with argument type 'String[]' is assumed static. This now
 When '=' or '\=' are used to compare two objects that are unknown to NetRexx (i.e., not strings), the Java 'equals' method is used for the comparison. '==' and '\==' check for identical objects, as before.
 The translator now exits with a return value of 2 if an error was detected, 1 if a warning was displayed, and 0 otherwise.
 
-______________________________________________
-NetRexx 0.77 [26 Aug 1996]
+
+# NetRexx 0.77 [26 Aug 1996]
 
 New uses keyword on the class instruction lets you specify one or more classes that will be used as a source for static methods and properties. For example, if your class is called Fred, then after
 class Fred uses Math
@@ -815,8 +819,8 @@ Options strictcase can be used to enforce strict case checking (for local variab
 Improvements to Trace: for example, all assignments are traced, with changed trace tags to indicate the type of variable being set.
 New methods in the Rexx class: d2c() and c2d.
 
-______________________________________________
-NetRexx 0.76 [13 Aug 1996]
+
+# NetRexx 0.76 [13 Aug 1996]
 
 Changes:
 
@@ -833,8 +837,8 @@ numeric form engineeering is now implemented.
 The static option has been added to the properties instruction, to allow for static properties that are not constant.
 The unpopular constant keyword on the method instruction has been renamed static, to align with the properties instruction. constant will continue to be accepted (with a warning) for a few months.
 
-______________________________________________
-NetRexx 0.67 [27 Jun 1996]
+
+# NetRexx 0.67 [27 Jun 1996]
 
 The compiler is now entirely written in NetRexx, and so should run on all platforms that support the Java toolkit. It calls the javac compiler by direct method invocation, and typically runs about ten times faster than before (the current slow spots are (a) reading large classes.zip files and (b) loading classes).
 This level of NetRexx (0.67) should be a functional superset of the final 0.62 OS/2 translator, though there is one small language change.
@@ -857,19 +861,14 @@ loop over can be used with any subclass of Rexx or of Dictionary (for example, H
 Invalid do syntax is re-tried as a loop instruction, after a warning.
 A list highlighting variables that are referenced only once is included in the variables cross-reference.
 
-______________________________________________
-NetRexx 0.54 [30 Apr 1996]
+# NetRexx 0.54 [30 Apr 1996]
 
 This release is a minor update to the translator, except for the addition of a fairly substantial example of a Java application written in NetRexx. See:
 
 http://www2.hursley.ibm.com/netrexx/pinger.html
 for a picture of how it looks. You can use this application without downloading the whole NetRexx package.
 
-______________________________________________
-NetRexx 0.50 [22 Apr 1996]
+
+# NetRexx 0.50 [22 Apr 1996]
 
 The first non-'IBM internal' release of NetRexx - the OS/2 Rexx prototype.
-
-
-
-

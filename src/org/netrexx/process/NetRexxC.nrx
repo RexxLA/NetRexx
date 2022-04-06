@@ -78,6 +78,7 @@ class NetRexxC
   argarray	   = String[] null           -- arguments for -exec [iff not null]
   compile	   = boolean 1               -- compile if translation OK
   console	   = boolean 1               -- display to console
+  color  	   = boolean 1               -- color in messages
   exec		   = boolean 0               -- interpret after parsing
   keep		   = boolean 0               -- keep the java file
   prompt	   = boolean 0               -- prompt after first execution
@@ -208,7 +209,8 @@ class NetRexxC
     -- primary entrypoint
    */
   method main2(arg=String[], logfile=PrintWriter null) constant returns int
-    it=NetRexxC()                    -- make private object
+    it=NetRexxC() -- make private object
+
     rc = int it.process(arg, logfile)
     if it.warnexit0 then if rc=1 then return 0
     return rc
@@ -264,7 +266,10 @@ class NetRexxC
 	    say e
 	  end
       end
-    
+
+    if color then NrAnsi(boolean 1)
+    else NrAnsi(boolean 0)
+
     langs=[Rexx 'Nr'] -- languages supported. There were more.
     
     if \translator.setlanguages(langs) then usage() -- select languages
@@ -537,6 +542,8 @@ class NetRexxC
         when arglow=='nosavelog'   then savelog=0
         when arglow=='console'     then console=1
         when arglow=='noconsole'   then console=0
+	when arglow=='color'       then color=1
+	when arglow=='nocolor'     then color=0
         when arglow=='prompt'      then prompt=1
         when arglow=='noprompt'    then prompt=0
 	when arglow=='warnexit0'   then warnexit0=1
@@ -596,16 +603,18 @@ return
       if vv=null then vv=''
       parse vv . . . vv
       nv = NrVersion()
-      say nv.getLogo() nv.getFullVersion() vv
+
+      say nv.getLogo() NrAnsi.ANSI_BLUE||nv.getFullVersion()||NrAnsi.ANSI_RESET vv
       say nv.getCopyright()'\n'
       say 'Arguments are: in_file_specification... [-option]...\n'
     end
-    if \helpreq then do; say 'Use "-help" to show all options'; return 0;end
+    if \helpreq then do; say 'Use "--help" to show all options'; return 0;end
       say 'In brief, NetRexxC-specific options are:\n'
       say '  -arg words     -- interpret; remaining words are arguments'
       say '  -classpath     -- specify a classpath'
       say '  -cp            -- short for classpath'
       say '  -compile       -- compile (default; -nocompile implies -keep)'
+      say '  -color         -- use color in translator messages'
       say '  -console       -- display messages on console (default)'
       say '  -exec          -- interpret with no argument words'
       say '  -ecj           -- prefer ecj (eclipse) compiler if available'
