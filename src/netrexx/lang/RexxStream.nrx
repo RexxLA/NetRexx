@@ -90,10 +90,22 @@ class RexxStream uses RexxDate
    * Method charout 
    */
   method charout(name,text,start='') static
+    -- check 3rd parm
     if start<>'' then if start<>1 then do
       say 'third parameter must be 0 or 1'
       return null
     end
+    -- special names for std file handles
+    if name='stdout' then do
+      System.out.println(text)
+      return 0
+    end
+    if name='stderr' then do
+      System.err.println(text)
+      return 0
+    end
+    -- end of special names
+    
     fh = fileReaderHandles.get(name.toString())
     if fh = null then do
       openFile(name,'r')
@@ -187,6 +199,16 @@ class RexxStream uses RexxDate
    * @param position is a Rexx which contains the start position in the file
    */
   method lineout(name,text,position=0) static
+    /* special cases for stdout and stderr as filenames */
+    if name='stdout' then do
+      System.out.println(text)
+      return 0
+    end
+    if name='stderr' then do
+      System.err.println(text)
+      return 0
+    end
+    /* end of special cases */
     if position=1 then do
       f = File(name)
       stream(name,'c','CLOSE')
@@ -353,7 +375,7 @@ class RexxStream uses RexxDate
 	  end
 
 	  otherwise
-	    say '?'
+	    say 'incorrect call to routine'
 	    return ""
 	end
       end
