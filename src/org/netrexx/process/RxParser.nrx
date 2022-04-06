@@ -38,6 +38,7 @@
 /* 2013.07.12 Issue warning for unqualified properties statement      */
 /* 2016.01.01 support for NETREXX-122 (annotations)                   */
 /* 2021.01.15 support for ADDRESS instruction -- MRE                  */
+/* 2022.04.06 Optional arg for iskey, don't check if var exists --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -1289,10 +1290,11 @@ class RxParser uses RxCode
 
  /* ISKEY -- test for a keyword
    Arg1 is array of characters to check
-   Arg2 is keyword to check -- must be in Uppercase
-   Returns 1 if both args match (caseless) and word is not a variable
+   Arg2 is keyword to check -- must be in Uppercase 
+   Arg3 is boolean to check for variable name  -- MRE only from NrAddress' RxExprParser
+   Returns 1 if both args match (caseless) and word is not a variable (unless nocheckvar=1)
    */
- method iskey(al=char[], kr=String) returns boolean
+ method iskey(al=char[], kr=String, nocheckvar=int 0) returns boolean
   if al.length\=kr.length() then return 0
   ar=kr.toCharArray()
   loop i=0 to al.length-1
@@ -1303,6 +1305,7 @@ class RxParser uses RxCode
     end
   /* The two words match (caseless) */
   if cursor.curclass=null then return 1           -- no variables possible yet
+  if nocheckvar then return 1
   if rxt.program.pooler.findvar(cursor, al, null, 0, 0, 0)=null then
     return 1 -- unknown
   return 0                                        -- is a variable

@@ -38,6 +38,7 @@
 /* 2000.02.26 Add evalexpr [wraps exceptions]                         */
 /* 2004.12.18 'do i=0 to to foo' failed (empty expression->AOOB)      */
 /* 2021.01.19 Add RC special name parsing as pseudo local variable    */
+/* 2022.04.05 Added termtok as 8th argument to parseexpr --MRE        */
 /* ------------------------------------------------------------------ */
 /* To-do .. remove redundant sub-expression code                      */
 -- Currently   foo=boolean \bar    will fail with dyadic.not; raise
@@ -143,6 +144,7 @@ class RxExprParser uses RxCode
     Arg5 is list of valid terminator keywords [usually null, default none]
     Arg6 is tracing tag character to use for tracing ('\0' to inhibit trace)
     Arg7 is tracing name to use for tracing [implies Trace Var may affect]
+    Arg8 is terminator token, only used from NrAddress --MRE 
     returns an RxCode object for the expression
 
     The non-recursive algorithm here very closely follows the expression
@@ -154,6 +156,9 @@ class RxExprParser uses RxCode
 
     Terminating keywords are handled by converting them to an END token
     in COPYTOKENS, which is the tokens[] array actually processed here.
+
+    termtok is only used from NrAddress to capture WITH fragment when a
+    variable named with exists  --MRE
 
     Values on OP stack:
       ';'    end of expression
@@ -173,9 +178,10 @@ class RxExprParser uses RxCode
     we can localize the position to the nearest token.
 
     */
+  
  method parseexpr(cursor=RxCursor, typeallowed=boolean, n=int,-
                   termins=char[], termwords=Rexx,-
-                  tracetag=char '>', tracename=Rexx '')-
+                  tracetag=char '>', tracename=Rexx '', termtok=RxToken null)-
                  returns RxCode
 
   ops       =Stack            -- the operators stack [of RxExprOpType objects]
@@ -195,7 +201,7 @@ class RxExprParser uses RxCode
         -- if -exec then we know the term word is known a keyword, so no
         -- need for the iskey check
         if utermwords.wordpos(uvalue)\==0 then
-         if rxt.exec, cursor.curprogram.parser.iskey(uvalue, uvalue) then do
+         if rxt.exec, cursor.curprogram.parser.iskey(uvalue, uvalue), termtok\=null & cursor.curprogram.parser.iskey(termtok.value, uvalue,1)  then do
           /* Match!  Drop blank to left, if any, then terminate with END */
           if i>0 then if tokens[i-1].type=RxToken.SP then do
             i=i-1
@@ -1731,3 +1737,4 @@ class RxExprOpType final shared
  method RxExprOpType(newtype=char, newtok=RxToken, newoff=int, newpref=boolean)
    type=newtype; off=newoff; tok=newtok; isprefix=newpref
 
+ 
