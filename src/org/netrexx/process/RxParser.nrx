@@ -38,7 +38,7 @@
 /* 2013.07.12 Issue warning for unqualified properties statement      */
 /* 2016.01.01 support for NETREXX-122 (annotations)                   */
 /* 2021.01.15 support for ADDRESS instruction -- MRE                  */
-/* 2022.04.06 Optional arg for iskey, don't check if var exists --MRE */
+/* 2022.04.06 Add istok, compares SYM tokens, fix address with --MRE  */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -1291,10 +1291,9 @@ class RxParser uses RxCode
  /* ISKEY -- test for a keyword
    Arg1 is array of characters to check
    Arg2 is keyword to check -- must be in Uppercase 
-   Arg3 is boolean to check for variable name  -- MRE only from NrAddress' RxExprParser
-   Returns 1 if both args match (caseless) and word is not a variable (unless nocheckvar=1)
+   Returns 1 if both args match (caseless) and word is not a variable
    */
- method iskey(al=char[], kr=String, nocheckvar=int 0) returns boolean
+ method iskey(al=char[], kr=String) returns boolean
   if al.length\=kr.length() then return 0
   ar=kr.toCharArray()
   loop i=0 to al.length-1
@@ -1305,10 +1304,33 @@ class RxParser uses RxCode
     end
   /* The two words match (caseless) */
   if cursor.curclass=null then return 1           -- no variables possible yet
-  if nocheckvar then return 1
   if rxt.program.pooler.findvar(cursor, al, null, 0, 0, 0)=null then
     return 1 -- unknown
   return 0                                        -- is a variable
+
+ /* ISTOK -- test for a token
+   Arg1 is token 1
+   Arg2 is token 2 
+   Returns 1 if both args are type SYM and values match
+   Note, only RxToken.SYM type tokens are compared
+   -- MRE this is mainly here to fix ADDRESS WITH instruction where WITH exists as a variable
+   */
+
+ method istok(a=RxToken, b=RxToken) returns boolean
+  if a.type\=b.type then return 0
+  if a.type=RxToken.SYM & b.type=RxToken.SYM then do
+    if a.value.length\=b.value.length then return 0
+    loop i=0 to a.value.length-1
+      cl=a.value[i]; cr=b.value[i]
+      if cl=cr then iterate
+      cl=Character.toUpperCase(cl)
+      cr=Character.toUpperCase(cr)
+      if cl\=cr then return 0
+    end
+    return 1
+  end
+  return 0
+
 
  /* CLAUSES: Return the number of known clauses
     After the first pass, this is the total in program. */
