@@ -1,11 +1,12 @@
 # NetRexx 4.04 alpha [23 Aug 2022]
 
+- the NetRexx issue tracker has moved to [https://github.com/RexxLA/NetRexx/issues]
 - non-oo notation for scripting mode (René Vincent Jansen) enables more Classic Rexx source compatible scripts
 - a new nr command for scripting purposes
 - releasenotes are in Markdown syntax
-- use of colour in language processor messages enabled (but optional,  opt-out)
+- use of color in language processor messages enabled (but optional,  opt-out)
 - long and short form of options
-- one can now exit the Workspace with an 'exit'
+- one can now exit the NetRexx Workspace with an 'exit'
 
 
 # NetRexx 4.03 BETA [01 Apr 2022]
