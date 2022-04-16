@@ -34,7 +34,9 @@ project at SourceForce and clone the repository using Git. For this
 version management package there are many graphical user interfaces, but
 what is shown here, is the command line version. Choose a suitable place
 as working directory - you can later move it around as you please.
-
+You can clone from this repository, or from sourceforge.
+`git clone git@github.com:RexxLA/NetRexx.git`
+or
 `git clone git://git.code.sf.net/p/netrexx/code netrexx-code`
 
 The master branch contains the most current version of the source code,
@@ -42,7 +44,7 @@ including the documentation, examples and test cases.
 
 ## The buildfile
 
-The official buildfile is called `build.xml' and the 'ant` utility is used for building
+The official buildfile is called `build.xml` and the `ant` utility is used for building
 from source. `ant` is present in the source repository.
 The `build.xml` file contains a number of tasks. To build the
 translator, make sure that the top level directory that is cloned from
