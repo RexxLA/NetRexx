@@ -1,12 +1,22 @@
 # NetRexx 4.04 alpha [23 Aug 2022]
 
+## Project
 - the NetRexx issue tracker has moved to [https://github.com/RexxLA/NetRexx/issues]
-- non-oo notation for scripting mode (René Vincent Jansen) enables more Classic Rexx source compatible scripts
+- The RexxLA/NetRexx shadow repository will be maintained to be equal in contents to the SourceForge one
+
+## Language
+- non-oo notation for scripting mode (René Vincent Jansen) enables (much more) Classic Rexx source compatible scripting
 - a new nr command for scripting purposes
-- releasenotes are in Markdown syntax
-- use of color in language processor messages enabled (but optional,  opt-out)
+- releasenotes are in Markdown syntax (and have moved to the root of the source tree)
+- use of color in language processor messages enabled (but optional,  opt-out for Linux and Mac, opt-in for windows)
 - long and short form of options
+## Workspace for NetRexx
 - one can now exit the NetRexx Workspace with an 'exit'
+- resolved an error in the startup timer of nrws
+- the default now is to display the command timer instead of the window number
+- the default prompt changed to 'Ready;' (but both options can still be changed in an $HOME/nrws.properties file
+- the pipelines processor is now loaded by default.
+## Pipelines for NetRexx
 
 
 # NetRexx 4.03 BETA [01 Apr 2022]
