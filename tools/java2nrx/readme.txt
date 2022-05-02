@@ -110,3 +110,9 @@ Version history
 
 - Changes:
    - Translate foreach statement as loop over
+
+1.0.6 (2022-05-02)
+   agrellum@gmail.com remesm@gmail.com
+
+- Changes:
+   - Fix cast expression

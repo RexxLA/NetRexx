@@ -21,7 +21,7 @@ public class java2nrx {
 	 */
 	public static void main(String[] args) throws Exception {
 		
-		System.out.println("java2nrx, the translator translator, version 1.0.5");
+		System.out.println("java2nrx, the translator translator, version 1.0.6");
 		
 		if (args.length == 0 || args[0].equals("-h") || args[0].equals("-H") || args[0].equals("--help") || args[0].equals("-?") ){
 	      System.err.println("\nUsage : java -jar java2nrx <infile.java> [out.nrx]");

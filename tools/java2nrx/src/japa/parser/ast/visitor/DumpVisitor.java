@@ -865,9 +865,8 @@ public final class DumpVisitor implements VoidVisitor<Object> {
 	}
 
 	public void visit(CastExpr n, Object arg) {
-		printer.print("(");
 		n.getType().accept(this, arg);
-		printer.print(") ");
+		printer.print(" ");
 		n.getExpr().accept(this, arg);
 	}
 
