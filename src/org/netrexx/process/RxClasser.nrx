@@ -90,6 +90,7 @@ import java.nio.file.OpenOption
 import java.nio.file.LinkOption
 import java.nio.file.StandardOpenOption
 
+
 /**   This is the generalized class processor.  The classer object    */
 /*   handles everything to do with classes: finding them, testing     */
 /*   for them, and so on.                                             */
@@ -959,22 +960,28 @@ return count
      Registers each package found (of form xxx.xxx.yyy)
      Calls packdirsearch to explore directory tree
    */
-  method packdirfind(classseg=String, packlook=Hashtable) private
+  method packdirfind(classseg=String, packlook=Hashtable) private 
     if classseg=='' then                       -- no segment specified
       dirpath=System.getProperty('user.dir')   -- .. so use current directory
     else dirpath=classseg                     -- [else use specified]
+    -- if classseg=='.' then return
 
-    dir=File(dirpath)                     -- check the path
-    if dir.getName() == '.' then return --<==== Marc, this is the line 
-    
-    if \dir.isDirectory() then return       -- directory does not exist
+    s = String[1]
+    s[0] = ''
+    dpath=Paths.get(dirpath,s)            -- check the path
+
+    o = LinkOption[1]
+    o[0] = LinkOption.NOFOLLOW_LINKS    
+    o = LinkOption[0]         -- we do want to support links
+    if \Files.isDirectory(dpath, o) then return       -- directory does not exist
+
     if rxt.superflag.diag then do
       -- only time the outer level
-      say '# PACKDIRFIND '''dir.getPath()''' loop start'
+      say '# PACKDIRFIND '''dpath.getFileName()''' loop start'
       start=System.currentTimeMillis()
     end
     -- don't recurse if explicit "current directory please"
-    packdirsearch(dir, '', packlook, classseg.length()>0)
+    packdirsearch(dpath, '', packlook, classseg.length()>0)
     if rxt.superflag.diag then say '# PACKDIRFIND loop end after' System.currentTimeMillis()-start'ms'
 
   /** packdirsearch -- private method to search a directory
@@ -991,30 +998,43 @@ return count
      We make the assumption that package directory names cannot end in
      .class, as the File() + isDirectory call is much slower.
      [In fact we now assume no embedded '.']
+
+     --MRE Now scanning with faster java.nio
    */
-  method packdirsearch(dir=File, package=String,-
-                       packlook=Hashtable, recurse=boolean) private
+  method packdirsearch(dir=Path, package=String,-
+                       packlook=Hashtable, recurse=boolean) private 
     /* search the directory */
-    entries=dir.list()                         -- get list of names
-    if entries=null then return                -- [avoids Linux problem]
-    hasclasses=boolean 0
-    loop i=0 for entries.length
-      name=entries[i]
-      if name.indexOf(int(dot), 0)>=0 then do  -- has dot, cannot be directory
-        if hasclasses then iterate i           -- had a .class file already
-        if name.endsWith('.class') then hasclasses=1  -- not a directory
-        iterate i
-      end
-      /* plain name -- could be a directory */
-      if \recurse then iterate i                    -- .. if interesting ...
-      if name.indexOf(int(dot), 0)>=0 then iterate i-- has dot, cannot be directory
-      item=File(dir, name)
-      if \item.isDirectory() then iterate i
-      if package.length()=0 then newpack=name
-      else newpack=package'.'name
-      packdirsearch(item, newpack, packlook, recurse)
-    end i
-    if hasclasses then if package.length()\=0 then addpackage(package, packlook)
+    o = LinkOption[1]
+    o[0] = LinkOption.NOFOLLOW_LINKS    
+    o = LinkOption[0]         -- we do want to support links
+
+    do
+      entries=Files.newDirectoryStream(dir)      -- get list of names
+      if entries=null then return                -- [avoids Linux problem]
+      hasclasses=boolean 0
+      i = Iterator
+      i = entries.iterator()
+      loop while i.hasNext() 
+        dpath = Path i.next()
+        name=dpath.getFileName().toString()
+
+        if name.indexOf(int(dot), 0)>=0 then do  -- has dot, cannot be directory
+          if hasclasses then iterate            -- had a .class file already
+          if name.endsWith('.class') then hasclasses=1  -- not a directory
+          iterate 
+        end
+        /* plain name -- could be a directory */
+        if \recurse then iterate                     -- .. if interesting ...
+        if name.indexOf(int(dot), 0)>=0 then iterate -- has dot, cannot be directory
+        if \Files.isDirectory(dpath,o) then iterate 
+        if package.length()=0 then newpack=name
+        else newpack=package'.'name
+        packdirsearch(dpath, newpack, packlook, recurse)
+      end 
+      if hasclasses then if package.length()\=0 then addpackage(package, packlook)
+    catch e=IOException
+      signal RxQuit(rxt, null, 'exception.cannot.be.caught', e.getMessage())
+    end
     return
 
   /** ADDPACKAGE -- add package to known list, if new
@@ -1029,18 +1049,18 @@ return count
     if packlook\=null then do
       if packlook.containsKey(pack) then return     -- already known in segment
                                                     -- is new in segment, so add entry
-                                                    packlook.put(pack, pack)
+      packlook.put(pack, pack)
     end
     if packagetable.containsKey(pack) then return   -- already known somewhere
     packagetable.put(pack, pack)                    -- a newie
     if rxt.superflag.diag then
       if rxt.program.flag.verbose>4 then say '# AddPackage:' pack
       -- It's new; if an upper package then register it, too
-      lsep=pack.lastIndexOf(int(dot), pack.length()-1)  -- find any package separator
-      if lsep<0 then return                           -- no more dots
-      pack=pack.substring(0, lsep)                    -- drop last segment
-      addpackage(pack, packlook)                      -- register (if new)
-      return
+    lsep=pack.lastIndexOf(int(dot), pack.length()-1)  -- find any package separator
+    if lsep<0 then return                           -- no more dots
+    pack=pack.substring(0, lsep)                    -- drop last segment
+    addpackage(pack, packlook)                      -- register (if new)
+    return
 
   /** GETPACKAGE -- return package part of a class name
      Arg1 is a (possibly qualified) class name or package name
