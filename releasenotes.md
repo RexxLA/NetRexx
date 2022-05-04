@@ -10,16 +10,18 @@
 - releasenotes are in Markdown syntax (and have moved to the root of the source tree)
 - use of color in language processor messages enabled (but optional,  opt-out for Linux and Mac, opt-in for windows)
 - long and short form of options
+
 ## Workspace for NetRexx
 - one can now exit the NetRexx Workspace with an 'exit'
 - resolved an error in the startup timer of nrws
 - the default now is to display the command timer instead of the window number
-- the default prompt changed to 'Ready;' (but both options can still be changed in an $HOME/nrws.properties file
+- the default prompt changed to 'Ready;' (but both options can still be changed in an $HOME/nrws.properties file)
 - the pipelines processor is now loaded by default.
+
 ## Pipelines for NetRexx
+- a pipelines example that uses the ADDRESS WITH functionality
 
-
-# NetRexx 4.03 BETA [01 Apr 2022]
+# NetRexx 4.03 GA [03 May 2022]
 
 - ADDRESS WITH implemented (Marc Remes)
 - a fix for NETREXX-24 (was 148): ITERATE without label is not inside LOOP construct message (Marc Remes)

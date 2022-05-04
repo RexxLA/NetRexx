@@ -52,8 +52,9 @@ git is the current directory, and issue the command:
 
 `java -jar ant/ant-launcher.jar`
 
-This will build the translator (compiler and interpreter) from source and create a directory in the
-current directory. In the NetRexxC and NetRexxR jars are put by the
+This will build the translator (compiler and interpreter) from source
+and create a ```build/lib``` directory in the
+current directory. Here the NetRexxC and NetRexxR jars are put by the
 archiving process that is started by the task. These new jars can be
-used immediately, by having them (NetRexxC will suffice) on the
-classpath.
+used immediately, by having them (NetRexxC.jar will suffice on a system
+that has a functioning Java compiler) on the classpath.
