@@ -1,0 +1,319 @@
+/* NetRexx */
+
+import javax.swing.event
+
+class BezierCurves public extends JFrame 
+
+    properties private 
+
+        isTrue = 1
+        isFalse = 0
+        myDialog = JDialog JDialog(this, "Exploring Bezier curves with NetRexx", isFalse)
+        myCanvas = DrawCanvas
+        canvas_width = 300
+        canvas_height = 300
+        dialog_width = 600
+        dialog_height = 750
+     
+    method BezierCurves 
+/**
+ * Create the HELP information in a un-editable JEditorPane
+ */
+        myPane = JEditorPane JEditorPane()
+        myPane.setEditable(isFalse)
+        myPane.setContentType("text/html")
+-- The help info in html
+        myPane.setText("<h1>Exploring Beziercurves with:</h1>" -
+                    || "<img src='http://netrexx.org/images/NetRexxKingSmall.gif' >" -
+                    || "<a href='http://netrexx.org/'><h1>NetRexx</h1></a>" - 
+                    || "<p>The code is based on the information provided on " -
+                    || "<a href='https://pomax.github.io/bezierinfo/'>this website.</a>.</p>" -   
+                    || "<p>You can use this code in the following way:</p>" -
+                    || "<ul>" -
+                    || "<li>Execution starts with a predefined set of startpoint, endpoint and 3 controlpoints.</li>" -
+                    || "<li>With the left mousebutton all points can be dragged.</li>" - 
+                    || "<li>Clicking the left mousebutton on one of the points will add an additional controlpoint " -
+                    || "between the one clicked and the next point.</li>" -
+                    || "<li>Clicking the right mousebutton on one of the points will remove that controlpoint.</li>" -
+                    || "<li>Double clicking the left mousebutton allows you the change the number of flattening steps.</li>" -
+                    || "</ul>" -
+                    || "<p>Go ahead, have some fun, I hope!</p><p>      Ruurd Idenburg</p>")
+-- The HyperlinkListener enables browsing of the referred websites
+        hll = HyperlinkListener myHyperlinkListener()
+        myPane.addHyperlinkListener(hll)
+-- Add the JEditorPane to the JDialog
+        myDialog.getContentPane().add(myPane, BorderLayout.CENTER)
+-- and set the necessary options for the JDialog
+        myDialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
+        myDialog.pack()
+        myDialog.setSize(dialog_width,dialog_height)
+        myDialog.setVisible(isTrue)
+-- Create the canvas for drawing the curves
+        myCanvas = DrawCanvas(25)
+        myCanvas.setPreferredSize(Dimension(canvas_width, canvas_height))
+-- Add the drawing canvas to th JFrame 
+        this.getContentPane().add(myCanvas)
+-- and set the necssary options for the JFrame
+        this.setTitle("Exploring Beziercurves.....")
+        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE)
+        this.pack()
+        this.setSize(canvas_width,canvas_height)
+        this.setLocationRelativeTo(null)
+        this.setVisible(isTrue)
+/**
+ * Start the application in the most thread-safe way.
+ */
+    method main(args=String[] ) static 
+        SwingUtilities.invokeLater(myRunnable())
+
+/**
+* Define inner class DrawCanvas, which is a JPanel used for custom drawing.
+*/
+class BezierCurves.DrawCanvas dependent private  extends JPanel -
+      adapter implements MouseListener, MouseMotionListener 
+
+    properties public
+-- first point is start, last point is end, in between are control
+        points=ArrayList()
+-- curvePoint is updated every flattening step
+        curvePoint
+-- size of a curvepoint
+        curvePointRadius = 5
+-- distance between X and also Y axes
+        skeletonAxesIncrement = 25
+-- The number of flattening steps to calculate the Bezier curve
+        flatteningSteps = 10
+
+    method DrawCanvas(steps)
+-- Create the initial start-, end- and control-points
+        points.add(110 150)
+        points.add(25 190)
+        points.add(210 250)
+        points.add(230 110)
+        points.add(210 30)
+-- Set the number of flattening steps 
+        flatteningSteps = steps
+-- Set the mouse listeners we need and implement
+        addMouseListener(this)
+        addMouseMotionListener(this)
+
+    method mouseDragged(event=MouseEvent)
+        moveCurvePoint(event)
+
+    method mouseReleased(event=MouseEvent)
+        moveCurvePoint(event)
+
+    method moveCurvePoint(event = MouseEvent)
+        ex = event.getX
+        ey = event.getY
+        r = curvePointRadius
+        loop label redraw i=0 while i<points.size
+            px = (Rexx points.get(i)).word(1)
+            py = (Rexx points.get(i)).word(2)
+            if (ex>=px-r & px<=px+r & ey>=py-r & ey<=py+r) then do 
+                points.set(i, ex ey)
+                repaint()           
+                leave redraw
+            end
+        end
+/**
+ * Handle single click and double click and left or right mouse action
+ * Double click allows altering the number of flattenening steps
+ * Single click with left mouse button allows adding a control point
+ * Single click with right mouse button allows removing a control point
+ */
+    method mouseClicked(event=MouseEvent)
+        if event.getClickCount>1 & \event.isConsumed() then do
+            event.consume()
+            input = JOptionPane.showInputDialog("Enter the number of curve flattening steps\nShould be in the range 0-100",flatteningSteps)
+            if (input\=null &\input.isEmpty()) then do
+                value = Rexx input
+                if (value.dataType('W') & value>+0 & value<=100) then do 
+                    flatteningSteps = value
+                    repaint()
+                end
+                else do
+                    JOptionPane.showMessageDialog(null, "Number of flattening steps not in range 0-100!")
+                end
+
+            end
+        end
+        if event.getClickCount=1 then do
+            ex = event.getX
+            ey = event.getY
+            r = curvePointRadius
+            loop label redraw i=0 while i<points.size
+                px = (Rexx points.get(i)).word(1)
+                py = (Rexx points.get(i)).word(2)
+                if (ex>=px-r & px<=px+r & ey>=py-r & ey<=py+r) then do 
+                    mouseButton = event.getButton
+                    if mouseButton==MouseEvent.BUTTON1 then addControlPoint(i)
+                    if mouseButton==MouseEvent.BUTTON3 then removeControlPoint(i)
+                    leave redraw
+                end
+            end
+        end
+
+/**
+ * A new control point is added halfway between the clicked one and the next control point.
+ * Adding a control point beyond the end point is not allowed
+ */
+    method addControlPoint(i)
+        if i<points.size-1 then do
+            one = Rexx points.get(i)
+            two = Rexx points.get(i+1)
+            x1 = one.word(1)
+            x2 = two.word(1)
+            y1 = one.word(2)
+            y2 = two.word(2)
+            newX = ((x1+x2)/2).format(null,0)
+            newY = ((y1+y2)/2).format(null,0)
+            points.add(i+1, newX newY) 
+            repaint()
+        end
+        else do
+            JOptionPane.showMessageDialog(null, "Adding a Controlpoint after Endpoint is not allowed!")
+        end
+/**
+ * Removing start or end point is not allowed, dragging them is the way to change them.
+ */
+    method removeControlPoint(i)
+        if (i>0 & i<points.size-1) then do
+            oldpts = ArrayList points
+            points = ArrayList()
+            loop j=0 while j<oldpts.size
+                --say oldpts.get(j)
+                if j<>i then points.add(oldpts.get(j))
+            end
+            repaint()
+        end
+        else do
+            JOptionPane.showMessageDialog(null, "Removing start or end point is not allowed!")
+        end
+
+/**
+ * The code to (re)paint the drawing canvas
+ */
+    method paintComponent( g=Graphics ) 
+        super.paintComponent(g)
+    -- draw the skeleton
+        incr = skeletonAxesIncrement
+        height = getHeight()
+        width = getWidth()
+        g.setColor(Color.lightgray)
+        loop i=0 by incr while i<=(Rexx height).max(width)
+            g.drawLine(i,0,i,height)
+            g.drawLIne(0,i,width,i)
+        end
+    -- show the number of flattening steps
+        g.setColor(Color.BLACK)
+        g.setFont(Font("Monospaced",Font.BOLD,10))
+        xPos = 5
+        yPos = height-5
+        g.drawString("Flattening steps:" flatteningSteps, xPos, yPos)
+    -- draw the lines between the points
+        if points.size>1 then do
+            px = 0
+            py = 0
+            loop i=0 while i<points.size
+                x = (Rexx points.get(i)).word(1)
+                y = (Rexx points.get(i)).word(2)
+                if i>0 then g.drawLine(px,py,x,y)
+                px = x
+                py = y
+            end
+        end
+
+    -- draw the points and information text
+        if points.size>0 then do
+            loop i=0 while i<points.size
+                coords = String (i+1) "("(Rexx points.get(i)).word(1)","(Rexx points.get(i)).word(2)")"
+                g.setColor(Color.BLACK)
+                g.drawString(coords,(Rexx points.get(i)).word(1)+8, (Rexx points.get(i)).word(2)+8)
+                g.setColor(Color.blue)
+                if i=0 then g.setColor(Color.green)
+                if i=points.size-1 then g.setColor(Color.red)
+                g.fillOval( (Rexx points.get(i)).word(1)-4, (Rexx points.get(i)).word(2)-4,8 ,8)
+            end
+        end
+
+    -- draw the flattened Bezier curve
+        if points.size>1 then do
+            t = 0.0
+            prevptx = 0
+            prevpty = 0
+            loop while t<=1
+                g.setColor(Color.blue)
+                stepCurvePoint(points, t)
+                ptx = curvePoint.word(1)
+                pty = curvePoint.word(2)
+                g.drawOval(int ptx-1,int  pty-1, 2, 2)
+                if t<>0 then do
+                    g.drawLine(int prevptx,int prevpty,int ptx,int pty)
+                end
+                prevptx = ptx
+                prevpty = pty
+                t = t+(100/flatteningSteps/100)
+            end
+        end
+
+/**
+ * If we want to draw Bézier curves, we can run through all values of t from 0 to 1 and
+ * then compute the weighted basis function at each value, getting the x/y values we need
+ * to plot. Unfortunately, the more complex the curve gets, the more expensive this
+ * computation becomes. Instead, we can use de Casteljau's algorithm to draw curves. 
+ * This is a geometric approach to curve drawing, and it's really easy to implement. 
+ * So easy, in fact, you can do it by hand with a pencil and ruler.
+ * <ol>
+ * <li> Treat t as a ratio (which it is). t=0 is 0% along a line, t=1 is 100% along a line.
+ * <li> Take all lines between the curve's defining points. For an order n curve, that's n lines.
+ * <li> Place markers along each of these line, at distance t. So if t is 0.2, place the mark at 20% from the start, 80% from the end.
+ * <li> Now form lines between those points. This gives n-1 lines.
+ * <li> Place markers along each of these line at distance t.
+ * <li> Form lines between those points. This'll be n-2 lines.
+ * <li> Place markers, form lines, place markers, etc.
+ * <li> Repeat this until you have only one line left. The point t on that line coincides with the original curve point at t.
+ * </ol>
+ */                
+    method stepCurvePoint(_points=ArrayList, t) 
+        if _points.size>1 then do
+            newPoints= ArrayList()
+            --say newPoints.length
+            loop i=0 while i<_points.size-1
+                x = (1-t)*(Rexx _points.get(i)).word(1)+t*(Rexx _points.get(i+1)).word(1)
+                y = (1-t)*(Rexx _points.get(i)).word(2)+t*(Rexx _points.get(i+1)).word(2)
+                newPoints.add(x y)
+            end
+            stepCurvePoint(newPoints, t)
+        end
+        else do
+            x = (Rexx _points.get(0)).word(1).format(null,0)
+            y = (Rexx _points.get(0)).word(2).format(null,0)
+            curvePoint = x y
+        end
+
+/**
+ * The HyperlinkListener is triggered by the hyperlinkUpdate event
+ * The event type can ENTERED, ECITED or ACTIVATED. If the hyperlink is activated
+ * the (default) desktop browser is invoked to try to browse the activated link.
+ */
+class myHyperlinkListener implements HyperlinkListener
+
+    method hyperlinkUpdate(event = HyperlinkEvent)
+        if (event.getEventType == HyperlinkEvent.EventType.ACTIVATED) then do
+            theURL = URL event.getURL()
+            if (theURL\=null) then do
+                dt = Desktop Desktop.getDesktop()
+                dt.browse(theURL.toURI)
+            catch ex=Exception
+                ex.printStackTrace
+            end
+        end
+
+/**
+ * Start the application in a thread-safe way
+ */
+class myRunnable private implements Runnable
+    method run 
+        BezierCurves()
+
