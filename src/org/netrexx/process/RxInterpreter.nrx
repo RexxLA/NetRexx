@@ -37,7 +37,6 @@
 /*                                               per issue #80 -KK-   */
 /* 2020.12.20 MRE -- catch exception when class modifier fields       */
 /*                                              are accessed in JDK9+ */
-/* 2022.02.25 MRE -- getStemElementValue without RxArray              */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -74,7 +73,7 @@ options binary nodecimal strictcase strictargs
 /*                                                                    */
 /* In general, a signal during event dispatching is unpleasant.       */
 /* ------------------------------------------------------------------ */
-
+--trace methods
 class RxInterpreter uses NrLevel, RxCursor, RxVariable
 
  properties shared
@@ -384,13 +383,6 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
     end
   return val
 
- method getStemElementValue(cursor=RxCursor,val=Rexx,ref=Rexx,tok=RxToken) returns Rexx
-  if val=null then signal RxSignal(cursor,NullPointerException(),tok)
-  val=val.getnode(ref).leaf
-  return val
-
-
-
  /** SETSTEMELEMENTVALUE: Look up an element in an indexed string
     Arg1 is the context
     Arg2 is the Rexx object (may not be null)
@@ -494,7 +486,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
         modifiersField = prop.getClass().getDeclaredField("modifiers") --issue #80 -KK-
 -- say '##MRE not reached on JDK12+'
         modifiersField.setAccessible(1) --issue #80 -KK-
-      catch e=NoSuchFieldException
+      catch NoSuchFieldException
         nop                   -- nop, but avoided JDK12+ java.lang.NoSuchFieldException:modifiers
                               -- triggering 'Severe Error: Internal error: RxInterpreter: pnf'
       end 
@@ -919,6 +911,8 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
   loop label execute while cursor.curclause\=null
     clause=cursor.curclause                   -- local reference
 
+loop label interactive
+
     -- trace the clause if required
     if cursor.curtrace\=null then do label traceit
       if cursor.curnewprot then leave traceit -- already just traced it
@@ -936,8 +930,9 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
                                   reqlevel, varlist)   -- trace variables list
       end traceit
 
+
     if clause.lookaside=null then nop
-     else do label realclause -- we have a real clause
+    else do label realclause -- we have a real clause
       -- interpret the clause, unless:
       --   * it newly starts a protected block, in which case we need
       --     to run it protectively
@@ -949,28 +944,56 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
           runprotected(cursor, lock)
           -- get back here after our END
           clause=cursor.curclause            -- update
-          end
+        end
         otherwise do
           cursor.curnewprot=0                -- defuse
           /* === now interpret a clause [unless skipping one] === */
           if cursor.curskipone then do
             cursor.curskipone=0
             cursor.curskiptrace=0            -- turn this off now, too
-            end
-           else clause.lookaside.interpret(cursor)
-          -- if it just ENDed a protected block, then return to caller and
-          -- let the caller carry on (unprotected or differently protected)
+          end
+          else
+            clause.lookaside.interpret(cursor)
+            -- if it just ENDed a protected block, then return to caller and
+            -- let the caller carry on (unprotected or differently protected)
           if cursor.curendprot then do
             cursor.curendprot=0
             return
-            end
-         catch s=RxSignal                      -- wrapped exception raised
-          -- [This could also be an Exit or precall signal.]
+          end
+        catch s=RxSignal                      -- wrapped exception raised
+        -- [This could also be an Exit or precall signal.]
           cursor.curreturn=s                   -- save the value
           cursor.curact=1                      -- alert
           cursor.curacttype=CUR_EXCEP          -- it's an Exception
-          end
-        end doclause
+        end
+      end doclause
+
+--MRE Interactive trace
+if cursor.curtrace\=null then do 
+  if cursor.curtrace.levelword() == 'int' then do 
+    loop label handleinput
+      say ' *-> \-'; x=ask
+      select 
+        when x=='=' then iterate interactive  -- redo clause
+        when x==''  then leave handleinput    -- continue
+        when x.upper().strip('B') == 'TRACE OFF' then do
+          cursor.curtrace.newlevel(RexxTrace.OFF)   --trace off
+          leave handleinput
+        end
+        when x=='?' then do                   -- show help
+          say 'Experimental interactive trace :'
+          say '  press [Enter] to trace interactively'
+          say '  press ''='' to reinterpret current line'
+          say '  type ''trace off'' to stop tracing'
+        end
+        otherwise do
+          say 'not supported'                -- should interpret it
+        end
+      end  
+    end handleinput
+  end
+end
+--MRE
 
       /* Now special actions */
       loop label popones while cursor.curlevel.thisone -- we just executed the One
@@ -1005,6 +1028,8 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
         otherwise nop
         end alerts
      end realclause
+     leave
+end interactive
 
     if cursor.curjump\==nojump then do       -- any jump request?
       cursor.curclause=cursor.curjump        -- [this could now be null]
