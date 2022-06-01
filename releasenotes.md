@@ -2,7 +2,7 @@
 
 ## Project
 - the NetRexx issue tracker has moved to [https://github.com/RexxLA/NetRexx/issues]
-- The RexxLA/NetRexx shadow repository will be maintained to be equal in contents to the SourceForge one
+- The RexxLA/NetRexx shadow repository will be maintained to be identical in contents to the SourceForge one
 
 ## Language
 - non-oo notation for scripting mode (René Vincent Jansen) enables (much more) Classic Rexx source compatible scripting
@@ -10,10 +10,12 @@
 - releasenotes are in Markdown syntax (and have moved to the root of the source tree)
 - use of color in language processor messages enabled (but optional,  opt-out for Linux and Mac, opt-in for windows)
 - long and short form of options
+- a bugfix on an address statement ("variable $2 already defined") with interruptedexception
+- add the netrexx/lang.Sysutils class by Marc Remes
 
 ## Workspace for NetRexx
 - one can now exit the NetRexx Workspace with an 'exit'
-- resolved an error in the startup timer of nrws
+- resolved an error in the startup timer of nrws; timer display is now default
 - the default now is to display the command timer instead of the window number
 - the default prompt changed to 'Ready;' (but both options can still be changed in an $HOME/nrws.properties file)
 - the pipelines processor is now loaded by default.
