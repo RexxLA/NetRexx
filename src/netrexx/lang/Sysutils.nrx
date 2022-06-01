@@ -8,979 +8,979 @@
 
  */
 package netrexx.lang
-options strictargs
+options binary strictargs
 
 import java.text
 import java.util.concurrent
 
 class Sysutils
-  -- properties private
-  -- os
-  -- osVersion
-  -- envSeparator
-  -- semMutexVector = Vector
-  -- semEventVector = Vector
-  -- rxExec = String[3]
-  -- rxRc
-  -- rxStdout = ''
-  -- rxStderr = ''
+  properties private
+  os
+  osVersion
+  envSeparator
+  semMutexVector = Vector
+  semEventVector = Vector
+  rxExec = String[3]
+  rxRc
+  rxStdout = String[]
+  rxStderr = String[]
 
-  -- method Sysutils
-  --   determineOS()
-  --   semMutexVector = Vector(10)
-  --   semEventVector = Vector(10)
+  method Sysutils
+    determineOS()
+    semMutexVector = Vector(10)
+    semEventVector = Vector(10)
     
-  -- /**
-  --  * Sleeps a number of seconds
-  --  *
-  --  * @param seconds  number of seconds to sleep
-  --  *
-  --  */
-  -- method SysSleep(seconds) signals InterruptedException
-  --   Thread.currentThread().Sleep(seconds * 1000)
+  /**
+   * Sleeps a number of seconds
+   *
+   * @param seconds  number of seconds to sleep
+   *
+   */
+  method SysSleep(seconds) signals InterruptedException
+    Thread.currentThread().sleep(seconds * 1000)
     
 
-  -- /**
-  --  * Creates or opens a mutex semaphore
-  --  *
-  --  * @param name     if null the method creates the unnamed semaphore, else the method opens named semaphore
-  --  * @return         the handle the created or opened semaphore, '' if error
-  --  *
-  --  */
-  -- method SysCreateMutexSem(name = '')
-  --   semMap = HashTable HashTable()
-  --   sem = Semaphore
-  --   handle = ""
+  /**
+   * Creates or opens a mutex semaphore
+   *
+   * @param name     if null the method creates the unnamed semaphore, else the method opens named semaphore
+   * @return         the handle the created or opened semaphore, '' if error
+   *
+   */
+  method SysCreateMutexSem(name = '')
+    semMap = Hashtable Hashtable()
+    sem = Semaphore
+    handle = ""
     
-  --   do
-  --     Thread.currentThread().Sleep(1)
-  --     if name == '' then do
-  --       name = System.currentTimeMillis()
-  --     end
+    do
+      Thread.currentThread().sleep(1)
+      if name == '' then do
+        name = System.currentTimeMillis()
+      end
       
-  --     sem = Semaphore(1)
-  --     handle = System.currentTimeMillis()
-  --     semMap.put("name", name)
-  --     semMap.put("sem", sem)
-  --     semMap.put("handle", handle)
+      sem = Semaphore(1)
+      handle = System.currentTimeMillis()
+      semMap.put("name", name)
+      semMap.put("sem", sem)
+      semMap.put("handle", handle)
       
-  --     semMutexVector.add(Object semMap)
-  --     return handle
-  --   catch InterruptedException
-  --     return 0
-  --   end
+      semMutexVector.add(Object semMap)
+      return handle
+    catch InterruptedException
+      return 0
+    end
     
     
-  -- /**
-  --  * Opens a mutex semaphore
-  --  *
-  --  * @param name     the semaphore handle to open
-  --  * @return         handle of opened semaphore if OK, 0 if error
-  --  *
-  --  */
-  -- method SysOpenMutexSem(name)
-  --   semMap = HashTable
-  --   loop i = 0 to semMutexVector.size() - 1
-  --     semMap = HashTable semMutexVector.get(i)
-  --     if Rexx semMap.get("name") == name then do
-  --       return Rexx semMap.get("handle")
-  --     end
-  --   end
-  --   return 0
+  /**
+   * Opens a mutex semaphore
+   *
+   * @param name     the semaphore handle to open
+   * @return         handle of opened semaphore if OK, 0 if error
+   *
+   */
+  method SysOpenMutexSem(name)
+    semMap = Hashtable
+    loop i = 0 to semMutexVector.size() - 1
+      semMap = Hashtable semMutexVector.get(i)
+      if Rexx semMap.get("name") == name then do
+        return Rexx semMap.get("handle")
+      end
+    end
+    return 0
     
     
-  -- /**
-  --  * Closes a mutex semaphore
-  --  *
-  --  * @param handle   the semaphore handle to close
-  --  * @return         0 if OK
-  --  *
-  --  */
-  -- method SysCloseMutexSem(handle)
-  --   semMap = HashTable
-  --   loop i = 0 to semMutexVector.size() - 1
-  --     semMap = HashTable semMutexVector.get(i)
-  --     if semMap.get("handle") == handle then do
-  --       semMap.clear()
-  --       semMutexVector.remove(semMap)
-  --       return 0
-  --     end
-  --   end
-  --   return 1
+  /**
+   * Closes a mutex semaphore
+   *
+   * @param handle   the semaphore handle to close
+   * @return         0 if OK
+   *
+   */
+  method SysCloseMutexSem(handle)
+    semMap = Hashtable
+    loop i = 0 to semMutexVector.size() - 1
+      semMap = Hashtable semMutexVector.get(i)
+      if semMap.get("handle") == handle then do
+        semMap.clear()
+        semMutexVector.remove(semMap)
+        return 0
+      end
+    end
+    return 1
     
     
-  -- /**
-  --  * Requests a mutex semaphore
-  --  *
-  --  * @param handle   the semaphore handle to request
-  --  * @param timeout  timeout in milliseconds to wait on the semaphore, defaults to indefinite
-  --  * @return         0 if OK
-  --  *
-  --  */
-  -- method SysRequestMutexSem(handle, timeout = -1)
-  --   do
-  --     loop i = 0 to semMutexVector.size() - 1
-  --       semMap = HashTable semMutexVector.get(i)
-  --       if semMap.get("handle") == handle then do
-  --         sem = Semaphore semMap.get("sem")
-  --         if timeout == -1 then do
-  --           sem.acquire(1)
-  --           return 0
-  --         end
-  --       else do
-  --         if sem.tryAcquire(1, timeout, TimeUnit.MILLISECONDS) then do
-  --           return 0
-  --         end
-  --       else do
-  --         return 2
-  --       end
-  --       end
-  --       end
-  --     end
-  --     return 1
-  --   catch InterruptedException
-  --     return 3
-  --   end
+  /**
+   * Requests a mutex semaphore
+   *
+   * @param handle   the semaphore handle to request
+   * @param timeout  timeout in milliseconds to wait on the semaphore, defaults to indefinite
+   * @return         0 if OK
+   *
+   */
+  method SysRequestMutexSem(handle, timeout = -1)
+    do
+      loop i = 0 to semMutexVector.size() - 1
+        semMap = Hashtable semMutexVector.get(i)
+        if semMap.get("handle") == handle then do
+          sem = Semaphore semMap.get("sem")
+          if timeout == -1 then do
+            sem.acquire(1)
+            return 0
+          end
+        else do
+          if sem.tryAcquire(1, timeout, TimeUnit.MILLISECONDS) then do
+            return 0
+          end
+        else do
+          return 2
+        end
+        end
+        end
+      end
+      return 1
+    catch InterruptedException
+      return 3
+    end
     
     
-  -- /**
-  --  * Releases a mutex semaphore
-  --  *
-  --  * @param handle the semaphore handle to release
-  --  * @return         0 if OK
-  --  *
-  --  */
-  -- method SysReleaseMutexSem(handle)
-  --   loop i = 0 to semMutexVector.size() - 1
-  --     semMap = HashTable semMutexVector.get(i)
-  --     if semMap.get("handle") == handle then do
-  --       sem = Semaphore semMap.get("sem")
-  --       sem.release(1)
-  --       return 0
-  --     end
-  --   end
-  --   return 1
+  /**
+   * Releases a mutex semaphore
+   *
+   * @param handle the semaphore handle to release
+   * @return         0 if OK
+   *
+   */
+  method SysReleaseMutexSem(handle)
+    loop i = 0 to semMutexVector.size() - 1
+      semMap = Hashtable semMutexVector.get(i)
+      if semMap.get("handle") == handle then do
+        sem = Semaphore semMap.get("sem")
+        sem.release(1)
+        return 0
+      end
+    end
+    return 1
     
     
-  -- /**
-  --  * Creates or opens a Event semaphore
-  --  *
-  --  * @param name     if null the method creates the unnamed semaphore, else the method opens named semaphore
-  --  * @return         the handle the created or opened semaphore, '' if error
-  --  *
-  --  */
-  -- method SysCreateEventSem(name = '')
-  --   semMap = HashTable HashTable()
-  --   sem = CountDownLatch
-  --   handle = ""
+  /**
+   * Creates or opens a Event semaphore
+   *
+   * @param name     if null the method creates the unnamed semaphore, else the method opens named semaphore
+   * @return         the handle the created or opened semaphore, '' if error
+   *
+   */
+  method SysCreateEventSem(name = '')
+    semMap = Hashtable Hashtable()
+    sem = CountDownLatch
+    handle = ""
     
-  --   do
-  --     Thread.currentThread().Sleep(1)
-  --     if name == '' then do
-  --       name = System.currentTimeMillis()
-  --     end
+    do
+      Thread.currentThread().sleep(1)
+      if name == '' then do
+        name = System.currentTimeMillis()
+      end
       
-  --     sem = CountDownLatch(1)
-  --     handle = System.currentTimeMillis()
-  --     semMap.put("name", name)
-  --     semMap.put("sem", sem)
-  --     semMap.put("handle", handle)
-  --     semEventVector.add(Object semMap)
-  --     return handle
-  --   catch InterruptedException
-  --     return 0
-  --   end
+      sem = CountDownLatch(1)
+      handle = System.currentTimeMillis()
+      semMap.put("name", name)
+      semMap.put("sem", sem)
+      semMap.put("handle", handle)
+      semEventVector.add(Object semMap)
+      return handle
+    catch InterruptedException
+      return 0
+    end
     
     
-  -- /**
-  --  * Opens a Event semaphore
-  --  *
-  --  * @param name     the semaphore handle to open
-  --  * @return         handle of opened semaphore if OK, 0 if error
-  --  *
-  --  */
-  -- method SysOpenEventSem(name)
-  --   semMap = HashTable
-  --   loop i = 0 to semEventVector.size() - 1
-  --     semMap = HashTable semEventVector.get(i)
-  --     if Rexx semMap.get("name") == name then do
-  --       return Rexx semMap.get("handle")
-  --     end
-  --   end
-  --   return 0
+  /**
+   * Opens a Event semaphore
+   *
+   * @param name     the semaphore handle to open
+   * @return         handle of opened semaphore if OK, 0 if error
+   *
+   */
+  method SysOpenEventSem(name)
+    semMap = Hashtable
+    loop i = 0 to semEventVector.size() - 1
+      semMap = Hashtable semEventVector.get(i)
+      if Rexx semMap.get("name") == name then do
+        return Rexx semMap.get("handle")
+      end
+    end
+    return 0
     
     
-  -- /**
-  --  * Closes a Event semaphore
-  --  *
-  --  * @param handle   the semaphore handle to close
-  --  * @return         0 if OK
-  --  *
-  --  */
-  -- method SysCloseEventSem(handle)
-  --   semMap = HashTable
-  --   loop i = 0 to semEventVector.size() - 1
-  --     semMap = HashTable semEventVector.get(i)
-  --     if semMap.get("handle") == handle then do
-  --       sem = CountDownLatch semMap.get("sem")
-  --       sem.countDown()
-  --       semEventVector.remove(semMap)
-  --       return 0
-  --     end
-  --   end
-  --   return 1
+  /**
+   * Closes a Event semaphore
+   *
+   * @param handle   the semaphore handle to close
+   * @return         0 if OK
+   *
+   */
+  method SysCloseEventSem(handle)
+    semMap = Hashtable
+    loop i = 0 to semEventVector.size() - 1
+      semMap = Hashtable semEventVector.get(i)
+      if semMap.get("handle") == handle then do
+        sem = CountDownLatch semMap.get("sem")
+        sem.countDown()
+        semEventVector.remove(semMap)
+        return 0
+      end
+    end
+    return 1
     
     
-  -- /**
-  --  * Requests a Event semaphore
-  --  *
-  --  * @param handle   the semaphore handle to request
-  --  * @param timeout  timeout in milliseconds to wait on the semaphore, defaults to indefinite
-  --  * @return         0 if OK
-  --  *
-  --  */
-  -- method SysRequestEventSem(handle, timeout = -1)
-  --   do
-  --     loop i = 0 to semEventVector.size() - 1
-  --       semMap = HashTable semEventVector.get(i)
-  --       if semMap.get("handle") == handle then do
-  --         sem = CountDownLatch semMap.get("sem")
-  --         if timeout == -1 then do
-  --           sem.await()
-  --           return 0
-  --         end
-  --       else do
-  --         if sem.await(timeout, TimeUnit.MILLISECONDS) then do
-  --           return 0
-  --         end
-  --       else do
-  --         return 2
-  --       end
-  --       end
-  --       end
-  --     end
-  --     return 1
-  --   catch InterruptedException
-  --     return 3
-  --   end
+  /**
+   * Requests a Event semaphore
+   *
+   * @param handle   the semaphore handle to request
+   * @param timeout  timeout in milliseconds to wait on the semaphore, defaults to indefinite
+   * @return         0 if OK
+   *
+   */
+  method SysRequestEventSem(handle, timeout = -1)
+    do
+      loop i = 0 to semEventVector.size() - 1
+        semMap = Hashtable semEventVector.get(i)
+        if semMap.get("handle") == handle then do
+          sem = CountDownLatch semMap.get("sem")
+          if timeout == -1 then do
+            sem.await()
+            return 0
+          end
+        else do
+          if sem.await(timeout, TimeUnit.MILLISECONDS) then do
+            return 0
+          end
+        else do
+          return 2
+        end
+        end
+        end
+      end
+      return 1
+    catch InterruptedException
+      return 3
+    end
 
 
-  -- /**
-  --  * Releases a Event semaphore
-  --  *
-  --  * @param handle the semaphore handle to release
-  --  * @return         0 if OK
-  --  *
-  --  */
-  -- method SysReleaseEventSem(handle)
-  --   loop i = 0 to semEventVector.size() - 1
-  --     semMap = HashTable semEventVector.get(i)
-  --     if semMap.get("handle") == handle then do
-  --       sem = CountDownLatch semMap.get("sem")
-  --       sem.countDown()
-  --       sem = CountDownLatch(1)
-  --       semMap.put("sem", sem)
-  --       return 0
-  --     end
-  --   end
-  --   return 1
+  /**
+   * Releases a Event semaphore
+   *
+   * @param handle the semaphore handle to release
+   * @return         0 if OK
+   *
+   */
+  method SysReleaseEventSem(handle)
+    loop i = 0 to semEventVector.size() - 1
+      semMap = Hashtable semEventVector.get(i)
+      if semMap.get("handle") == handle then do
+        sem = CountDownLatch semMap.get("sem")
+        sem.countDown()
+        sem = CountDownLatch(1)
+        semMap.put("sem", sem)
+        return 0
+      end
+    end
+    return 1
 
 
-  -- /**
-  --  * Fills a stem with the contents of a file
-  --  *
-  --  * @param file  file to read
-  --  * @param stem  stem to fill
-  --  * @return      stem with file contentsl
-  --  *
-  --  */
-  -- method SysFileRead(file, stem) signals IOException,FileNotFoundException
-  --   f = File(file)
-  --   in = BufferedReader(InputStreamReader(FileInputStream(f)))
-  --   i = 0
-  --   stem = ''
-  --   Loop forever
-  --     line = in.readLine()
-  --     if line = null then leave
-  --     i = i + 1
-  --     stem[i] = line
-  --   End
-  --   stem[0] = i
-  --   in.close()
-  --   return stem
+  /**
+   * Fills a stem with the contents of a file
+   *
+   * @param file  file to read
+   * @param stem  stem to fill
+   * @return      stem with file contentsl
+   *
+   */
+  method SysFileRead(file, stem) signals IOException,FileNotFoundException
+    f = File(file)
+    in = BufferedReader(InputStreamReader(FileInputStream(f)))
+    i = 0
+    stem = ''
+    Loop forever
+      line = in.readLine()
+      if line = null then leave
+      i = i + 1
+      stem[i] = line
+    End
+    stem[0] = i
+    in.close()
+    return stem
 
 
-  -- /**
-  --  * Writes a file with the contents of a stem
-  --  *
-  --  * @param file  file to write
-  --  * @param stem  file contents
-  --  *
-  --  */
-  -- method SysFileWrite(file, stem) signals IOException,FileNotFoundException
-  --   f = File(file)
-  --   out = BufferedWriter(OutputStreamWriter(FileOutputStream(f)))
+  /**
+   * Writes a file with the contents of a stem
+   *
+   * @param file  file to write
+   * @param stem  file contents
+   *
+   */
+  method SysFileWrite(file, stem) signals IOException,FileNotFoundException
+    f = File(file)
+    out = BufferedWriter(OutputStreamWriter(FileOutputStream(f)))
 
-  --   Loop i = 1 to stem[0]
-  --     out.write(String stem[i], 0, stem[i].length())
-  --     out.newLine()
-  --   end
-  --   out.close()
+    Loop i = 1 to stem[0]
+      out.write(String stem[i], 0, stem[i].length())
+      out.newLine()
+    end
+    out.close()
 
 
-  -- /**
-  --  * Reads and returns the next character from the keyboard buffer
-  --  *
-  --  * @opt       ECHO to echo the key, NOECHO to not echo the key, defaults to ECHO
-  --  * @return    character read
-  --  *
-  --  */
-  -- method SysGetKey(opt = 'ECHO')
-  --   if opt = 'ECHO' then return ask
-  --   else return asknoecho
+  /**
+   * Reads and returns the next character from the keyboard buffer
+   *
+   * @opt       ECHO to echo the key, NOECHO to not echo the key, defaults to ECHO
+   * @return    character read
+   *
+   */
+  method SysGetKey(opt = 'ECHO')
+    if opt = 'ECHO' then return ask
+    else return asknoecho
 
     
-  -- /**
-  --  * Deletes a given file
-  --  *
-  --  * @param file     file to delete
-  --  * @return         0 if OK, 1 if error
-  --  *
-  --  */
-  -- method SysFileDelete(file)
-  --   return \ File(file).delete()
+  /**
+   * Deletes a given file
+   *
+   * @param file     file to delete
+   * @return         0 if OK, 1 if error
+   *
+   */
+  method SysFileDelete(file)
+    return \ File(file).delete()
 
 
-  -- /**
-  --  * Checks if a given file exists
-  --  *
-  --  * @param file  file to check
-  --  * @return      1 if the file exists, 0 if not
-  --  *
-  --  */
-  -- method SysFileExists(file)
-  --   return File(file).exists()
+  /**
+   * Checks if a given file exists
+   *
+   * @param file  file to check
+   * @return      1 if the file exists, 0 if not
+   *
+   */
+  method SysFileExists(file)
+    return File(file).exists()
 
 
-  -- /**
-  --  * Returns the given timestamp of a given file
-  --  *
-  --  * @param file     file to check
-  --  * @param sel      W for last modified time (supported), C for create time (not supported), A for last access time (not supported)
-  --  * @return         timestamp in YYYY-MM-DD HH:MM:SS format, -1 if error
-  --  *
-  --  */
-  -- method SysGetFileDateTime(file, sel = Rexx("W"))
-  --   f = File(file)
-  --   time = long
-  --   time = 0
-  --   select
-  --     when "WRITE".abbrev(sel.upper(), 1) then do
-  -- 	time = f.lastModified()
-  --     end
-  --     when "CREATE".abbrev(sel.upper(), 1) then do
-  -- 	nop
-  --     end
-  --     when "ACCESS".abbrev(sel.upper(), 1) then do
-  -- 	nop
-  --     end
-  --     otherwise
-  -- 	signal BadArgumentException
-  --   end
-  --   if time > 0 then do
-  --     fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-  --     timestamp = fmt.format(Date(time))
-  --   end
-  --   else do
-  --     timestamp = -1
-  --   end
-  --   return timestamp
+  /**
+   * Returns the given timestamp of a given file
+   *
+   * @param file     file to check
+   * @param sel      W for last modified time (supported), C for create time (not supported), A for last access time (not supported)
+   * @return         timestamp in YYYY-MM-DD HH:MM:SS format, -1 if error
+   *
+   */
+  method SysGetFileDateTime(file, sel = Rexx("W"))
+    f = File(file)
+    time = long
+    time = 0
+    select
+      when "WRITE".abbrev(sel.upper(), 1) then do
+	time = f.lastModified()
+      end
+      when "CREATE".abbrev(sel.upper(), 1) then do
+	nop
+      end
+      when "ACCESS".abbrev(sel.upper(), 1) then do
+	nop
+      end
+      otherwise
+	signal BadArgumentException
+    end
+    if time > 0 then do
+      fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+      timestamp = fmt.format(Date(time))
+    end
+    else do
+      timestamp = -1
+    end
+    return timestamp
 
 
-  -- /**
-  --  * Fills stem with all lines in a file containing a search string
-  --  *
-  --  * @param search   string to search
-  --  * @param file     file to search
-  --  * @param stem     stem to update
-  --  * @param options  a combination of the following: C for case sensitive search, N for file line numbers only, defaults to case insensitive search
-  --  * @return         stem with found references
-  --  *
-  --  */
-  -- method SysFileSearch(search, file, stem=Rexx, options = Rexx(""))
-  --   --    trace results
-  --   stem = Rexx('')
-  --   fstem = Rexx('')
-  --   do
-  --     fstem = SysFileRead(file, fstem)
-  --     if options.upper().pos('C') > 0 then do
-  --       toUpper = 0
-  --     end
-  --   else do
-  --     search = search.upper()
-  --     toUpper = 1
-  --   end
-  --   if options.upper().pos('N') > 0 then do
-  --     lineNumbersOnly = 1
-  --   end
-  --     else do
-  --       lineNumbersOnly = 0
-  --     end
+  /**
+   * Fills stem with all lines in a file containing a search string
+   *
+   * @param search   string to search
+   * @param file     file to search
+   * @param stem     stem to update
+   * @param options  a combination of the following: C for case sensitive search, N for file line numbers only, defaults to case insensitive search
+   * @return         stem with found references
+   *
+   */
+  method SysFileSearch(search, file, stem=Rexx, options = Rexx(""))
+    --    trace results
+    stem = Rexx('')
+    fstem = Rexx('')
+    do
+      fstem = SysFileRead(file, fstem)
+      if options.upper().pos('C') > 0 then do
+        toUpper = 0
+      end
+    else do
+      search = search.upper()
+      toUpper = 1
+    end
+    if options.upper().pos('N') > 0 then do
+      lineNumbersOnly = 1
+    end
+      else do
+        lineNumbersOnly = 0
+      end
 
-  --     j = 0
-  --     Loop i = 1 to fstem[0]
-  --       if toUpper then do
-  --         found = fstem[i].upper().pos(search)
-  --       end
-  --   else do
-  --     found = fstem[i].pos(search)
-  --   end
-  --   if found > 0 then do
-  --     j = j + 1
-  --     if lineNumbersOnly then do
-  --       stem[j] = i
-  --     end
-  --   else do
-  --     stem[j] = fstem[i]
-  --   end
-  --   end
-  --     End
-  --     stem[0] = j
-  --   catch IOException
-  --     stem = ''
-  --     stem[0] = 0
-  --   end
-  --   return stem
-
-
-  -- /**
-  --  * Searches the specified path for the specified filename
-  --  *
-  --  * @param env       environment variable containing directories, eg. PATH or CLASSPATH
-  --  * @param filename  file to search
-  --  * @param option    'N' start search at paths in env, 'C' start search at current directory, then env, defaults to 'C'
-  --  * @return          full path of first matching filename, '' if not found
-  --  *
-  --  */
-  -- method SysSearchPath(env, filename, option)
-  --   if option.upper() == 'C' then do
-  --     f = File(filename)
-  --     if f.exists() then do
-  --       return f.getAbsolutePath()
-  --     end
-  --   end
-  --   env = System.getenv(env)
-  --   if env <> null & (option.upper() == 'N' | option.upper() == 'C' ) then do
-  --     pp = 1
-  --     p = env.pos(envSeparator, pp)
-  --     loop while p > 0
-  --       p = env.pos(envSeparator, pp)
-  --       path = env.substr(pp, p - pp)
-  --       if path <> "" then do
-  --         f = File(path'/'filename)
-  --         if f.exists() then do
-  --           return f.getAbsolutePath()
-  --         end
-  --       end
-  --       pp = p + 1
-  --       p = env.pos(envSeparator, pp)
-  --     end
-  --     path = env.substr(pp)
-  --     if path <> "" then do
-  --       f = File(path'/'filename)
-  --       if f.exists() then do
-  --         return f.getAbsolutePath()
-  --       end
-  --     end
-  --   end
-  --   return ''
+      j = 0
+      Loop i = 1 to fstem[0]
+        if toUpper then do
+          found = fstem[i].upper().pos(search)
+        end
+    else do
+      found = fstem[i].pos(search)
+    end
+    if found > 0 then do
+      j = j + 1
+      if lineNumbersOnly then do
+        stem[j] = i
+      end
+    else do
+      stem[j] = fstem[i]
+    end
+    end
+      End
+      stem[0] = j
+    catch IOException
+      stem = ''
+      stem[0] = 0
+    end
+    return stem
 
 
-  -- /**
-  --  * Checks for the existence of a file
-  --  *
-  --  * @param file  file to check
-  --  * @return      1 if the file exists, 0 if not
-  --  *
-  --  */
-  -- method SysIsFile(file)
-  --   f = File(file)
-  --   if f.exists() & \ f.isDirectory() then do
-  --     return 1
-  --   end
-  --   else do
-  --     return 0
-  --   end
+  /**
+   * Searches the specified path for the specified filename
+   *
+   * @param env       environment variable containing directories, eg. PATH or CLASSPATH
+   * @param filename  file to search
+   * @param option    'N' start search at paths in env, 'C' start search at current directory, then env, defaults to 'C'
+   * @return          full path of first matching filename, '' if not found
+   *
+   */
+  method SysSearchPath(env, filename, option)
+    if option.upper() == 'C' then do
+      f = File(filename)
+      if f.exists() then do
+        return f.getAbsolutePath()
+      end
+    end
+    env = System.getenv(env)
+    if env <> null & (option.upper() == 'N' | option.upper() == 'C' ) then do
+      pp = 1
+      p = env.pos(envSeparator, pp)
+      loop while p > 0
+        p = env.pos(envSeparator, pp)
+        path = env.substr(pp, p - pp)
+        if path <> "" then do
+          f = File(path'/'filename)
+          if f.exists() then do
+            return f.getAbsolutePath()
+          end
+        end
+        pp = p + 1
+        p = env.pos(envSeparator, pp)
+      end
+      path = env.substr(pp)
+      if path <> "" then do
+        f = File(path'/'filename)
+        if f.exists() then do
+          return f.getAbsolutePath()
+        end
+      end
+    end
+    return ''
 
 
-  -- /**
-  --  * Checks for the existence of a directory
-  --  *
-  --  * @param file  directory to check
-  --  * @return      1 if the directory exists, 0 if not
-  --  *
-  --  */
-  -- method SysIsFileDirectory(file)
-  --   f = File(file)
-  --   if f.exists() & f.isDirectory() then do
-  --     return 1
-  --   end
-  --   else do
-  --     return 0
-  --   end
+  /**
+   * Checks for the existence of a file
+   *
+   * @param file  file to check
+   * @return      1 if the file exists, 0 if not
+   *
+   */
+  method SysIsFile(file)
+    f = File(file)
+    if f.exists() & \ f.isDirectory() then do
+      return 1
+    end
+    else do
+      return 0
+    end
 
 
-  -- /**
-  --  * Creates a directory
-  --  *
-  --  * @param file  directory to create
-  --  * @return      0 if OK, 1 on error
-  --  *
-  --  */
-  -- method SysMkDir(file)
-  --   f = File(file)
-  --   rc = f.mkdir()
-  --   if rc then do
-  --     return 0
-  --   end
-  --   return 1
+  /**
+   * Checks for the existence of a directory
+   *
+   * @param file  directory to check
+   * @return      1 if the directory exists, 0 if not
+   *
+   */
+  method SysIsFileDirectory(file)
+    f = File(file)
+    if f.exists() & f.isDirectory() then do
+      return 1
+    end
+    else do
+      return 0
+    end
 
 
-  -- /**
-  --  * Removes a directory
-  --  *
-  --  * @param file  directory to remove
-  --  * @return      0 if OK, 1 on error
-  --  *
-  --  */
-  -- method SysRmDir(file)
-  --   if SysIsFileDirectory(file) then do
-  --     f = File(file)
-  --     rc = f.delete()
-  --     if rc then do
-  --       return 0
-  --     end
-  --   end
-  --   return 1
+  /**
+   * Creates a directory
+   *
+   * @param file  directory to create
+   * @return      0 if OK, 1 on error
+   *
+   */
+  method SysMkDir(file)
+    f = File(file)
+    rc = f.mkdir()
+    if rc then do
+      return 0
+    end
+    return 1
 
 
-  -- /**
-  --  * Searches a directory for files
-  --  *
-  --  * @param spec     file search specification
-  --  * @param stem     stem with found results (date, time, size, attributes and file specification)
-  --    attributes ADHRS Archive Directory Hidden Readonly System,  . not applicable (A and S), + set, - not set
-  --  * @param options  combination of F (files only) D (directories only) B (both, default) S (recursive search) T (time format YY/MM/DD/HH/MM) L (time format YYYY-MM-DD HH:MM:SS) I (search case-insensitive) O (fully qualified file name only)
-  --  * @param tattrib  target attribute mask ADHRS (* any state, + set, - not set)
-  --  * @param nattrib  NOT IMPLEMENTED new attribute mask to set for found files ADHRS (* unchanged, + set, - not set)
-  --  * @return         stem
-  --  *
-  --  * Note : target attributes are verified by IsDirectory, isHidden, canWrite java calls, not by the actual 'attributes', archive and system attributes are not checked
-  --  */
-  -- method SysFileTree(spec, stem, options = 'BL', tattrib = '*****', nattrib = '*****')
-  --   nattrib=nattrib /* avoid warning, will be ptimzed away */
-  --   stem = ''
-  --   stem[0] = 0
-  --   do
-  --     d = spec.substr(1, spec.lastpos('/'))
-  --     f = spec.substr(spec.lastpos('/') + 1)
-  --     regex = f
-
-  --     escapechar = char[] "\\+()^$.{}[]|"
-  --     Loop i = 0 to escapechar.length - 1
-  --       pos = regex.pos(escapechar[i], 1)
-  --       Loop while pos > 0
-  --         regex = regex.insert('\\', pos - 1)
-  --         pos = regex.pos(escapechar[i], pos + 2)
-  --       End
-  --     End
-  --     pos = regex.pos('*', 1)
-  --     Loop while pos > 0
-  --       regex = regex.insert('.', pos - 1)
-  --       pos = regex.pos('*', pos + 2)
-  --     End
-  --     regex = regex.translate('.', '?')
-
-  --     Recursive = 0
-  --     if options.upper().pos('S') > 0 then do
-  --       Recursive = 1
-  --     end
-
-  --     if options.upper().pos('I') > 0 then do
-  --       regex = regex.insert('(?i)')
-  --     end
-
-  --     FileAndOrDir = 'B'
-  --     if options.upper().pos('F') > 0 then do
-  --       FileAndOrDir = 'F'
-  --     end
-  --     if options.upper().pos('D') > 0 then do
-  --       FileAndOrDir = 'D'
-  --     end
-
-  --     if options.upper().pos('T') > 0 then do
-  --       format = SimpleDateFormat("yy/MM/dd/HH/mm")
-  --     end
-  --     else do
-  --       if options.upper().pos('L') > 0 then do
-  --         format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-  --       end
-  --     else do
-  --       format = SimpleDateFormat()
-  --     end
-  --     end
-
-  --     FilenameOnly = 0
-  --     if options.upper().pos('O') > 0 then do
-  --       FilenameOnly = 1
-  --     end
-
-  --     stem = FileTree(stem, d, regex, Recursive, FileAndOrDir, format, FilenameOnly, tattrib)
-  --   catch IOException
-  --     stem = ''
-  --     stem[0] = 0
-  --   end
-  --   return stem
+  /**
+   * Removes a directory
+   *
+   * @param file  directory to remove
+   * @return      0 if OK, 1 on error
+   *
+   */
+  method SysRmDir(file)
+    if SysIsFileDirectory(file) then do
+      f = File(file)
+      rc = f.delete()
+      if rc then do
+        return 0
+      end
+    end
+    return 1
 
 
-  -- /**
-  --  * Private recursively searches a directory for files
-  --  *
-  --  * @param stem          stem to fill
-  --  * @param dirname       directory to start from
-  --  * @param regex         regular expression of file to loop for
-  --  * @param Recursive     descend recursively into directories
-  --  * @param FileAndOrDir  FDB, File Directory or Both
-  --  * @param format        SimpleDateFormat
-  --  * @param FileNameOnly  format of returned stem, filename only or datetime size .HDR. filename
-  --  * @param tattrib       target attributes mask to match .DHR. (* any state, + set, - not set, . not applicable)
-  --  * @return         stem
-  --  *
-  --  */
-  -- method FileTree(stem, dirname, regex, Recursive, FileAndOrDir, format = SimpleDateFormat, FilenameOnly, tattrib) private signals IOException
+  /**
+   * Searches a directory for files
+   *
+   * @param spec     file search specification
+   * @param stem     stem with found results (date, time, size, attributes and file specification)
+     attributes ADHRS Archive Directory Hidden Readonly System,  . not applicable (A and S), + set, - not set
+   * @param options  combination of F (files only) D (directories only) B (both, default) S (recursive search) T (time format YY/MM/DD/HH/MM) L (time format YYYY-MM-DD HH:MM:SS) I (search case-insensitive) O (fully qualified file name only)
+   * @param tattrib  target attribute mask ADHRS (* any state, + set, - not set)
+   * @param nattrib  NOT IMPLEMENTED new attribute mask to set for found files ADHRS (* unchanged, + set, - not set)
+   * @return         stem
+   *
+   * Note : target attributes are verified by IsDirectory, isHidden, canWrite java calls, not by the actual 'attributes', archive and system attributes are not checked
+   */
+  method SysFileTree(spec, stem, options = Rexx('BL'), tattrib = '*****', nattrib = '*****')
+    nattrib=nattrib /* avoid warning, will be ptimzed away */
+    stem = ''
+    stem[0] = 0
+    do
+      d = spec.substr(1, spec.lastpos('/'))
+      f = spec.substr(spec.lastpos('/') + 1)
+      regex = f
 
-  --   dir = File(dirname)
+      escapechar = char[] "\\+()^$.{}[]|"
+      Loop i = 0 to escapechar.length - 1
+        pos = regex.pos(escapechar[i], 1)
+        Loop while pos > 0
+          regex = regex.insert('\\', pos - 1)
+          pos = regex.pos(escapechar[i], pos + 2)
+        End
+      End
+      pos = regex.pos('*', 1)
+      Loop while pos > 0
+        regex = regex.insert('.', pos - 1)
+        pos = regex.pos('*', pos + 2)
+      End
+      regex = regex.translate('.', '?')
 
-  --   files = File[] dir.listFiles()
-  --   if files <> null then do
-  --     Loop i = 0 to files.length - 1
-  --       f = Rexx files[i].toString()
+      Recursive = 0
+      if options.upper().pos('S') > 0 then do
+        Recursive = 1
+      end
 
-  --       f = f.substr(f.lastpos('/') + 1)
-  --       isDirectory = files[i].isDirectory()
-  --       if f.toString().matches(regex)  then do
-  --         addToStem = 0
+      if options.upper().pos('I') > 0 then do
+        regex = regex.insert('(?i)')
+      end
 
-  --         if FileAndOrDir == 'B' then do
-  --           addToStem = 1
-  --         end
-  --         if FileAndOrDir == 'F' then do
-  --           if \ isDirectory then do
-  --             addToStem = 1
-  --           end
-  --         end
-  --         if FileAndOrDir == 'D' then do
-  --           if isDirectory then do
-  --             addToStem = 1
-  --           end
-  --         end
-  --         if addToStem then do
-  --           if FileNameOnly then do
-  --             stem[0] = stem[0] + 1
-  --             stem[stem[0]] = files[i].toString()
-  --           end
-  --         else do
-  --           epoch = files[i].lastModified()
-  --           cal = Calendar.getInstance()
-  --           cal.setTimeInMillis(epoch)
+      FileAndOrDir = 'B'
+      if options.upper().pos('F') > 0 then do
+        FileAndOrDir = 'F'
+      end
+      if options.upper().pos('D') > 0 then do
+        FileAndOrDir = 'D'
+      end
 
-  --           filedate = Rexx format.format(cal.gettime())
-  --           if isDirectory then do
-  --             filesize = '0'
-  --           end
-  --         else do
-  --           filesize = Rexx files[i].length()
-  --         end
+      if options.upper().pos('T') > 0 then do
+        format = SimpleDateFormat("yy/MM/dd/HH/mm")
+      end
+      else do
+        if options.upper().pos('L') > 0 then do
+          format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        end
+      else do
+        format = SimpleDateFormat()
+      end
+      end
 
-  --         attrib = '.'
-  --         if isDirectory then do
-  --           attrib = attrib'D'
-  --         end
-  --           else do
-  --             attrib = attrib'-'
-  --           end
-  --           if files[i].isHidden() then do
-  --             attrib = attrib'H'
-  --           end
-  --         else do
-  --           attrib = attrib'-'
-  --         end
-  --         if files[i].canWrite() then do
-  --           attrib = attrib'-'
-  --         end
-  --           else do
-  --             attrib = attrib'R'
-  --           end
-  --           attrib = attrib'.'
-  --           if tattrib <> '*****' then do
-  --             if tattrib.substr(2, 1) == '+' & attrib.substr(2, 1) <> 'D' then do
-  --               addToStem = 0
-  --             end
-  --           else do
-  --             if tattrib.substr(2, 1) == '-' & attrib.substr(2, 1) <> '-' then do
-  --               addToStem = 0
-  --             end
-  --           end
-  --           if tattrib.substr(3, 1) == '+' & attrib.substr(3, 1) <> 'H' then do
-  --             addToStem = 0
-  --           end
-  --             else do
-  --               if tattrib.substr(3, 1) == '-' & attrib.substr(3, 1) <> '-' then do
-  --                 addToStem = 0
-  --               end
-  --             end
-  --             if tattrib.substr(4, 1) == '+' & attrib.substr(4, 1) <> 'R' then do
-  --               addToStem = 0
-  --             end
-  --           else do
-  --             if tattrib.substr(4, 1) == '-' & attrib.substr(4, 1) <> '-' then do
-  --               addToStem = 0
-  --             end
-  --           end
-  --           end
-  --           if addToStem then do
-  --             stem[0] = stem[0] + 1
-  --             stem[stem[0]] = filedate.left(24)' 'filesize.right(14)' 'attrib' 'files[i].toString()
-  --           end
-  --         end
-  --         end
-  --       end
-  --       if isDirectory & Recursive then do
-  --         if files[i].getAbsolutePath() == files[i].getCanonicalPath() then do    -- don't descend into symlinks
-  --           stem = FileTree(stem, Rexx files[i], regex, Recursive, FileAndOrDir, format, FilenameOnly, tattrib)
-  --         end
-  --       end
-  --     End
-  --   end
-  --   return stem
+      FilenameOnly = 0
+      if options.upper().pos('O') > 0 then do
+        FilenameOnly = 1
+      end
+
+      stem = FileTree(stem, d, regex, Recursive, FileAndOrDir, format, FilenameOnly, tattrib)
+    catch IOException
+      stem = ''
+      stem[0] = 0
+    end
+    return stem
 
 
-  -- /**
-  --  * Deletes items from a stem
-  --  *
-  --  * @param stem  stem to update
-  --  * @param start start index from where to delete
-  --  * @param count number of items to delete, defaults to 1
-  --  * @return      updated stem, -1 on error
-  --  *
-  --  */
-  -- method SysStemDelete(stem, start, count = 1)
-  --   if start + count - 1 > stem[0] | start == 0 then do
-  --     return -1
-  --   end
-  --   j = start + count
-  --   loop i = start to stem[0] - count
-  --     stem[i] = stem[j]
-  --     j = j + 1
-  --   end
-  --   stem[0] = stem[0] - count
-  --   return stem
+  /**
+   * Private recursively searches a directory for files
+   *
+   * @param stem          stem to fill
+   * @param dirname       directory to start from
+   * @param regex         regular expression of file to loop for
+   * @param Recursive     descend recursively into directories
+   * @param FileAndOrDir  FDB, File Directory or Both
+   * @param format        SimpleDateFormat
+   * @param FileNameOnly  format of returned stem, filename only or datetime size .HDR. filename
+   * @param tattrib       target attributes mask to match .DHR. (* any state, + set, - not set, . not applicable)
+   * @return         stem
+   *
+   */
+  method FileTree(stem, dirname, regex, Recursive, FileAndOrDir, format = SimpleDateFormat, FileNameOnly, tattrib) private signals IOException
+
+    dir = File(dirname)
+    filesize=Rexx'0'
+    files = File[] dir.listFiles()
+    if files <> null then do
+      Loop i = 0 to files.length - 1
+        f = Rexx files[i].toString()
+
+        f = f.substr(f.lastpos('/') + 1)
+        isDirectory = files[i].isDirectory()
+        if f.toString().matches(regex)  then do
+          addToStem = 0
+
+          if FileAndOrDir == 'B' then do
+            addToStem = 1
+          end
+          if FileAndOrDir == 'F' then do
+            if \ isDirectory then do
+              addToStem = 1
+            end
+          end
+          if FileAndOrDir == 'D' then do
+            if isDirectory then do
+              addToStem = 1
+            end
+          end
+          if addToStem then do
+            if FileNameOnly then do
+              stem[0] = stem[0] + 1
+              stem[stem[0]] = files[i].toString()
+            end
+          else do
+            epoch = files[i].lastModified()
+            cal = Calendar.getInstance()
+            cal.setTimeInMillis(epoch)
+
+            filedate = Rexx format.format(cal.getTime())
+            if isDirectory then do
+              filesize = '0'
+            end
+          else do
+            filesize = Rexx(files[i].length())
+          end
+
+          attrib = Rexx('.')
+          if isDirectory then do
+            attrib = attrib'D'
+          end
+            else do
+              attrib = attrib'-'
+            end
+            if files[i].isHidden() then do
+              attrib = attrib'H'
+            end
+          else do
+            attrib = attrib'-'
+          end
+          if files[i].canWrite() then do
+            attrib = attrib'-'
+          end
+            else do
+              attrib = attrib'R'
+            end
+            attrib = attrib'.'
+            if tattrib <> '*****' then do
+              if tattrib.substr(2, 1) == '+' & attrib.substr(2, 1) <> 'D' then do
+                addToStem = 0
+              end
+            else do
+              if tattrib.substr(2, 1) == '-' & attrib.substr(2, 1) <> '-' then do
+                addToStem = 0
+              end
+            end
+            if tattrib.substr(3, 1) == '+' & attrib.substr(3, 1) <> 'H' then do
+              addToStem = 0
+            end
+              else do
+                if tattrib.substr(3, 1) == '-' & attrib.substr(3, 1) <> '-' then do
+                  addToStem = 0
+                end
+              end
+              if tattrib.substr(4, 1) == '+' & attrib.substr(4, 1) <> 'R' then do
+                addToStem = 0
+              end
+            else do
+              if tattrib.substr(4, 1) == '-' & attrib.substr(4, 1) <> '-' then do
+                addToStem = 0
+              end
+            end
+            end
+            if addToStem then do
+              stem[0] = stem[0] + 1
+              stem[stem[0]] = filedate.left(24)' 'filesize.right(14)' 'attrib' 'files[i].toString()
+            end
+          end
+          end
+        end
+        if isDirectory & Recursive then do
+          if files[i].getAbsolutePath() == files[i].getCanonicalPath() then do    -- don't descend into symlinks
+            stem = FileTree(stem, Rexx files[i], regex, Recursive, FileAndOrDir, format, FileNameOnly, tattrib)
+          end
+        end
+      End
+    end
+    return stem
 
 
-  -- /**
-  --  * Inserts an new item in a stem
-  --  *
-  --  * @param stem  stem to update
-  --  * @param pos   position where to insert the item
-  --  * @param value item value to insert
-  --  * @return      updated stem, -1 on error
-  --  *
-  --  */
-  -- method SysStemInsert(stem, pos, value)
-  --   if pos > stem[0] + 1 | pos == 0 then do
-  --     return -1
-  --   end
-  --   loop i = stem[0] + 1 to pos by -1
-  --     stem[i] = stem[i - 1]
-  --   end
-  --   stem[pos] = value
-  --   stem[0] = stem[0] + 1
-  --   return stem
+  /**
+   * Deletes items from a stem
+   *
+   * @param stem  stem to update
+   * @param start start index from where to delete
+   * @param count number of items to delete, defaults to 1
+   * @return      updated stem, -1 on error
+   *
+   */
+  method SysStemDelete(stem, start, count = 1)
+    if start + count - 1 > stem[0] | start == 0 then do
+      return -1
+    end
+    j = start + count
+    loop i = start to stem[0] - count
+      stem[i] = stem[j]
+      j = j + 1
+    end
+    stem[0] = stem[0] - count
+    return stem
 
 
-  -- /**
-  --  * Copies items from one stem into another
-  --  *
-  --  * @param fromstem  stem to copy from
-  --  * @param tostem    stem to update
-  --  * @param fromindex start index from where to copy, defaults to 1
-  --  * @param toindex   to index into tostem where to copy to, defaults to 1
-  --  * @param count     number of items to copy, defaults to size of fromstem
-  --  * @param insert    O for overwrite or I for insert, defaults to Overwrite
-  --  * @return          updated stem, -1 on error
-  --  *
-  --  */
-  -- method SysStemCopy(fromstem, tostem, fromindex = 1, toindex = 1, count = fromstem[0], insert = "O")
-  --   if toindex > tostem[0] + 1 | toindex == 0 | count > fromstem[0] - fromindex + 1 then do
-  --     return -1
-  --   end
-  --   if fromindex > fromstem[0] | fromindex == 0 | count > fromstem[0] then do
-  --     return -1
-  --   end
-  --   if insert == "I" then do
-  --     Loop i = tostem[0] to toindex by -1
-  --       tostem[i + count] = tostem[i]
-  --     End
-  --   j = toindex
-  --   Loop i = fromindex for count
-  --     tostem[j] = fromstem[i]
-  --     j = j + 1
-  --   End
-  --   tostem[0] = tostem[0] + count
-  --   end
-  --   else do
-  --     j = toindex
-  --     Loop i = fromindex for count
-  --       tostem[j] = fromstem[i]
-  --       j = j + 1
-  --     End
-  --     if toindex + count - 1 > tostem[0] then do
-  --       tostem[0] = toindex + count - 1
-  --     end
-  --   end
-  --   return tostem
+  /**
+   * Inserts an new item in a stem
+   *
+   * @param stem  stem to update
+   * @param pos   position where to insert the item
+   * @param value item value to insert
+   * @return      updated stem, -1 on error
+   *
+   */
+  method SysStemInsert(stem, pos, value)
+    if pos > stem[0] + 1 | pos == 0 then do
+      return -1
+    end
+    loop i = stem[0] + 1 to pos by -1
+      stem[i] = stem[i - 1]
+    end
+    stem[pos] = value
+    stem[0] = stem[0] + 1
+    return stem
 
 
-  -- /**
-  --  * Implementation of the command execution, backend to rxCmd and rxExec
-  --  *
-  --  * @param execArray   3 element array containing shell to execute
-  --  *
-  --  * @return returncode of execution
-  --  *
-  --  */
-  -- method rxExecArray(execArray = String[]) private
-  --   do
-  --     p = Runtime.getRuntime().exec(execArray)
-  --     in = BufferedReader(InputStreamReader(p.getInputStream()))
-  --     linenum = 0
-  --     loop forever
-  --       line = in.readLine()
-  --       if line = null then leave
-  --       linenum = linenum + 1
-  --       rxStdout[linenum] = line
-  --     End
-  --     rxStdout['0'] = linenum
-  --     in = BufferedReader(InputStreamReader(p.getErrorStream()))
-  --     linenum = 0
-  --     loop forever
-  --       line = in.readLine()
-  --       if line = null then leave
-  --       linenum = linenum + 1
-  --       rxStderr[linenum] = line
-  --     End
-  --     rxStderr['0'] = linenum
+  /**
+   * Copies items from one stem into another
+   *
+   * @param fromstem  stem to copy from
+   * @param tostem    stem to update
+   * @param fromindex start index from where to copy, defaults to 1
+   * @param toindex   to index into tostem where to copy to, defaults to 1
+   * @param count     number of items to copy, defaults to size of fromstem
+   * @param insert    O for overwrite or I for insert, defaults to Overwrite
+   * @return          updated stem, -1 on error
+   *
+   */
+  method SysStemCopy(fromstem, tostem, fromindex = 1, toindex = 1, count = fromstem[0], insert = "O")
+    if toindex > tostem[0] + 1 | toindex == 0 | count > fromstem[0] - fromindex + 1 then do
+      return -1
+    end
+    if fromindex > fromstem[0] | fromindex == 0 | count > fromstem[0] then do
+      return -1
+    end
+    if insert == "I" then do
+      Loop i = tostem[0] to toindex by -1
+        tostem[i + count] = tostem[i]
+      End
+    j = toindex
+    Loop i = fromindex for count
+      tostem[j] = fromstem[i]
+      j = j + 1
+    End
+    tostem[0] = tostem[0] + count
+    end
+    else do
+      j = toindex
+      Loop i = fromindex for count
+        tostem[j] = fromstem[i]
+        j = j + 1
+      End
+      if toindex + count - 1 > tostem[0] then do
+        tostem[0] = toindex + count - 1
+      end
+    end
+    return tostem
+
+
+  /**
+   * Implementation of the command execution, backend to rxCmd and rxExec
+   *
+   * @param execArray   3 element array containing shell to execute
+   *
+   * @return returncode of execution
+   *
+   */
+  method rxExecArray(execArray = String[]) private
+    do
+      p = Runtime.getRuntime().exec(execArray)
+      in = BufferedReader(InputStreamReader(p.getInputStream()))
+      linenum = Rexx '0'
+      loop forever
+        line = in.readLine()
+        if line = null then leave
+        linenum = linenum + 1
+        rxStdout[linenum] = line
+      end
+      rxStdout['0'] = linenum
+      in = BufferedReader(InputStreamReader(p.getErrorStream()))
+      linenum = 0
+      loop forever
+        line = in.readLine()
+        if line = null then leave
+        linenum = linenum + 1
+        rxStderr[linenum] = line
+      end
+      rxStderr['0'] = linenum
       
-  --     p.waitFor()
-  --     rxRc = p.exitValue()
-  --     p.getInputStream().close()
-  --     p.getErrorStream().close()
-  --     p.getOutputStream().close()
+      p.waitFor()
+      rxRc = p.exitValue()
+      p.getInputStream().close()
+      p.getErrorStream().close()
+      p.getOutputStream().close()
       
-  --   catch InterruptedException
-  --     rxStdout['0'] = 0
-  --     rxStderr['0'] = 0
-  --     rxRc = -9
+    catch InterruptedException
+      rxStdout['0'] = 0
+      rxStderr['0'] = 0
+      rxRc = -9
 
-  --   catch IOException
-  --     rxStdout['0'] = 0
-  --     rxStderr['0'] = 0
-  --     rxRc = -9
-  --   end
+    catch IOException
+      rxStdout['0'] = 0
+      rxStderr['0'] = 0
+      rxRc = -9
+    end
 
-  --   return rxRc
-
-
-  -- /**
-  --  * Executes a command with optional redirection
-  --  *
-  --  * @param command    command to execute, can contain redirection and command chaining
-  --  * @param mode       not used
-  --  *
-  --  * @return returncode of execution
-  --  *
-  --  */
-  -- method rxCmd(command, mode = 0)
-  --   mode=mode
-  --   rxExec[2] = command
-  --   rc = rxExecArray(rxExec)
-  --   return rc
+    return rxRc
 
 
-  -- /**
-  --  * Executes a single command, no redirection
-  --  *
-  --  * @param command    single command to execute
-  --  * @param mode       not used
-  --  *
-  --  * @return returncode of execution
-  --  *
-  --  */
-  -- method rxExec(command, mode = 0)
-  --   mode=mode
-  --   execArray = String[1]
-
-  --   execArray[0] = command
-  --   rc = rxExecArray(execArray)
-  --   return rc
+  /**
+   * Executes a command with optional redirection
+   *
+   * @param command    command to execute, can contain redirection and command chaining
+   * @param mode       not used
+   *
+   * @return returncode of execution
+   *
+   */
+  method rxCmd(command, mode = 0)
+    mode=mode
+    rxExec[2] = command
+    rc = rxExecArray(rxExec)
+    return rc
 
 
-  -- /**
-  --  * Returns stdout of last rxExec/rxCmd
-  --  *
-  --  * @return stdout
-  --  *
-  --  */
-  -- method rxGetstdout
+  /**
+   * Executes a single command, no redirection
+   *
+   * @param command    single command to execute
+   * @param mode       not used
+   *
+   * @return returncode of execution
+   *
+   */
+  method rxExec(command, mode = 0)
+    mode=mode
+    execArray = String[1]
 
-  --   return rxStdout
-
-
-  -- /**
-  --  * Returns stderr of last rxExec/rxCmd
-  --  *
-  --  * @return stderr
-  --  *
-  --  */
-  -- method rxGetStderr
-
-  --   return rxStderr
+    execArray[0] = command
+    rc = rxExecArray(execArray)
+    return rc
 
 
-  -- /**
-  --  * Returns a string to identify operating system and version
-  --  *
-  --  * @return OS version
-  --  *
-  --  */
-  -- method SysVersion
-  --   return os" "osVersion
+  /**
+   * Returns stdout of last rxExec/rxCmd
+   *
+   * @return stdout
+   *
+   */
+  method rxGetstdout returns String[]
+
+    return rxStdout
 
 
-  -- method determineOS private
-  --   os = System.getProperty("os.name")
-  --   select
-  --     when os.pos("Win") > 0 then do
-  --       os = "Windows"
-  --       envSeparator = ';'
-  --       rxExec[0] = "CMD.EXE"
-  --       rxExec[1] = "/C"
-  --     end
-  --     otherwise
-  --       envSeparator = ':'
-  --       rxExec[0] = "bash"
-  --       rxExec[1] = "-c"
-  --   end
-  --   osVersion = System.getProperty("os.version")
+  /**
+   * Returns stderr of last rxExec/rxCmd
+   *
+   * @return stderr
+   *
+   */
+  method rxGetStderr returns String[]
+
+    return rxStderr
+
+
+  /**
+   * Returns a string to identify operating system and version
+   *
+   * @return OS version
+   *
+   */
+  method SysVersion
+    return os" "osVersion
+
+
+  method determineOS private
+    os = System.getProperty("os.name")
+    select
+      when os.pos("Win") > 0 then do
+        os = "Windows"
+        envSeparator = ';'
+        rxExec[0] = "CMD.EXE"
+        rxExec[1] = "/C"
+      end
+      otherwise
+        envSeparator = ':'
+        rxExec[0] = "bash"
+        rxExec[1] = "-c"
+    end
+    osVersion = System.getProperty("os.version")
 
 
