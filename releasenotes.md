@@ -23,6 +23,20 @@
 ## Pipelines for NetRexx
 - a pipelines example that uses the ADDRESS WITH functionality
 
+## Documentation
+- The Quickstart Guide has been corrected to make all examples
+  pasteable from the PDF - eliminated all 'typographical' quotes and
+  hyphens.
+- The Quickstart Guide now delivers some missing information on
+  getting NetRexx to run.
+- The Programming Guide has been brought up to date with modern JVM
+  versions, which means that some scripting examples have
+  disappeared, as the supporting functionality has been removed by
+  Oracle.
+- New documentation features will be in Markdown only (not visible to
+  the user of the documents but opening up the production of document chapters
+  to non-Latex users).
+
 # NetRexx 4.03 GA [03 May 2022]
 
 - ADDRESS WITH implemented (Marc Remes)
@@ -42,7 +56,6 @@
 - The distribution package now also contains java2nrx (previously only
   in source package)
 - in scripting mode, 'parse pull' can be used as an equivalent of 'parse ask' 
-
 
 # NetRexx 4.02 GA [Januari 24, 2022]
 
