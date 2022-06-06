@@ -12,6 +12,7 @@
 - long and short form of options
 - a bugfix on an address statement ("variable $2 already defined") with interruptedexception
 - add the netrexx/lang.Sysutils class by Marc Remes
+- TODO added options to Date/Time to be on par with ooRexx
 
 ## Workspace for NetRexx
 - one can now exit the NetRexx Workspace with an 'exit'
@@ -35,7 +36,9 @@
   Oracle.
 - New documentation features will be in Markdown only (not visible to
   the user of the documents but opening up the production of document chapters
-  to non-Latex users).
+  to non-Latex users)
+- TODO error codes in Pipelines Reference
+- TODO debug levels in Pipelines Reference
 
 # NetRexx 4.03 GA [03 May 2022]
 
