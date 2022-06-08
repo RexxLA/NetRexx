@@ -15,14 +15,14 @@
 - TODO added options to Date/Time to be on par with ooRexx
 
 ## Workspace for NetRexx
-- one can now exit the NetRexx Workspace with an 'exit'
+- you can now exit the NetRexx Workspace with an 'exit'
 - resolved an error in the startup timer of nrws; timer display is now default
 - the default now is to display the command timer instead of the window number
 - the default prompt changed to 'Ready;' (but both options can still be changed in an $HOME/nrws.properties file)
 - the pipelines processor is now loaded by default.
 
 ## Pipelines for NetRexx
-- a pipelines example that uses the ADDRESS WITH functionality
+- a pipelines example that uses the ADDRESS WITH functionality in a NetRexx script
 
 ## Documentation
 - The Quickstart Guide has been corrected to make all examples
@@ -39,6 +39,8 @@
   to non-Latex users)
 - TODO error codes in Pipelines Reference
 - TODO debug levels in Pipelines Reference
+- The file `stages.html` is now included in the documentation directory
+- The file `methods.html` is now included in the documentation directory
 
 # NetRexx 4.03 GA [03 May 2022]
 
