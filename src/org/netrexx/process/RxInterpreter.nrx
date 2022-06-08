@@ -972,9 +972,22 @@ loop label interactive
 if cursor.curtrace\=null then do 
   if cursor.curtrace.levelword() == 'int' then do 
     loop label handleinput
-      say ' *-> \-'; x=ask
+--      say cursor.curclause.showtokens() '+++' cursor.curclause.lookaside.toString()
+      say '    *-> \-'; x=ask
       select 
-        when x=='=' then iterate interactive  -- redo clause
+        when x=='=' then do 
+          clauseobj = cursor.curclause.lookaside
+          if clauseobj <= NrDo        | - 
+             clauseobj <= NrLoop      | -
+             clauseobj <= NrSelect    | -
+             clauseobj <= NrEnd       | -
+             clauseobj <= NrCatch     | -
+             clauseobj <= NrOtherwise | -
+             clauseobj <= NrFinally   then 
+            say '        Sorry, this clause cannot be re-interpreted' 
+          else 
+            iterate interactive    -- redo clause
+        end    
         when x==''  then leave handleinput    -- continue
         when x.upper().strip('B') == 'TRACE OFF' then do
           cursor.curtrace.newlevel(RexxTrace.OFF)   --trace off
