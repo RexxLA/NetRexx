@@ -23,6 +23,7 @@
 
 ## Pipelines for NetRexx
 - a pipelines example that uses the ADDRESS WITH functionality in a NetRexx script
+- Stage locate can be abbreviate to locat, loc, lo and l
 
 ## Documentation
 - The Quickstart Guide has been corrected to make all examples
