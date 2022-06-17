@@ -1052,18 +1052,23 @@ if cursor.curtrace\=null then do
           src.openfile('trace', String x)
 
           traceclauser=RxClauser(rxt, src)   -- create clauser from trace input
+          rxt.program.parser=RxParser(rxt,traceclauser)            -- create our own
+          rxt.program.tracer=RxTracer(rxt)                         -- create our own
+          rxt.program.parser.level=3                               -- 'in a method'
+          rxt.program.parser.cursor=cursor                         -- dummy
+
 --          say '#### PASS' rxt.pass
           rxt.pass=0; rxt.pass0=1
           traceclausenum=0
           loop forever                       -- do pass 0 first, create array
             traceclausenum=traceclausenum+1
             do
-            curclause=traceclauser.clause(traceclausenum)
-              catch RxQuit
-                say '    --- Invalid trace instruction'
-              catch RxError
-                say '    --- Invalid trace instruction'
-              end  
+              curclause=traceclauser.clause(traceclausenum)
+            catch RxQuit
+              say '    --- Invalid trace instruction'
+            catch RxError
+              say '    --- Invalid trace instruction'
+            end  
             if curclause=null then leave
 --            say '### PASS0 : "'curclause.toString()'"' curclause.showtokens()
           end  
@@ -1078,9 +1083,10 @@ if cursor.curtrace\=null then do
 --            say '### TRACE INPUT :"'curclause.toString()'"' curclause.showtokens()
 
             curse = RxCursor(cursor.curprogram, cursor.curclass, cursor.curmethod, curclause)
-            curse.curlpool=cursor.curlpool
-            curse.curexec=1
-            curse.curthis=cursor.curthis
+            curse.curlpool =cursor.curlpool
+            curse.curexec  =1
+            curse.curthis  =cursor.curthis
+            curse.curclass =cursor.curclass
 
             term=RxCode null
             tok=curse.curclause.tokens[0];
@@ -1089,10 +1095,7 @@ if cursor.curtrace\=null then do
             tok2=curse.curclause.tokens[1];
             t2=tok2.type
 
-            rxt.program.parser=RxParser(rxt,traceclauser)            -- create our own
-            rxt.program.tracer=RxTracer(rxt)                         -- create our own
-            rxt.program.parser.level=3                               -- 'in a method'
-            rxt.program.parser.cursor = curse
+            rxt.program.parser.cursor = curse                          -- our trace cursor
 
                                                                      -- copied from RxParser 
             if t=RxToken.SYM then if term=null then do
