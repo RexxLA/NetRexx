@@ -37,11 +37,13 @@
 /*                                               per issue #80 -KK-   */
 /* 2020.12.20 MRE -- catch exception when class modifier fields       */
 /*                                              are accessed in JDK9+ */
+/* 2022.06.16 Interactive trace assign and say implementation --MRE   */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
 package org.netrexx.process
-options binary nodecimal strictcase strictargs
+--options binary nodecimal strictcase strictargs
+options binary decimal strictcase strictargs
 
 /* ------------------------------------------------------------------ */
 /* Proxies:  [2000.03.14]                                             */
@@ -911,7 +913,6 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
   loop label execute while cursor.curclause\=null
     clause=cursor.curclause                   -- local reference
 
-loop label interactive
 
     -- trace the clause if required
     if cursor.curtrace\=null then do label traceit
@@ -930,6 +931,7 @@ loop label interactive
                                   reqlevel, varlist)   -- trace variables list
       end traceit
 
+loop label interactive
 
     if clause.lookaside=null then nop
     else do label realclause -- we have a real clause
@@ -988,7 +990,49 @@ if cursor.curtrace\=null then do
           else 
             iterate interactive    -- redo clause
         end    
+
         when x==''  then leave handleinput    -- continue
+        when x.substr(1,1)=='+' then do 
+          if x=='+' then do
+            if cursor.curclause.next \= null then do 
+              say cursor.curclause.next.toString()
+            end
+          end  
+          else if x.datatype('N') then do    -- show next x lines
+            clines = x.format()             
+            nc = cursor.curclause.next
+            loop i=1 to clines by 1
+              if nc \= null then do
+                say nc.toString()
+                nc = nc.next
+              end
+              else leave  
+            end
+          end
+          iterate handleinput
+        end  
+        when x.substr(1,1)=='-' then do 
+          if x=='-' then do
+            if cursor.curclause.clausenum > 1 then do
+              clausen = cursor.curclause.clausenum 
+              c = rxt.program.clauser.clause(clausen)
+              say c.toString()
+            end 
+          end
+          else if x.datatype('N') then do    -- show previous x lines 
+            clines = short x.format().abs()
+
+-- this loop needs decimal, how to loop with nodecimal ?
+            loop i=clines-1 to 0 by -1
+              clausen = cursor.curclause.clausenum - i
+              if clausen > 0 then do
+                c = rxt.program.clauser.clause(clausen)
+                say c.toString()
+              end
+            end
+          end
+          iterate handleinput
+        end  
         when x.upper().strip('B') == 'TRACE OFF' then do
           cursor.curtrace.newlevel(RexxTrace.OFF)   --trace off
           leave handleinput
@@ -996,11 +1040,107 @@ if cursor.curtrace\=null then do
         when x=='?' then do                   -- show help
           say 'Experimental interactive trace :'
           say '  press [Enter] to trace interactively'
-          say '  press ''='' to reinterpret current line'
+          say '  type ''='' to reinterpret current clause'
+          say '  type ''-[n]'' to show previous n clause(s), shows current clause if n is absent'
+          say '  type ''+[n]'' to show next n clause(s), shows next clause if n is absent'
           say '  type ''trace off'' to stop tracing'
+          say '  any other clause entered must be either an assignment or a SAY instruction'
         end
         otherwise do
-          say 'not supported'                -- should interpret it
+--trace results          
+          src = RxFileReader(rxt)
+          src.openfile('trace', String x)
+
+          traceclauser=RxClauser(rxt, src)   -- create clauser from trace input
+--          say '#### PASS' rxt.pass
+          rxt.pass=0; rxt.pass0=1
+          traceclausenum=0
+          loop forever                       -- do pass 0 first, create array
+            traceclausenum=traceclausenum+1
+            do
+            curclause=traceclauser.clause(traceclausenum)
+              catch RxQuit
+                say '    --- Invalid trace instruction'
+              catch RxError
+                say '    --- Invalid trace instruction'
+              end  
+            if curclause=null then leave
+--            say '### PASS0 : "'curclause.toString()'"' curclause.showtokens()
+          end  
+      
+          rxt.pass=3; rxt.pass0=0           -- now pass 3
+
+          traceclausenum=0
+          loop forever
+            traceclausenum=traceclausenum+1
+            curclause=traceclauser.clause(traceclausenum)
+            if curclause=null then leave         -- EOS
+--            say '### TRACE INPUT :"'curclause.toString()'"' curclause.showtokens()
+
+            curse = RxCursor(cursor.curprogram, cursor.curclass, cursor.curmethod, curclause)
+            curse.curlpool=cursor.curlpool
+            curse.curexec=1
+            curse.curthis=cursor.curthis
+
+            term=RxCode null
+            tok=curse.curclause.tokens[0];
+            t=tok.type
+            if t=RxToken.END then signal RxQuit(rxt,null,"internal.error","null clause 3")
+            tok2=curse.curclause.tokens[1];
+            t2=tok2.type
+
+            rxt.program.parser=RxParser(rxt,traceclauser)            -- create our own
+            rxt.program.tracer=RxTracer(rxt)                         -- create our own
+            rxt.program.parser.level=3                               -- 'in a method'
+            rxt.program.parser.cursor = curse
+
+                                                                     -- copied from RxParser 
+            if t=RxToken.SYM then if term=null then do
+              if t2=RxToken.SP then term=rxt.tparser.parsesymbol(curse,0)
+              else if t2=RxToken.OP then if tok2.value\=null then if tok2.value[0]="=" then term=rxt.tparser.parsesymbol(curse,0)
+            end
+            if term==null then term=rxt.tparser.parseterm(curse,0,0)
+            if term.begclause=null then signal RxQuit(rxt,tok,"internal.error","RxParser: bcnull")
+            n=term.endoff+1
+            tokn=curse.curclause.tokens[n];
+            tn=tokn.type
+            if tn=RxToken.OP then if tokn.value[0]="=" then do       -- this is an assigment
+--              say '    : assigment'
+              do
+                assign=NrAssign(rxt)              -- construct Assignment instruction 
+                curse.curclause.lookaside=assign
+                curse.curtrace = RexxTrace(1)     -- force re-evaluation
+                assign.process(term,n)            -- further token processing 
+                assign.interpret(curse)           -- interpret trace input
+              catch RxQuit
+                say '    --- Invalid trace instruction (Q)'
+              catch RxError
+                say '    --- Invalid trace instruction (E)'
+              end  
+            end
+            else do 
+              say '    *** Cannot handle'
+            end
+            else do
+              if t=RxToken.SYM then if rxt.program.parser.iskey(tok.value, 'SAY') then do -- this is SAY
+--                say '    : saying something'
+                do
+                  saying=NrSay(rxt)
+                  saying.scan(2)
+                  saying.interpret(curse)
+                catch RxQuit
+                  say '    --- Invalid trace instruction (Q)'
+                catch RxError
+                  say '    --- Invalid trace instruction (E)'
+                end  
+              end
+              else say '    *** Cannot handle'
+            end
+            
+            rxt.program.parser=null           -- clean up
+            rxt.program.tracer=null
+            iterate handleinput               -- ask more input 
+          end
         end
       end  
     end handleinput

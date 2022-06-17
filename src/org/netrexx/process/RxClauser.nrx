@@ -30,6 +30,7 @@
 /* 2013.07.10 change Character.isLetter to .isJavaIdentifierStart     */
 /* 2016.01.01 allow @ as an operator for annotations NETREXX-122      */
 /* 2021.12.31 add RxModel - Jason Martin                              */
+/* 2022.06.16 Optional interactive trace RxSource on constructor --MRE*/
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -107,8 +108,11 @@ class RxClauser
   copyright=RxProcessor.copyright
 
  /** Construct the factory */
- method RxClauser(newrxt=RxTranslator)
-  rxt=newrxt; source=rxt.program.source
+ method RxClauser(newrxt=RxTranslator,newsource=RxSource null)
+  rxt=newrxt;
+  if newsource == null then source=rxt.program.source       -- MRE as before
+  else source = newsource         -- when provided, it is the interactive trace string RxFileReader
+
   /* Set up the translate table */
   loop i=0 to intrans.length-1               -- determine highest
     if intrans[i]>tranmax then tranmax=intrans[i]
@@ -147,7 +151,6 @@ class RxClauser
     if clausenumber>carray.length then return null
     return carray[clausenumber-1]
     end
-
   /* pass 0 */
   clause=RxClause()                     -- make a clause
   tcount=0                              -- tokens in current clause array
@@ -201,12 +204,12 @@ class RxClauser
       isuni=boolean 0                   -- assume not a uni-keyword clause
       trial=tarray[0].value             -- get the word
       select
-        when rxt.program.parser.iskey(trial, 'IF')        then isif=1
-        when rxt.program.parser.iskey(trial, 'THEN')      then isuni=1
-        when rxt.program.parser.iskey(trial, 'WHEN')      then isif=1
-        when rxt.program.parser.iskey(trial, 'ELSE')      then isuni=1
-        when rxt.program.parser.iskey(trial, 'OTHERWISE') then isuni=1
-        when rxt.program.parser.iskey(trial, 'FINALLY')   then isuni=1
+        when rxt.programparser.iskey(trial, 'IF')        then isif=1
+        when rxt.programparser.iskey(trial, 'THEN')      then isuni=1
+        when rxt.programparser.iskey(trial, 'WHEN')      then isif=1
+        when rxt.programparser.iskey(trial, 'ELSE')      then isuni=1
+        when rxt.programparser.iskey(trial, 'OTHERWISE') then isuni=1
+        when rxt.programparser.iskey(trial, 'FINALLY')   then isuni=1
         otherwise nop
         end
       /* If we're looking for THEN and this token is THEN, then close
