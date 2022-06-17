@@ -1040,14 +1040,13 @@ if cursor.curtrace\=null then do
         when x=='?' then do                   -- show help
           say 'Experimental interactive trace :'
           say '  press [Enter] to trace interactively'
-          say '  type ''='' to reinterpret current line'
-          say '  type ''-[n]'' to show previous n line(s), show current line if n is absent'
-          say '  type ''+[n]'' to show next n line(s), show one line if n is absent'
+          say '  type ''='' to reinterpret current clause'
+          say '  type ''-[n]'' to show previous n clause(s), shows current clause if n is absent'
+          say '  type ''+[n]'' to show next n clause(s), shows next clause if n is absent'
           say '  type ''trace off'' to stop tracing'
           say '  any other clause entered must be either an assignment or a SAY instruction'
         end
         otherwise do
---          say 'not supported'                -- should interpret it
 --trace results          
           src = RxFileReader(rxt)
           src.openfile('trace', String x)
@@ -1081,6 +1080,7 @@ if cursor.curtrace\=null then do
             curse = RxCursor(cursor.curprogram, cursor.curclass, cursor.curmethod, curclause)
             curse.curlpool=cursor.curlpool
             curse.curexec=1
+            curse.curthis=cursor.curthis
 
             term=RxCode null
             tok=curse.curclause.tokens[0];
@@ -1092,6 +1092,7 @@ if cursor.curtrace\=null then do
             rxt.program.parser=RxParser(rxt,traceclauser)            -- create our own
             rxt.program.tracer=RxTracer(rxt)                         -- create our own
             rxt.program.parser.level=3                               -- 'in a method'
+            rxt.program.parser.cursor = curse
 
                                                                      -- copied from RxParser 
             if t=RxToken.SYM then if term=null then do
@@ -1104,45 +1105,41 @@ if cursor.curtrace\=null then do
             tokn=curse.curclause.tokens[n];
             tn=tokn.type
             if tn=RxToken.OP then if tokn.value[0]="=" then do       -- this is an assigment
---              say '    :'
+--              say '    : assigment'
               do
-                assign=NrAssign(rxt, curse)       -- construct Assignment instruction from our trace cursor
+                assign=NrAssign(rxt)              -- construct Assignment instruction 
                 curse.curclause.lookaside=assign
                 curse.curtrace = RexxTrace(1)     -- force re-evaluation
                 assign.process(term,n)            -- further token processing 
                 assign.interpret(curse)           -- interpret trace input
               catch RxQuit
-                say '    --- Invalid trace instruction'
+                say '    --- Invalid trace instruction (Q)'
               catch RxError
-                say '    --- Invalid trace instruction'
+                say '    --- Invalid trace instruction (E)'
               end  
-              rxt.program.parser=null
-              rxt.program.tracer=null
-              iterate handleinput
             end
             else do 
               say '    *** Cannot handle'
             end
             else do
-              if t=RxToken.SYM then if rxt.program.parser.iskey(tok.value, 'SAY') then do
---                say '    :'
-                rxt.program.parser.cursor = curse
+              if t=RxToken.SYM then if rxt.program.parser.iskey(tok.value, 'SAY') then do -- this is SAY
+--                say '    : saying something'
                 do
                   saying=NrSay(rxt)
                   saying.scan(2)
                   saying.interpret(curse)
                 catch RxQuit
-                  say '    --- Invalid trace instruction'
+                  say '    --- Invalid trace instruction (Q)'
                 catch RxError
-                  say '    --- Invalid trace instruction'
+                  say '    --- Invalid trace instruction (E)'
                 end  
               end
               else say '    *** Cannot handle'
             end
             
-            rxt.program.parser=null
+            rxt.program.parser=null           -- clean up
             rxt.program.tracer=null
-            iterate handleinput           
+            iterate handleinput               -- ask more input 
           end
         end
       end  
