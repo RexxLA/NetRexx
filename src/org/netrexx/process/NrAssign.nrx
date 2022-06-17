@@ -23,6 +23,7 @@
 /* 1996.07.12 Reorganized for RxClauseParser                          */
 /* 1999.08.07 Optimize int=int+1 and int=int-1                        */
 /* 2000.02.24 Implement interpret complete                            */
+/* 2022.06.16 Optional interactive trace cursor on constructor --MRE  */
 /* ------------------------------------------------------------------ */
 -- Could use RxExpr for the RHS, later
 package org.netrexx.process
@@ -57,11 +58,12 @@ class NrAssign implements RxClauseParser uses RxCode, RxVariable
   rhslitexpr=boolean 0        -- we used litexpr on RHS
 
  /** Construct an object from the current clause */
- method NrAssign(newrxt=RxTranslator)
+ method NrAssign(newrxt=RxTranslator, cursor=RxCursor null)
   rxt      =newrxt                      -- the boss
   parser   =rxt.program.parser          -- our parser
   pooler   =rxt.program.pooler          -- our variables manager
-  pcursor  =parser.cursor               -- our parsing cursor
+  if cursor==null then pcursor=parser.cursor   -- our parsing cursor --MRE as before
+  else pcursor=cursor                          -- our trace cursor
   tokens   =pcursor.curclause.tokens    -- local reference
   converter=rxt.converter               -- conversions
 
@@ -351,7 +353,7 @@ class NrAssign implements RxClauseParser uses RxCode, RxVariable
  method interpret(cursor=RxCursor null)
   -- for prologue (property) assignments, we only get here if we have
   -- the right staticality
-
+  
   if cursor.curprogram.flag.diag then
     say '#=' lhs.group lhs.type.toSig() ':' cursor.curclause.toString()
 
