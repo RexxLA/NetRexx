@@ -1,0 +1,59 @@
+package org.netrexx.diag
+
+options nobinary decimal
+
+class DiagTrace
+  properties private static
+  p=0
+
+  method DiagInteractiveTrace static
+    i=0
+    TRACE INT
+
+    TRACE OFF
+    if i+p = 2 then 
+      say 'DiagTrace: OK! 'i+p
+    else
+      signal DiagX('Interactive trace not interpreted correctly')  
+    
+
+  method DiagTrace
+    classpath = System.getProperty('java.class.path')
+    userdir   = System.getProperty('user.dir')
+    psep      = System.getProperty('path.separator')
+    classpath = classpath||psep||userdir
+    jvhome = System.getProperty('java.home')
+    jv=jvhome'/bin/java'
+    
+    istem=''
+    istem[0]=7
+    istem[1]="say 'i='i"
+    istem[2]="i=1"
+    istem[3]="say 'i='i"
+    istem[4]="p=1"
+    istem[5]="say 'p='p"
+    istem[6]="say 'i+p='i+p"
+    istem[7]="trace off"
+    istem=istem
+    
+    args = '-cp 'classpath' org.netrexx.process.NetRexxC src/org/netrexx/diag/DiagTrace src/org/netrexx/diag/DiagX -arg INTERACTIVE'
+    do 
+      address system with input stem istem
+      jv args
+    catch dx=DiagX
+      say 'Failed: "'dx.getMessage'"'
+    end 
+
+    
+  method main(s=String[]) static
+  if s.length > 0 then do 
+    say 'DiagTrace: interactive trace !!'
+    DiagInteractiveTrace()
+  end
+  else do
+    do 
+      DiagTrace()
+    catch dx=DiagX
+      say 'Failed: "'dx.getMessage'"'
+    end 
+  end
