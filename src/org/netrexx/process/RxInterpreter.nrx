@@ -1055,7 +1055,7 @@ if cursor.curtrace\=null then do
           rxt.program.parser=RxParser(rxt,traceclauser)            -- create our own
           rxt.program.tracer=RxTracer(rxt)                         -- create our own
           rxt.program.parser.level=3                               -- 'in a method'
-          rxt.program.parser.cursor=cursor                         -- dummy
+          rxt.program.parser.cursor = cursor                       -- dummy
 
 --          say '#### PASS' rxt.pass
           rxt.pass=0; rxt.pass0=1
@@ -1065,9 +1065,15 @@ if cursor.curtrace\=null then do
             do
               curclause=traceclauser.clause(traceclausenum)
             catch RxQuit
-              say '    --- Invalid trace instruction'
+              do
+                say '    --- Invalid trace instruction (Q0)'
+                iterate handleinput
+              end  
             catch RxError
-              say '    --- Invalid trace instruction'
+              do
+                say '    --- Invalid trace instruction (E0)'
+                iterate handleinput
+              end
             end  
             if curclause=null then leave
 --            say '### PASS0 : "'curclause.toString()'"' curclause.showtokens()
@@ -1080,13 +1086,13 @@ if cursor.curtrace\=null then do
             traceclausenum=traceclausenum+1
             curclause=traceclauser.clause(traceclausenum)
             if curclause=null then leave         -- EOS
---            say '### TRACE INPUT :"'curclause.toString()'"' curclause.showtokens()
+--            say '### TRACE INPUT : 'curclause.showtokens()' : "'curclause.toString()'"' 
 
             curse = RxCursor(cursor.curprogram, cursor.curclass, cursor.curmethod, curclause)
-            curse.curlpool =cursor.curlpool
-            curse.curexec  =1
-            curse.curthis  =cursor.curthis
-            curse.curclass =cursor.curclass
+            curse.curlpool=cursor.curlpool
+            curse.curexec=1
+            curse.curthis=cursor.curthis
+            curse.curclass=cursor.curclass
 
             term=RxCode null
             tok=curse.curclause.tokens[0];
@@ -1095,51 +1101,84 @@ if cursor.curtrace\=null then do
             tok2=curse.curclause.tokens[1];
             t2=tok2.type
 
-            rxt.program.parser.cursor = curse                          -- our trace cursor
+            rxt.program.parser.cursor = curse                        -- our trace cursor
+--trace results
 
                                                                      -- copied from RxParser 
-            if t=RxToken.SYM then if term=null then do
-              if t2=RxToken.SP then term=rxt.tparser.parsesymbol(curse,0)
-              else if t2=RxToken.OP then if tok2.value\=null then if tok2.value[0]="=" then term=rxt.tparser.parsesymbol(curse,0)
-            end
-            if term==null then term=rxt.tparser.parseterm(curse,0,0)
-            if term.begclause=null then signal RxQuit(rxt,tok,"internal.error","RxParser: bcnull")
-            n=term.endoff+1
-            tokn=curse.curclause.tokens[n];
-            tn=tokn.type
-            if tn=RxToken.OP then if tokn.value[0]="=" then do       -- this is an assigment
---              say '    : assigment'
-              do
-                assign=NrAssign(rxt)              -- construct Assignment instruction 
-                curse.curclause.lookaside=assign
-                curse.curtrace = RexxTrace(1)     -- force re-evaluation
-                assign.process(term,n)            -- further token processing 
-                assign.interpret(curse)           -- interpret trace input
-              catch RxQuit
-                say '    --- Invalid trace instruction (Q)'
-              catch RxError
-                say '    --- Invalid trace instruction (E)'
+            if t=RxToken.SYM then do 
+              if t2=RxToken.SP then do 
+                term=rxt.tparser.parsesymbol(curse,0)
+              end  
+              else if t2=RxToken.OP then do 
+                if tok2.value\=null then do 
+                  if tok2.value[0]="=" then do 
+                    term=rxt.tparser.parsesymbol(curse,0)
+                  end
+                end    
               end  
             end
-            else do 
-              say '    *** Cannot handle'
-            end
+
+            if term==null then n=0
             else do
-              if t=RxToken.SYM then if rxt.program.parser.iskey(tok.value, 'SAY') then do -- this is SAY
+              if term.begclause=null then signal RxQuit(rxt,tok,"internal.error","RxParser: bcnull")
+              n=term.endoff+1
+            end  
+            tokn=curse.curclause.tokens[n];
+            tn=tokn.type
+
+--trace results
+            handled=0
+            if tn=RxToken.OP then do 
+              if tokn.value[0]="=" then do       -- this is an assigment
+--                say '    : assigment'  
+                do
+                  handled=1
+                  assign=NrAssign(rxt)              -- construct Assignment instruction 
+                  curse.curclause.lookaside=assign
+                  curse.curtrace = RexxTrace(1)     -- force re-evaluation
+
+                  curse.curexec=0                   -- don't evaluate method calls twice
+                  assign.process(term,n)            -- further token processing 
+                  curse.curexec=1
+                  assign.interpret(curse)           -- interpret trace input
+                catch RxQuit
+                  say '    --- Invalid trace instruction (QA)'
+                catch RxError
+                  say '    --- Invalid trace instruction (EA)'
+                end 
+              end   
+            end
+            else if t=RxToken.SYM then do 
+              if rxt.program.parser.iskey(tok.value, 'SAY') then do -- this is SAY
 --                say '    : saying something'
                 do
-                  saying=NrSay(rxt)
+                  handled=1
+                  saying=NrSay(rxt)    
+                  curse.curexec=0          -- don't evaluate method calls twice
                   saying.scan(2)
+                  curse.curexec=1         
                   saying.interpret(curse)
                 catch RxQuit
-                  say '    --- Invalid trace instruction (Q)'
+                  say '    --- Invalid trace instruction (QS)'
                 catch RxError
-                  say '    --- Invalid trace instruction (E)'
+                  say '    --- Invalid trace instruction (ES)'
                 end  
               end
-              else say '    *** Cannot handle'
-            end
-            
+            end 
+           
+            if handled=0 then do 
+--              say '    : parsing term'
+              do 
+                term=rxt.tparser.parseterm(curse,0,0)
+                if term=null then signal RxError(rxt, null, 'expression.has.no.value')
+                if term.group=RxCode.T_UNKNOWN then signal RxError(rxt, null, 'expression.has.no.value')
+              catch RxQuit
+                say '    --- Invalid trace instruction (QT)'
+              catch RxError
+                say '    --- Invalid trace instruction (ET)'
+              end
+            end    
+
             rxt.program.parser=null           -- clean up
             rxt.program.tracer=null
             iterate handleinput               -- ask more input 
