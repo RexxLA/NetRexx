@@ -1118,6 +1118,19 @@ if cursor.curtrace\=null then do
               end  
             end
 
+            handled=0
+            if term=null then do 
+              do
+                term=rxt.tparser.parseterm(curse,0,0)     -- possible array
+                if term.group=RxCode.S_METHOD then do
+                  handled=1                               -- don't call 'term'-ed methods twice
+                end
+              catch RxQuit
+                nop                 -- pass through 
+              catch RxError
+                nop                 -- pass through
+              end
+            end  
             if term==null then n=0
             else do
               if term.begclause=null then signal RxQuit(rxt,tok,"internal.error","RxParser: bcnull")
@@ -1125,9 +1138,7 @@ if cursor.curtrace\=null then do
             end  
             tokn=curse.curclause.tokens[n];
             tn=tokn.type
-
 --trace results
-            handled=0
             if tn=RxToken.OP then do 
               if tokn.value[0]="=" then do       -- this is an assigment
 --                say '    : assigment'  
