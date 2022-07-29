@@ -42,8 +42,7 @@
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
 package org.netrexx.process
---options binary nodecimal strictcase strictargs
-options binary decimal strictcase strictargs
+options binary nodecimal strictcase strictargs
 
 /* ------------------------------------------------------------------ */
 /* Proxies:  [2000.03.14]                                             */
@@ -80,6 +79,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
 
  properties shared
   rxt=RxTranslator            -- the usual
+  helper=RxInterpreterHelper
 
  -- no private properties; this is a factory, and callMethod is called
  -- recursively
@@ -94,6 +94,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
  /** General Constructor */
  method RxInterpreter(translator=RxTranslator)
   rxt=translator
+  helper=RxInterpreterHelper(rxt)
 
  /** INITIALIZEPROPERTIES -- initialize static or instance variables
     Arg1 is the local class
@@ -993,44 +994,11 @@ if cursor.curtrace\=null then do
 
         when x==''  then leave handleinput    -- continue
         when x.substr(1,1)=='+' then do 
-          if x=='+' then do
-            if cursor.curclause.next \= null then do 
-              say cursor.curclause.next.toString()
-            end
-          end  
-          else if x.datatype('N') then do    -- show next x lines
-            clines = x.format()             
-            nc = cursor.curclause.next
-            loop i=1 to clines by 1
-              if nc \= null then do
-                say nc.toString()
-                nc = nc.next
-              end
-              else leave  
-            end
-          end
+          helper.showSource(cursor, x)
           iterate handleinput
         end  
         when x.substr(1,1)=='-' then do 
-          if x=='-' then do
-            if cursor.curclause.clausenum > 1 then do
-              clausen = cursor.curclause.clausenum 
-              c = rxt.program.clauser.clause(clausen)
-              say c.toString()
-            end 
-          end
-          else if x.datatype('N') then do    -- show previous x lines 
-            clines = short x.format().abs()
-
--- this loop needs decimal, how to loop with nodecimal ?
-            loop i=clines-1 to 0 by -1
-              clausen = cursor.curclause.clausenum - i
-              if clausen > 0 then do
-                c = rxt.program.clauser.clause(clausen)
-                say c.toString()
-              end
-            end
-          end
+          helper.showSource(cursor, x)
           iterate handleinput
         end  
         when x.upper().strip('B') == 'TRACE OFF' then do
@@ -1123,6 +1091,7 @@ if cursor.curtrace\=null then do
               do
                 term=rxt.tparser.parseterm(curse,0,0)     -- possible array
                 if term.group=RxCode.S_METHOD then do
+--    say '    : plain method call'  
                   handled=1                               -- don't call 'term'-ed methods twice
                 end
               catch RxQuit
@@ -1141,7 +1110,7 @@ if cursor.curtrace\=null then do
 --trace results
             if tn=RxToken.OP then do 
               if tokn.value[0]="=" then do       -- this is an assigment
---                say '    : assigment'  
+--    say '    : assigment'  
                 do
                   handled=1
                   assign=NrAssign(rxt)              -- construct Assignment instruction 
@@ -1161,7 +1130,7 @@ if cursor.curtrace\=null then do
             end
             else if t=RxToken.SYM then do 
               if rxt.program.parser.iskey(tok.value, 'SAY') then do -- this is SAY
---                say '    : saying something'
+--    say '    : saying something'
                 do
                   handled=1
                   saying=NrSay(rxt)    
@@ -1178,7 +1147,7 @@ if cursor.curtrace\=null then do
             end 
            
             if handled=0 then do 
---              say '    : parsing term'
+--    say '    : parsing term'
               do 
                 term=rxt.tparser.parseterm(curse,0,0)
                 if term=null then signal RxError(rxt, null, 'expression.has.no.value')
