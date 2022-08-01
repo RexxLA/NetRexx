@@ -19,6 +19,7 @@ where \emph{tracesetting} is one of:
     \textbf{methods}
     \textbf{off}
     \textbf{results}
+    \textbf{int}
 
     and \emph{varlist} is one or more variable \emph{names}
     (optionally prefixed with a \texttt{+} or \texttt{-})
@@ -92,6 +93,16 @@ If \keyword{trace results} is placed before the first method in the
 current class, the \keyword{method} instructions in the class will be
 traced when the method is invoked, together with the values of the
 arguments passed to each method.
+\item[int]\label{reftrres}
+\index{INT,TRACE setting}
+\index{INTERACTIVE,TRACE setting}
+
+With the \keyword{trace int} instruction, interpretation of the
+code is interrupted and the trace prompt \textbf{*->} is presented. Clauses are 
+interpreted one by one by pressing [Enter]. While single-stepping the code, access 
+to variables, properties and methods is available interactively. 
+Trace output is shown as if \keyword{trace results} is active.
+
 \end{description}
  \textbf{Notes:}
 \begin{enumerate}
@@ -107,6 +118,9 @@ immediately used for an assignment (in an assignment instruction, or
 when the control variable is initialized in a \keyword{loop}
 instruction).
 The assignment will trace the result of the expression.
+\item Interactive trace as with \keyword{trace int} is only available when 
+interpreting code, i.e. when using the -arg or -exec option. When compiling
+\keyword{trace int} a warning '+++ Warning: TRACE INT ignored when compiling' is shown.
 \end{enumerate}
 \section{Tracing variables}
 \index{Tracing,variables}
@@ -216,12 +230,12 @@ The identifier tags are listed in table \ref{table:Trace
 \toprule
 \texttt{*=*}&
 \index{*=* tracing flag,}
-identifies the first line of the source of a single clause, \emph{i.e.},
+Identifies the first line of the source of a single clause, \emph{i.e.},
 the data actually in the program.
 \\\midrule
 \texttt{*-*}&
 \index{*-* tracing flag,}
-identifies a continuation line from the source of a single clause.
+Identifies a continuation line from the source of a single clause.
 Continuations may be due to the use of a  continuation character (see page \pageref{refsemis}) 
 or to the use of a  block comment (see page \pageref{refblockco}) 
 which spans more than one line.
@@ -254,6 +268,10 @@ call).
 \index{+++ tracing flag,}
 Reserved for error messages that are not supplied by the environment
 underlying the implementation.
+\\\midrule
+\texttt{*->}&
+\index{*-> tracing flag,}
+The interactive trace prompt.
 \\\bottomrule
 \end{tabularx}
 \end{table}
@@ -321,3 +339,101 @@ tracing overhead is not accidentally incurred.}
 \item With some implementations it may be possible to switch tracing on
 externally, without requiring modification to the program.
 \end{enumerate}
+
+\section{Interactive tracing}
+\index{Interactive tracing}
+
+Interactive tracing is activated by the \keyword{trace int} instruction, 
+which will cause the interpreter to stop and present the interactive 
+trace prompt. 
+
+Pressing [Enter] continuously, single-steps and executes 
+every clause in the program. Variables and properties are accessible in 
+both read and write mode.
+
+Typing '?' shows the interactive trace capabilities:
+\begin{lstlisting}
+*-> ?
+Experimental interactive trace :
+  press [Enter] to trace interactively
+  type '=' to reinterpret current clause
+  type '-[n]' to show previous n clause(s), shows current clause if n is absent
+  type '+[n]' to show next n clause(s), shows next clause if n is absent
+  type 'trace off' to stop tracing
+  any other clause entered must be either an assignment or a SAY instruction
+    *-> 
+\end{lstlisting}
+
+Given below trace.nrx program, 
+\begin{lstlisting}
+class trace
+  properties public static
+  p = 1
+ 
+  method main(args=String[]) static
+    say 'interactively tracing..'
+    trace int
+    i=0
+    say 'i='i 
+    i=traced(i)
+    say 'Hello world'||'!'.copies(i)
+
+  method traced(arg=Rexx) static
+    say 'traced called with arg:'arg  
+    return arg+p
+\end{lstlisting}
+
+a sample interactive trace session could look as follows:
+
+
+\begin{lstlisting}
+$ nrc -exec trace
+NetRexx portable processor 4.04
+Copyright (c) RexxLA, 2011,2022.   All rights reserved.
+Parts Copyright (c) IBM Corporation, 1995,2008.
+Program trace.nrx
+  === class trace ===
+    function main(String[])
+    function traced(Rexx)
+===== Exec: trace =====
+interactively tracing..
+    *->                                       -- interrupted at trace int, single-step
+    --- trace.nrx
+  8 *=*     i=0
+    >v> i "0"
+    *->                                       -- single-step
+  9 *=*     say 'i='i 
+    >>> "i=0"
+i=0
+    *-> i=2                                   -- update variable i
+    *-> =                                     -- re-execute current clause
+    >>> "i=2"
+i=2
+    *-> say 'p='p                             -- say something
+p=1
+    *-> p=2                                   -- update property p
+    *-> say 'p='p
+p=2
+    *->                                       -- single-step
+ 10 *=*     i=traced(i)                       
+    >>> "2"
+traced called with arg:2
+    >v> i "4"
+    *->                                       -- single-step
+ 11 *=*     say 'Hello world'||'!'.copies(i)
+    >>> "4"
+    >>> "Hello world!!!!"
+Hello world!!!!
+    *-> i=-1                                  -- update variable
+    *-> i=traced(i)                           -- call method
+traced called with arg:-1
+    *-> say 'i='i                             -- say something
+i=1
+    *-> =                                     -- re-execute
+    >>> "1"
+    >>> "Hello world!"
+Hello world!
+    *-> trace off                             -- trace off
+Processing of 'trace.nrx' complete
+
+\end{lstlisting}

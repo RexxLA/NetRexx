@@ -1,0 +1,60 @@
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* RxInterpreterHelper                                                */
+/*                                                                    */
+/*   The interpreter helper object.                                   */
+/*   Allows RxInterpreter to run as nodecimal                         */
+/* ------------------------------------------------------------------ */
+/* 2022.07.25 Initial --MRE                                           */
+
+package org.netrexx.process
+options binary decimal strictcase strictargs
+
+class RxInterpreterHelper 
+
+properties shared
+  rxt=RxTranslator            -- the usual
+
+method RxInterpreterHelper(translator=RxTranslator)
+  rxt=translator
+
+method showSource(cursor=RxCursor, x)
+  select
+    when x.substr(1,1)=='+' then do 
+      if x=='+' then do
+        if cursor.curclause.next \= null then do 
+          say cursor.curclause.next.toString()
+        end
+      end  
+      else if x.datatype('N') then do    -- show next x lines
+        clines = x.format()             
+        nc = cursor.curclause.next
+        loop i=1 to clines by 1
+          if nc \= null then do
+            say nc.toString()
+            nc = nc.next
+          end
+          else leave  
+        end
+      end
+    end  
+    when x.substr(1,1)=='-' then do 
+      if x=='-' then do
+        if cursor.curclause.clausenum > 1 then do
+          clausen = cursor.curclause.clausenum 
+          c = rxt.program.clauser.clause(clausen)
+          say c.toString()
+        end 
+      end
+      else if x.datatype('N') then do    -- show previous x lines 
+        clines = short x.format().abs()
+        loop i=clines-1 to 0 by -1
+          clausen = cursor.curclause.clausenum - i
+          if clausen > 0 then do
+            c = rxt.program.clauser.clause(clausen)
+            say c.toString()
+          end
+        end
+      end
+    end  
+  end
