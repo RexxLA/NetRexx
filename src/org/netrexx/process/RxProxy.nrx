@@ -31,6 +31,7 @@ options binary nodecimal strictcase strictargs
 /* for it.  The proxy class forms instances and holds properties      */
 /* during interpretation.                                             */
 -- 2015.06.09 switch RuntimeConstants to local copy so tools.jar is not needed for NetRexx build -- issue #131 -- KK
+/* 2022.08.06 no final flag for constant properties, fix issue #33    */
 /* ------------------------------------------------------------------ */
 
 -- +++ should check for limits overflows
@@ -379,7 +380,16 @@ class RxProxy uses RuntimeConstants, RxField
     end
   **/
 
-  if field.isFinal()     then flags=flags|ACC_FINAL
+  --if field.isFinal()     then flags=flags|ACC_FINAL
+  
+  --MRE fix https://github.com/RexxLA/NetRexx/issues/33
+  -- the interpreter fails when setting the initial value on constant properties due to JDK-8210522. 
+  -- the workaround KK created fails on recent JVMs.
+  -- the translator will not allow updating a constant property  
+  -- so we do not need to set the final flag on java fields
+  -- the compiler is unmodified - RxProxy is interpreted mode only
+  -- compiled classes have the field's final access modifier correctly set 
+
   if field.isStatic()    then flags=flags|ACC_STATIC
   if field.isAbstract()  then flags=flags|ACC_ABSTRACT
   if field.isVolatile()  then flags=flags|ACC_VOLATILE
