@@ -1,0 +1,289 @@
+
+package org.rexxla.compostimate
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.app.AlertDialog.Builder
+import android.content
+import android.content.res.Configuration
+import android.content.SharedPreferences
+import android.net
+import android.os.Bundle
+import android.view
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
+import android.view.View
+import android.view.View.OnClickListener
+import android.webkit
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.TextView
+import android.widget.ViewSwitcher
+
+class CompostiMate extends Activity implements android.view.View.OnClickListener,android.content.DialogInterface.OnClickListener
+
+
+  properties private
+    metric=CheckBox
+    soil_nitrogen=TextView
+    soil_phosphorus=TextView
+    soil_potassium=TextView
+    compost_nitrogen=TextView
+    compost_phosphorus=TextView
+    compost_potassium=TextView
+    area_length=TextView
+    area_width=TextView
+    button1=Button
+    button2=Button
+    button3=Button
+    button4=Button
+    status=SharedPreferences
+    switcher=ViewSwitcher
+
+  method onCreate(savedInstanceState=Bundle)
+    super.onCreate(savedInstanceState)
+    setContentView(R.layout.main)
+    this.soil_nitrogen=TextView this.findViewById(R.id.editText1)
+    this.soil_phosphorus=TextView this.findViewById(R.id.editText3)
+    this.soil_potassium=TextView this.findViewById(R.id.editText5)
+    this.compost_nitrogen=TextView this.findViewById(R.id.editText2)
+    this.compost_phosphorus=TextView this.findViewById(R.id.editText4)
+    this.compost_potassium=TextView this.findViewById(R.id.editText6)
+    this.area_length=TextView this.findViewById(R.id.editText7)
+    this.area_width=TextView this.findViewById(R.id.editText8)
+    this.metric=CheckBox this.findViewById(R.id.CheckBox1)
+    this.button1=Button this.findViewById(R.id.button1)
+    this.button1.setOnClickListener(android.view.View.OnClickListener this)
+    this.button2=Button this.findViewById(R.id.button2)
+    this.button2.setOnClickListener(android.view.View.OnClickListener this)
+    this.button3=Button this.findViewById(R.id.button3)
+    this.button3.setOnClickListener(android.view.View.OnClickListener this)
+    this.button4=Button this.findViewById(R.id.button4)
+    this.button4.setOnClickListener(android.view.View.OnClickListener this)
+    this.status=SharedPreferences getPreferences(android.content.Context.MODE_PRIVATE)
+    if this.status.contains("terms_value") then do
+      current_value=this.status.getString("terms_value","")
+      if current_value\="YES" then this.terms_show()
+    end
+    else do
+      my_editor=this.status.edit()
+      my_editor.putString("terms_value","NO")
+      my_editor.commit()
+      this.terms_show()
+    end
+    this.switcher=ViewSwitcher findViewById(R.id.profileSwitcher)
+    this.soil_nitrogen.requestFocus()
+
+  method onClick(v=View)
+    select case v.getId()
+      when R.id.button1 then this.set_avg_npk()
+      when R.id.button2 then this.calculate()
+      when R.id.button3 then this.reset_inputs()
+      when R.id.button4 then this.clear_inputs()
+      otherwise
+      nop
+    end
+
+  method onClick(dlg=android.content.DialogInterface,chosen=int) public
+    select case chosen
+      when android.content.DialogInterface.BUTTON_NEUTRAL then nop
+      when android.content.DialogInterface.BUTTON_NEGATIVE then finish()
+      when android.content.DialogInterface.BUTTON_POSITIVE then eula_ok()
+      otherwise
+      nop
+    end
+
+  method onCreateOptionsMenu(m=Menu) public returns boolean
+    super.onCreateOptionsMenu(m)
+    getMenuInflater().inflate(R.menu.menu,m)
+    return boolean 1
+
+  method onOptionsItemSelected(i=MenuItem) public returns boolean
+    select case i.getItemId()
+      when R.id.open_help then do
+        this.help_show()
+        return boolean 1
+      end
+      when R.id.open_terms then do
+        this.terms_show(int 1)
+        return boolean 1
+      end
+      when R.id.open_site then do
+        this.rexxla_site()
+        return boolean 1
+      end
+      otherwise
+      return super.onOptionsItemSelected(i)
+    end
+
+  method rexxla_site()
+    startActivity((Intent Intent(Intent.ACTION_VIEW,Uri.parse("https://www.rexxla.org/"))))
+
+  method help_show()
+    htm="<head>" "<title>"this.getString(R.string.app_name)"</title>" "</head>" "<body>" "<table border=\"1\">" "<tbody>" "<tr>" "<td>" "<h2>"this.getString(R.string.txt_help)"</h2>" "</td>" "</tr>" "<tr>" "<td>" "<br>"this.getString(R.string.W12)"<br>" "<br>"this.getString(R.string.W13)"<br>" "<br>"this.getString(R.string.W14)"<br>" "<ul>" "<li>"this.getString(R.string.W15)"</li>" "<li>"this.getString(R.string.W16)"</li>" "</ul>" "<br>"this.getString(R.string.W17)"<br>" "<br>"this.getString(R.string.W18)"<br>" "<br>"this.getString(R.string.W19)"<br>" "<ul>" "<li>"this.getString(R.string.W20)"</li>" "<li>"this.getString(R.string.W21)"</li>" "<li>"this.getString(R.string.W22)"</li>" "</ul>" "<br>"this.getString(R.string.W23)"<br>" "<br>"this.getString(R.string.W24)"<br>" "<br>"this.getString(R.string.W25)"<br>" "<br>"this.getString(R.string.W26)"<br>" "<br>"this.getString(R.string.W27)"<br>" "<br>"this.getString(R.string.W28)"<br>" "</td>" "</tr>" "</tbody>" "</table>"
+    details=Uri.encode(htm)
+    page="<html><meta content=\"text/html; charset=utf-8\" " "http-equiv=\"content-type\"><body>"details"</body></html>"
+    inflater=LayoutInflater.from(android.content.Context this)
+    helpView=inflater.inflate(R.layout.help,null)
+    engine=WebView helpView.findViewById(R.id.web_engine)
+    engine.loadData(page,"text/html","utf-8")
+    notice=AlertDialog.Builder(android.content.Context this)
+    notice.setTitle(R.string.app_name)
+    notice.setView(helpView)
+    notice.setNeutralButton(R.string.txt_ok,(android.content.DialogInterface.OnClickListener this))
+    notice.show()
+
+  method terms_show(for_user=int 0)
+    htm="<head>" "<title>"this.getString(R.string.app_name)"</title>" "</head>" "<body>" "<table border=\"1\">" "<tbody>" "<tr>" "<td>" "<h2>"this.getString(R.string.W03)"</h2>" "</td>" "</tr>" "<tr>" "<td>" "<br>"this.getString(R.string.W04)"<br>" ""this.getString(R.string.W06)"<br>" "<br>"this.getString(R.string.W05)"<br>" ""this.getString(R.string.app_support)"<br>" "<br>"this.getString(R.string.W07)"<ul>" "<li>"this.getString(R.string.W08)"</li>" "<li>"this.getString(R.string.W09)"</li>" "<li>"this.getString(R.string.W10)"</li>" "<li>"this.getString(R.string.W11)"</li>" "</ul>" "</td>" "</tr>" "</tbody>" "</table>"
+    details=Uri.encode(htm)
+    page="<html><meta content=\"text/html; charset=utf-8\" " "http-equiv=\"content-type\"><body>"details"</body></html>"
+    inflater=LayoutInflater.from(android.content.Context this)
+    helpView=inflater.inflate(R.layout.help,null)
+    engine=WebView helpView.findViewById(R.id.web_engine)
+    engine.loadData(page,"text/html","utf-8")
+    if for_user=1 then do
+      notice=AlertDialog.Builder(android.content.Context this)
+      notice.setTitle(R.string.app_name)
+      notice.setView(helpView)
+      notice.setNeutralButton(R.string.txt_ok,null)
+      notice.show()
+    end
+    else do
+      notice=AlertDialog.Builder(android.content.Context this)
+      notice.setTitle(R.string.app_name)
+      notice.setCancelable(boolean 0)
+      notice.setView(helpView)
+      notice.setPositiveButton(R.string.W01,(android.content.DialogInterface.OnClickListener this))
+      notice.setNegativeButton(R.string.W02,(android.content.DialogInterface.OnClickListener this))
+      notice.show()
+    end
+
+  method eula_ok()
+    my_editor=this.status.edit()
+    my_editor.putString("terms_value","YES")
+    my_editor.commit()
+
+  method onConfigurationChanged(newConfig=Configuration)
+    super.onConfigurationChanged(newConfig)
+
+  method reset_inputs()
+    this.switcher.showNext()
+    this.button4.requestFocus()
+
+  method clear_inputs()
+    this.switcher.showPrevious()
+    this.soil_nitrogen.setText(R.string.txt_null)
+    this.soil_phosphorus.setText(R.string.txt_null)
+    this.soil_potassium.setText(R.string.txt_null)
+    this.compost_nitrogen.setText(R.string.txt_null)
+    this.compost_phosphorus.setText(R.string.txt_null)
+    this.compost_potassium.setText(R.string.txt_null)
+    this.area_length.setText(R.string.txt_null)
+    this.area_width.setText(R.string.txt_null)
+
+  method set_avg_npk()
+    this.compost_nitrogen.setText("1.37")
+    this.compost_phosphorus.setText("1.25")
+    this.compost_potassium.setText("1.53")
+
+  method calculate()
+    rn=this.soil_nitrogen.getText().toString()
+    if rn=null then rn="0"
+    else if netrexx.lang.Rexx(rn).datatype("N")="0" then rn="0"
+    rp=this.soil_phosphorus.getText().toString()
+    if rp=null then rp="0"
+    else if netrexx.lang.Rexx(rp).datatype("N")="0" then rp="0"
+    rk=this.soil_potassium.getText().toString()
+    if rk=null then rk="0"
+    else if netrexx.lang.Rexx(rk).datatype("N")="0" then rk="0"
+    cn=this.compost_nitrogen.getText().toString()
+    if cn=null then cn="0"
+    else if netrexx.lang.Rexx(cn).datatype("N")="0" then cn="0"
+    cp=this.compost_phosphorus.getText().toString()
+    if cp=null then cp="0"
+    else if netrexx.lang.Rexx(cp).datatype("N")="0" then cp="0"
+    ck=this.compost_potassium.getText().toString()
+    if ck=null then ck="0"
+    else if netrexx.lang.Rexx(ck).datatype("N")="0" then ck="0"
+    al=this.area_length.getText().toString()
+    if al=null then al="0"
+    else if netrexx.lang.Rexx(al).datatype("N")="0" then al="0"
+    aw=this.area_width.getText().toString()
+    if aw=null then aw="0"
+    else if netrexx.lang.Rexx(aw).datatype("N")="0" then aw="0"
+    if rn+rp+rk\=0 then do
+      if al\=0&aw\=0 then do
+        if cn+cp+ck\=0 then do
+          if cn+cp+ck<=100 then do
+            if this.metric.isChecked() then do
+              x="10"
+              y="10000"
+              system_title=this.getString(R.string.txt_in_metric)
+            end
+            else do
+              x="20"
+              y="43560"
+              system_title=this.getString(R.string.txt_in_us)
+            end
+            N=0
+            P=0
+            K=0
+            do
+              if cn\=0 then do
+                N=((rn/(cn*x*"0.20"))/(y/(al*aw))).format(null,3)
+              end
+              else N=this.getString(R.string.txt_na)
+              if cp\=0 then do
+                P=((rp/(cp*x*"0.40"))/(y/(al*aw))).format(null,3)
+              end
+              else P=this.getString(R.string.txt_na)
+              if ck\=0 then do
+                K=((rk/(ck*x*"0.60"))/(y/(al*aw))).format(null,3)
+              end
+              else K=this.getString(R.string.txt_na)
+             catch e=Exception
+              notice=AlertDialog.Builder(android.content.Context this)
+              notice.setTitle(R.string.txt_alert_title)
+              notice.setMessage(e.getMessage())
+              notice.setNeutralButton(R.string.txt_ok,null)
+              notice.show()
+            end
+            calc_results=this.getString(R.string.txt_nitrogen)" : "N "\n"this.getString(R.string.txt_phosphorus)" : "P "\n"this.getString(R.string.txt_potassium)" : "K "\n"
+            notice=AlertDialog.Builder(android.content.Context this)
+            notice.setTitle(system_title)
+            notice.setMessage(calc_results)
+            notice.setNeutralButton(R.string.txt_ok,null)
+            notice.show()
+          end
+          else do
+            notice=AlertDialog.Builder(android.content.Context this)
+            notice.setTitle(R.string.txt_alert_title)
+            notice.setMessage(R.string.txt_warn_01)
+            notice.setNeutralButton(R.string.txt_ok,null)
+            notice.show()
+          end
+        end
+        else do
+          notice=AlertDialog.Builder(android.content.Context this)
+          notice.setTitle(R.string.txt_alert_title)
+          notice.setMessage(R.string.txt_warn_02)
+          notice.setNeutralButton(R.string.txt_ok,null)
+          notice.show()
+        end
+      end
+      else do
+        notice=AlertDialog.Builder(android.content.Context this)
+        notice.setTitle(R.string.txt_alert_title)
+        notice.setMessage(R.string.txt_warn_03)
+        notice.setNeutralButton(R.string.txt_ok,null)
+        notice.show()
+      end
+    end
+    else do
+      notice=AlertDialog.Builder(android.content.Context this)
+      notice.setTitle(R.string.txt_alert_title)
+      notice.setMessage(R.string.txt_warn_04)
+      notice.setNeutralButton(R.string.txt_ok,null)
+      notice.show()
+    end

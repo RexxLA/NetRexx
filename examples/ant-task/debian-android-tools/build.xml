@@ -1,0 +1,184 @@
+<?xml version="1.0" ?>
+
+<!-- =================================================================== -->
+<!-- NetRexx Ant Task example using https://wiki.debian.org/AndroidTools -->
+<!-- =================================================================== -->
+
+<project name="Ant Assemble NetRexx Android Apk's"
+         default="signed"
+         basedir=".">
+
+    <!-- leave these alone -->
+    <property environment="env"/>
+    <property name="ant.netrexxc.source"       value="1.7"/>
+    <property name="ant.netrexxc.target"       value="1.7"/>
+    <property name="ant.netrexxc.javacompiler" value="javac -source ${ant.netrexxc.source} -target ${ant.netrexxc.target}"/>
+    <!-- change these to match your install directories/files -->
+    <property name="ANDROIDSDK"                value="/usr/lib/android-sdk/build-tools/debian"/>
+    <property name="PLATFORM"                  value="/usr/lib/android-sdk/platforms/android-23/android.jar"/>
+    <!-- NOTE: JUST MADE TO WORK FROM EXAMPLES DIRECTORY. YOU SHOULD NOT WORK HERE. -->
+    <property name="NETREXXR"                  value="${basedir}/../../../runlib/NetRexxR.jar"/>
+    <!-- change these to match AndroidManifest.xml, your main Activity class,  -->
+    <!--    where your keystore is located and minimum sdk version App runs on -->
+    <property name="APPNAME"                   value="CompostiMate"/>
+    <property name="KEYSTORE"                  value="keystore.jks"/>
+    <property name="MINSDK"                    value="3"/>
+
+    <!-- We need NetRexx, android.jar and which NetRexx runlib you will package -->
+    <path id="project.class.path">
+        <pathelement location="${env.CLASSPATH}:${PLATFORM}:${NETREXXR}"/>
+    </path>
+
+    <taskdef name="nrc"
+             classname="org.apache.tools.ant.taskdefs.optional.NetRexx">
+    </taskdef>
+
+    <!-- =================================================================== -->
+    <!-- First create R.java from /res for later use in your NetRexx App     -->
+    <!-- =================================================================== -->
+
+    <target name="R.java" description="Android Asset Packaging Tool">
+        <exec executable="aapt">
+            <arg value="package" />
+            <arg value="-f" />
+            <arg value="-m" />
+            <arg value="-J" />
+            <arg value="src" />
+            <arg value="-S" />
+            <arg value="res" />
+            <arg value="-M" />
+            <arg value="AndroidManifest.xml" />
+            <arg value="-I" />
+            <arg value="${PLATFORM}" />
+        </exec>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Java compile R.java to classes to make them useable from NetRexx    -->
+    <!-- =================================================================== -->
+
+    <target name="javacompile" description="Compile Java source to bytecode">
+        <javac includeantruntime="false" bootclasspath="${PLATFORM}" srcdir="src" includes="**" encoding="utf-8" source="1.7" target="1.7">
+            <classpath refid="project.class.path"/>
+        </javac>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- NetRexx compile your App to get the class files needed by dx        -->
+    <!-- =================================================================== -->
+
+    <target name="nrccompile" description="Compile NetRexx source to Classes">
+        <nrc srcDir="src" includes="**" compile="yes">
+            <classpath refid="project.class.path"/>
+        </nrc>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Create directory to store the dex classes                           -->
+    <!-- =================================================================== -->
+
+    <target name="storage" description="create dex directory/">
+        <mkdir dir="dex" />
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Create classes.dex from /dex which will include your NetRexxR.jar   -->
+    <!-- =================================================================== -->
+
+    <target name="dex" depends="storage" description="Android Asset Packaging Tool">
+        <exec executable="${ANDROIDSDK}/dx">
+            <arg value="--dex" />
+            <arg value="--verbose" />
+            <arg value="--min-sdk-version=${MINSDK}" />
+            <arg value="--output=dex" />
+            <arg value="src" />
+            <arg value="${NETREXXR}" />
+        </exec>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Batch above targets                                                 -->
+    <!-- =================================================================== -->
+
+    <target name="batch" depends="R.java,javacompile,nrccompile,dex" description="process needed targets/">
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Create first apk which will be unsigned                             -->
+    <!-- =================================================================== -->
+
+    <target name="unsigned" depends="batch" description="package an unsigned apk">
+        <exec executable="aapt">
+            <arg value="package" />
+            <arg value="-f" />
+            <arg value="-v" />
+            <arg value="-F" />
+            <arg value="${APPNAME}.unsigned.apk" />
+            <arg value="-M" />
+            <arg value="AndroidManifest.xml" />
+            <arg value="-I" />
+            <arg value="${PLATFORM}" />
+            <arg value="-S" />
+            <arg value="res" />
+            <arg value="dex" />
+        </exec>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Create second apk which will be aligned using the unsigned apk      -->
+    <!--    NOTE: We are using apksigner, we must align before signing       -->
+    <!--      If using jarsigner, this target must re-worked to be last      -->
+    <!-- =================================================================== -->
+
+    <target name="aligned" depends="unsigned" description="create aligned apk from unsigned apk">
+        <exec executable="zipalign">
+            <arg value="-f" />
+            <arg value="-p" />
+            <arg value="4" />
+            <arg value="${APPNAME}.unsigned.apk" />
+            <arg value="${APPNAME}.aligned.apk" />
+        </exec>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Create final apk which will be signed using the aligned apk         -->
+    <!--    keystore arguments may need to be changed to match yours         -->
+    <!-- =================================================================== -->
+
+    <target name="signed" depends="aligned" description="package a signed apk from aligned">
+        <exec executable="apksigner">
+            <arg value="sign" />
+            <arg value="--ks" />
+            <arg value="${KEYSTORE}" />
+            <arg value="--ks-key-alias" />
+            <arg value="androidkey" />
+            <arg value="--ks-pass" />
+            <arg value="pass:android" />
+            <arg value="--key-pass" />
+            <arg value="pass:android" />
+            <arg value="--out" />
+            <arg value="${APPNAME}.apk" />
+            <arg value="${APPNAME}.aligned.apk" />
+        </exec>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Clean everything but nrx files                                      -->
+    <!-- =================================================================== -->
+
+    <target name="clean"
+            description="Cleans this project">
+        <delete dir="dex"
+                failonerror="false" />
+        <!-- Delete all created apk files -->
+        <delete>
+            <fileset dir="." includes="*.apk" />
+        </delete>
+        <!-- Delete all but the nrx files in /src -->
+        <delete>
+            <fileset dir="src" excludes="**/*.nrx" />
+        </delete>
+
+    </target>
+
+</project>
