@@ -1,4 +1,4 @@
-# NetRexx 4.04 alpha [23 Aug 2022]
+# NetRexx 4.04 GA [12 Sep 2022]
 
 ## Project
 - the NetRexx issue tracker has moved to [https://github.com/RexxLA/NetRexx/issues]
