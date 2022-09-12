@@ -9,10 +9,8 @@
 - a new nr command for scripting purposes
 - releasenotes are in Markdown syntax (and have moved to the root of the development tree)
 - use of color in language processor messages enabled (but optional,  opt-out for Linux and Mac, opt-in for windows)
-- long and short form of options
 - a bugfix on an address statement ("variable $2 already defined") with interruptedexception
 - add the netrexx/lang/Sysutils class by Marc Remes
-- TODO added options to Date/Time to be on par with ooRexx
 - date('j') input format gave incorrect output and is fixed. This
   version 'century windows' around 75 for compatibility with z/VM CMS Rexx; in a coming release 2-digit years
   will be deprecated on date'j' input format.
