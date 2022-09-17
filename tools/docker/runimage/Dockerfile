@@ -4,9 +4,7 @@ LABEL maintainer="rvjansen@xs4all.nl"
 WORKDIR /
 
 # Copy the current directory contents into the container at /app
-ADD .therc /root
 ADD nrws /bin
-ADD nrws.input /root
 
 #
 RUN apt-get update && \
