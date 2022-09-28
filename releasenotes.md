@@ -1,3 +1,11 @@
+# NetRexx 4.05 alpha [28 Sep 2022]
+
+## Fixes
+- #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
+  could look for a shell that was not there (Marc Remes)
+- the sqlselect stage has an exception message protected against nullpointers from a failing JDBC driver
+
+
 # NetRexx 4.04 GA [12 Sep 2022]
 
 ## Project
