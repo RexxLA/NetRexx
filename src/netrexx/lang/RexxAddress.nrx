@@ -14,6 +14,7 @@
 /* 2022.02.25 MRE ooRexx-like ADDRESS WITH stem implementation        */
 /* 2022.03.02 MRE ooRexx-like ADDRESS WITH stream implementation      */
 /* 2022.03.05 MRE signal exceptions to caller                         */
+/* 2022.09.28 MRE resolve SYSTEM at runtime, issue #38                */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
@@ -98,6 +99,10 @@ class RexxAddress implements Serializable
     iReader=BufferedReader
     oWriter=BufferedWriter
     eWriter=BufferedWriter
+
+    if addr == 'SYSTEM' then do
+      addr=getSystemAddressee()                            -- OS hard-coded environments, resolve at runtime
+    end
 
     do              -- catching exceptions IOException and InterruptedException 
         
@@ -229,6 +234,23 @@ class RexxAddress implements Serializable
       signal InterruptedException()
     end -- do
     return
+
+/** get default addressee per OS */
+method getSystemAddressee static returns String
+
+  os=Rexx System.getProperty('os.name')
+  os=os.lower()
+  sysaddr = Rexx
+
+  if      os.pos('linux')   >> 0 then sysaddr=System.getenv('SHELL')
+  else if os.pos('macos')   >> 0 then sysaddr=System.getenv('SHELL')
+  else if os.pos('windows') >> 0 then do 
+                                      sysaddr=System.getenv('COMSPEC')
+                                      sysaddr=sysaddr.changestr('\\', '/')  -- freaking backslash ..
+  end  
+  else                                sysaddr='/bin/sh'
+
+  return sysaddr
 
 
 

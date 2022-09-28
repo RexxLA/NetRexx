@@ -19,6 +19,7 @@
 /* 2022.03.02 ooRexx-like ADDRESS WITH stream implementation          */
 /* 2022.03.05 exit(9) upon RexAddress exception                       */
 /* 2022.03.07 exit(9) removed, user must check RC for exceptions      */
+/* 2022.09.28 resolve SYSTEM at runtime, issue #38                    */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
@@ -139,7 +140,7 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
         end
       end
       else if t=='SYSTEM' then do
-        addr=getSystemAddressee()                                         -- OS hard-coded environments
+        addr=t                                     -- resolve shell at runtime in RexxAddress
       end
 
       if addr=='' then do
@@ -257,7 +258,7 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
       if addr==null then do
          addr = tclass.curaddress
          if addr==null then do
-            addr = getSystemAddressee()                -- use SYSTEM default
+            addr = 'SYSTEM'                        -- resolve shell at runtime in RexxAddress
          end
          if rxt.program.flag.diag then say '# NrAddress: INDIRECT ADDRESS 'addr' from class 'tclass.classname  
       end 
@@ -383,24 +384,6 @@ method scanWithWhat(nexttoken, with_, append)
   end
 
   
-
-/** get default addressee per OS */
-method getSystemAddressee returns Rexx
-
-  os=Rexx System.getProperty('os.name')
-  os=os.lower()
-  sysaddr = Rexx
-
-  if      os.pos('linux')   >> 0 then sysaddr=System.getenv('SHELL')
-  else if os.pos('macos')   >> 0 then sysaddr=System.getenv('SHELL')
-  else if os.pos('windows') >> 0 then do 
-                                      sysaddr=System.getenv('COMSPEC')
-                                      sysaddr=sysaddr.changestr('\\', '/')  -- freaking backslash ..
-  end  
-  else                                sysaddr='/bin/sh'
-
-  return sysaddr
-
 
  /** Trace names list */
  method getAssigns returns String[]
