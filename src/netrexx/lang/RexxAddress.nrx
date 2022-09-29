@@ -30,6 +30,7 @@ class RexxAddress implements Serializable
     StdOut = ConcurrentLinkedDeque()
     command  = String null
     exitcode = Rexx 'RC'
+    sysaddr  = Rexx ''                        -- look up once
 
   properties private constant unused
   serialVersionUID=long 2781762092115528702
@@ -237,19 +238,20 @@ class RexxAddress implements Serializable
 
 /** get default addressee per OS */
 method getSystemAddressee static returns String
+  
+  if sysaddr == '' then do 
+    os=Rexx System.getProperty('os.name')
+    os=os.lower()
 
-  os=Rexx System.getProperty('os.name')
-  os=os.lower()
-  sysaddr = Rexx
-
-  if      os.pos('linux')   >> 0 then sysaddr=System.getenv('SHELL')
-  else if os.pos('macos')   >> 0 then sysaddr=System.getenv('SHELL')
-  else if os.pos('windows') >> 0 then do 
-                                      sysaddr=System.getenv('COMSPEC')
-                                      sysaddr=sysaddr.changestr('\\', '/')  -- freaking backslash ..
-  end  
-  else                                sysaddr='/bin/sh'
-
+    if      os.pos('linux')   >> 0 then sysaddr=System.getenv('SHELL')
+    else if os.pos('macos')   >> 0 then sysaddr=System.getenv('SHELL')
+    else if os.pos('windows') >> 0 then do 
+                                        sysaddr=System.getenv('COMSPEC')
+                                        sysaddr=sysaddr.changestr('\\', '/')  -- freaking backslash ..
+    end  
+    else                                sysaddr='/bin/sh'
+  end   
+  
   return sysaddr
 
 
