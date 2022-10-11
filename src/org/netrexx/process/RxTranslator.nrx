@@ -61,6 +61,7 @@
 /* 2019.05.09 display failed summaries last - Jason Martin            */
 /* 2021.01.15 store (setaddress) NetRexxC -address flag  -- MRE       */
 /* 2021.12.31 add RxModel - Jason Martin                              */
+/* 2022.10.11 When interpreting, always wait for all threads -- MRE   */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -618,14 +619,16 @@ class RxTranslator
           if \t.isDaemon() then do
             userthreads=userthreads+1
             if t.isAlive() then alive=alive+1
-            end
           end
+        end
         if userthreads=1 then leave          -- simple enough
-        if \hadexit then leave               -- no exit to wait for
+-- MRE Now we always wait for threads to complete, even in programs without 'exit'
+-- Note, interpreting any 'exit' clause still immediately leaves this loop
+    --     if \hadexit then leave               -- no exit to wait for
         -- say '# user, alive:' userthreads alive
         Thread.sleep(100)                    -- pause 0.1s
         if exiting then leave
-        end
+      end
       catch InterruptedException
         nop     -- just leave
       end -- finally
