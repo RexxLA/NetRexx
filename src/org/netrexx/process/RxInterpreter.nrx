@@ -38,6 +38,8 @@
 /* 2020.12.20 MRE -- catch exception when class modifier fields       */
 /*                                              are accessed in JDK9+ */
 /* 2022.06.16 Interactive trace assign and say implementation --MRE   */
+/* 2022.10.13 no need anymore for final modifier access -- MRE        */
+/*                                              undo issue #80 fix    */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -483,21 +485,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
     if set then do
       setvalue=code2ref(setvalue, field.fieldtype) /* rewrap if needed */
 
--- MRE need to wrap this and catch JDK12+ inaccessible class modifiers       
-      do
-        -- temp remove FINAL property as Java 5+ does not allow changing finals --issue #80 -KK-
-        modifiersField = prop.getClass().getDeclaredField("modifiers") --issue #80 -KK-
--- say '##MRE not reached on JDK12+'
-        modifiersField.setAccessible(1) --issue #80 -KK-
-      catch NoSuchFieldException
-        nop                   -- nop, but avoided JDK12+ java.lang.NoSuchFieldException:modifiers
-                              -- triggering 'Severe Error: Internal error: RxInterpreter: pnf'
-      end 
-
-      modifiers=prop.getModifiers() --issue #80 -KK-
-      if Modifier.isFinal(modifiers) then modifiersField.setInt(prop, modifiers-Modifier.FINAL) --issue #80 -KK-
       prop.set(obj, setvalue)
-      if Modifier.isFinal(modifiers) then modifiersField.setInt(prop, modifiers) --issue #80 -KK-
       value=Object null
     end
    else do -- get its value
@@ -863,7 +851,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
                                else lock=localclass.classinfo.getClassObject()
     runprotected(cursor, lock)
     end
-
+  
   -- here iff run off end, or RETURN seen, or exception raised
   if cursor.curreturn\=null then do
     retobject=cursor.curreturn
