@@ -4,7 +4,10 @@
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
   could look for a shell that was not there (Marc Remes)
 - the sqlselect stage has an exception message protected against nullpointers from a failing JDBC driver
-- The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending
+- #33: fix interpreter handling constant properties
+- #40: detect unreachable code
+- #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending
+
 
 # NetRexx 4.04 GA [12 Sep 2022]
 
