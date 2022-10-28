@@ -153,13 +153,13 @@ class Workspace
       say iox.getMessage()
     end 
     
-  method init static signals IOException 
-    filter   = FilteringOutputStream(System.out)
-    printStream	 = PrintStream(filter)
+  method init static signals IOException
+    filter	= FilteringOutputStream(System.out)
+    printStream	= PrintStream(filter)
     System.setOut(printStream)
-    terminal = TerminalBuilder.builder().jansi(1).build()
+    terminal	= TerminalBuilder.builder().jansi(1).build()
     historyFile	= 'nrws.history'
-    reader   = LineReaderBuilder.builder().terminal(terminal).history(DefaultHistory()).variable(LineReader.HISTORY_FILE, historyFile).build()
+    reader	= LineReaderBuilder.builder().terminal(terminal).history(DefaultHistory()).variable(LineReader.HISTORY_FILE, historyFile).build()
 
   method getInstance(uid) static returns Workspace
     return Workspace instances.get(uid)
@@ -175,6 +175,8 @@ class Workspace
   method Workspace(initialFrame	= org.vpad.extra.workpad.Frame)
     synonyms['apr']  = 'what things'
     synonyms['apropos']	= 'what things'
+    Runtime.getRuntime().addShutdownHook(Thread(org.vpad.extra.workpad.Workspace.cancelled()))
+
 
     interpreter		       = NetRexxA()
     parser		       = org.vpad.extra.workpad.Parser()
@@ -1981,6 +1983,25 @@ class Workspace
     say 'Copyright (c)  parts RexxLA 2019,2021'
     
 
+/**
+ * The user is able to cancel a workspace session with control-C
+ * or it can crash unexpectedly
+ * On shutdown of the JVM we run this thread to delete the WS2_instanceid_.nrx file. 
+ */
+  class Workspace.cancelled dependent implements Runnable
+  method cancelled()
+  method run() 
+    dir=File('.')
+    fileList = dir.listFiles()
+    loop x over fileList
+      fn = x.getName()
+      parse fn first 6 rest
+      parse rest . '.' ext
+      if first='_WS2_' then if ext ='nrx' then do
+	x.delete()
+      end
+    end
+    
 class Workspace.FilteringOutputStream extends OutputStream
 
   status = Hashtable
