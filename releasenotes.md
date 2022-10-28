@@ -5,6 +5,7 @@
   could look for a shell that was not there (Marc Remes)
 - the sqlselect stage has an exception message protected against nullpointers from a failing JDBC driver
 - #33: fix interpreter handling constant properties
+- #35: Rexx date now standard in scripting mode; adapted qtime.nrx
 - #40: detect unreachable code
 - #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending
 
