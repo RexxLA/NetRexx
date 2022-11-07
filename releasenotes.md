@@ -10,6 +10,7 @@
 - #40: detect unreachable code (Marc Remes)
 - #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending (Rene Jansen)
 - #42 A settings.history=off property in nrws.properties can be used to avoid writing a nrws.history file (Rene Jansen)
+- when interpreting, wait for all threads to complete after main() returned. 
 
 # NetRexx 4.04 GA [12 Sep 2022]
 
