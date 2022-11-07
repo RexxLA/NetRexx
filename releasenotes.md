@@ -5,10 +5,11 @@
   could look for a shell that was not there (Marc Remes)
 - the sqlselect stage has an exception message protected against nullpointers from a failing JDBC driver
 - #33: fix interpreter handling constant properties
-- #35: Rexx date now standard in scripting mode; adapted qtime.nrx
-- #40: detect unreachable code
-- #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending
-
+- #35: Rexx date now standard in all modes (scripting mode and standard mode)
+- adapted qtime.nrx example for #35 (Rene Jansen)
+- #40: detect unreachable code (Marc Remes)
+- #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending (Rene Jansen)
+- #42 A settings.history=off property in nrws.properties can be used to avoid writing a nrws.history file (Rene Jansen)
 
 # NetRexx 4.04 GA [12 Sep 2022]
 
