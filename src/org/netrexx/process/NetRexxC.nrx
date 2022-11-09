@@ -130,12 +130,18 @@ class NetRexxC
     return main(arg,[String programstring],logfile,classfiles)
 
   /** method compile-load-and-go, no translator messages produced
-     arg is the name of the class of which the main method is called with no args
+   * except when compile fails 
+   * arg is the name of the class of which the main method is called with no args
    */
   method clgMain(arg=Rexx, programstring=String) constant
     if arg==null then arg='tempnm'
     classList = ArrayList()
     rc = main(arg' -nologo -verbose0',[String programstring],null,classList)
+    if rc==2 then do
+      rc = main(arg'',[String programstring],null,classList)
+      say "Compilation failed."
+      exit
+    end
     mapLoader = RxMapClassLoader classList.get(0)
     do
       c = mapLoader.findClass(arg)
