@@ -4,7 +4,8 @@
 /* Copyright (c) 1995-2009 IBM Corp.                                  */
 /* Copyright (c) 2011- RexxLA                                         */
 options binary
-package org.netrexx.process
+package org.netrexx.buildtools
+import org.netrexx.process.
 import java.net.
 /**
  * NetRexx Compiler Server, server part. This creates a server socket and
@@ -27,9 +28,9 @@ class NetRexxS
   /** the total amount of time spend on compilation, in milliseconds */
   lapsed    = long
   /** the total number of files processed */
-  filecount = int
+  fileCount = int
   
-  method NetRexxS()
+  method NetRexxS() signals IOException
     createSocket(2001)
     startTime = System.currentTimeMillis()
     lapsed    = 0
@@ -38,11 +39,10 @@ class NetRexxS
       processFile()
     end -- loop
     
-  method NetRexxS(port_)
+  method NetRexxS(port_) signals IOException
     createSocket(port_)
     startTime = System.currentTimeMillis()
     lapsed    = 0
-    fileCount = 0
     loop forever
       processFile()
     end -- loop
@@ -58,14 +58,14 @@ class NetRexxS
       say "When option -sourcedir is not used, .class files will be written to:"
       say System.getProperty('user.dir')
     catch ex=IOException
-      say ex.getMessage
+      say ex.getMessage()
     end -- do
     return
     
   method processFile() signals IOException
     do
       this.sock	= this.srv.accept()
-      this.rd	= BufferedReader(InputStreamReader(this.sock.getInputstream()))
+      this.rd	= BufferedReader(InputStreamReader(this.sock.getInputStream()))
       this.wr	= PrintWriter(OutputStreamWriter(this.sock.getOutputStream()))	
       line	= Rexx rd.readLine()
       if line = null then
@@ -84,7 +84,7 @@ class NetRexxS
 	if strAr[i] = "-shutdown" then exit
       end -- loop
       do
-	fileCount    = fileCount + line.countStr(".nrx") 
+	fileCount    = fileCount + line.countstr(".nrx") 
 	strAr[items] = "-noconsole"
 	retCode = this.compiler.main2(strAr, this.wr)
 	wr.write("@#!retcode" retCode )	  
@@ -95,10 +95,10 @@ class NetRexxS
     end
     return
 
-  method main(args=String[]) static
+  method main(args=String[]) static signals IOException
     say "NetRexxS 3.0"
     select 
-      when args.length = 0  then  NetRexxS()
+      when args.length = 0  then NetRexxS()
       when args.length = 1  & (Rexx args[0]).datatype('N') then NetRexxS(args[0])
       otherwise
 	do
