@@ -1,5 +1,11 @@
 # NetRexx 4.05 alpha [10 Nov 2022]
 
+## Project
+
+## Language
+- a new option -deps to list dependencies
+- tools to assist build systems
+
 ## Fixes
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
   could look for a shell that was not there (Marc Remes)
