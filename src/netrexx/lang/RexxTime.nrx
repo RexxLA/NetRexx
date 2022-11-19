@@ -18,8 +18,9 @@ package netrexx.lang
 /* 09.01.2021: rvj redid time'E' and time'R'                                  */
 /* 15.01.2021: rvj added date('C') following a recipe by Walter Pachl         */
 /* 03.11.2022: MRE make unexposed methods private                             */
+/* 18.11.2022: rvj add casing variants of some public methods                 */
 
-options decimal nobinary nostrictcase
+options decimal nobinary strictcase nostrictargs
 --trace results
 
 -- note: digits 18 absolutely needed
@@ -36,6 +37,17 @@ class RexxTime public
   starttime = 0 
   
   method RexxTime() 
+
+  method time(opt=char) public static returns Rexx
+    opt_=Rexx(opt)
+    return time(opt)
+
+  method Time(opt=char) public static returns Rexx
+    opt_=Rexx(opt)
+    return time(opt_)
+    
+  method Time(opt_=Rexx ' ') public static returns Rexx
+    return time(opt_)
     
   method time(opt=Rexx ' ') public static returns Rexx
     dts=java.time.LocalDateTime.now()
@@ -167,10 +179,16 @@ class RexxTime public
       Day = Day - ThisMonth
     end
     return Year Month Day Hour Minute Second Microsecond BaseDays YearDays
+
+  method date() static
+    return nativeDate()
     
   method Date() static
     return nativeDate()
 
+  method date(Option) static
+    return Date(Option)
+    
   method Date(Option) static
     Option=Option.left(1).upper()
     BaseDays = Date('B',nativeDate())
@@ -178,6 +196,9 @@ class RexxTime public
     if Option == 'S' then OutSeparator = ''
     else OutSeparator = Option.translate("xx/x //x","BDEMNOUW")
     return DateFormat(Micro,Option,OutSeparator)
+    
+  method date(Option, inDate, InOption="", arg4='', arg5='') static 
+    return Date(Option, inDate, InOption="", arg4='', arg5='')
     
   method Date(Option, inDate, InOption="", arg4='', arg5='') static 
     Option=Option.left(1).upper()
@@ -253,7 +274,7 @@ class RexxTime public
 	 end
        if Logic = 'EOU' then do
 	 /* The century is assumed, on the basis of the current year. */
-	 if YY.dataType('W')=0 then return ''
+	 if YY.datatype('W')=0 then return ''
 	 YearNow = Date('S').left(4)
 	 Year = YY
 	 loop while Year < YearNow-50
@@ -263,7 +284,7 @@ class RexxTime public
        
        if Logic <> 'BD' then do
 	 /* Convert Month & Day to Days of year. */
-	 if Month.dataType('W')=0 | Day.dataType('W')=0 | Year.dataType('W')=0 then return ''
+	 if Month.datatype('W')=0 | Day.datatype('W')=0 | Year.datatype('W')=0 then return ''
 	 Days = '0 31 59 90 120 151 181 212 243 273 304 334'.word(Month) + (Month>2)*Leap(Year) + Day-1
        end
        else
@@ -346,7 +367,7 @@ class RexxTime public
 	   Year.right(4,'0')||delimiter||Month.right(2,'0')||delimiter||Day.right(2,'0')
       when format = 'U' then return -
 	   Month.right(2,'0')||delimiter||Day.right(2,'0')||delimiter||Year.right(2,'0')
-      when format = 'W' then return Weekdays.word(1+Base//7)
+      when format = 'W' then return WeekDays.word(1+Base//7)
       otherwise
 	return 'Unknown Date option'
     end
