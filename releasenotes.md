@@ -1,10 +1,13 @@
 # NetRexx 4.05 alpha [10 Nov 2022]
 
 ## Project
+- an ant build.xml (in examples) to build an Android .apk for the NetRexx translator (Jason Martin)
 
 ## Language
 - a new option -deps to list dependencies
-- tools to assist build systems
+- tools to assist build systems, like ninja build
+- a new option -noimplicituses to avoid automatic addition of Classic Rexx compatible classes to 'uses' -see below
+
 
 ## Fixes
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
