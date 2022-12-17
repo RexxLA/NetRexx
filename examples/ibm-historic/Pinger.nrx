@@ -20,7 +20,7 @@
 
 options binary                     -- optional, for speed
 import sun.audio.                  -- for sound clip player
-
+import javax.sound.sampled.
 /* ------------------------------------------------------------------ */
 /* Pinger -- a stand-alone application for the Java Virtual Machine   */
 /* ------------------------------------------------------------------ */
@@ -127,7 +127,7 @@ class PingerComponent extends Canvas-   -- Canvas is a drawing area
    spinner=PingerSpinner           -- spin-button, non-null if spinning
 
    -- Sound stuff
-   bleeper=PingerBleeper           -- a bleeper object
+  bleeper=PingerBleeper           -- a bleeper object
 
    -- Drawing and layout properties
    shadow=Image                    -- shadow image
@@ -591,7 +591,7 @@ class PingerBleeper
   soundfile=File                   -- File of The Sound
   okfile=boolean 0                 -- 1 if the file is good
   input=InputStream                -- .. as a stream
-  audio=AudioStream                -- .. as audio
+  audio=AudioInputStream                -- .. as audio
 
   /* Constructor.
      Arg1 is beep file (.au) to play
@@ -605,32 +605,25 @@ class PingerBleeper
       end
     okfile=1                       -- file is plausible
 
-    -- now prime the audio subsystem by sending it a 0 byte.  This loads
-    -- the audio software so the final bleeps will be prompt (starting
-    -- up the audio subsystem can take seconds on some platforms).
-    do
-      input=ByteArrayInputStream([byte 0])
-      -- next lines prime the audio subsystem, by trying to play an
-      -- invalid stream
-      audio=AudioStream(input)
-      AudioPlayer.player.start(audio)
-    catch IOException
-      -- we expect to get here
-    end
 
   /* bleep once */
   method bleep
+    do
     if \okfile then return         -- no good file to play
     do
       -- set the input stream each time ('rewind')
       input=FileInputStream(soundfile)
-      audio=AudioStream(input)
+      audio=AudioSystem.getAudioInputStream(soundfile)
     catch IOException
       say "Could not play file '"soundfile"'"
       okfile=0                     -- don't even try next time
+    end -- if do
+    clip=AudioSystem.getClip()
+    clip.open(audio)
+    clip.start()
+    catch ex=Throwable
+      say ex.getClass.getName ex.getMessage()
     end
-    AudioPlayer.player.start(audio)
-
 /* ------------------------------------------------------------------ */
 /* PingerDialog -- tell about us                                      */
 /* ------------------------------------------------------------------ */
@@ -693,7 +686,7 @@ class PingerDialog extends Dialog adapter implements WindowListener
 
    -- Add some text, etc.  Any graphics allowed, here.
    if form=ABOUT then do
-     secs=int Date().getTime//7000
+     secs=int java.util.Date().getTime//7000
      d.setColor(Color.getHSBColor(secs/6999, 1, 0.5))
      d.drawString("Simple 'Pinger' application",  20, y+h)
      d.drawString("For the NetRexx source, see:", 20, y+h*2)

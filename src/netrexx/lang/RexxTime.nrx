@@ -17,8 +17,10 @@ package netrexx.lang
 /* 01.01.2021: rvj redid all of date, based on Rexx ANSI/ISO/INCITS standard  */
 /* 09.01.2021: rvj redid time'E' and time'R'                                  */
 /* 15.01.2021: rvj added date('C') following a recipe by Walter Pachl         */
+/* 03.11.2022: MRE make unexposed methods private                             */
+/* 18.11.2022: rvj add casing variants of some public methods                 */
 
-options decimal nobinary nostrictcase
+options decimal nobinary strictcase nostrictargs
 --trace results
 
 -- note: digits 18 absolutely needed
@@ -34,7 +36,18 @@ class RexxTime public
   WeekDays=Rexx 'Monday Tuesday Wednesday Thursday Friday Saturday Sunday'
   starttime = 0 
   
-  method RexxTime()
+  method RexxTime() 
+
+  method time(opt=char) public static returns Rexx
+    opt_=Rexx(opt)
+    return time(opt)
+
+  method Time(opt=char) public static returns Rexx
+    opt_=Rexx(opt)
+    return time(opt_)
+    
+  method Time(opt_=Rexx ' ') public static returns Rexx
+    return time(opt_)
     
   method time(opt=Rexx ' ') public static returns Rexx
     dts=java.time.LocalDateTime.now()
@@ -96,7 +109,7 @@ class RexxTime public
     end /* select */
 
 
-  method timeFormatC(ihh,nn) static
+  method timeFormatC(ihh,nn) static private
     xx='am'
     if ihh>12 then
       do
@@ -110,12 +123,12 @@ class RexxTime public
 
 
     -- here starts the date part
-  method Leap(yeara) static returns Rexx
+  method Leap(yeara) static private returns Rexx
     if yeara // 400 = 0 then return 1
     if (yeara // 4 = 0) & (yeara // 100 <> 0) then return 1
     return 0
 
-  method Time2Date(microseconds) static
+  method Time2Date(microseconds) static private
     /* These are checks on the range of the date. */
     if microseconds < 0 then
       return 'Bad'
@@ -123,7 +136,7 @@ class RexxTime public
       return 'Bad'
     return Time2Date2(microseconds)
     
-  method Time2Date2(microseconds) static
+  method Time2Date2(microseconds) static private
     /*  Convert a timestamp to a date.
        Argument is a timestamp (the number of microseconds relative to
        0001 01 01 00:00:00.000000)
@@ -166,10 +179,16 @@ class RexxTime public
       Day = Day - ThisMonth
     end
     return Year Month Day Hour Minute Second Microsecond BaseDays YearDays
+
+  method date() static
+    return nativeDate()
     
   method Date() static
     return nativeDate()
 
+  method date(Option) static
+    return Date(Option)
+    
   method Date(Option) static
     Option=Option.left(1).upper()
     BaseDays = Date('B',nativeDate())
@@ -178,7 +197,10 @@ class RexxTime public
     else OutSeparator = Option.translate("xx/x //x","BDEMNOUW")
     return DateFormat(Micro,Option,OutSeparator)
     
-  method Date(Option, inDate, InOption="", arg4='', arg5='') static
+  method date(Option, inDate, InOption="", arg4='', arg5='') static 
+    return Date(Option, inDate, InOption="", arg4='', arg5='')
+    
+  method Date(Option, inDate, InOption="", arg4='', arg5='') static 
     Option=Option.left(1).upper()
     /* if Inoption is not set, it will be N */
     if InOption <> '' then
@@ -252,7 +274,7 @@ class RexxTime public
 	 end
        if Logic = 'EOU' then do
 	 /* The century is assumed, on the basis of the current year. */
-	 if YY.dataType('W')=0 then return ''
+	 if YY.datatype('W')=0 then return ''
 	 YearNow = Date('S').left(4)
 	 Year = YY
 	 loop while Year < YearNow-50
@@ -262,7 +284,7 @@ class RexxTime public
        
        if Logic <> 'BD' then do
 	 /* Convert Month & Day to Days of year. */
-	 if Month.dataType('W')=0 | Day.dataType('W')=0 | Year.dataType('W')=0 then return ''
+	 if Month.datatype('W')=0 | Day.datatype('W')=0 | Year.datatype('W')=0 then return ''
 	 Days = '0 31 59 90 120 151 181 212 243 273 304 334'.word(Month) + (Month>2)*Leap(Year) + Day-1
        end
        else
@@ -300,14 +322,14 @@ class RexxTime public
 	 Micro = BaseDays * 86400 * 1000000
 	 return DateFormat(Micro,Option,OutSeparator)
 	 
-  method nativeDate() static
+  method nativeDate() static private
     cal=GregorianCalendar()
     dd=Rexx(cal.get(Calendar.DAY_OF_MONTH))
     mm=cal.get(Calendar.MONTH) + 1
     yyyy=cal.get(Calendar.YEAR)
     return dd.right(2,'0') months3.word(mm) yyyy
 
-  method DateFormat(x, format, delimiter='') static
+  method DateFormat(x, format, delimiter='') static private
     /* Convert from microseconds to given format and separator. */
     x = Time2Date(x)
     if x='Bad' then return 'Bad'
@@ -345,13 +367,13 @@ class RexxTime public
 	   Year.right(4,'0')||delimiter||Month.right(2,'0')||delimiter||Day.right(2,'0')
       when format = 'U' then return -
 	   Month.right(2,'0')||delimiter||Day.right(2,'0')||delimiter||Year.right(2,'0')
-      when format = 'W' then return Weekdays.word(1+Base//7)
+      when format = 'W' then return WeekDays.word(1+Base//7)
       otherwise
 	return 'Unknown Date option'
     end
 
 
-  method main(args=String[]) static
+  method main(args=String[]) static private
     numeric digits 18
     say DateFormat(737791*86400*1000000,'B')
     say DateFormat(737791*86400*1000000,'E','/')

@@ -31,6 +31,7 @@
 /* 2021.01.15 Add curaddress, last known ADDRESS --MRE                */
 /* 2022.03.24 Use RexxStream, RexxDate in scripting mode --MRE        */
 /* 2022.04.01 Use RexxRexx in scripting mode --RVJ                    */
+/* 2022.11.03 Implicit uses of RexxDate, RexxStream and RexxRexx --MRE*/
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -531,10 +532,47 @@ class RxClass implements RxClauseParser
     if \iss then signal RxQuit(rxt, imptok, 'internal.error', 'RxClass: hierarchy 2')
     end impcheck
 
+--trace results
+-- MRE add implicit 'default' uses
+    if rxt.program.flag.implicituses then do label defaultuses
+      if rxt.program.flag.diag then say '# default uses RexxDate, RexxStream, RexxRexx' 
+
+      add = Rexx ''
+      add['RexxDate']   = 1
+      add['RexxStream'] = 1
+      add['RexxRexx']   = 1
+
+      -- don't add twice when user 'uses'
+      count=uselist.size()
+      loop index=0 for count
+        name=Rexx uselist.elementAt(index)
+        if name == Rexx 'RexxDate'   then add['RexxDate']   = 0  
+        if name == Rexx 'RexxStream' then add['RexxStream'] = 0  
+        if name == Rexx 'RexxRexx'   then add['RexxRexx']   = 0  
+      end  
+      -- don't use self
+      if classname == Rexx 'netrexx.lang.RexxDate'   then add['RexxDate']   = 0
+      if classname == Rexx 'netrexx.lang.RexxStream' then add['RexxStream'] = 0  
+      if classname == Rexx 'netrexx.lang.RexxRexx'   then add['RexxRexx']   = 0  
+
+      -- add 'default' uses
+      if add['RexxDate'] then do 
+        uselist.addElement(Rexx 'RexxDate')
+        usetoks.addElement(null)
+      end
+      if add['RexxStream'] then do  
+        uselist.addElement(Rexx 'RexxStream')
+        usetoks.addElement(null)
+      end
+      if add['RexxRexx'] then do
+        uselist.addElement(Rexx 'RexxRexx')
+        usetoks.addElement(null)
+      end
+    end defaultuses
   /* --- uses list --- */
   if uselist.size()>0 then do label usecheck
     /* Build up array of Infos for the classes, checking as we go */
-    count=uselist.size()
+    count=uselist.size() 
     infolist=RxClassInfo[count]              -- this will go, later
     loop index=0 for count
       name=Rexx   uselist.elementAt(index)
@@ -845,7 +883,7 @@ class RxClass implements RxClauseParser
      classinfo.superinfo=objectinfo
     classinfo.ispublic=1
     classinfo.localclass=this                -- back link
-
+/*  
     infolist=RxClassInfo[3]  
     info=checkclass('RexxDate', null)             -- get the classinfo
     infolist[0]=info
@@ -856,7 +894,7 @@ class RxClass implements RxClauseParser
  
     classusei=infolist
     if rxt.program.flag.diag then say '# default scripting uses RexxDate, RexxStream, RexxRexx' 
-
+*/
     end
   beginclass2(pass)
 
@@ -1290,7 +1328,16 @@ class RxClass implements RxClauseParser
     */
  method checkclass(name=Rexx, tok=RxToken) private returns RxClassInfo
   info=classer.findanyclass(parser.cursor, name, tok)
-  if info=null then signal RxQuit(rxt, tok, 'class.not.found', name)
+   if info=null then do
+     if rxt.deps then do
+       say pcursor.curprogram.programname 'dep' name 'missing'
+       exit
+     end
+     signal RxQuit(rxt, tok, 'class.not.found', name)
+   end -- if info
+   if rxt.deps then do
+     say pcursor.curprogram.programname 'dep found' info
+   end
   return info
 
   method setAnnotation(a)

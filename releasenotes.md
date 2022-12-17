@@ -1,14 +1,26 @@
-# NetRexx 4.05 alpha [28 Sep 2022]
+# NetRexx 4.05 alpha [10 Nov 2022]
+
+## Project
+- an ant build.xml (in examples) to build an Android .apk for the NetRexx translator (Jason Martin)
+
+## Language
+- a new option -deps to list dependencies
+- tools to assist build systems, like ninja build
+- a new option -noimplicituses to avoid automatic addition of Classic Rexx compatible classes to 'uses' -see below
+
 
 ## Fixes
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
   could look for a shell that was not there (Marc Remes)
 - the sqlselect stage has an exception message protected against nullpointers from a failing JDBC driver
 - #33: fix interpreter handling constant properties
-- #35: Rexx date now standard in scripting mode; adapted qtime.nrx
-- #40: detect unreachable code
-- #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending
-
+- #35: Rexx date() now standard in all modes (scripting mode and standard mode) -noimplicituses option for breakage
+- adapted qtime.nrx example for #35 (Rene Jansen)
+- #40: detect unreachable code (Marc Remes)
+- #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending (Rene Jansen)
+- #42 A settings.history=off property in nrws.properties can be used to avoid writing a nrws.history file (Rene Jansen)
+- when interpreting, wait for all threads to complete after main() returned.
+- better diagnostics on failed clgMain (compile-load-go) dynamic compiles, e.g. for pipes and their stage exits
 
 # NetRexx 4.04 GA [12 Sep 2022]
 

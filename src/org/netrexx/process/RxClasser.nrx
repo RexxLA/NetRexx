@@ -2053,15 +2053,23 @@ end exact
     Arg3 is token where to report error
     If not found, entries in the impinfos array may be null.
     */
- method findimps(cursor=RxCursor, info=RxClassInfo, tok=RxToken)
-  if info.impnames=null then count=0
-                        else count=info.impnames.length
-  implist=RxClassInfo[count]
-  loop i=0 for count
-    implist[i]=findclass(cursor, info.impnames[i], tok, 0)
-    if implist[i]=null then
+  method findimps(cursor=RxCursor, info=RxClassInfo, tok=RxToken)
+    if info.impnames=null then count=0
+    else count=info.impnames.length
+    implist=RxClassInfo[count]
+    loop i=0 for count
+      implist[i]=findclass(cursor, info.impnames[i], tok, 0)
+      if implist[i]=null then do
+	if rxt.deps then do
+	  say info.impnames[i] 'dep' info.impnames[i] 'interface missing'
+	end
       signal RxQuit(rxt, tok, 'class.not.found', info.impnames[i])
-    end i
+      end
+      else if rxt.deps then do
+	say  info.impnames[i] 'dep found' info
+      end
+    end i -- loop i
+  
   info.impinfos=implist       -- now use this list
   info.impnames=null          -- finished with the old one
 

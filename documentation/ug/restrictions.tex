@@ -1,5 +1,10 @@
 \chapter{Current Restrictions}\label{restrictions}
-This chapter lists the restrictions for the current release. Please note that the presence of an item in this section is not a commitment to remove a restriction in some future update; \nr{} enhancements are dependent on on-going research, your feedback, and available resources. You should treat this list as a “wish-list” (and please send in your wishes, preferable as an RFE on the \url{http://sourceforge.net/projects/netrexx} website). 
+This chapter lists the restrictions for the current release. Please
+note that the presence of an item in this section is not a commitment
+to remove a restriction in some future update; \nr{} enhancements are
+dependent on on-going research, your feedback, and available
+resources. You should treat this list as a “wish-list” (and please
+send in your wishes, preferable as an RFE\footnote{Request For Enhancement} on the \url{https://github.com/RexxLA/NetRexx/issues} page). 
 \section{General restrictions}
 \begin{enumerate}
 \item The translator requires that Java  \minimalJVMversion{} or later be installed. It is tested up to JDK \maximalJVMversion{}.
@@ -22,14 +27,14 @@ also be explicitly imported, or javac will report that the class cannot be found
 Interpreting Java-based programs is complex, and is constrained by various security issues and the architecture of the Java Virtual Machine. As a result, the following restrictions apply; these will not affect most uses of the interpreter. 
 \begin{enumerate}
 \item Certain “built-in” Java classes\footnote{notably java.lang.Object, java.lang.String, and java.lang.Throwable} are constrained by the JVM in that they are assumed to be pre-loaded. An attempt to interpret them is allowed, but will cause the later loading of any other classes to fail with a class cast exception. 
-Interpreted classes have a stub which is loaded by a private class loader. This means that they will usually not be visible to external (non-interpreted) classes which attempt to find them explicitly using reflection, Class.forName(), etc. Instead, these calls may find compiled versions of the classes from the classpath. Therefore, to find the “live” classes being interpreted, use the \nr{}A interpreter API interface (described below). 
-\item An interpreter cannot completely emulate the actions taken by the Java Virtual Machine as it closes down. Therefore, special rules are followed to determine when an application is assumed to have ended when interpreting (that is, when any of –exec, –arg, or –noarg is specified): 
-\item If the application being interpreted invokes the exit method of the java.lang.System class, the run ends immediately (even if –prompt was specified). The call cannot be intercepted by the interpreter, and is assumed to be an explicit request by the application to terminate the process and release all resources. 
+Interpreted classes have a stub which is loaded by a private class loader. This means that they will usually not be visible to external (non-interpreted) classes which attempt to find them explicitly using reflection, Class.forName(), etc. Instead, these calls may find compiled versions of the classes from the classpath. Therefore, to find the “live” classes being interpreted, use the \nr{}A interpreter API interface. 
+\item If the application being interpreted invokes the EXIT instruction or exit method of the java.lang.System class, the run ends immediately 
+(even if –prompt was specified). The call cannot be intercepted by the interpreter, and is assumed to be an explicit request by the application to terminate the process and release all resources. 
 In other cases, \nr{}C has to decide when the application ends and hence when to leave \nr{}C (or display the prompt, if –prompt was specified). The following rules apply:
 \begin{enumerate} 
-\item If any of the programs being interpreted contains the \nr{} exit instruction and the application leaves extra user threads active after the main method ends then \nr{}C will wait for an exit instruction to be executed before assuming the application has ended and exiting (or re-prompting). 
-Otherwise (that is, there are no extra threads, or no exit instruction was seen) the application is assumed to have ended as soon as the main method returns and in this case the run ends (or the prompt is shown) immediately. This rule allows a program such as “hello world” to be run after a windowing application (which leaves threads active) without a deadlocked wait. 
-These rules normally “do the right thing”. Applications which create windows may, however, appear to exit prematurely unless they use the \nr{} exit instruction to end their execution, because of the last rule. 
+\item If the application leaves extra user threads active after the main method ends then \nr{}C will wait for an exit instruction to be executed or all threads to complete before assuming the application has ended and exiting (or re-prompting). 
+Otherwise (that is, there are no extra threads) the application is assumed to have ended as soon as the main method returns and in this case the run ends (or the prompt is shown) immediately.
+As such, interpreted programs behave identical to compiled programs. 
 \item Applications which include both thread creation and an exit instruction which is never executed will wait indefinitely and will need to be interrupted by an external “break” request, or equivalent, just as they would if run from compiled classes. 
 \item Interpreting programs which set up their own security managers may prevent correct operation of the interpreter. 
 \end{enumerate}

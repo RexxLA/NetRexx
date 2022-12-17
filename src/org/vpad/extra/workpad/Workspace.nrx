@@ -30,15 +30,15 @@ class Workspace
   currentFileName  = Rexx 'workspace.input'
   currentDirectory = System.getProperty('user.dir')
 
-  settings = Rexx ''                -- workspace settings
+
   synonyms = Rexx ''                -- defined synonyms
 
   properties public static
-
   ANSI_RESET  = '\u001B[0m'
   ANSI_BLUE   = '\u001B[34m'
   ANSI_RED    = '\u001B[31m'  
   ANSI_YELLOW = '\u001B[33m'
+  settings = Rexx ''                -- workspace settings
   
   properties static private
   -- jline things
@@ -142,7 +142,7 @@ class Workspace
 	end
       else
 	do
-	  is = Workspace.class.getResourceAsStream('/src/input/workspace.input')
+	  is = Workspace.class.getResourceAsStream('/src/input/nrws.input')
 	  if is \= null then do
 	    ws.doReadStream(BufferedReader(InputStreamReader(is)), 'I')
 	    is.close()
@@ -153,13 +153,26 @@ class Workspace
       say iox.getMessage()
     end 
     
-  method init static signals IOException
+  method init() static signals IOException
     filter	= FilteringOutputStream(System.out)
     printStream	= PrintStream(filter)
     System.setOut(printStream)
     terminal	= TerminalBuilder.builder().jansi(1).build()
+    do
+      propsFile = FileInputStream(System.getProperty("user.home")System.getProperty("file.separator")'nrws.properties')
+      props = Properties()
+      props.load(propsFile)
+      settings['history']	 = props.getProperty("settings.history", 'on')
+    catch IOException
+    end
     historyFile	= 'nrws.history'
-    reader	= LineReaderBuilder.builder().terminal(terminal).history(DefaultHistory()).variable(LineReader.HISTORY_FILE, historyFile).build()
+    if settings['history'] = 'off' then do
+      reader	= LineReaderBuilder.builder().terminal(terminal).build()
+    end
+    else do
+      reader	= LineReaderBuilder.builder().terminal(terminal).history(DefaultHistory()).variable(LineReader.HISTORY_FILE, historyFile).build()
+    end
+
 
   method getInstance(uid) static returns Workspace
     return Workspace instances.get(uid)
@@ -191,6 +204,7 @@ class Workspace
       settings['prompt'] = props.getProperty("settings.prompt", 'Ready;')
       settings['timer']	 = props.getProperty("settings.timer", 'on')
       settings['quit']	 = props.getProperty("settings.quit", 'unprotected')
+      settings['history']	 = props.getProperty("settings.history", 'on')
       settings['display.depth']	 = 10
       settings['display.level']	 = 4
       settings['history']	 = 'on'
@@ -1766,7 +1780,7 @@ class Workspace
   -- frame management
   method newFrame(f = org.vpad.extra.workpad.Frame)
     if framesTable.get(f.getName()) \= null then do
-      say 'frame' f.getName() 'already exits: new ignored'
+      say 'frame' f.getName() 'already exists: new ignored'
       return
     end
     framesRing.addElement(f)

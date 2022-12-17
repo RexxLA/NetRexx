@@ -63,6 +63,7 @@
 /* 2015.06.11 fix nullpointer message in findjavacompiler -- KK       */
 /* 2019.08.05 add clgMain to compile, load and go for main method rvj */
 /* 2021.01.15 add option to allow ADDRESS instructions -- MRE         */
+/* 2022.11.03 add option for implicit uses -- MRE                     */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -90,6 +91,8 @@ class NetRexxC
   ecj		   = boolean 0               -- prefer ecj compiler if available
   helpreq	   = boolean 0		           -- explicit help request? 2015-05-15 -KK-
   address	   = boolean 1               -- prefer no address processing 2021-01-15 MRE -do prefer rvj 
+  implicituses     = boolean 1               -- prefer implicit uses of RexxDate, RexxStream and RexxRexx --MRE
+  deps             = 0                       -- prefer no dependencies listing
 					     -- next two are set by parseline
   files		   = Vector(10)              -- collects file specifications
   flags		   = Vector(10)              -- collects translator flags
@@ -128,12 +131,18 @@ class NetRexxC
     return main(arg,[String programstring],logfile,classfiles)
 
   /** method compile-load-and-go, no translator messages produced
-     arg is the name of the class of which the main method is called with no args
+   * except when compile fails 
+   * arg is the name of the class of which the main method is called with no args
    */
   method clgMain(arg=Rexx, programstring=String) constant
     if arg==null then arg='tempnm'
     classList = ArrayList()
     rc = main(arg' -nologo -verbose0',[String programstring],null,classList)
+    if rc==2 then do
+      rc = main(arg'',[String programstring],null,classList)
+      say "Compilation failed."
+      exit
+    end
     mapLoader = RxMapClassLoader classList.get(0)
     do
       c = mapLoader.findClass(arg)
@@ -228,6 +237,8 @@ class NetRexxC
     
     translator.setkeeps(keep,keepasjava,classlist,javac,ecj)
     translator.setaddress(address)
+    translator.setimplicituses(implicituses)
+    translator.setdeps(deps)
     
     -- need to set java.class.path property and restore it later
     currentClassPath = System.getProperty("java.class.path")
@@ -556,7 +567,13 @@ class NetRexxC
 	when arglow=='nokeepasjava' then keepasjava=0
 	when arglow=='javac' then do;javac=1;ecj=0;end	-- can't prefer both javac and ecj compiler KK
 	when arglow=='ecj' then do;javac=0;ecj=1;end	-- can't prefer both javac and ecj compiler KK
-when arglow=='noaddress' then do; address=0; end  -- explicitely set address flag to change parser MRE
+	when arglow=='noaddress' then do; address=0; end  -- explicitely set address flag to change parser MRE
+	when arglow=='address' then do; address=1; end    
+	when arglow=='noimplicituses' then do; implicituses=0; end  -- no implicit uses MRE
+	when arglow=='implicituses' then do; implicituses=1; end  
+	when arglow=='nodeps' then do; deps=0; end  -- no deps listing RVJ
+	when arglow=='deps' then do; deps=1; end  
+	  
 	when arglow=='classpath' | arglow=='cp' then do
    	  a=a+1
    	  if a<arg.length then do
@@ -617,8 +634,10 @@ return
       say '  -compile       -- compile (default; -nocompile implies -keep)'
       say '  -color         -- use color in translator messages'
       say '  -console       -- display messages on console (default)'
+      say '  -deps          -- list dependencies'
       say '  -exec          -- interpret with no argument words'
       say '  -ecj           -- prefer ecj (eclipse) compiler if available'
+      say '  -implicituses  -- use Classic Rexx compatibility option'
       say '  -javac         -- prefer javac compiler if available'
       say '  -keep          -- keep any completed .java file (as xxx.java.keep)'
       say '  -keepasjava    -- keep any completed .java file (as xxx.java)'
