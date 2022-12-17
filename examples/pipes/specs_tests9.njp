@@ -1,0 +1,206 @@
+/* specs_tests9.njp */
+
+/*
+  22/12/12 Jeff Hennick
+*/
+
+/** specs
+            +-STOP--ALLEOF----+ (3)  v-----------------------------------------+
+ >>--SPECs--+-----------------+------+--+-| Group |--------------------------+-+---------><
+            +-STOP-+-ANYEOF-+-+ (3)     +-READ-------------------------------+
+                   +-n------+   (3)     +-READSTOP---------------------------+ (3)
+                                        +-WRITE------------------------------+
+                                        +-SELECT-+-streamnum-+---------------+
+                                        |        +-streamid--+               |
+                                        +-PAD--+-char----+-------------------+
+                                        |      +-hexchar-+                   |
+                                        |      +-BLANK---+                   |
+                                        |      +-SPACE---+                   |
+                                        +-+-WORDSEParator---+--+--char-----+-+  (7)
+                                          +-WS--------------+  +-hexchar---+
+                                          +-FIELDSEparator--+  +-BLANK-----+
+                                          +-FS--------------+  +-TAB-------+
+                                                               +-hexstring-+
+                                                               +-qword-----+    (4)(6)
+
+Group:
+ |--| Input |--| Conversion |--| Output |--| Alignment |--|
+
+Input:
+ |--+-Words-(1)-wnumberrange----------------------+-------|
+    +-Fields-(1)-fnumberrange---------------------+
+    +-cnumberrange--------------------------------+
+    +-/string/------------------------------------+
+    +-Xhexstring----------------------------------+
+    +-Hhexstring----------------------------------+
+    +-Bbinstring----------------------------------+
+    |            +-FROM--1-------+ +-BY--1-----+  |
+    +-+-RECNO--+-+---------------+-+-----------+--+  (8)(9)
+    | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |
+    +-TODclock------------------------------------+  (3)
+
+Conversion:
+ |-+-------+--+--------------------+------|
+   +-STRIP-+  +-B2C----------------+
+              +-B2X----------------+ (4)
+              +-C2B----------------+
+              +-C2D----------------+
+              +-C2F----------------+ (3)
+              +-C2I----------------+ (3)
+              +-C2P-+------------+-+ (3)
+              |     +-(2)(scale)-+ | (3)
+              +-C2V----------------+ (3)
+              +-C2X----------------+
+              +-D2C----------------+
+              +-D2X----------------+ (4)
+              +-F2C----------------+ (3)
+              +-I2C----------------+ (3)
+              +-P2C-+------------+-+ (3)
+              |     +-(2)(scale)-+ | (3)
+              +-V2C----------------+ (3)
+              +-X2B----------------+ (4)
+              +-X2C----------------+
+              +-X2D----------------+ (4)
+              +-F2T----------------+ (3)
+              +-LOWER--------------+ (4)
+              +-UPPER--------------+ (4)
+              +-STRING-------------+ (4)
+
+Output:
+ |--+-Next-+-------+-------+--|
+    |      +-(2).n-+       |
+    +-NEXTWord-+-+-------+-+
+    +-NWord----+ +-(2).n-+ |
+    +-collumnrange---------+
+
+Alignment:
+ |--+--------+--|
+    +-Left---+
+    +-Center-+
+    +-Right--+
+
+Notes:
+ (1) Blanks are optional in this position.
+ (2) Blanks are not allowed here.
+ (3) CMS only. Not yet implemented in njpipes
+ (4) Njpipes only. Not yet implemented in CMS
+ (5) READ is giving the same output as READSTOP when
+     the streams are different length.
+ (6) A Qword is an optionally quoted word, with single or double marks.
+     If it contains spaces or begins with a quote mark, it must be quoted.
+     It can not begin with a space (the quote mark will be considered
+     a single character, and rest jibberish).
+     If is unquoted and an even number of hexadecimal characters,
+     it will be used as a hexchar or hexstring.
+ (7) NetRexx Pipelines ONLY: a single quote character is NOT allowed,
+     use "'" or '"' as appropriate.
+ (8) CMS can have multiple independent RECNOs, NetRexx uses only one per stage.
+ (9) CMS Pipelines, without documenting it, places this right by defualt
+     NetRexx Pipelines follows the documentation and places this left by defualt.
+     Specify the alignment you want to override these defaults.
+(10) CMS has a mini-programming language built in. NetRexx does not.
+
+**/
+
+pipe (specs_tests9)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+-- specs simple word?
+   literal one two three four |
+   specs w2 1 |
+   c1: compare any ~2# 1 specs simple word ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c1: ?
+
+-- specs wordseparator ?
+   literal one@two@three@four |
+   specs wordseparator @ w2 1 |
+   c2: compare any ~2# 2 specs wordseparator ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c2: ?
+
+-- specs wordsep ?
+   literal one@two@three@four |
+   specs wordsep @ w2 1 |
+   c3: compare any ~2# 3 specs wordsep ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c3: ?
+
+-- specs ws ?
+   literal one@two@three@four |
+   specs ws @ w2 1 |
+   c4: compare any ~2# 4 specs ws ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c4: ?
+
+-- specs wordseparator multichar?
+   literal one@#two@#three@#four |
+   specs wordseparator @# w2 1 |
+   c5: compare any ~2# 5 specs wordseparator multichar ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c5: ?
+
+-- specs wordseparator multichar multiseps?
+   literal @#one@#@#@#two@#@#three@#four |
+   specs wordseparator @# w2 1 |
+   c6: compare any ~2# 6 specs wordseparator multichar multiseps~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c6: ?
+
+-- specs fieldseparator ?
+   literal one@two@three@four |
+   specs fieldseparator @ f2 1 |
+   c7: compare any ~2# 7 specs fieldseparator ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c7: ?
+
+-- specs fieldse ?
+   literal one@two@three@four |
+   specs fieldse @ f2 1 |
+   c8: compare any ~2# 8 specs fieldse ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c8: ?
+
+-- specs fs ?
+   literal one@two@three@four |
+   specs fs @ f2 1 |
+   c9: compare any ~2# 9 specs fs ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c9: ?
+
+-- specs fieldseparator multichar?
+   literal one@#two@#three@#four |
+   specs fieldseparator @# f2 1 |
+   c10: compare any ~2#10 specs fieldseparator multichar ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c10: ?
+
+-- specs fieldseparator multichar multiseps?
+   literal @#one@#@#@#two@#@#three@#four |
+   specs fieldseparator @# f5 1 |
+   c11: compare any ~2#11 specs fieldseparator multichar multiseps~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two |
+   c11: ?
+
+-- specs multi fieldseparator multichar multiseps?
+   literal $@#$one$@#@#@#two@#@#$three$@#four |
+   specs fieldseparator @# f5 1 fieldseparator $ f5 nw |
+   c12: compare any ~2#12 specs multi fieldseparator multichar multiseps~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal two three |
+   c12: ?
