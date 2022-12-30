@@ -1,6 +1,6 @@
 -- spec
 /*
- *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 1997-2011 Ed Tomlinson, 2020-2022 RexxLA
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -9,13 +9,17 @@
  */
 
 /*
- 20/ 7/18 Fix for partial extra output with multiple input streams.
- 20/03/28 Added FIRST and SECOND; CENTRE
- 20/03/26 various range specifiers; major fix for backward ABBREVs
- 20/03/17 B2c, D2c, TODclock added.
- 20/02/20 Hexidecimal & Binary handling.
+ 22/12/15 Fix X2C. READ works, READSTOP does not. Jeff Hennick
+ 22/12/01 Major update in handling of multiple input streams. Jeff Hennick
+ 22/11/ 3 Adding Fields and Separators. Jeff Hennick
+ 22/ 7/ 4 Clarify RECNO positioning vs. CMS. Jeff Hennick
+ 20/ 7/18 Fix for partial extra output with multiple input streams. Jeff Hennick
+ 20/03/28 Added FIRST and SECOND; CENTRE Jeff Hennick
+ 20/03/26 various range specifiers; major fix for backward ABBREVs Jeff Hennick
+ 20/03/17 B2c, D2c, TODclock added. Jeff Hennick
+ 20/02/20 Hexidecimal & Binary handling. Jeff Hennick
  20/02/19 NUMBER, Alignment abbreviations; space optional on words & fields; additional tests on option names. Jeff Hennick
- 20/02/18 rename to spec for abbreviated name
+ 20/02/18 rename to spec for abbreviated name Jeff Hennick
  20/02/18 Can be used as a Driver stage, first in pipe. C2D, C2X, X2C, RECNO added. Jeff Hennick
  20/02/17 X,H, & Bstrings; Fix PAD; Documentation. Jeff Hennick
  20/02/14 Added NW for Nextword; pad: hexchar, BLANK, SPACE. Jeff Hennick
@@ -26,45 +30,44 @@
  98/07/17 fix pad operations, output next.n was inserting a space.  EJT
 */
 
-/** spec
-            +-STOP--ALLEOF----+ (3)  v----------------------------------------+
- >>--SPECs--+-----------------+------+--+-| Group |-------------------------+-+-----------><
-            +-STOP-+-ANYEOF-+-+ (3)     +-READ------------------------------+ (5)
-                   +-n------+   (3)     +-READSTOP--------------------------+
-                                        +-WRITE-----------------------------+
-                                        +-SELECT-+-streamnum-+--------------+
-                                        |        +-streamid--+              |  (3)
-                                        |        +-FIRST-----+              |
-                                        |        +-SECOND----+              |
-                                        +-PAD--+-char----+------------------+
-                                        |      +-hexchar-+                  |
-                                        |      +-BLANK---+                  |
-                                        |      +-SPACE---+                  |
-                                        +-+-WORDSEParator---+--+--char---+--+  (3)
-                                          +-WS------------- +  +-hexchar-+     (3)
-                                          +-FIELDSEparator- +  +-BLANK---+     (3)
-                                          +-FS------------- +  +-SPACE---+     (3)
+/** specs
+            +-STOP--ALLEOF----+ (3)  v-----------------------------------------+
+ >>--SPECs--+-----------------+------+--+-| Group |--------------------------+-+---------><
+            +-STOP-+-ANYEOF-+-+ (3)     +-READ-------------------------------+
+                   +-n------+   (3)     +-READSTOP---------------------------+ (3)
+                                        +-WRITE------------------------------+
+                                        +-SELECT-+-streamnum-+---------------+
+                                        |        +-streamid--+               |
+                                        +-PAD--+-char----+-------------------+
+                                        |      +-hexchar-+                   |
+                                        |      +-BLANK---+                   |
+                                        |      +-SPACE---+                   |
+                                        +-+-WORDSEParator---+--+--char-----+-+  (7)
+                                          +-WS--------------+  +-hexchar---+
+                                          +-FIELDSEparator--+  +-BLANK-----+
+                                          +-FS--------------+  +-TAB-------+
+                                                               +-hexstring-+
+                                                               +-qword-----+    (4)(6)
 
 Group:
  |--| Input |--| Conversion |--| Output |--| Alignment |--|
 
 Input:
  |--+-Words-(1)-wnumberrange----------------------+-------|
-    +-Fields-(1)-fnumberrange---------------------+  (3)
+    +-Fields-(1)-fnumberrange---------------------+
     +-cnumberrange--------------------------------+
     +-/string/------------------------------------+
     +-Xhexstring----------------------------------+
     +-Hhexstring----------------------------------+
     +-Bbinstring----------------------------------+
     |            +-FROM--1-------+ +-BY--1-----+  |
-    +-+-RECNO--+-+---------------+-+-----------+--+
+    +-+-RECNO--+-+---------------+-+-----------+--+  (8)(9)
     | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |
-    +-TODclock------------------------------------+
+    +-TODclock------------------------------------+  (3)
 
 Conversion:
  |-+-------+--+--------------------+------|
    +-STRIP-+  +-B2C----------------+
-              +-B2D----------------+ (4)
               +-B2X----------------+ (4)
               +-C2B----------------+
               +-C2D----------------+
@@ -84,7 +87,7 @@ Conversion:
               +-X2B----------------+ (4)
               +-X2C----------------+
               +-X2D----------------+ (4)
-              +-f2t----------------+
+              +-F2T----------------+ (3)
               +-LOWER--------------+ (4)
               +-UPPER--------------+ (4)
               +-STRING-------------+ (4)
@@ -100,23 +103,30 @@ Alignment:
  |--+--------+--|
     +-Left---+
     +-Center-+
-    +-Centre-+
     +-Right--+
-
-Ranges (cnumberrange, fnumberrange (3), wnumberrange):
- |--+-snumber-+--(2)--+-------------------------+--|
-    +---*-----+       +--.-----(2)----number----+
-                      +- - -+--(2)--+-snumber-+-+
-                      +--;--+       +---*-----+
 
 Notes:
  (1) Blanks are optional in this position.
  (2) Blanks are not allowed here.
  (3) CMS only. Not yet implemented in njpipes
  (4) Njpipes only. Not yet implemented in CMS
- (5) READ is giving the same output as READSTOP when the streams are different length.
- [6] This senses if it is the first stage, but comment stages will fool it into not
-     producing any output.
+ (5) READ is giving the same output as READSTOP when
+     the streams are different length.
+ (6) A Qword is an optionally quoted word, with single or double marks.
+     If it contains spaces or begins with a quote mark, it must be quoted.
+     It can not begin with a space (the quote mark will be considered
+     a single character, and rest jibberish).
+     If is unquoted and an even number of hexadecimal characters,
+     it will be used as a hexchar or hexstring.
+ (7) NetRexx Pipelines ONLY: a single quote character is NOT allowed,
+     use "'" or '"' as appropriate.
+ (8) CMS can have multiple independent RECNOs, NetRexx uses only one per stage.
+ (9) CMS Pipelines, without documenting it, places this right by defualt
+     NetRexx Pipelines follows the documentation and places this left by defualt.
+     Specify the alignment you want to override these defaults.
+(10) CMS has a mini-programming language built in. It uses Field Identifiers and Control Breaks,
+     Counters, and Structured Data.
+     <br>NetRexx does not yet have any of these.</li>
 
 **/
 
@@ -134,12 +144,14 @@ class spec extends stage
     exit(rc)
 
 
+  method stageExit(pInfo=Rexx,code=Rexx) returns boolean signals StageError
+
     /*
      * pInfo    = name of pipe,
      * pInfo[1] = stage number in pipe
      * pInfo[2] = stage label, null if no label
      * pInfo[3] = stage name
-     * pInfo[4] = stage arguements
+     * pInfo[4] = stage arguments
      * pInfo[5] = rest of pipe
      * pInfo[6] = sep
      * pInfo[7] = end
@@ -152,14 +164,12 @@ class spec extends stage
      *
      * pInfo[2] = stage label
      * pInfo[3] = name of stage
-     * pInfo[4] = stage arguements
+     * pInfo[4] = stage arguments
      * pInfo[5] = rest of the pipe
      * code[0]  = number of lines generated
-     * code[n]  = line n
+     * code[n]  = line n of lines generated
      *
      */
-
-  method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
 
     pid  = pInfo
     name = pInfo[3]
@@ -168,31 +178,31 @@ class spec extends stage
     if pInfo[8] then
       signal StageError(13,'Error (specs) - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
 
-    n   = o[0]          -- we update this stem and return it
-    p   = rexx 0        -- true if a peek has been done
-    s   = rexx '0'      -- the currently selected stream
-    pr  = rexx 0        -- peakto required flag
-    pad = rexx ' '      -- default pad char
-    recnoline = rexx 0
-    todline = rexx 0
+    n   = Rexx 0
+    p   = Rexx 0        -- true if a peek has been done
+    s   = Rexx '0'      -- the currently selected stream, "S" for Second Read Station
+    pr  = Rexx 0        -- peakto required flag
+    pad = Rexx ' '      -- default pad char
+    recnoline = Rexx 0
 
-    x = rexx
-    y = rexx
+    x = Rexx
+    y = Rexx
 
     cname = stageName(name,pid,pInfo[1])
-    o[n+1] ='class 'cname' extends stage private'
-    o[n+2] ='--trace results'
-    o[n+3]='method run()'
-    o[n+4]="-- reserved for 'recno'"
-    recnoline = n+4
-    o[n+5]="-- reserved for 'tod'"
-    todline = n+5
-    o[n+7]='   data = Rexx ""'
-    o[n+8]='   previous = Rexx ""; previous = previous'
-    n = n+8
+    n=n+1;code[n] ='class 'cname' extends stage private'
+    n=n+1;code[n] ='-- trace results'
+    n=n+1;code[n] ='safespace = Rexx ""'
+    n=n+1;code[n] ='safesep = Rexx ""'
+    n=n+1;code[n] ='records = Rexx ""' -- Array of inputs indexed by stream, -1 is the previous 0.
+    n=n+1;code[n] ='record  = Rexx ""' -- The currently selected records[].
+    n=n+1;code[n]='method run()'
+    n=n+1;code[n]="-- reserved for 'recno'"
+    recnoline = n
+    n=n+1;code[n]="-- reserved for 'tod'"
+    n=n+1;code[n]='   data = Rexx ""'
 
-    cnts    = rexx 1    -- figure out how many stream we are going to use
-    flgs    = rexx 1
+    cnts    = Rexx 1    -- count of how many streams we are going to use
+    flgs    = Rexx 1
     flgs[0] = 0
 
     parse b 'select' sn work
@@ -205,35 +215,41 @@ class spec extends stage
     end
     all = cnts          -- default to 'stop alleof' to end on all streams at eof
 
-    o[n+1]='   outp = rexx ""'
-    o[n+2]='   eoff = rexx 1; eoff = eoff'
-    o[n+3]='   eoff["s"] = 0'
-    o[n+4]='   eofc = rexx 0'
+    n=n+1;code[n] = '   reqcon =' cnts -- set the required connections to all, the number we stated with
+    n=n+1;code[n] = '   outp = Rexx ""'
+    n=n+1;code[n] = '   eoff = Rexx 1; eoff = eoff'
+    n=n+1;code[n] = '   eofc = Rexx 0; eofc = eofc'
     if pInfo[9] then do  -- driver stage
-      o[n+3]=''
-      o[n+4]=''
+      n=n+1;code[n] = ''
+      n=n+1;code[n] = ''
     end
-    o[n+5]='   read = boolean 1'
-    o[n+7]='   loop label body while read'
-    o[n+9] = '      read = 0'
-    o[n+10] = '      noread = 0'
-    n = n+11
+    n=n+1;code[n] = '   read = boolean 1'
+    n=n+1;code[n] = '   inselect = 0; inselect = inselect'
+    n=n+1;code[n] = '   data = Rexx ""'
+    n=n+1;code[n] = '   loop label body loopcount = 1 while read -- 239'
+    n=n+1;code[n] = '      read = 0'
 
+    if b.word(1)<>'select' then     -- start with standard input
+      b = 'select 0' b
     if b.word(b.words())<>'write' then     -- and end with a write
       b = b' write'
 
-    parse b t b 1 ob
-                                -- prime loop
+    ob = b
+    parse b t b
+
+    firstpass = 1
+
+    wsep = ' '    -- Blank                          -- WordSeparator
+    fsep = '\t'   -- Tab                            -- FieldSeperator
+
     loop label body while t<>''
 
-      -- process stop / pad / read / readstop / select / write
+      -- process options
 
       loop label options forever
-
         select
-
           when t='stop' then do
-            parse b t b 1 ob
+            parse b t b
             select
               when t='alleof' then
                 all = cnts
@@ -250,7 +266,7 @@ class spec extends stage
           end
 
           when t='pad' then do
-            parse b t b 1 ob
+            parse b t b
             select
                when t.length = 1 then nop
                when t.length = 2 & t.datatype('X') then t = t.x2c
@@ -263,207 +279,176 @@ class spec extends stage
             iterate options
           end
 
-          when t='select' then do
-            parse b t b 1 ob
-            if t.lower = 'second' then do
-              s = 's'
-              o[n+1] = '      ls = previous'
-              n = n+1
-            end
-            else do
-              if t.lower = 'first' then t = 0
-              if \t.datatype('W') then
-                signal StageError(13,'Error (specs) - 'pInfo' - select number must be numeric. found 't)
-              if pr then do
-                o[n+1] = '      do'
-                o[n+2] = '         l's' = Rexx peekto(); l's' = l's
-                o[n+3] = '         read = 1'
-                o[n+4] = '      catch StageError'
-                o[n+5] = '         rc = rc()'
-                o[n+6] = '         eofc = eofc+eoff['s']'
-                o[n+7] = '         eoff['s'] = 0'
-                o[n+8] = '         if eofc>='all' then do'
-                  o[n+9] = '            if outp<>"" then'
-                  o[n+10]= '               if \\noread then output(outp)'
-                  o[n+11]= '            leave body'
-                  o[n+12]= '         end'
-                  o[n+13]= '         l's' = ""'
-                  o[n+14]= '         noread = 1'
-                  o[n+15]= '      end'
-                  n = n+16
-                  p[s] = 1
-                  pr = 0
-              end
-              o[n+1] = '      do'
-              o[n+2] = '         selectInput('t')'
-              o[n+3] = '      catch StageError'
-              o[n+4] = '         rc = rc()'
-              o[n+5] = '         noread = 1'
-              o[n+6] = '      end'
-              n = n+7
-              pr = 1
-              s = t
-            end
-          end
-
           when t='read' then do
-            -- This is giving the same result as READSTOP when the streams are differnt length.
-            if s\='s' & s<0 then
-              s = 0
-            o[n+1] = '      do'
-            n = n+1
-            if p[s] then do
-              o[n+1] = '         readto()'
-              n = n+1
-              o[n+1] = '         previous = l0'
-              n = n+1
-              p[s] = 0
-            end
-            o[n+1] = '         l's' = Rexx peekto(); l's' = l's
-            o[n+2] = '         read = 1'
-            o[n+3] = '      catch StageError'
-            o[n+4] = '         rc = rc()'
-            o[n+5] = '         eofc = eofc+eoff['s']'
-            o[n+6] = '         eoff['s'] = 0'
-            o[n+7] = '         if eofc>='all' then do'
-            o[n+8] = '            if outp<>"" then'
-            o[n+9] = '               if \\noread then output(outp)'
-            o[n+10]= '            leave body'
-            o[n+11]= '         end'
-            o[n+12]= '         l's' = ""'
-            o[n+13]= '         noread = 1'
-            o[n+14]= '      end'
-            n = n+15
-            pr = 0
-            p[s] = 1
+            n=n+1;code[n] = '         selectInput('s')'
+            n=n+1;code[n] = '         readto() -- 323'
+            n=n+1;code[n] = '      do'
+            n=n+1;code[n] = '         record = Rexx peekto() -- 329'
+            n=n+1;code[n] = '      catch StageError'
+            n=n+1;code[n] = '         record = ""'
+            n=n+1;code[n] = '      end'
           end
 
           when t='readstop' then do
-            if s\='s' & s<0 then
-              s = 0
-            o[n+1] = '      do'
-            n = n+1
-            if p[s] then do
-              o[n+1] = '         readto()'
-              n = n+1
-              o[n+1] = '         previous = l0'
-              n = n+1
-              p[s] = 0
-            end
-            o[n+1] = '         l's' = Rexx peekto(); l's' = l's
-            o[n+2] = '         read = 1'
-            o[n+3] = '      catch StageError'
-            o[n+4] = '         rc = rc()'
-            o[n+5] = '         if outp<>"" then'
-            o[n+6] = '            if \\noread then output(outp)'
-            o[n+7] = '         leave body'
-            o[n+8] = '      end'
-            n = n+8
-            pr = 0
-            p[s] = 1
+            signal StageError(13,'Error (specs) - 'pInfo' - READSTOP is not yet supported')
           end
 
           when t='write' then do                 -- write if its required
-            o[n+1] = '      if \\noread then output(outp)'
-            o[n+2] = '      outp = ""'
-            n = n+3
+            n=n+1;code[n] = '      if eofc = 0 then do'
+            n=n+1;code[n] = '        output(outp) --438'
+            n=n+1;code[n] = '        outp = ""'
+            n=n+1;code[n] = '      end'
+
+            n=n+1;code[n] = '      loop stream = 0 for' cnts ' -- 445'
+            n=n+1;code[n] = '        selectInput(stream)'
+            n=n+1;code[n] = '        readto()'
+            n=n+1;code[n] = '      catch StageError'
+            n=n+1;code[n] = '        rc = rc()'
+            n=n+1;code[n] = '      end stream'
+
+            loop i over p                          -- issue readto for peeked streams
+              if p[i] then do
+                n=n+1;code[n] = '      do -- 446'
+                if s<>i  then do
+                  n=n+1;code[n] = '         selectInput('i')'
+                  s = i
+                end
+                n=n+1;code[n] = '         readto() -- 451'
+                n=n+1;code[n] = '      catch StageError'
+                n=n+1;code[n] = '         rc = rc()'
+                n=n+1;code[n] = '      end'
+                p[i] = 0
+              end
+              p["S"] = 0
+            end
           end
-
           otherwise
-            leave options
 
+             /* **** New 6/22 **** */
+           havesep = 0
+
+           nn = getSep(t b, 'WORDSEParator', 7)
+           if nn[0] = 3 then do
+             wsep = nn[1]
+             b = nn[2]
+             havesep = 1
+           end
+
+           nn = getSep(t b, 'WS', 2)
+           if nn[0] = 3 then do
+             wsep = nn[1]
+             b = nn[2]
+             havesep = 1
+           end
+
+           nn = getSep(t b, 'FIELDSEparator', 7)
+           if nn[0] = 3 then do
+             fsep = nn[1]
+             b = nn[2]
+             havesep = 1
+           end
+
+           nn = getSep(t b, 'FS', 2)
+           if nn[0] = 3 then do
+             fsep = nn[1]
+             b = nn[2]
+             havesep = 1
+           end
+             /* **** End new ***** */
+           if \havesep then
+             leave options
         end -- select
 
         if t='write' & b='' then           -- force specs to finish
           leave body
 
- --         ob = b
-          parse b t b 1 ob
+        ob = b
+        parse b t b
 
       end options
 
-      -- wait for a record and peekto it before processing
+      -- wait for a record and peekto it for processing
 
-      if \p[s] & \pInfo[9] & s \= 's' then do
-        o[n+1] = '      do'
-        o[n+2] = '         l's' = Rexx peekto(); l's' = l's
-        o[n+3] = '         read = 1'
-        o[n+4] = '      catch StageError'
-        o[n+5] = '         rc = rc()'
-        o[n+6] = '         eofc = eofc+eoff['s']'
-        o[n+7] = '         eoff['s'] = 0'
-        o[n+8] = '         if eofc>='all' then do'
-          o[n+9] = '            if outp<>"" then'
-          o[n+10]= '               if \\noread then output(outp)'
-          o[n+11]= '            leave body'
-          o[n+12]= '         end'
-          o[n+13]= '         l's' = ""'
-          o[n+14]= '         noread = 1'
-          o[n+14]= '      end'
-        n = n+15
-        pr = 0
-        p[s] = 1
-      end
+    if firstpass then do
+      firstpass = 0
+      n=n+1;code[n] = '      records[-1] = records[0]'
+      n=n+1;code[n] = '      connections = 0'
+                           -- get data from all streams, if disconnected, leave as is
+                           -- when all streams are disconnected exit
+      n=n+1;code[n] = '      rc = 0'
+      n=n+1;code[n] = '      if' cnts '> 1 then loop stream = 0 for' cnts
+      n=n+1;code[n] = '        selectInput(stream)'
+      n=n+1;code[n] = '        records[stream] = Rexx peekto()'
+      n=n+1;code[n] = '        connections = connections + 1'
+      n=n+1;code[n] = '        read = 1'
+      n=n+1;code[n] = '      catch StageError'
+      n=n+1;code[n] = '        rc = rc()'
+      n=n+1;code[n] = '        records[stream] = ""'
+      n=n+1;code[n] = '      end stream'
+      n=n+1;code[n] = '      else do'
+      n=n+1;code[n] = '        connections =' cnts
+      n=n+1;code[n] = '        records[0] = Rexx peekto()'
+      n=n+1;code[n] = '        read = 1'
+      n=n+1;code[n] = '      catch StageError'
+      n=n+1;code[n] = '        rc = rc()'
+      n=n+1;code[n] = '        records[stream] = ""'
+      n=n+1;code[n] = '      end'
+      n=n+1;code[n] = '      if rc <> 0 & connections <= reqcon & loopcount > 1 then do'
+      n=n+1;code[n] = '        if outp<>"" then do'
+      n=n+1;code[n] = '          output(outp)'
+      n=n+1;code[n] = '          outp = ""'
+      n=n+1;code[n] = '        end'
+      n=n+1;code[n] = '        leave body'
+      n=n+1;code[n] = '      end'
+    end
 
       -- process an input range
       type = ''
-      tl = t.lower
-      fc = tl.left(1)
-
-      if tl = 'write' then fc = 's'
+      fc = t.left(1).lower
       select case fc
         when 'w' then do       -- handle word [space] range
           fn = t.verify('-1234567890','M')
           if fn > 0 then do
-            parse tl tl =(fn) num
+            parse t t =(fn) num
             b = num b
           end
-          if \'words'.abbrev(tl,1) then signal StageError(13,'Error (specs) - 't b' - Unrecognized option:' t)
+          if \'words'.lower.abbrev(t) then signal StageError(13,'Error (specs) - Unrecognized option:' t 'In:' t b)
           type = 'w'
-          parse b t b 1 ob
+          parse b t b
           t = 'word't
         end
 
         when 'f' then do       -- handle field [space] range
-          fn = t.verify('1234567890','M')
+          fn = t.verify('-1234567890','M')
           if fn > 0 then do
-            parse tl tl =(fn) num
+            parse t t =(fn) num
             b = num b
           end
-          if \'fields'.abbrev(tl,1) then signal StageError(13,'Error (specs) - 't b' - Unrecognized option:' t)
+          if \'fields'.lower.abbrev(t) then signal StageError(13,'Error (specs) - 't b' - Unrecognized option:' t)
           type = 'f'
-          parse b t b 1 ob
+          parse b t b
           t = 'field't
         end
 
-        when 'x', 'h' then do       -- handle hexidecimal range
+        when 'x', 'h' then do       -- handle hexadecimal range
+
           type = 'a'
           parse t 2 ds
           if \ds.datatype('X') then signal StageError(13,'Error (specs) - 't b' - Invalid hex number ')
-          ret = Rexx ''
-          loop i = 1 to ds.length by 2
-            ret = ret || ds.substr(i,2).x2c
-          end
-          ds = ret
-          parse b t b 1 ob
+          ds = xl2c(ds)
+          parse b t b
         end
 
         when 'b' then do       -- handle binary range
           type = 'a'
           parse t 2 ds
           if \ds.datatype('B') then signal StageError(13,'Error (specs) - 't b' - Invalid binary number ')
-          ret = Rexx ''
-          loop i = 1 to ds.length by 8
-            cc = ds.substr(i,8)
-            cc = cc
-            ret = ret || ds.substr(i,8).b2x.x2c
-          end
-          ds = ret
-          parse b t b 1 ob
+          ds = xl2c(ds.b2x)
+          parse b t b
         end
 
         when 'r', 'n' then do       -- handle recno
-          if " recno number".pos(tl) = 0 then signal StageError(13,'Error (specs) - 't b' - Unrecognized option:' t)
+          if " recno number".pos(t.lower) = 0 then signal StageError(13,'Error (specs) - 't b' - Unrecognized option:' t)
           type = 'r'
           parse b fkey skey r
           fromn = Rexx 1 -- default
@@ -480,13 +465,36 @@ class spec extends stage
           end
           b = r
         end
-        when 't' then do       -- handle timeofday
-          if \'todclock'.abbrev(tl,3) then signal StageError(13,'Error (specs) - 't b' - Unrecognized option:' t '::' tl)
-          type = 't'
+
+        when 's' then do       -- handle select
+          if t <> 'select' then
+            signal StageError(13,'Error (specs) - 't b' - option is not SELECT')
           parse b t b 1 ob
+          select
+            when t = 'first' then t = 0
+            when t = 'second' then t = -1
+            when \t.datatype('W') then
+              signal StageError(13,'Error (specs) - 'pInfo' - select number must be numeric. found 't)
+            when t < -1 | t > all then
+              signal StageError(13,'Error (specs) - 'pInfo' - select number out of range of connected streams. found 't)
+            otherwise
+              nop
+          end
+
+          n=n+1;code[n] = '      record = records['t']'
+          parse b t b 1 ob
+          x = ''
+          y = ''
+
+          iterate
         end
+
+        when 't' then do       -- handle timeofday
+          signal StageError(13,'Error (specs) - 't b' - TODclock option is not yet implemented')
+        end
+
         otherwise
-           if fc.datatype('W') then do
+           if fc.datatype('W') | fc = "-" then do
               type = 'n'
            end
            else do
@@ -494,369 +502,333 @@ class spec extends stage
            end
       end
 
-                        -- make sure we have a range
-      rf = 0
-      tr = Rexx t
-      tl = t.lower
-
-      if type = 'w' then
-        x = tr.substr(5).strip('L')
-      else
-        x = tr.strip('L')
+      rf = 0                    -- make sure we have a range
       select
-        when x.pos(';')>1 then
-          parse x x ';' y
-        when x.pos('.')>1 then
-          parse x x '.' y
-        when x.countstr('-')>1 then do
-          if x.substr(1,1) = '-' then do
-            parse x '-' x '-' y
-            x = -x
+        when type = 'w' then
+          x = t.substr(5).strip('L')
+        when type = 'f' then
+          x = t.substr(6).strip('L')
+        when type = 'l' then
+          nop
+        otherwise
+          x = t.strip('L')
+      end
+      select
+        when 'next'.abbrev(t) then
+          rf = 1
+        when ('nextword'.abbrev(t,5) | 'nword'.abbrev(t,2)) then
+          rf = 1
+        when type = 's' then do
+          dsobj = DString(t b)
+          ds = dsobj.string
+          if ds \== '' then do  -- we have a dstring
+            b = dsobj.residue
+            t = ''
+            rf = 1
+            x = 0
+            y = 0
           end
-          else parse x x '-' y
         end
-        when x.pos('-')>1 then
-          parse x x '-' y
+        when x.pos(';')>1 then do
+          parse x x ';' y
+        end
+        when x.pos('.')>1 then do
+          parse x x '.' y
+        end
+        when x.pos('-', 2)>1 then do
+          if x.left(1) = '-' then do
+            parse x '-' x '-' y
+            x = '-'x
+          end
+          else
+            parse x x '-' y
+        end
+        when type <> 'a' then do
+          y = 1
+          t = t'.1'
+        end
         otherwise
           y = '\n'
       end
       if x='*' then
         x = 1
 
-      rf = x.datatype('W')&(y.datatype('W')|y='*'|y='\n')
-      if \rf then do
-        parse tl th '.'
-        rf = ('next'.abbrev(th,1) | 'nextword'.abbrev(th, 5) | 'nw'.abbrev(th))
+      rf = rf | x.datatype('W')&(y.datatype('W')|y='*'|y='\n')
+
+        /* *** New 6/22 **** */
+      if type = 'w' & wsep \== ' ' then do
+        n=n+1;code[n] = '      record = codew(record, 'wsep')'
       end
 
+      if type = 'f' & fsep \== ' ' then do
+        if fsep = " " then fsep = '"fsep"'
+        n=n+1;code[n] = '      record = codew("E"record,' fsep', 1)'
+      end
+
+      mtype = type = 'w' | type = 'f'
+        /* **** End new ***** */
+
       select
-        when rf & type = 'w' & t.pos('.')>0 then do
+        when rf & mtype & t.pos('.')>0 then do
           if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if y<0 then
-            signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
-          if x=-1 then
-            o[n+1] = "      stpos = l"s".words()"
-          else if x<0 then
-            o[n+1] = "      stpos = l"s".words()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          o[n+1] = '      data = l's'.subword(stpos,'y') -- w.'
-          n = n+1
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
+          if x < 0 then do
+            n=n+1;code[n] = '      x = record.words() +1' x
+          end
+          else do
+            n=n+1;code[n] = '      x = ' x
+          end
+          if y < 0 then do
+            n=n+1;code[n] = '      y = record.words()' y
+          end
+          else do
+            n=n+1;code[n] = '      y = ' y
+          end
+          n=n+1;code[n] = '      data = record.subword(x,y)'
         end
-        when rf & type = 'w' & t.right(2)='-*' then do
+        when rf & mtype & t.right(2)='-*' then do
           if \x.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
           if x<0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
-          o[n+1] = '      data = l's'.subword('x')'
-          n = n+1
+          n=n+1;code[n] = '      data = record.subword('x')'
         end
-        when rf & type = 'w' & t.pos(';')>0 then do
+        when rf & mtype & t.pos(';')>0 then do
           if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if x<0 then
-            o[n+1] = "      stpos = l"s".words()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          if y<0 then
-            o[n+1] = "      len = l"s".words()"y"+2-stpos"
-          else
-            o[n+1] = '      len = 'y'-stpos+1'
-          n = n+1
-          o[n+1] = '      data = l's'.subword(stpos,len) -- w;'
-          n = n+1
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
+          if x < 0 then do
+            n=n+1;code[n] = '      x = record.words() +1' x
+          end
+          else do
+            n=n+1;code[n] = '      x = ' x
+          end
+          if y < 0 then do
+            n=n+1;code[n] = '      y = record.words()' y' + 2 - x'
+          end
+          else do
+            n=n+1;code[n] = '      y = ' y' + 1 - x'
+          end
+          n=n+1;code[n] = '      data = record.subword(x,y)'
         end
-        when rf & type = 'w' & t.substr(6).countstr('-')>1 then do
-          if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if x<0 then
-            o[n+1] = "      stpos = l"s".words()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          if y<0 then
-            o[n+1] = "      len = l"s".words()"y"+2-stpos"
-          else
-            o[n+1] = '      len = 'y'-stpos+1'
-          n = n+1
-          o[n+1] = '      data = l's'.subword(stpos,len) -- -- w'
-          n = n+1
+        when rf & mtype & t.pos('-', 2)>0 & y \= '\n' then do
+          if x < 0 then do
+            n=n+1;code[n] = '      x = record.words() +1' x
+          end
+          else do
+            n=n+1;code[n] = '      x = ' x
+          end
+          if y < 0 then do
+            n=n+1;code[n] = '      y = record.words() 'y' + 2 - x'
+          end
+          else do
+            n=n+1;code[n] = '      y = ' y' +1 - x'
+          end
+          n=n+1;code[n] = '      data = record.subword(x,y)'
         end
-        when rf & type = 'w' & t.pos('-')>0 & y.datatype('W') then do
-          if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if y<0 then
-            signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
-          if x<0 then
-            o[n+1] = "      stpos = l"s".words()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          o[n+1] = '      len = 'y'-stpos+1'
-          n = n+1
-          o[n+1] = '      data = l's'.subword(stpos,len) -- w-'
-          n = n+1
-        end
-        when rf & type = 'w' then do
+        when rf & mtype then do
           if \x.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if x<0 then
-            o[n+1] = "      stpos = l"s".words()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          o[n+1] = '      data = l's'.word(stpos)'
-          n = n+1
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
+          if x < 1 then do
+            n=n+1;code[n] = '      wp = record.words() +1' x
+            n=n+1;code[n] = '      if wp > 0 then data = record.word(wp)'
+            n=n+1;code[n] = '      else data = ""'
+          end
+          else do
+            n=n+1;code[n] = '      data = record.word('x''
+          end
         end
         when rf & t.pos('.')>0 then do
           if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
+          if x < 0 then do
+            n=n+1;code[n] = '      startp = 0.max(record.length() + 'x' + 1)'
+          end
+          else do
+            n=n+1;code[n] = '      startp = 1.max('x')'
+          end
           if y<0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
-          if x<0 then
-            o[n+1] = "      stpos = l"s".length()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          o[n+1] = '      data = l's'.substr(stpos,'y') -- .'
-          n = n+1
+          n=n+1;code[n] = '      endp = 'y
+          n=n+1;code[n] = '      data = record.substr(startp,endp)'
         end
         when rf & t.right(2)='-*' then do
           if \x.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
           if x<0 then
-            o[n+1] = "      stpos = l"s".length()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          o[n+1] = '      data = l's'.substr(stpos) -- -*'
-          n = n+1
+            signal StageError(13,'Error (specs) - 'pInfo' - Invalid range' t)
+          if x = 1 then do
+            n=n+1;code[n] = '      data = record'
+          end
+          else do
+            n=n+1;code[n] = '      data = record.substr('x')'
+          end
         end
         when rf & t.pos(';')>0 then do
           if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if x<0 then
-            o[n+1] = "      stpos = l"s".length()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          if y<0 then
-            o[n+1] = "      len = l"s".length()"y"+1-stpos"
-          else
-            o[n+1] = "      len =" y+1"-stpos"
-          n = n+1
-          o[n+1] = '      data = l's'.substr(stpos,len) -- ;'
-          n = n+1
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
+          if x < 0 then do
+            n=n+1;code[n] = '      startp = 0.max(record.length() + 'x' + 1)'
+          end
+          else do
+            n=n+1;code[n] = '      startp = 1.max('x')'
+          end
+          if y < 0 then do
+            n=n+1;code[n] = '      endp = 0.max(record.length() + 'y' + 1) - startp'
+          end
+          else do
+            n=n+1;code[n] = '      endp = 'y'.min(record.length()) + 1 - startp'
+          end
+          n=n+1;code[n] = '      data = record.substr(startp,endp)'
         end
-        when rf & t.pos('-',2)>0 then do
+        when rf & t.pos('-', 2)>0 then do
           if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if x<0 then
-            o[n+1] = "      stpos = l"s".length()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          if y<0 then
-            o[n+1] = "      len = l"s".length()"y"+1-stpos"
-          else
-            o[n+1] = "      len =" y+1"-stpos"
-          n = n+1
-          o[n+1] = '      data = l's'.substr(stpos,len) -- -'
-          n = n+1
+            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
+          if x < 0 then do
+            n=n+1;code[n] = '      startp = 0.max(record.length() + 'x' + 1)'
+          end
+          else do
+            n=n+1;code[n] = '      startp = 1.max('x')'
+          end
+          if y < 0 then do
+            n=n+1;code[n] = '      endp = 0.max(record.length() + 'y' + 1) - startp'
+          end
+          else do
+            n=n+1;code[n] = '      endp = 'y'.min(record.length()) + 1 - startp'
+          end
+          n=n+1;code[n] = '      data = record.substr(startp,endp)'
         end
-        when rf & t.datatype('W') & type \= 'a' then do
-          if x<0 then
-            o[n+1] = "      stpos = l"s".length()"x+1
-          else
-            o[n+1] = '      stpos =' x
-          n = n+1
-          o[n+1] = '      data = l's'.substr(stpos, 1) -- n'
-          n = n+1
-        end
-        when rf & type = 'a' then do
+        when rf & (type = 'a' | type = 's') then do
           ds = ds.changestr('"','""')
           ds = ds.changestr('\\','\\\\')
-          o[n+1] = '      data = "'ds'"'
-          n = n+1
+          n=n+1;code[n] = '      data = "'ds'"'
           b = t b
         end
         when type = 'r' then do
-          o[recnoline] = "recno=Rexx" fromn";recno_byn=Rexx" byn
-          o[n+1] = '      data = recno.right(10)'
-          n = n+1
-          o[n+1] = '      recno = recno + recno_byn'
-          n = n+1
-        end
-        when rf & type = 't' then do
-          o[todline] = '      todmils = Rexx java.lang.System.currentTimeMillis()'
-          o[n+1] = '      data = todmils.d2b(64)'
-          n = n+1
-          b = t b
+          code[recnoline] = "recno=Rexx" fromn";recno_byn=Rexx" byn
+          n=n+1;code[n] = '      data = recno.right(10)'
+          n=n+1;code[n] = '      recno = recno + recno_byn'
         end
         when rf then
           signal StageError(13,'Error (specs) - 'pInfo' - unreconized range 't)
+        when type = 'a' then do
+            ds = ds.changestr('"','""')
+            ds = ds.changestr('\\','\\\\')
+            n=n+1;code[n] = '      data = "'ds'"'
+        end
+        when t = 'SELECT' then
+          nop
         otherwise do
-          delim = t.left(1)
-          if ob.substr(2).pos(delim)=0 then
+          delim = t.left(1)' '
+          if ob.pos(delim)=0 then
             signal StageError(13,'Error (specs) - 'pInfo' - Missing data selector at 't)
-          parse ob (delim) t (delim) b
+          parse ob 2 t (delim) b
           parse t 'arg(' x ')'
-          if t='arg()' | x.datatype('W') then
-            o[n+1] = "      data = "t
+          if t='arg()' | x.datatype('W') then do
+            n=n+1;code[n] = "      data = "t
+          end
           else do
             t = t.changestr('"','""')
             t = t.changestr('\\','\\\\')
-            o[n+1] = "      data = '"t"'"
+            n=n+1;code[n] = "      data = '"t"'"
           end
-          n = n+1
       end
     end
 
+         /* ***** New 6/22 ***** */
+    if type = 'w' & wsep \== ' ' then do
+      n=n+1;code[n] = '      data = decodew(data,' wsep')'
+      n=n+1;code[n] = '      record = decodew(record,' wsep')'
+    end
+
+    if type = 'f' & fsep \= ' ' then do
+      n=n+1;code[n] = '      data = decodew(data,' fsep', 1)'
+      n=n+1;code[n] = '      record = decodew(record,' fsep', 1)'
+    end
+        /* **** End new ***** */
+
     -- process a string
-    parse b t b 1 ob
+    parse b t b
     if t = 'strip' then do
-      o[n+1] = '      datar = Rexx data'
-      n = n+1
-      o[n+1] = '      data = datar.strip("B")'
-      n = n+1
-      parse b t b 1 ob
+      n=n+1;code[n] = '      data = data.strip("B")'
+      parse b t b
     end
 
     -- process conversion functions
-
     select
       when t = 'b2c' then do
-        o[n+1] = '      datar = Rexx data'
-        n = n+1
-        o[n+1] = '      datar = datar'
-        n = n+1
-        o[n+1] = '      data=""'
-        n = n+1
-        o[n+1] = '      loop i=1 to datar.length by 8'
-        n = n+1
-        o[n+1] = '        data=data||datar.substr(i,8).b2x.x2c()'
-        n = n+1
-        o[n+1] = '      end'
-        n = n+1
-        parse b t b 1 ob
-      end
-      when t = 'b2d' then do
-        o[n+1] = '      data = data.b2x.x2d()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = xl2c(data.b2x())'
+        parse b t b
       end
       when t = 'b2x' then do
-        o[n+1] = '      data = data.b2x()'
-        n = n+1
-        parse b t b 1 ob
-      end
-      when t = 'c2d' then do
-        o[n+1] = "      datar = Rexx data;l= datar.length;out=''"
-        n = n+1
-        o[n+1] = '      loop i=1 to l'
-        n = n+1
-        o[n+1] = '        out=out||datar.substr(i,1).c2d()'
-        n = n+1
-        o[n+1] = '      end'
-        n = n+1
-        o[n+1] = '      data=out'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = data.b2x()'
+        parse b t b
       end
       when t = 'c2b' then do
-        o[n+1] = "      datar = Rexx data;l= datar.length;out=''"
-        n = n+1
-        o[n+1] = '      loop i=1 to l'
-        n = n+1
-        o[n+1] = '        out=out||datar.substr(i,1).c2x.x2b()'
-        n = n+1
-        o[n+1] = '      end'
-        n = n+1
-        o[n+1] = '      data=out'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = c2xl(data).x2b'
+        parse b t b
+      end
+      when t = 'c2d' then do
+        n=n+1;code[n] = "      datar = Rexx data;l= datar.length;out=''"
+        n=n+1;code[n] = '      loop i=1 to l'
+        n=n+1;code[n] = '        out=out || datar.substr(i,1).c2d().right(2,0)'
+        n=n+1;code[n] = '      end'
+        n=n+1;code[n] = '      data=out'
+        parse b t b
       end
       when t = 'c2x' then do
-        o[n+1] = '      datar = Rexx data'
-        n = n+1
-        o[n+1] = '      l= datar.length'
-        n = n+1
-        o[n+1] = '      out=""'
-        n = n+1
-        o[n+1] = '      loop i=1 to l'
-        n = n+1
-        o[n+1] = '        out=out||datar.substr(i,1).c2x'
-        n = n+1
-        o[n+1] = '      end'
-        n = n+1
-        o[n+1] = '      data=out'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = "      datar = Rexx data.strip('T');l= datar.length;out=''"
+        n=n+1;code[n] = '      loop i=1 to l'
+        n=n+1;code[n] = '        co = datar.substr(i,1).c2x()'
+        n=n+1;code[n] = '        out=out""(00""co).right(2)' -- NetRexx strips 0s and blanks
+        n=n+1;code[n] = '      end'
+        n=n+1;code[n] = '      data=out'
+        parse b t b
       end
       when t = 'd2c' then do
-        o[n+1] = '      datar = Rexx data'
-        n = n+1
-        o[n+1] = '      data = datar.d2c()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = xl2c(data.d2x)'
+        parse b t b
       end
       when t = 'd2x' then do
-        o[n+1] = '      data = data.d2x()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = data.d2x()'
+        parse b t b
       end
       when t = 'x2b' then do
-        o[n+1] = '      data = data.x2b()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = data.x2b()'
+        parse b t b
       end
       when t = 'x2c' then do
-        o[n+1] = "      datar = Rexx data"
-        n = n+1
-        o[n+1] = "      l= datar.length;out=''"
-        n = n+1
-        o[n+1] = '      loop i=1 to l by 2'
-        n = n+1
-        o[n+1] = '        out=out||datar.substr(i,2).x2c()'
-        n = n+1
-        o[n+1] = '      end'
-        n = n+1
-        o[n+1] = '      data=out'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = "      datar = Rexx data"
+        n=n+1;code[n] = "      l= datar.length;out=''"
+        n=n+1;code[n] = '      loop i=1 to l by 2'
+        n=n+1;code[n] = '        out=out||datar.substr(i,2).x2c()'
+        n=n+1;code[n] = '      end'
+        n=n+1;code[n] = '      data=out'
+        parse b t b
       end
       when t = 'x2d' then do
-        o[n+1] = '      data = data.x2d()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = data.x2d()'
+        parse b t b
       end
-      when ' c2f c2i c2p f2c i2c p2c v2c'.pos(t) > 0 then do
+      when ' c2f c2i c2p c2v f2c f2t i2c p2c v2c'.pos(t) > 0 then do
         signal StageError(13,'Error (specs) -' t b '- Conversion not yet available in Njpipes: 't)
       end
       when t = 'lower' then do
-        o[n+1] = '      data = data.lower()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = data.lower()'
+        parse b t b
       end
       when t = 'upper' then do
-        o[n+1] = '      data = data.upper()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = data.upper()'
+        parse b t b
       end
       when t = 'string' then do
-        o[n+1] = '      data = data.toString()'
-        n = n+1
-        parse b t b 1 ob
+        n=n+1;code[n] = '      data = data.toString()'
+        parse b t b
       end
       otherwise
         nop
     end
 
     -- process formater options
-
     word = b.word(1)
     select
       when 'right'.abbrev(word,1) then do
@@ -869,7 +841,7 @@ class spec extends stage
         n = n+1
         b = b.subword(2)
       end
-      when 'center'.abbrev(word,1) | 'centre'.abbrev(word,1) then do
+      when 'center'.abbrev(word,1) | 'centre'.abbrev(word,1)then do
         conv = '.strip("B").center('
         n = n+1
         b = b.subword(2)
@@ -882,105 +854,103 @@ class spec extends stage
     if pad = '"' then pad = '""'
     if pad = '\\' then pad = '\\\\'
 
-    tl = t.lower
-    parse tl th '.'
+    tlow = t.lower()
+    parse tlow tlowone '.'
 
-    -- positioning
+    if t.pos('-')>0 then do
+      parse t x '-' y
+      if y = '*' then
+      t = x
+    end
+    if t.pos(';')>0 then do
+      parse t x ';' y
+      if y = '*' then
+      t = x
+    end
+
     select
-      when ('nextword'.abbrev(th, 5) | 'nw'.abbrev(th)) & tl.pos('.')>0 then do
+      when ('nextword'.abbrev(tlowone,5) | 'nword'.abbrev(tlowone,2)) & t.pos('.')>0 then do
         parse t '.' x
         if \x.datatype('W') then
-          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
+          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
         if conv<>'' then
           conv = conv||x',"'pad'")'
         else
           conv = '.left('x',"'pad'")'
-        o[n+1] = '      outp = outp" "data'conv
-        n = n+1
+        n=n+1;code[n] = '      if data \\== "" then'
+        n=n+1;code[n] = '        outp = outp" "data'conv  '-- 991'
       end
-      when 'next'.abbrev(th, 1) & t.pos('.')>0 then do
+      when 'next'.abbrev(tlowone) & t.pos('.')>0 then do
         parse t '.' x
         if \x.datatype('W') then
-          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
+          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
         if conv<>'' then
           conv = conv||x',"'pad'")'
         else
           conv = '.left('x',"'pad'")'
-        o[n+1] = '      outp = outp||data'conv
-        n = n+1
+        n=n+1;code[n] = '      outp = outp||data'conv
       end
-      when ('nextword'.abbrev(th, 5) | 'nw'.abbrev(th, 2)) then do
+      when ('nextword'.abbrev(tlow,5) | 'nword'.abbrev(tlow,2)) then do
         if conv<>'' then
           signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
-        o[n+1] = '      outp = outp data'
-        n = n+1
+        n=n+1;code[n] = '      if data \\== "" then'
+        n=n+1;code[n] = '        outp = outp" "data -- 1019'
       end
-      when 'next'.abbrev(th, 1) then do
+      when 'next'.abbrev(tlow) then do
         if conv<>'' then
           signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
-        o[n+1] = '      outp = outp||data'
-        n = n+1
+        n=n+1;code[n] = '      outp = outp||data'
       end
+      when t = 'write' then nop
       when t='1' then do
         if conv<>'' then
           signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
-        o[n+1] = '      outp = data'
-        n = n+1
+        n=n+1;code[n] = '      outp = data'
       end
       when t.datatype('W') then do
         if conv<>'' then
           signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
-        o[n+1] = '      outp = outp.left('t-1',"'pad'")||data'
-        n = n+1
+        n=n+1;code[n] = '      outp = outp.overlay(data,'t',data.length(),"'pad'")'
       end
       when t.pos('.')>0 then do
         parse t x '.' y
         if \x.datatype('W') | \y.datatype('W') then
-          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
+          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
         if x<0 | y<0 then
           signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
         if conv<>'' then
           conv = conv||y',"'pad'")'
-        o[n+1] = '      outp = outp.overlay(data'conv','x','y',"'pad'")'
-        n = n+1
+        n=n+1;code[n] = '      leftpart = outp.substr(1,'x-1')'
+        n=n+1;code[n] = '      rightpart = outp.substr('x+y')'
+        n=n+1;code[n] = '      outp = outp.overlay(data'conv'.left('y'), 'x')'
+        n=n+1;code[n] = '      outp = leftpart || data'conv'.left('y') || rightpart'
       end
       when t.pos(';')>0 then do
         parse t x ';' y
         if \x.datatype('W') | \y.datatype('W') then
-          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-        if x<0 | y<x then
+          signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric. Found:  't)
+        if x>0 | y<x then
           signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
         if conv<>'' then
           conv = conv||x.abs()+y+1',"'pad'")'
-        o[n+1] = '      outp = outp.overlay(data'conv',outp.length()'x+1','x.abs()+y+1',"'pad'")'
-        n = n+1
+        n=n+1;code[n] = '      outp = outp.overlay(data'conv',outp.length()'x+1','x.abs()+y+1',"'pad'")'
       end
       when t.pos('-')>0 then do
         parse t x '-' y
-        if x.datatype('W') & y = '*' then do
-          if conv<>'' then
-            signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
-          o[n+1] = '      outp = outp.left('x-1',"'pad'")||data'
-          n = n+1
-        end
-        else do
-          if \x.datatype('W') | \y.datatype('W') then
-            signal StageError(13,'Error (specs) - 'pInfo' - Range should be numeric 't)
-          if x<0 | y<x then
-            signal StageError(13,'Error (specs) - 'pInfo' - Invalid range 't)
-          if conv<>'' then
-            conv = conv||y-x-1',"'pad'")'
-          o[n+1] = '      outp = outp.overlay(data'conv','x','y-x+1',"'pad'")'
-          n = n+1
-        end
+        if \x.datatype('W') | \y.datatype('W') then
+          signal StageError(13,'Error (specs) - 'pInfo' - Target range should be numeric. Found:  't)
+        if x<0 | y<x then
+          signal StageError(13,'Error (specs) - 'pInfo' - Invalid target range 't)
+        if conv<>'' then
+          conv = conv||y-x-1',"'pad'")'
+        n=n+1;code[n] = '      outp = outp.overlay(data'conv','x','y-x+1',"'pad'")'
       end
-      when tl = 'write' then b = t b
-      when tl = 'pad' then b = t b
       otherwise
         signal StageError(13,'Error (specs) - 'pInfo' - Missing target selector at 't)
     end
 
-    parse b t b 1 ob
+    ob = b
+    parse b t b
   end
 
   if pr then
@@ -988,42 +958,75 @@ class spec extends stage
 
   loop i over p                          -- issue readto for peeked streams
     if p[i] then do
-      o[n+2] = '      do'
-      n = n+2
-      o[n+1] = '        previous = l0'
-      n = n+1
-      if s<>i then do
-        o[n+1] = '         selectInput('i')'
-        n = n+1
+      n=n+1;code[n] = '      do -- 1073'
+      if s<>i & s \= "-1" then do
+        n=n+1;code[n] = '         selectInput('i')'
         s = i
       end
-      o[n+1] = '         readto()'
-      o[n+2] = '      catch StageError'
-      o[n+3] = '         rc = rc()'
-      o[n+4] = '      end'
-      n = n+4
+      n=n+1;code[n] = '         readto() -- 1078'
+      n=n+1;code[n] = '      catch StageError'
+      n=n+1;code[n] = '         rc = rc()'
+      n=n+1;code[n] = '      end'
       p[i] = 0
     end
+    p["S"] = 0
   end
-  -- end loop with stream 0 selected
   if s<>0 then do
-    o[n+2] = '      do'
-    o[n+3] = '      selectInput(0)'
-    o[n+4] = '      catch StageError'
-    o[n+5] = '         rc = rc()'
-    o[n+6] = '      end'
-    n = n+6
+    n=n+1;code[n] = '      do'
+    n=n+1;code[n] = '      selectInput(0)'
+    n=n+1;code[n] = '      catch StageError'
+    n=n+1;code[n] = '         rc = rc()'
+    n=n+1;code[n] = '      end'
     s = 0
   end
 
-  o[n+2] = '   catch StageError'
-  o[n+3] = '      rc = rc()'
-  o[n+4] = '   end'
+  n=n+1;code[n] = '   catch StageError'
+  n=n+1;code[n] = '      rc = rc()'
+  n=n+1;code[n] = '   end'
 
-  o[n+6] = 'exit(rc*(rc<>12))'
-  n=n+7
+  n=n+1;code[n] = 'exit(rc*(rc<>4)*(rc<>12))'
 
-  o[0]=n+1
+/* ****** New 6/22 **** */
+  n=n+1;code[n] = 'method codew(data=Rexx, wsep=Rexx, isfield=Rexx 0) returns Rexx'
+  n=n+1;code[n] = ' safesep = ""'
+  n=n+1;code[n] = ' loop'        -- find a non-occuring character string
+  n=n+1;code[n] = '  safespace = netrexx.lang.RexxTime.time("L").right(6)'
+  n=n+1;code[n] = '  if data.pos(safespace) = 0 then leave'
+  n=n+1;code[n] = ' end'
+  n=n+1;code[n] = ' if isfield then do'
+  n=n+1;code[n] = '  loop'
+  n=n+1;code[n] = '   safesep = netrexx.lang.RexxTime.time("L").right(6)'
+  n=n+1;code[n] = '   if data.pos(safesep)=0 & safesep <> safespace then leave'
+  n=n+1;code[n] = ' end'
+  n=n+1;code[n] = 'end'
+  n=n+1;code[n] = 'if data.substr(1,1) = wsep then data = safesep""data'
+  n=n+1;code[n] = ' data = data.changestr(" ", safespace)'
+  n=n+1;code[n] = ' data = data.changestr(wsep, " "safesep)'  -- makes sure each field has a character in it
+  n=n+1;code[n] = 'return data'
+
+  n=n+1;code[n] = 'method decodew(data=Rexx, wsep=Rexx, isfield=Rexx 0) returns Rexx'
+  n=n+1;code[n] = ' data = data.changestr(" "safesep, wsep)'
+  n=n+1;code[n] = ' data = data.changestr(safesep, "")'
+  n=n+1;code[n] = ' data = data.changestr(safespace, " ")'
+  n=n+1;code[n] = 'return data'
+
+  n=n+1;code[n] = 'method xl2c(hex) returns Rexx' -- hex string to character string ala Rexx
+  n=n+1;code[n] = ' if hex.length()//2 = 1 then hex = "0"hex'
+  n=n+1;code[n] = '  cs = ""'
+  n=n+1;code[n] = '  loop i = 1 by 2 to hex.length()'
+  n=n+1;code[n] = '   cs = cs || hex.substr(i,2).x2c()'
+  n=n+1;code[n] = '  end'
+  n=n+1;code[n] = 'return cs'
+
+  n=n+1;code[n] = 'method c2xl(cs) returns Rexx' -- character string to hex string ala Rexx
+  n=n+1;code[n] = '  hex = ""'
+  n=n+1;code[n] = '  loop i = 1 to cs.length'
+  n=n+1;code[n] = '   hex = hex || cs.substr(i,1).c2x()'
+  n=n+1;code[n] = '  end'
+  n=n+1;code[n] = 'return hex'
+/* ***** End new ******* */
+
+  code[0]=n
 
   pInfo[3] = cname
   pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
@@ -1031,8 +1034,79 @@ class spec extends stage
   ss = 1 -- show generated source
   ss = 0 -- comment out to show generated source
 
-  if ss then loop i = 1 for o[0]
-    say o[i]
+  if ss then do
+   trace off   -- Leave. This is for the source code out.
+   say " "
+   say "###########################################################"
+   loop i = 1 for code[0]
+    say i code[i]
+   end
   end
 
   return 1
+
+method getSep(opts, tok, len) returns Rexx[]
+    wsep = Rexx null
+    wsepa = Rexx ''
+    if \ tok.lower.abbrev(opts.word(1), len) then return [1]
+
+--  /*  I have not been able to get these through OK. 12/22 Jeff Hennick
+    select case opts.word(2).lower()
+      when 'lf' then wsep = '\x0D'
+      when 'cr' then wsep = '\x0A'
+      when 'crlf' then wsep = '\x0A\x0D'
+      otherwise wsep = null
+    end
+--   */
+
+    if wsep \== null then do
+      wsepa[1] = opts.subword(3)
+    end
+    else do
+      wsepa = getKeyWord(opts, tok, len, 'S')
+      do
+        wsep = getXorc(wsepa[2])    -- PROBLEM! with getXorC('@')
+      catch BadArgumentException
+        wsep = null
+      end
+    /* we have either a single character or null */
+    end
+
+  if wsep == null then do
+    if wsepa[2].datatype('X') & wsepa[2].length()//2 = 0 then do
+      hs = wsepa[2]
+      wsep = ''
+      loop i = 1 by 2 to hs.length()/2 + 1
+       wsep = wsep || hs.substr(i,2).x2c()
+      end
+    end
+  end
+
+   /* We have a string of one or more charcters from hex numbers */
+  if wsep == null then do
+    wsepa = getKeyWord(opts, tok, 2, 'Q')
+    if wsepa[2] \= '' then do
+      wsep = wsepa[2]
+      rest = wsepa[1]
+    end
+  end
+
+   /* We have a word, qword, or null */
+  rest = wsepa[1]
+
+  if wsep \== ' ' then do
+    wsep = "'" || wsep.changestr("'", "''") || "'"
+    rest = wsepa[1]
+  end
+
+  ret = [3, wsep, rest]
+  return ret
+
+method xl2c(hex) returns Rexx -- hex string to character string ala Rexx
+  if hex.length()//2 = 1 then hex = "0"hex
+  cs = ""
+  loop i = 1 by 2 to hex.length()
+    cs = cs || hex.substr(i,2).x2c()
+  end
+  return cs
+
