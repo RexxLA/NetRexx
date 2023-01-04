@@ -1,107 +1,9 @@
-/* specs_tests8.njp /
+/* specs_tests8.njp */
 
 /*
-  22/12/16 Documentation update. Jeff Hennick
+  22/12/31 Documentation update. Jeff Hennick
   20/ 3/28 Jeff Hennick
 */
-
-/** specs
-            +-STOP--ALLEOF----+ (3)  v-----------------------------------------+
- >>--SPECs--+-----------------+------+--+-| Group |--------------------------+-+---------><
-            +-STOP-+-ANYEOF-+-+ (3)     +-READ-------------------------------+
-                   +-n------+   (3)     +-READSTOP---------------------------+ (3)
-                                        +-WRITE------------------------------+
-                                        +-SELECT-+-streamnum-+---------------+
-                                        |        +-streamid--+               |
-                                        +-PAD--+-char----+-------------------+
-                                        |      +-hexchar-+                   |
-                                        |      +-BLANK---+                   |
-                                        |      +-SPACE---+                   |
-                                        +-+-WORDSEParator---+--+--char-----+-+  (7)
-                                          +-WS--------------+  +-hexchar---+
-                                          +-FIELDSEparator--+  +-BLANK-----+
-                                          +-FS--------------+  +-TAB-------+
-                                                               +-hexstring-+
-                                                               +-qword-----+    (4)(6)
-
-Group:
- |--| Input |--| Conversion |--| Output |--| Alignment |--|
-
-Input:
- |--+-Words-(1)-wnumberrange----------------------+-------|
-    +-Fields-(1)-fnumberrange---------------------+
-    +-cnumberrange--------------------------------+
-    +-/string/------------------------------------+
-    +-Xhexstring----------------------------------+
-    +-Hhexstring----------------------------------+
-    +-Bbinstring----------------------------------+
-    |            +-FROM--1-------+ +-BY--1-----+  |
-    +-+-RECNO--+-+---------------+-+-----------+--+  (8)(9)
-    | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |
-    +-TODclock------------------------------------+  (3)
-
-Conversion:
- |-+-------+--+--------------------+------|
-   +-STRIP-+  +-B2C----------------+
-              +-B2X----------------+ (4)
-              +-C2B----------------+
-              +-C2D----------------+
-              +-C2F----------------+ (3)
-              +-C2I----------------+ (3)
-              +-C2P-+------------+-+ (3)
-              |     +-(2)(scale)-+ | (3)
-              +-C2V----------------+ (3)
-              +-C2X----------------+
-              +-D2C----------------+
-              +-D2X----------------+ (4)
-              +-F2C----------------+ (3)
-              +-I2C----------------+ (3)
-              +-P2C-+------------+-+ (3)
-              |     +-(2)(scale)-+ | (3)
-              +-V2C----------------+ (3)
-              +-X2B----------------+ (4)
-              +-X2C----------------+
-              +-X2D----------------+ (4)
-              +-F2T----------------+ (3)
-              +-LOWER--------------+ (4)
-              +-UPPER--------------+ (4)
-              +-STRING-------------+ (4)
-
-Output:
- |--+-Next-+-------+-------+--|
-    |      +-(2).n-+       |
-    +-NEXTWord-+-+-------+-+
-    +-NWord----+ +-(2).n-+ |
-    +-collumnrange---------+
-
-Alignment:
- |--+--------+--|
-    +-Left---+
-    +-Center-+
-    +-Right--+
-
-Notes:
- (1) Blanks are optional in this position.
- (2) Blanks are not allowed here.
- (3) CMS only. Not yet implemented in njpipes
- (4) Njpipes only. Not yet implemented in CMS
- (5) READ is giving the same output as READSTOP when
-     the streams are different length.
- (6) A Qword is an optionally quoted word, with single or double marks.
-     If it contains spaces or begins with a quote mark, it must be quoted.
-     It can not begin with a space (the quote mark will be considered
-     a single character, and rest jibberish).
-     If is unquoted and an even number of hexadecimal characters,
-     it will be used as a hexchar or hexstring.
- (7) NetRexx Pipelines ONLY: a single quote character is NOT allowed,
-     use "'" or '"' as appropriate.
- (8) CMS can have multiple independent RECNOs, NetRexx uses only one per stage.
- (9) CMS Pipelines, without documenting it, places this right by defualt
-     NetRexx Pipelines follows the documentation and places this left by defualt.
-     Specify the alignment you want to override these defaults.
-(10) CMS has a mini-programming language built in. NetRexx does not.
-
-**/
 
 pipe (specs_tests8)
 
@@ -208,4 +110,128 @@ pipe (specs_tests8)
    c10: compare any ~2#10 specs 1-* range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
    literal lead |
-   c10: ?
+   c10:
+
+
+/** specs
+            +-STOP--ALLEOF----+ (3)
+ >>--SPECs--+-----------------+-------+-----------------+-------->
+            +-STOP-+-ANYEOF-+-+ (3)   +-COUNTERS-number-+ (12)
+                   +-n------+   (3)
+
+
+       v------------------------------------------------------------+
+   >---+--+-| Group |--------------------------+--+--------------+--+--><
+          +-READ-------------------------------+  +-(1),-(4)(13)-+
+          +-READSTOP---------------------------+ (3)
+          +-WRITE------------------------------+
+          +-SELECT-+-streamnum-+---------------+
+          |        +-streamid--+               |
+          +-OUTSTREAM--streamnum---------------+
+          +-PAD--+-char----+-------------------+
+          |      +-hexchar-+                   |
+          |      +-BLANK---+                   |
+          |      +-SPACE---+                   |
+          +-+-WORDSEParator---+--+--char-----+-+  (7)
+            +-WS--------------+  +-hexchar---+
+            +-FIELDSEparator--+  +-BLANK-----+
+            +-FS--------------+  +-TAB-------+
+                                 +-hexstring-+
+                                 +-qword-----+    (4)(6)
+Group:
+ |--| Id |--| Input |--| Conversion |--| Output |--| Alignment |--|
+
+Id:
+ |-letter--(14)--:-(2)--|
+
+Input:
+ |--+-Words-(1)-wnumberrange----------------------+-------|
+    +-Fields-(1)-fnumberrange---------------------+
+    +-cnumberrange--------------------------------+
+    +-/string/------------------------------------+
+    +-Xhexstring----------------------------------+
+    +-Hhexstring----------------------------------+
+    +-Bbinstring----------------------------------+
+    |            +-FROM--1-------+ +-BY--1-----+  |
+    +-+-RECNO--+-+---------------+-+-----------+--+  (8)
+    | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |
+    +-TODclock------------------------------------+  (3)
+
+Conversion:
+ |-+-------+--+------------------------------+------|
+   +-STRIP-+  +-B2C--------------------------+
+              +-B2X--------------------------+ (4)
+              +-C2B--------------------------+
+              +-C2D--------------------------+
+              +-C2F--------------------------+ (3)
+              +-C2I--------------------------+ (3)
+              +-C2P-+------------+-----------+ (3)
+              |     +-(2)(scale)-+           | (3)
+              +-C2V--------------------------+ (3)
+              +-C2X--------------------------+
+              +-D2C--------------------------+
+              +-D2X--------------------------+ (4)
+              +-F2C--------------------------+ (3)
+              +-I2C--------------------------+ (3)
+              +-P2C-+------------+-----------+ (3)
+              |     +-(2)(scale)-+           | (3)
+              +-V2C--------------------------+ (3)
+              +-X2B--------------------------+ (4)
+              +-X2C--------------------------+
+              +-X2D--------------------------+ (4)
+              +-F2T--------------------------+ (3)
+              +-LOWER------------------------+ (4)
+              +-UPPER------------------------+ (4)
+              +-STRING-----------------------+ (4)(11)
+              +-+-NETREXX-+-delimited_string-+ (4)(10)
+                +-NR------+                    (4)
+Output:
+ |--+-Next-+-------+-------+--|
+    |      +-(2).n-+       |
+    +-NEXTWord-+-+-------+-+
+    +-NWord----+ +-(2).n-+ |
+    +-columnrange----------+
+    +-.--------------------+
+
+Alignment:
+    +-Left---+
+ |--+--------+--|
+    +-Center-+
+    +-Right--+
+
+Notes:
+ (1) Blanks are optional in this position.
+ (2) Blanks are not allowed here.
+ (3) CMS only. Not yet implemented in njpipes
+ (4) NetRexx only. Not yet implemented in CMS
+ (5) NetRexx only: READ is giving the same output as READSTOP when
+     the streams are different length.
+ (6) A Qword is an optionally quoted word, with single or double marks.
+     If it contains spaces or begins with a quote mark, it must be quoted.
+     It can not begin with a space (the quote mark will be considered
+     a single character, and rest jibberish).
+     If is unquoted and an even number of hexadecimal characters,
+     it will be used as a hexchar or hexstring.
+ (7) NetRexx Pipelines ONLY: a single quote character is NOT allowed,
+     use "'" or '"' as appropriate.
+ (8) CMS Pipelines, without documenting it, places this right by defualt
+     NetRexx Pipelines follows the documentation and places this left by defualt.
+     Specify the alignment you want to override these defaults.
+ (9) CMS has a mini-programming language built in. It uses Control Breaks and
+     Structured Data.
+     NetRexx does not yet have these, but see the NETREXX converter (10).
+(10) The delimited string is any valid NetRexx code. [Yes, you can get in trouble!]
+     It is put into a method and executed for each record.  The selected input data
+     is in the variable DATA. The returned string is output.  The persistent
+     variable array COUNTER[] is available for your use. Each COUNTER is
+     initially 0, but can hold any NetRexx value, including strings. COUNTERs
+     are shared across all NETREXX converters in a stage. Index can be number or string.
+     Fields identified by a fieldid are accessed as field["id"] when the quotes are
+     required, the id is a single letter, case is respected
+(11) The data is processed by the toString() method.
+(12) CMS Only. NetRexx ignores COUNTERS n; it has an unlimited number. See the NETREXX converter.
+(13) NetRexx Only. A comma may be used to separate groups for readability.
+(14) Letter is a single character, a-zA-Z.  Case is respected. BLANK is not permited between
+     letter and : .  The resulting data is available in the NETREXX code as field["letter"].
+
+**/

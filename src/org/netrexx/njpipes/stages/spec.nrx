@@ -1,6 +1,6 @@
 -- spec
 /*
- *  Copyright (C) 1997-2011 Ed Tomlinson, 2020-2022 RexxLA
+ *  Copyright (C) 1997-2011 Ed Tomlinson, 2020-2023 RexxLA
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -9,6 +9,17 @@
  */
 
 /*
+
+ 23/ 1/ 4 Make getSep caseless. Jeff Hennick
+ 23/ 1/ 2 Add "." for input range = 0.0. Jeff Hennick
+ 22/12/30 Add "," as optional group separator. Jeff Hennick
+ 22/12/29 Fix "." for output position = ignore.  Jeff Hennick
+ 22/12/28 Add fields and fieldids. Jeff Hennick
+ 22/12/27 "." for output position = ignore.  Jeff Hennick
+ 22/12/26 Auto RETURN DATA for NetRexx. Jeff Hennick
+ 22/12/23 Outstream. Fix WRITE with WRITEFINAL. Ignore COUNTERS option. Jeff Hennick
+ 22/12/22 Removed restriction on RECNO/NUMBER being limited to one per stage.  Jeff Hennick
+ 22/12/22 Add NETREXX & NR converters to run user functions.  Jeff Hennick
  22/12/15 Fix X2C. READ works, READSTOP does not. Jeff Hennick
  22/12/01 Major update in handling of multiple input streams. Jeff Hennick
  22/11/ 3 Adding Fields and Separators. Jeff Hennick
@@ -31,26 +42,35 @@
 */
 
 /** specs
-            +-STOP--ALLEOF----+ (3)  v-----------------------------------------+
- >>--SPECs--+-----------------+------+--+-| Group |--------------------------+-+---------><
-            +-STOP-+-ANYEOF-+-+ (3)     +-READ-------------------------------+
-                   +-n------+   (3)     +-READSTOP---------------------------+ (3)
-                                        +-WRITE------------------------------+
-                                        +-SELECT-+-streamnum-+---------------+
-                                        |        +-streamid--+               |
-                                        +-PAD--+-char----+-------------------+
-                                        |      +-hexchar-+                   |
-                                        |      +-BLANK---+                   |
-                                        |      +-SPACE---+                   |
-                                        +-+-WORDSEParator---+--+--char-----+-+  (7)
-                                          +-WS--------------+  +-hexchar---+
-                                          +-FIELDSEparator--+  +-BLANK-----+
-                                          +-FS--------------+  +-TAB-------+
-                                                               +-hexstring-+
-                                                               +-qword-----+    (4)(6)
+            +-STOP--ALLEOF----+ (3)
+ >>--SPECs--+-----------------+-------+-----------------+-------->
+            +-STOP-+-ANYEOF-+-+ (3)   +-COUNTERS-number-+ (12)
+                   +-n------+   (3)
 
+
+       v------------------------------------------------------------+
+   >---+--+-| Group |--------------------------+--+--------------+--+--><
+          +-READ-------------------------------+  +-(1),-(4)(13)-+
+          +-READSTOP---------------------------+ (3)
+          +-WRITE------------------------------+
+          +-SELECT-+-streamnum-+---------------+
+          |        +-streamid--+               |
+          +-OUTSTREAM--streamnum---------------+
+          +-PAD--+-char----+-------------------+
+          |      +-hexchar-+                   |
+          |      +-BLANK---+                   |
+          |      +-SPACE---+                   |
+          +-+-WORDSEParator---+--+--char-----+-+  (7)
+            +-WS--------------+  +-hexchar---+
+            +-FIELDSEparator--+  +-BLANK-----+
+            +-FS--------------+  +-TAB-------+
+                                 +-hexstring-+
+                                 +-qword-----+    (4)(6)
 Group:
- |--| Input |--| Conversion |--| Output |--| Alignment |--|
+ |--| Id |--| Input |--| Conversion |--| Output |--| Alignment |--|
+
+Id:
+ |-letter--(14)--:-(2)--|
 
 Input:
  |--+-Words-(1)-wnumberrange----------------------+-------|
@@ -61,47 +81,50 @@ Input:
     +-Hhexstring----------------------------------+
     +-Bbinstring----------------------------------+
     |            +-FROM--1-------+ +-BY--1-----+  |
-    +-+-RECNO--+-+---------------+-+-----------+--+  (8)(9)
+    +-+-RECNO--+-+---------------+-+-----------+--+  (8)
     | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |
     +-TODclock------------------------------------+  (3)
+    +-.-------------------------------------------+  (4)(15)
 
 Conversion:
- |-+-------+--+--------------------+------|
-   +-STRIP-+  +-B2C----------------+
-              +-B2X----------------+ (4)
-              +-C2B----------------+
-              +-C2D----------------+
-              +-C2F----------------+ (3)
-              +-C2I----------------+ (3)
-              +-C2P-+------------+-+ (3)
-              |     +-(2)(scale)-+ | (3)
-              +-C2V----------------+ (3)
-              +-C2X----------------+
-              +-D2C----------------+
-              +-D2X----------------+ (4)
-              +-F2C----------------+ (3)
-              +-I2C----------------+ (3)
-              +-P2C-+------------+-+ (3)
-              |     +-(2)(scale)-+ | (3)
-              +-V2C----------------+ (3)
-              +-X2B----------------+ (4)
-              +-X2C----------------+
-              +-X2D----------------+ (4)
-              +-F2T----------------+ (3)
-              +-LOWER--------------+ (4)
-              +-UPPER--------------+ (4)
-              +-STRING-------------+ (4)
-
+ |-+-------+--+------------------------------+------|
+   +-STRIP-+  +-B2C--------------------------+
+              +-B2X--------------------------+ (4)
+              +-C2B--------------------------+
+              +-C2D--------------------------+
+              +-C2F--------------------------+ (3)
+              +-C2I--------------------------+ (3)
+              +-C2P-+------------+-----------+ (3)
+              |     +-(2)(scale)-+           | (3)
+              +-C2V--------------------------+ (3)
+              +-C2X--------------------------+
+              +-D2C--------------------------+
+              +-D2X--------------------------+ (4)
+              +-F2C--------------------------+ (3)
+              +-I2C--------------------------+ (3)
+              +-P2C-+------------+-----------+ (3)
+              |     +-(2)(scale)-+           | (3)
+              +-V2C--------------------------+ (3)
+              +-X2B--------------------------+ (4)
+              +-X2C--------------------------+
+              +-X2D--------------------------+ (4)
+              +-F2T--------------------------+ (3)
+              +-LOWER------------------------+ (4)
+              +-UPPER------------------------+ (4)
+              +-STRING-----------------------+ (4)(11)
+              +-+-NETREXX-+-delimited_string-+ (4)(10)
+                +-NR------+                    (4)
 Output:
  |--+-Next-+-------+-------+--|
     |      +-(2).n-+       |
     +-NEXTWord-+-+-------+-+
     +-NWord----+ +-(2).n-+ |
-    +-collumnrange---------+
+    +-columnrange----------+
+    +-.--------------------+
 
 Alignment:
- |--+--------+--|
     +-Left---+
+ |--+--------+--|
     +-Center-+
     +-Right--+
 
@@ -109,8 +132,8 @@ Notes:
  (1) Blanks are optional in this position.
  (2) Blanks are not allowed here.
  (3) CMS only. Not yet implemented in njpipes
- (4) Njpipes only. Not yet implemented in CMS
- (5) READ is giving the same output as READSTOP when
+ (4) NetRexx only. Not yet implemented in CMS
+ (5) NetRexx only: READ is giving the same output as READSTOP when
      the streams are different length.
  (6) A Qword is an optionally quoted word, with single or double marks.
      If it contains spaces or begins with a quote mark, it must be quoted.
@@ -120,13 +143,54 @@ Notes:
      it will be used as a hexchar or hexstring.
  (7) NetRexx Pipelines ONLY: a single quote character is NOT allowed,
      use "'" or '"' as appropriate.
- (8) CMS can have multiple independent RECNOs, NetRexx uses only one per stage.
- (9) CMS Pipelines, without documenting it, places this right by defualt
+ (8) CMS Pipelines, without documenting it, places this right by defualt
      NetRexx Pipelines follows the documentation and places this left by defualt.
      Specify the alignment you want to override these defaults.
-(10) CMS has a mini-programming language built in. It uses Field Identifiers and Control Breaks,
-     Counters, and Structured Data.
-     <br>NetRexx does not yet have any of these.</li>
+ (9) CMS has a mini-programming language built in. It uses Control Breaks and
+     Structured Data.
+     NetRexx does not yet have these, but see the NETREXX converter (10).
+(10) The delimited string is any valid NetRexx code. [Yes, you can get in trouble!]
+     It is put into a method and executed for each record.  The selected input data
+     is in the variable DATA. The returned string is output.  The persistent
+     variable array COUNTER[] is available for your use. Each COUNTER is
+     initially 0, but can hold any NetRexx value, including strings. COUNTERs
+     are shared across all NETREXX converters in a stage. Index can be number or string.
+     Fields identified by a fieldid are accessed as field["id"] when the quotes are
+     required, the id is a single letter, case is respected
+(11) The data is processed by the toString() method.
+(12) CMS Only. NetRexx ignores COUNTERS n; it has an unlimited number. See the NETREXX converter.
+(13) NetRexx Only. A comma may be used to separate groups for readability.
+(14) Letter is a single character, a-zA-Z.  Case is respected. BLANK is not permited between
+     letter and : .  The resulting data is available in the NETREXX code as field["letter"].
+(15) NetRexx Pipelines ONLY: A "." for input is "0.0", no data is selected. Variable data is "".
+
+Examples:
+CMS Pipelines has built into the SPEC stage its own programming language.
+It is Rexx-like-but-not-quite-Rexx.  For NetRexx Pipelines we have built in the worlds best scripting language: NetRexx.
+This gives all the power, but with a somewhat different syntax, of the CMS version.
+It is incorporated into the "Conversion" phase, with the key word NETREXX (or NR)
+and a delimitedString containing the NetRexx source.  In running, this code is encapsulated in a method.
+The data selected in the Input phase is available as the variable data.
+And whatever is returned is passed to the Output phase of the stage.
+(As a convenience, if the last statement is not RETURN, the statement "return data" is automatically added.)
+So all of these pipes work the same (giving cba):
+
+    pipe "literal abc | spec 1-* NR /return data.reverse/ 1 | cons"
+    pipe "literal abc | spec 1-* NR @rev = data.reverse; return rev@ 1 | cons"
+    pipe "literal abc | spec 1-* NR %data = data.reverse% 1 | cons"
+    pipe "spec /abc/ NR /data = data.reverse/ 1 | cons"
+
+Using COUNTERS:
+    pipe "literal abc | spec 1-* NR /counter[7]=counter[7]+1;ret=data.reverse counter[7];return ret/ 1 | cons"
+gives cba 1
+
+Using Field Ids (and "." for output position).  In this case the variable data is not used at all.:
+    pipe "literal abc | spec T:1-* . 1 NR @rev = field['T'].reverse; return rev@ 1 | cons"
+    pipe "literal abc | spec T:1-* . t:1 NR @rev = field['T'].reverse; return rev@ 1 | cons"
+"T:" and "t:" are different.
+
+Using comma to separate groups:
+    pipe "literal abc | spec T:1-* 10-16, 1.2 NR @rev = field['T'].reverse; return rev@ 1 | cons"
 
 **/
 
@@ -136,6 +200,12 @@ package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
 
 class spec extends stage
+
+  ufn = 0 -- number of user methods
+  uf = Rexx '' -- lines of user functions
+  uln = 0 -- linenumber in user functions
+
+  rno = 0 -- number of RECNOs
 
   -- The run method of specs should never get called
 
@@ -180,38 +250,52 @@ class spec extends stage
 
     n   = Rexx 0
     p   = Rexx 0        -- true if a peek has been done
-    s   = Rexx '0'      -- the currently selected stream, "S" for Second Read Station
+    s   = Rexx '0'      -- the currently selected input stream, "S" for Second Read Station
+    outstream = Rexx 0  -- the currently selected outout stream
     pr  = Rexx 0        -- peakto required flag
     pad = Rexx ' '      -- default pad char
     recnoline = Rexx 0
 
     x = Rexx
     y = Rexx
+    fid = Rexx ""; fid = fid
 
     cname = stageName(name,pid,pInfo[1])
     n=n+1;code[n] ='class 'cname' extends stage private'
     n=n+1;code[n] ='-- trace results'
-    n=n+1;code[n] ='safespace = Rexx ""'
-    n=n+1;code[n] ='safesep = Rexx ""'
-    n=n+1;code[n] ='records = Rexx ""' -- Array of inputs indexed by stream, -1 is the previous 0.
-    n=n+1;code[n] ='record  = Rexx ""' -- The currently selected records[].
+    n=n+1;code[n] ='-- trace methods'
+    n=n+1;code[n] ='-- trace var data outp'
+    n=n+1;code[n] ='  safespace = Rexx ""'
+    n=n+1;code[n] ='  safesep = Rexx ""'
+    n=n+1;code[n] ='  records = Rexx ""' -- Array of inputs indexed by stream, -1 is the previous 0.
+    n=n+1;code[n] ='  record  = Rexx ""' -- The currently selected records[].
+    n=n+1;code[n] ='  counter = Rexx 0' -- available for use in user functions
+    n=n+1;code[n] ='  field = Rexx ""' -- contents of named fields
+    n=n+1;code[n] ='  field2 = Rexx ""' -- contents of named fields in second read station
     n=n+1;code[n]='method run()'
-    n=n+1;code[n]="-- reserved for 'recno'"
+    n=n+1;code[n]="  recno = Rexx 0; recno = recno" -- Array of RECNO variables
+    n=n+1;code[n]="  recno_byn = Rexx 1; recno_byn = recno_byn" -- Array of RECNO BY variables
+    n=n+1;code[n]='' -- reserved for RECNO initialization
     recnoline = n
-    n=n+1;code[n]="-- reserved for 'tod'"
+--    n=n+1;code[n]="-- reserved for 'tod'"
     n=n+1;code[n]='   data = Rexx ""'
+    n=n+1;code[n]='   fid = Rexx ""; fid = fid' -- fieldid letter for current field
+    n=n+1;code[n]='   curoutstream = Rexx 0'  -- the current recently selected outout stream
+    n=n+1;code[n]='   lastoutstream = Rexx 0'  -- the most recently selected outout stream
 
     cnts    = Rexx 1    -- count of how many streams we are going to use
     flgs    = Rexx 1
     flgs[0] = 0
 
     parse b 'select' sn work
+    sn = sn.strip('T',',')
     loop while sn.datatype('W')
       if flgs[sn] then do
         cnts = cnts+1
         flgs[sn] = 0
       end
       parse work 'select' sn work
+      sn = sn.strip('T',',')
     end
     all = cnts          -- default to 'stop alleof' to end on all streams at eof
 
@@ -225,14 +309,13 @@ class spec extends stage
     end
     n=n+1;code[n] = '   read = boolean 1'
     n=n+1;code[n] = '   inselect = 0; inselect = inselect'
-    n=n+1;code[n] = '   data = Rexx ""'
-    n=n+1;code[n] = '   loop label body loopcount = 1 while read -- 239'
+    n=n+1;code[n] = '   loop label body loopcount = 1 while read'
     n=n+1;code[n] = '      read = 0'
 
     if b.word(1)<>'select' then     -- start with standard input
       b = 'select 0' b
     if b.word(b.words())<>'write' then     -- and end with a write
-      b = b' write'
+      b = b' writefinal'
 
     ob = b
     parse b t b
@@ -247,7 +330,16 @@ class spec extends stage
       -- process options
 
       loop label options forever
+        if t <> ',' then
+          t = t.strip('T',',')
+        if t = "." then
+          t = "0.0"
+
         select
+          when t = ',' then do
+            parse b t b
+            iterate
+          end
           when t='stop' then do
             parse b t b
             select
@@ -267,6 +359,10 @@ class spec extends stage
 
           when t='pad' then do
             parse b t b
+            if t.substr(2) = ',' then
+               t = t.substr(1,1)
+            else
+               t = t.strip('T',',')
             select
                when t.length = 1 then nop
                when t.length = 2 & t.datatype('X') then t = t.x2c
@@ -281,9 +377,9 @@ class spec extends stage
 
           when t='read' then do
             n=n+1;code[n] = '         selectInput('s')'
-            n=n+1;code[n] = '         readto() -- 323'
+            n=n+1;code[n] = '         readto()'
             n=n+1;code[n] = '      do'
-            n=n+1;code[n] = '         record = Rexx peekto() -- 329'
+            n=n+1;code[n] = '         record = Rexx peekto()'
             n=n+1;code[n] = '      catch StageError'
             n=n+1;code[n] = '         record = ""'
             n=n+1;code[n] = '      end'
@@ -294,12 +390,32 @@ class spec extends stage
           end
 
           when t='write' then do                 -- write if its required
-            n=n+1;code[n] = '      if eofc = 0 then do'
-            n=n+1;code[n] = '        output(outp) --438'
+            n=n+1;code[n] = '      if eofc = 0 then do -- 325'
+            n=n+1;code[n] = '        if curoutstream <> lastoutstream then do'
+            n=n+1;code[n] = '          selectOutput(curoutstream)'
+            n=n+1;code[n] = '          lastoutstream = curoutstream'
+            n=n+1;code[n] = '        end'
+            n=n+1;code[n] = '        output(outp)'
             n=n+1;code[n] = '        outp = ""'
+            n=n+1;code[n] = '      catch StageError'
+            n=n+1;code[n] = '        rc = rc()'
+            n=n+1;code[n] = '      end'
+          end
+
+          when t='writefinal' then do                 -- write if its required
+            n=n+1;code[n] = '      if eofc = 0 then do'
+            n=n+1;code[n] = '        if curoutstream <> lastoutstream then do'
+            n=n+1;code[n] = '          selectOutput(curoutstream)'
+            n=n+1;code[n] = '          lastoutstream = curoutstream'
+            n=n+1;code[n] = '        end'
+            n=n+1;code[n] = '        output(outp)'
+            n=n+1;code[n] = '        outp = ""'
+            n=n+1;code[n] = '      catch StageError'
+            n=n+1;code[n] = '        rc = rc()'
             n=n+1;code[n] = '      end'
 
-            n=n+1;code[n] = '      loop stream = 0 for' cnts ' -- 445'
+
+            n=n+1;code[n] = '      loop stream = 0 for' cnts
             n=n+1;code[n] = '        selectInput(stream)'
             n=n+1;code[n] = '        readto()'
             n=n+1;code[n] = '      catch StageError'
@@ -308,12 +424,12 @@ class spec extends stage
 
             loop i over p                          -- issue readto for peeked streams
               if p[i] then do
-                n=n+1;code[n] = '      do -- 446'
+                n=n+1;code[n] = '      do'
                 if s<>i  then do
                   n=n+1;code[n] = '         selectInput('i')'
                   s = i
                 end
-                n=n+1;code[n] = '         readto() -- 451'
+                n=n+1;code[n] = '         readto()'
                 n=n+1;code[n] = '      catch StageError'
                 n=n+1;code[n] = '         rc = rc()'
                 n=n+1;code[n] = '      end'
@@ -322,8 +438,16 @@ class spec extends stage
               p["S"] = 0
             end
           end
-          otherwise
 
+          when t = 'counters' then do  -- ignore it if well formed
+            parse b counterval t b
+            if \counterval.strip('T',',').datatype('W') then do
+              signal StageError(13,'Error (specs) - COUNTERS:' counterval 'must be a whole number.')
+            end
+            iterate
+          end
+
+          otherwise
              /* **** New 6/22 **** */
            havesep = 0
 
@@ -359,7 +483,8 @@ class spec extends stage
              leave options
         end -- select
 
-        if t='write' & b='' then           -- force specs to finish
+
+        if t='writefinal' then           -- force specs to finish
           leave body
 
         ob = b
@@ -372,6 +497,13 @@ class spec extends stage
     if firstpass then do
       firstpass = 0
       n=n+1;code[n] = '      records[-1] = records[0]'
+      n=n+1;code[n] = '      loop var over field2'
+      n=n+1;code[n] = '        field2[var] = null'
+      n=n+1;code[n] = '      end'
+      n=n+1;code[n] = '      loop var over field'
+      n=n+1;code[n] = '        field2[var] = field[var]'
+      n=n+1;code[n] = '        field[var] = null'
+      n=n+1;code[n] = '      end'
       n=n+1;code[n] = '      connections = 0'
                            -- get data from all streams, if disconnected, leave as is
                            -- when all streams are disconnected exit
@@ -404,6 +536,20 @@ class spec extends stage
 
       -- process an input range
       type = ''
+      t = t.strip('T',',')
+
+            /* is there a Field Identifier? */
+      parse t . 2 sc 3 .
+      if sc = ":" then do
+        parse t fid 2 . 3 rest
+        if rest = '' then
+          parse b t b
+        else
+          t = rest
+      n=n+1;code[n] = '      fid = "'fid'"; fid=fid'
+        iterate
+      end
+
       fc = t.left(1).lower
       select case fc
         when 'w' then do       -- handle word [space] range
@@ -434,6 +580,7 @@ class spec extends stage
 
           type = 'a'
           parse t 2 ds
+          ds = ds.strip('T',',')
           if \ds.datatype('X') then signal StageError(13,'Error (specs) - 't b' - Invalid hex number ')
           ds = xl2c(ds)
           parse b t b
@@ -442,6 +589,7 @@ class spec extends stage
         when 'b' then do       -- handle binary range
           type = 'a'
           parse t 2 ds
+          ds = ds.strip('T',',')
           if \ds.datatype('B') then signal StageError(13,'Error (specs) - 't b' - Invalid binary number ')
           ds = xl2c(ds.b2x)
           parse b t b
@@ -451,6 +599,8 @@ class spec extends stage
           if " recno number".pos(t.lower) = 0 then signal StageError(13,'Error (specs) - 't b' - Unrecognized option:' t)
           type = 'r'
           parse b fkey skey r
+          fkey = fkey.strip('T',',')
+          skey = skey.strip('T',',')
           fromn = Rexx 1 -- default
           if fkey = 'from' then do
             if \skey.datatype('W') then signal StageError(13,'Error (specs) - "from number" is not numeric 'b)
@@ -460,6 +610,7 @@ class spec extends stage
           byn = Rexx 1 -- default
           if r.word(1) = 'by' then do
             parse r . skey r
+            skey = skey.strip('T',',')
             if \skey.datatype('W') then signal StageError(13,'Error (specs) - "by number" is not numeric 'b)
             byn = skey
           end
@@ -470,6 +621,7 @@ class spec extends stage
           if t <> 'select' then
             signal StageError(13,'Error (specs) - 't b' - option is not SELECT')
           parse b t b 1 ob
+          t = t.strip('T',',')
           select
             when t = 'first' then t = 0
             when t = 'second' then t = -1
@@ -486,6 +638,13 @@ class spec extends stage
           x = ''
           y = ''
 
+          iterate
+        end
+
+        when 'o' then do  -- handle outstream number
+          parse b outstream t b 1 ob
+          outstream = outstream.strip('T',',')
+          n=n+1;code[n] = '      curoutstream =' outstream
           iterate
         end
 
@@ -704,9 +863,10 @@ class spec extends stage
           b = t b
         end
         when type = 'r' then do
-          code[recnoline] = "recno=Rexx" fromn";recno_byn=Rexx" byn
-          n=n+1;code[n] = '      data = recno.right(10)'
-          n=n+1;code[n] = '      recno = recno + recno_byn'
+          rno = rno + 1
+          code[recnoline] = code[recnoline]";recno["rno"]=Rexx" fromn";recno_byn["rno"]=Rexx" byn
+          n=n+1;code[n] = '      data = recno['rno'].right(10)'
+          n=n+1;code[n] = '      recno['rno'] = recno['rno'] + recno_byn['rno']'
         end
         when rf then
           signal StageError(13,'Error (specs) - 'pInfo' - unreconized range 't)
@@ -745,6 +905,12 @@ class spec extends stage
       n=n+1;code[n] = '      record = decodew(record,' fsep', 1)'
     end
         /* **** End new ***** */
+
+    if fid \= '' then do
+      n=n+1;code[n] = '      field["'fid'"] = data'
+      n=n+1;code[n] = '      fid = ""'
+      fid = ""
+    end
 
     -- process a string
     parse b t b
@@ -824,12 +990,34 @@ class spec extends stage
         n=n+1;code[n] = '      data = data.toString()'
         parse b t b
       end
+              /* **** New 12/22 **** */
+      when t='netrexx',t='nr' then do
+        nrc = getKeyWord(t b, 'netrexx', 7, 'D')
+        if nrc[5] = 0 then
+          nrc = getKeyWord(t b, 'nr', 2, 'D')
+        b = nrc[1]
+        ufn = ufn + 1
+        n=n+1;code[n] = '      data = user'ufn'(data)'
+
+             /* ensure the user fuction ends with "return data" if needed */
+        ucode = nrc[2].strip('B').strip('T',';') -- clean it up
+        lsc = ucode.lastpos(';') + 1
+        parse ucode . =(lsc) verb object rest  -- what is last statement?
+        if verb \= 'return' then ucode = ucode';return data' -- add a return if needed
+
+        uln=uln+1;uf[uln] = 'method user'ufn'(data)'
+        uln=uln+1;uf[uln] = ' 'ucode
+
+        parse b t b 1 ob
+      end
+              /* **** End New 12/22 **** */
       otherwise
         nop
     end
 
     -- process formater options
     word = b.word(1)
+    word = word.strip('T',',')
     select
       when 'right'.abbrev(word,1) then do
         conv = '.strip("B").right('
@@ -854,6 +1042,8 @@ class spec extends stage
     if pad = '"' then pad = '""'
     if pad = '\\' then pad = '\\\\'
 
+    t = t.strip.strip('T',',')
+
     tlow = t.lower()
     parse tlow tlowone '.'
 
@@ -869,6 +1059,9 @@ class spec extends stage
     end
 
     select
+      when t = '', t = '.' then do   -- dot = ignore output
+        nop
+      end
       when ('nextword'.abbrev(tlowone,5) | 'nword'.abbrev(tlowone,2)) & t.pos('.')>0 then do
         parse t '.' x
         if \x.datatype('W') then
@@ -894,7 +1087,7 @@ class spec extends stage
         if conv<>'' then
           signal StageError(13,'Error (specs) - 'pInfo' - field 't' has no implied length')
         n=n+1;code[n] = '      if data \\== "" then'
-        n=n+1;code[n] = '        outp = outp" "data -- 1019'
+        n=n+1;code[n] = '        outp = outp" "data'
       end
       when 'next'.abbrev(tlow) then do
         if conv<>'' then
@@ -953,6 +1146,8 @@ class spec extends stage
     parse b t b
   end
 
+                /* end of stage input processing */
+
   if pr then
     p[s] = 1
 
@@ -987,19 +1182,27 @@ class spec extends stage
   n=n+1;code[n] = 'exit(rc*(rc<>4)*(rc<>12))'
 
 /* ****** New 6/22 **** */
-  n=n+1;code[n] = 'method codew(data=Rexx, wsep=Rexx, isfield=Rexx 0) returns Rexx'
+  n=n+1;code[n] = 'method codew(data=Rexx, wsep=Rexx, isfield=Rexx 0) returns Rexx signals ThreadQ'
   n=n+1;code[n] = ' safesep = ""'
-  n=n+1;code[n] = ' loop'        -- find a non-occuring character string
-  n=n+1;code[n] = '  safespace = netrexx.lang.RexxTime.time("L").right(6)'
+  n=n+1;code[n] = ' loop count = 0 to 99'        -- find a non-occuring character string
+  n=n+1;code[n] = '  safespace = time("L").right(6)'
   n=n+1;code[n] = '  if data.pos(safespace) = 0 then leave'
   n=n+1;code[n] = ' end'
-  n=n+1;code[n] = ' if isfield then do'
-  n=n+1;code[n] = '  loop'
-  n=n+1;code[n] = '   safesep = netrexx.lang.RexxTime.time("L").right(6)'
-  n=n+1;code[n] = '   if data.pos(safesep)=0 & safesep <> safespace then leave'
+  n=n+1;code[n] = ' if count > 99 then do'
+  n=n+1;code[n] = '   say "Codew could not get safespace"'
+  n=n+1;code[n] = '   exit(13)'
   n=n+1;code[n] = ' end'
-  n=n+1;code[n] = 'end'
-  n=n+1;code[n] = 'if data.substr(1,1) = wsep then data = safesep""data'
+  n=n+1;code[n] = ' if isfield then do'
+  n=n+1;code[n] = '  loop count = 0 to 99'
+  n=n+1;code[n] = '   safesep = time("L").right(6) + 1'
+  n=n+1;code[n] = '   if data.pos(safesep)=0 & safesep <> safespace then leave'
+  n=n+1;code[n] = '  end'
+  n=n+1;code[n] = '  if count > 99 then do'
+  n=n+1;code[n] = '   say "Codew could not get safesep"'
+  n=n+1;code[n] = '   exit(13)'
+  n=n+1;code[n] = '  end'
+  n=n+1;code[n] = ' end'
+  n=n+1;code[n] = ' if data.substr(1,wsep.length) = wsep then data = safesep""data'
   n=n+1;code[n] = ' data = data.changestr(" ", safespace)'
   n=n+1;code[n] = ' data = data.changestr(wsep, " "safesep)'  -- makes sure each field has a character in it
   n=n+1;code[n] = 'return data'
@@ -1019,12 +1222,19 @@ class spec extends stage
   n=n+1;code[n] = 'return cs'
 
   n=n+1;code[n] = 'method c2xl(cs) returns Rexx' -- character string to hex string ala Rexx
-  n=n+1;code[n] = '  hex = ""'
-  n=n+1;code[n] = '  loop i = 1 to cs.length'
-  n=n+1;code[n] = '   hex = hex || cs.substr(i,1).c2x()'
-  n=n+1;code[n] = '  end'
+  n=n+1;code[n] = ' hex = ""'
+  n=n+1;code[n] = ' loop i = 1 to cs.length'
+  n=n+1;code[n] = '  hex = hex || cs.substr(i,1).c2x()'
+  n=n+1;code[n] = ' end'
   n=n+1;code[n] = 'return hex'
-/* ***** End new ******* */
+/* ***** End new 6/22 ******* */
+
+/* ***** New 12/22 ***** */
+   -- include the user functions
+  loop i = 1 to uln
+    n=n+1;code[n] = uf[i]
+  end
+/* ***** End new 12/22 ******* */
 
   code[0]=n
 
@@ -1046,31 +1256,31 @@ class spec extends stage
   return 1
 
 method getSep(opts, tok, len) returns Rexx[]
-    wsep = Rexx null
-    wsepa = Rexx ''
-    if \ tok.lower.abbrev(opts.word(1), len) then return [1]
+  wsep = Rexx null
+  wsepa = Rexx ''
+  if \ tok.lower.abbrev(opts.word(1).lower, len) then return [1]
 
 --  /*  I have not been able to get these through OK. 12/22 Jeff Hennick
-    select case opts.word(2).lower()
-      when 'lf' then wsep = '\x0D'
-      when 'cr' then wsep = '\x0A'
-      when 'crlf' then wsep = '\x0A\x0D'
-      otherwise wsep = null
-    end
+  select case opts.word(2).lower()
+    when 'lf' then wsep = '\x0D'
+    when 'cr' then wsep = '\x0A'
+    when 'crlf' then wsep = '\x0A\x0D'
+    otherwise wsep = null
+  end
 --   */
 
-    if wsep \== null then do
-      wsepa[1] = opts.subword(3)
+  if wsep \== null then do
+    wsepa[1] = opts.subword(3)
+  end
+  else do
+    wsepa = getKeyWord(opts, tok, len, 'S')
+    do
+      wsep = getXorc(wsepa[2])    -- PROBLEM! with getXorC('@')
+    catch BadArgumentException
+      wsep = null
     end
-    else do
-      wsepa = getKeyWord(opts, tok, len, 'S')
-      do
-        wsep = getXorc(wsepa[2])    -- PROBLEM! with getXorC('@')
-      catch BadArgumentException
-        wsep = null
-      end
     /* we have either a single character or null */
-    end
+  end
 
   if wsep == null then do
     if wsepa[2].datatype('X') & wsepa[2].length()//2 = 0 then do
@@ -1100,7 +1310,7 @@ method getSep(opts, tok, len) returns Rexx[]
   end
 
   ret = [3, wsep, rest]
-  return ret
+return ret
 
 method xl2c(hex) returns Rexx -- hex string to character string ala Rexx
   if hex.length()//2 = 1 then hex = "0"hex
@@ -1108,5 +1318,4 @@ method xl2c(hex) returns Rexx -- hex string to character string ala Rexx
   loop i = 1 by 2 to hex.length()
     cs = cs || hex.substr(i,2).x2c()
   end
-  return cs
-
+return cs
