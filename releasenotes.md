@@ -8,7 +8,6 @@
 - tools to assist build systems, like ninja build
 - a new option -noimplicituses to avoid automatic addition of Classic Rexx compatible classes to 'uses' -see below
 
-
 ## Fixes
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
   could look for a shell that was not there (Marc Remes)
@@ -22,6 +21,7 @@
 - when interpreting, wait for all threads to complete after main() returned.
 - better diagnostics on failed clgMain (compile-load-go) dynamic compiles, e.g. for pipes and their stage exits
 - an error in RexxTime which could lead to a recursive call has been solved
+- #43: Erroneous leading zero on Date() and Date('n') corrected, now following the language reference and standard
 
 # NetRexx 4.04 GA [12 Sep 2022]
 
