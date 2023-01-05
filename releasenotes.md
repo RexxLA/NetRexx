@@ -22,7 +22,7 @@
 - better diagnostics on failed clgMain (compile-load-go) dynamic compiles, e.g. for pipes and their stage exits
 - an error in RexxTime which could lead to a recursive call has been solved
 - #43: Erroneous leading zero on Date() and Date('n') corrected, now following the language reference and standard
-
+- allow lowercase 'date()' functions
 # NetRexx 4.04 GA [12 Sep 2022]
 
 ## Project
