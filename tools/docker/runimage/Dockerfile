@@ -18,10 +18,9 @@ wget http://netrexx.org/files/NetRexx-4.05-alpha.zip && \
 unzip NetRexx-4.05-alpha.zip && \
 apt-get install nano -y && \
 apt-get install zsh -y && \
-mv /bin/pipe /bin/pipr && \
 chmod +x /bin/nrc && \
 chmod +x /bin/NetRexxC.sh && \
-chmod +x /bin/pipr && \
+chmod +x /bin/pipe && \
 echo 'alias pipc="java org.netrexx.njpipes.pipes.compiler"' >>/root/.bashrc && \
 echo 'alias pipe="java org.netrexx.njpipes.pipes.runner"' >>/root/.bashrc && \
 echo 'alias pipc="java org.netrexx.njpipes.pipes.compiler"' >>/root/.zshrc && \
