@@ -7,6 +7,7 @@
 - a new option -deps to list dependencies
 - tools to assist build systems, like ninja build
 - a new option -noimplicituses to avoid automatic addition of Classic Rexx compatible classes to 'uses' -see below
+- org.netrexx.njpipes.pipes.runner now reads pipeline source from stdin when invoked without arguments 
 
 ## Fixes
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
@@ -23,6 +24,8 @@
 - an error in RexxTime which could lead to a recursive call has been solved
 - #43: Erroneous leading zero on Date() and Date('n') corrected, now following the language reference and standard
 - allow lowercase 'date()' functions
+- updated ADDRESSable bin/pipe shell script
+
 # NetRexx 4.04 GA [12 Sep 2022]
 
 ## Project
