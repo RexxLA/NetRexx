@@ -7,7 +7,10 @@
 - a new option -deps to list dependencies
 - tools to assist build systems, like ninja build
 - a new option -noimplicituses to avoid automatic addition of Classic Rexx compatible classes to 'uses' -see below
-- org.netrexx.njpipes.pipes.runner now reads pipeline source from stdin when invoked without arguments 
+- org.netrexx.njpipes.pipes.runner now reads pipeline source from
+  stdin when invoked without arguments 
+- the package org.netrexx.address is now deprecated, because its work is
+  better done by the ADDRESS statement
 
 ## Fixes
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
