@@ -75,6 +75,7 @@
 /* jre/lib+jre/lib/ext scan to sun.boot.class.path+java.ext.dirs scan */
 /* 2020.12.19 -- MRE -- added support for JPMS on Java 9+             */
 /* 2022.01.28 -- MRE -- added support for --[upgrade-]module-path     */
+/* 2023.01.10 -- MRE -- packdirfind again using File, faster          */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -89,7 +90,6 @@ import java.nio.file.FileSystems
 import java.nio.file.OpenOption
 import java.nio.file.LinkOption
 import java.nio.file.StandardOpenOption
-
 
 /**   This is the generalized class processor.  The classer object    */
 /*   handles everything to do with classes: finding them, testing     */
@@ -592,7 +592,7 @@ return
      Calls itself recursively to explore the complete directory tree
    */
   method packmodfind(dirpath=String) private
-    dpath=dirpath
+      dpath=dirpath
     
     e=Exception
   do
@@ -968,27 +968,22 @@ return count
     /* kludge to make sure we don't run into macOS open files bug */
     if System.getProperty('os.name') == "Mac OS X" then do
       if System.getProperty('user.dir') == System.getProperty('user.home') then
-	if classseg=='.' then return
+      	if classseg=='.' then return
     end
     /* so it now only is a problem when on macOS, in the user home dir,
      * looking for classes in packages in subdirs */ 
-    
-    s = String[1]
-    s[0] = ''
-    dpath=Paths.get(dirpath,s)            -- check the path
 
-    o = LinkOption[1]
-    o[0] = LinkOption.NOFOLLOW_LINKS    
-    o = LinkOption[0]         -- we do want to support links
-    if \Files.isDirectory(dpath, o) then return       -- directory does not exist
+    dir=File(dirpath)
+    if \dir.isDirectory() then return
+
 
     if rxt.superflag.diag then do
       -- only time the outer level
-      say '# PACKDIRFIND '''dpath.getFileName()''' loop start'
+      say '# PACKDIRFIND '''dir.getPath()''' loop start'
       start=System.currentTimeMillis()
     end
     -- don't recurse if explicit "current directory please"
-    packdirsearch(dpath, '', packlook, classseg.length()>0)
+    packdirsearch(dir, '', packlook, classseg.length()>0)
     if rxt.superflag.diag then say '# PACKDIRFIND loop end after' System.currentTimeMillis()-start'ms'
 
   /** packdirsearch -- private method to search a directory
@@ -1005,44 +1000,32 @@ return count
      We make the assumption that package directory names cannot end in
      .class, as the File() + isDirectory call is much slower.
      [In fact we now assume no embedded '.']
-
-     --MRE Now scanning with faster java.nio
    */
-  method packdirsearch(dir=Path, package=String,-
+  method packdirsearch(dir=File, package=String,-
                        packlook=Hashtable, recurse=boolean) private 
     /* search the directory */
-    o = LinkOption[1]
-    o[0] = LinkOption.NOFOLLOW_LINKS    
-    o = LinkOption[0]         -- we do want to support links
-
-    do
-      entries=Files.newDirectoryStream(dir)      -- get list of names
-      if entries=null then return                -- [avoids Linux problem]
-      hasclasses=boolean 0
-      i = Iterator
-      i = entries.iterator()
-      loop while i.hasNext() 
-        dpath = Path i.next()
-        name=dpath.getFileName().toString()
-
-        if name.indexOf(int(dot), 0)>=0 then do  -- has dot, cannot be directory
-          if hasclasses then iterate            -- had a .class file already
-          if name.endsWith('.class') then hasclasses=1  -- not a directory
-          iterate 
-        end
-        /* plain name -- could be a directory */
-        if \recurse then iterate                     -- .. if interesting ...
-        if name.indexOf(int(dot), 0)>=0 then iterate -- has dot, cannot be directory
-        if \Files.isDirectory(dpath,o) then iterate 
-        if package.length()=0 then newpack=name
-        else newpack=package'.'name
-        packdirsearch(dpath, newpack, packlook, recurse)
-      end 
-      if hasclasses then if package.length()\=0 then addpackage(package, packlook)
-    catch e=IOException
-      signal RxQuit(rxt, null, 'exception.cannot.be.caught', e.getMessage())
-    end
+    entries=dir.list()                         -- get list of names
+    if entries=null then return                -- [avoids Linux problem]
+    hasclasses=boolean 0
+    loop i=0 for entries.length
+      name=entries[i]
+      if name.indexOf(int(dot), 0)>=0 then do  -- has dot, cannot be directory
+        if hasclasses then iterate i           -- had a .class file already
+        if name.endsWith('.class') then hasclasses=1  -- not a directory
+        iterate i
+      end
+      /* plain name -- could be a directory */
+      if \recurse then iterate i                    -- .. if interesting ...
+      if name.indexOf(int(dot), 0)>=0 then iterate i-- has dot, cannot be directory
+      item=File(dir, name)
+      if \item.isDirectory() then iterate i
+      if package.length()=0 then newpack=name
+      else newpack=package'.'name
+      packdirsearch(item, newpack, packlook, recurse)
+    end i
+    if hasclasses then if package.length()\=0 then addpackage(package, packlook)
     return
+ 
 
   /** ADDPACKAGE -- add package to known list, if new
      Arg1 is package name to add; exact case
