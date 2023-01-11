@@ -76,6 +76,7 @@
 /* 2020.12.19 -- MRE -- added support for JPMS on Java 9+             */
 /* 2022.01.28 -- MRE -- added support for --[upgrade-]module-path     */
 /* 2023.01.10 -- MRE -- packdirfind again using File, faster          */
+/* 2023.01.10 -- rvj -- limit home dir restriction macOS to ./Library */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -965,17 +966,9 @@ return count
       dirpath=System.getProperty('user.dir')   -- .. so use current directory
     else dirpath=classseg                     -- [else use specified]
 
-    /* kludge to make sure we don't run into macOS open files bug */
-    if System.getProperty('os.name') == "Mac OS X" then do
-      if System.getProperty('user.dir') == System.getProperty('user.home') then
-      	if classseg=='.' then return
-    end
-    /* so it now only is a problem when on macOS, in the user home dir,
-     * looking for classes in packages in subdirs */ 
-
     dir=File(dirpath)
-    if \dir.isDirectory() then return
 
+    if \dir.isDirectory() then return
 
     if rxt.superflag.diag then do
       -- only time the outer level
@@ -1002,7 +995,15 @@ return count
      [In fact we now assume no embedded '.']
    */
   method packdirsearch(dir=File, package=String,-
-                       packlook=Hashtable, recurse=boolean) private 
+                       packlook=Hashtable, recurse=boolean) private
+    /* kludge to make sure we don't run into macOS max open files bug */
+    if System.getProperty('os.name') == "Mac OS X" then do
+      if System.getProperty('user.dir') == System.getProperty('user.home') then
+	if dir.toString().startsWith('./Library/') then return
+    end
+    /* so now any package will be found in the macOS user home hierarchy
+     * as long it is not in the hidden, and reserved for the system, ./Library folder */ 
+
     /* search the directory */
     entries=dir.list()                         -- get list of names
     if entries=null then return                -- [avoids Linux problem]

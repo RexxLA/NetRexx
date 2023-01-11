@@ -28,6 +28,9 @@
 - #43: Erroneous leading zero on Date() and Date('n') corrected, now following the language reference and standard
 - allow lowercase 'date()' functions
 - updated ADDRESSable bin/pipe shell script
+- lifted restriction on macOS where due to an Apple caused 'feature' the home directory was not scanned for packages
+  when a '.' was part of the CLASSPATH environment variable. The restriction is now limited to the $HOME/.Library hidden
+  system directory - on macOS, NetRexx will not find modules, packages and classes in that location.
 
 # NetRexx 4.04 GA [12 Sep 2022]
 
