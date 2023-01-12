@@ -1,0 +1,302 @@
+-- all.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2023  Jeffrey Hennick, Jeff @ Jeff-H . com
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+  22/ 1/10 New. From LOCATE and SPEC. Jeff Hennick
+*/
+
+/** all
+
+>>--ALL--+----------+--| expression |---><
+         +--%debug--+ (6)
+         +--%dump---+ (7)
+
+Notes:
+(1) "expression" consists of one or more delimitedstrings separated
+    by logical ANDs, ORs, and NOTs, and grouped, if needed, by parentheses.
+(2) "&" is used for AND.
+(3) Since "|" is the default stage separator, "!" may be used for OR.
+(4) Since NetRexx uses "(" and ")" for options -- which are not used in the ALL stage --
+    "[" and "]" must be used for parentheses.
+(5) CMS Pipelines, having originated on 3270 terminals, uses "¬" for NOT.
+    This symbol is not readily typed on terminals running NetRexx Pipelines,
+    so as alternatives, the NetRexx "\\" (it needs to be doubled to "escape" it)
+    or the Kex "^" NOT symbols may be used as alternatives.
+(6) %debug (must be lowercase)
+    NetRexx Pipelines writes the logic line to the file ALL.DEBUG in the current directory.
+    Windows may make it all.debug
+    CMS Pipelines writes constructed pipeline to ALL DEBUG A.
+(7) %dump (must be lowercase) - writes to the primary output stream as the first record.
+    NetRexx Pipelines writes the logic line.
+    CMS Pipelines writes constructed pipeline.
+CMS Pipelines uses is own logic order. NetRexx Pipelines uses regular NetRexx logic.
+
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class all extends stage
+-- trace results
+
+ss = Rexx "" -- output intermediate source array
+sline = int 0 -- output source last line number
+lline = Rexx "" -- logic line being built
+
+method run()  -- never should be called
+say "'Run' was called!"
+    rc = 16
+    exit(rc)
+
+method stageExit(pInfo=Rexx,code=Rexx) returns boolean
+do
+
+     /*
+      * pInfo    = name of pipe,
+      * pInfo[1] = stage number in pipe
+      * pInfo[2] = stage label, null if no label
+      * pInfo[3] = stage name
+      * pInfo[4] = stage arguments
+      * pInfo[5] = rest of pipe
+      * pInfo[6] = sep
+      * pInfo[7] = end
+      * pInfo[8] = not modifier active
+      * pInfo[9] = stage is a driver
+      * code     = ''
+      * code[0]  = 0
+      *
+      * When compilerExit returns with true, the compiler expects:
+      *
+      * pInfo[2] = stage label
+      * pInfo[3] = name of stage
+      * pInfo[4] = stage arguments
+      * pInfo[5] = rest of the pipe
+      * code[0]  = number of lines generated
+      * code[n]  = line n of lines generated
+      *
+      */
+
+ pid  = pInfo
+ name = pInfo[3]
+ b    = pInfo[4]
+
+ debug = 0
+ parse b fw residue
+ if fw = "%debug" then do
+   b = residue
+   debug = 1
+ end
+
+ dump = 0
+ parse b fw residue
+ if fw = "%dump" then do
+   b = residue
+   dump = 1
+ end
+
+ see = 0
+ parse b fw residue
+ if fw = "%see" then do
+   b = residue
+   see = 1
+ end
+
+ not = ""
+ if pInfo[8] then not = "\\"
+
+ cname = stageName(name,pid,pInfo[1])
+
+ s("class "cname" extends stage private")
+ -- s(" trace results")
+ s("method run()")
+
+ s(" s0 = boolean 1")
+ s(" s1 = boolean 1")
+ s(" record  = rexx")
+ s(" rc = int")
+ if dump then do
+  s(" do")
+  s("")
+  dumpline = sline
+  s("  output(dumpl)")
+  s(" catch StageError")
+  s(" end")
+ end
+
+ if see then do
+  s("")
+  seeline = sline
+ end
+
+ if debug then do
+  s("do")
+  s("file = 'ALL.DEBUG'")
+  s("by = byte[]")
+  s("boutFile = DataOutputStream(FileOutputStream(String file,boolean 1))")
+  s("bout = BufferedOutputStream(boutFile)")
+  s("")
+  debugline = sline
+  s("lend = debugl || System.lineSeparator()")
+  s("by = lend.toString().getBytes()")
+  s("bout.write(by,0,by.length)")
+  s("catch en= FileNotFoundException")
+  s("Emsg(13,'Error - 'en.getMessage())")
+  s("catch ee = IOException")
+  s("Emsg(13,'Error - 'ee.getMessage())")
+
+  s("finally")
+  s("do")
+  s(" bout.close()")
+  s("catch ee=IOException")
+  s(" Emsg(13,'Error - 'ee.getMessage())")
+  s("end")
+ s("end")
+ end
+
+
+
+
+ s(" loop forever")
+ s("    do")
+ s("     aobj = peekto()")
+ s("    catch StageError")
+ s("     rc = rc()")
+ s("     leave")
+ s("    end")
+ s("    record = Rexx aobj")
+ s("    if" not "-")
+ s("")
+ logicline = sline
+ s("    then do")
+ s("       if s0 then do")
+ s("          selectOutput(0)")
+ s("          output(aobj)")
+ s("       catch StageError")
+ s("          selectOutput(1)")
+ s("          s0 = 0")
+ s("       end")
+ s("    end; else")
+ s("       if s1 then do")
+ s("          selectOutput(1)")
+ s("          output(aobj)")
+ s("       catch StageError")
+ s("          selectOutput(0)")
+ s("          s1 = 0")
+ s("       end")
+ s("    readto()")
+ s(" catch StageError")
+ s(" end")
+
+ s("rc = mrc()")
+ s("exit(rc*(rc<>12))")
+
+
+ d_str = DString
+ orsym = Rexx 124.d2c
+
+ rest = b
+
+ loop while rest <> ""
+   parse rest fc 2 rest
+
+   select case fc
+    when "|", "!" then do
+     o(orsym)
+    end
+    when "&" then do
+     o("&")
+    end
+    when "\\" then do
+     o("\\")
+     if rest.substr(1,1) = "\\" then do
+       rest = rest.substr(2)
+     end
+    end
+    when "^", "¬" then do
+     o("\\")
+    end
+    when "]" then
+     o(")")
+    when "[" then
+     o("(")
+    when "(", ")", " " then
+     o(fc)
+    when "H","h","X","x" then do
+     candidate = rest
+     hstr = ""
+     loop c = 1 to rest.length() by 2
+       pcandidate = candidate
+       parse candidate c2 3 candidate
+       if \ c2.datatype('X') then leave
+       hstr = hstr""c2.x2c
+     end
+     c = c -- prevent warning
+     o("record.pos('"hstr"')>0")
+     rest = pcandidate
+    end
+    when "B","b" then do
+     candidate = rest
+     bstr = ""
+     loop c = 1 to rest.length() by 4
+       pcandidate = candidate
+       parse candidate c4 5 candidate
+       if \ c4.datatype('B') then leave
+       bstr = bstr""c4.b2x.x2c
+     end
+     o("record.pos('"bstr"')>0")
+     rest = pcandidate
+    end
+    otherwise
+     d_str = DString(fc''rest)
+     if d_str.Delimiter() \= '' then do
+       o("(record.pos('"d_str.String()"')>0)")
+       rest = d_str.Residue()
+       iterate
+     end
+     else
+      o(fc)
+  end
+ end
+
+ ss[0] = sline
+ if debug then do
+   dl = Rexx lline.changestr("\\","\\\\")
+   ss[debugline] = ' debugl = Rexx "'dl'"'
+ end
+ if dump then do
+   dl = Rexx lline.changestr("\\","\\\\")
+   ss[dumpline] = ' dumpl = Rexx "'dl'"'
+ end
+ if see then do
+   dl = Rexx lline.changestr("\\","\\\\")
+   ss[seeline] = ' say "'dl'"'
+ end
+
+ ss[logicline] = lline
+
+ loop i = 0 to sline
+  code[i] = ss[i]
+ end
+
+ pInfo[3] = cname
+ pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
+end
+
+return 1
+
+method o(term)
+ lline = lline || term
+return
+
+method s(source)
+ sline = sline + 1
+ ss[sline] = source
+return
+
