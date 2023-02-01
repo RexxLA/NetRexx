@@ -20,7 +20,32 @@
 \large
 \input{../boilerplate/series}
 %\input{../boilerplate/conventions}
-\mainmatter
+\mainmatter%
+\lstset{showstringspaces=false}
+\lstset{keepspaces=true}
+% \lstdefinelanguage{NetRexx}
+% \lstset{morekeywords={blabla}}
+\lstset{keywordstyle=\color{black}}
+
+
+
+% \lstset{language=NetRexx,
+%     captionpos=none,
+%    tabsize=3,
+%    alsolanguage=Rexx,
+%    keywordstyle=\color{nrorange},
+%    commentstyle=\color{nrgrey},
+%    stringstyle=\color{nrgreen},
+%    numbers=none,
+%    numberstyle=\tiny,
+%    numbersep=5pt,
+%    breaklines=true,
+%    showstringspaces=true,
+%    index=[1][keywords],
+%    columns=fixed,
+%    basicstyle=\fontsize{10}{10}\fontspec{Hack},emph={label}
+% }
+
 \chapter{Introduction}
 A Pipeline, or Hartmann
 Pipeline\footnote{\url{https://en.wikipedia.org/wiki/CMS_Pipelines}}\footnote{This
@@ -604,7 +629,7 @@ Stages can be categorised in different groups : device drivers, record selection
 
 Chapter \ref{BuiltinStages} documents all built-in stages and differences to CMS Pipelines.
 
-For detailed information on then built-in stages, refer to the CMS Pipelines User's Guide and Reference.
+For detailed information on the built-in stages, refer to the CMS Pipelines User's Guide and Reference.
 
 \section{Device drivers}\label{ch:devicedrivers}
 
@@ -864,9 +889,9 @@ assignment to quickly reverse a string.
 /* BAGVENDT REXX -- Reverse the contents of lines in the pipeline */
 signal on error
 do forever
-'peekto data'
-'output' reverse(data)
-'readto'
+  'peekto data'
+  'output' reverse(data)
+  'readto'
 end
 error: exit RC*(RC<>12)
 \end{lstlisting}
@@ -885,15 +910,15 @@ by the import from org.netrexx.njpipes.pipes. (file: \texttt{bagvendt.nrx})
 \begin{lstlisting}
 import org.netrexx.njpipes.pipes.
 class bagvendt extends stage
-method run()
-loop forever
-line = Rexx peekto()
-output(line.reverse())
-readto()
-catch StageError
-rc = rc()
-end
-exit(rc*(rc<>12))
+  method run()
+    loop forever
+      line = Rexx peekto()
+      output(line.reverse())
+      readto()
+    catch StageError
+      rc = rc()
+    end
+    exit(rc*(rc<>12))
 \end{lstlisting}
 So that would look fairly familiar, and admittedly, a bit easier for us already well versed in \nr{}.
 Because the source uses pipe idioms, the regular \nr{} compiler cannot understand everything, and we need to uses the pipes compiler \emph{pipc} to compile this source. This will call the \nr{} and Java compilers at the appropriate moment. The resulting .class file needs to be on the CLASSPATH environment variable.
@@ -906,17 +931,17 @@ NetRexx portable processor 4.05-GA build 2,156-20230131-1212
 Copyright (c) RexxLA, 2011,2023.   All rights reserved.
 Parts Copyright (c) IBM Corporation, 1995,2008.
 Program bagvendt.nrx
-=== class bagvendt ===
-method run
-signals ThreadQ
-overrides stage.run
+  === class bagvendt ===
+    method run
+      signals ThreadQ
+      overrides stage.run
 Compilation of 'bagvendt.nrx' successful
 $ pipe 'literal a plan | bagvendt | cons'
 nalp a
 \end{lstlisting}
 
 
-\section{Multi-Stream Pipelines}
+\section{Multi-Stream Pipelines}\index{multi-stream pipelines}
 One of the defining differences with Unix pipes is the possibility to
 define multi-stream pipelines. The selection stages from the previous
 chapter all have \emph{secondary streams}. What the selection
@@ -946,7 +971,7 @@ further processing by using the secondary stream that \emph{locate}
 provides.
 
 To prepare for this, we give the secondary stream a name by providing
-a label - a character string terminated by a \texttt{:} colon. We call it, in absence of any creativity,
+a label - a character string terminated by a \texttt{:} colon\index{label}. We call it, in absence of any creativity,
 \emph{rest:}\footnote{often, you will see it being called 'a:'}. Also, we send the selected \texttt{foo} output into a
 \emph{hole} stage, where it disappears.
 \begin{lstlisting}
@@ -996,16 +1021,16 @@ As stages are threads there is no guarantee of order of execution of the additio
 \begin{lstlisting}
 $ cat multipipe.njp
 pipe ( multipipe end ? )
-literal  eno |
-a: faninany |
-reverse |
-cons ?
-literal  owt|
-a:  ?
-literal  eerht |
-a: ?
-literal  ruof |
-a:
+     literal  eno |
+  a: faninany |
+     reverse |
+     cons ?
+     literal  owt|
+  a: ?
+     literal  eerht |
+  a: ?
+     literal  ruof |
+  a:
 
 $ pipc multipipe
 pipe (multipipe end ? ) literal  eno | a: faninany | reverse | cons ? literal  owt| a:  ? literal  eerht | a: ? literal  ruof | a:
@@ -1022,7 +1047,7 @@ two
 \end{lstlisting}
 
 
-\section{Pipeline Stalls}
+\section{Pipeline Stalls}\index{stall} \index{deadlock}
 With multi-stream pipelines a new problem sometimes rears its head - a \emph{Pipeline stall},
 also called \emph{deadlock}. This happens when stages
 wait for input that cannot be delivered, in a way that ensures that it
@@ -1488,18 +1513,21 @@ opposite, while when the pipeline is issued from the Workspace for
 needs double quotes instead of the - for SQL statements- normal single quotes.
 \end{shaded}
 \chapter{The Pipes Runner}\label{pipesrunner}\index{pipes runner}
-The pipes compiler is used in both precompiled and directly executed
-pipelines. When you directly execute a pipeline from the commandline
-or from the \emph{nrws} \nr{} workspace, the process is optimized to not persist
-generated \nr{}, Java and Class files to disk before execution; the
-whole process runs from memory. The Pipes Runner uses the Pipes
-Compiler for this purpose, and as such misses the options for
-persistence\footnote{But specifying them will not generate an error}.
 
-The \emph{pipe} command alias start the Pipes Runner, which is a
+The \emph{pipe} command alias starts the Pipes Runner, which is a
 command processor that can execute a pipe from the command line in an
 OS shell, the OS being Windows, Linux or macOS\footnote{this is a
   non-exhaustive list of operating systems}.
+
+The Pipes Compiler is used in both precompiled and directly executed
+pipelines. When you directly execute a pipeline from the commandline
+or from the \emph{nrws} \nr{} workspace, the process is optimized to not persist
+generated .nrx, .java and .class files to disk before execution; the
+whole process runs from memory.
+
+The Pipes Runner uses the Pipes
+Compiler for this purpose, and as such misses the options for
+persistence\footnote{But specifying them will not generate an error}.
 
 A pipe can be run with options prepended within parentheses, like this:
 \begin{lstlisting}
@@ -1523,13 +1551,13 @@ needs the options (test1 sep !).
 \\\midrule
 debug&The debug option specifies a bitmask for
 debugging the execution of a pipe; (debug 63), for
-example, generates a rather complete debugging trail).
+example, generates a rather complete debugging trail.
 \\\midrule
 end&The default pipe end character is the ' ?'
   (question mark), which can be overridden here. Note that the
   backslash, which is an obvious pipe end character for the z/VM 3270
   interface, is not a good choice for Windows and Unix shells.
-  \\\midrule
+\\\midrule
 stall& The duration in number of milliseconds of a pipe stall (or deadlock)
 detection cycle.
 \\\bottomrule
@@ -1537,14 +1565,17 @@ detection cycle.
 
 
 \chapter{The Pipes Compiler}
-The purpose of precompiling a pipeline specification is to produce a
+The \emph{pipc} command alias starts the Pipes Compiler,
+The purpose of compiling a pipeline specification is to produce a
 .class file for the JVM that can be run independently and on different
 machines; only the JVM and the NetRexxC.jar or the NetRexxF.jar are
 required to run a precompiled pipe. A set of precompiled pipes can be
 shipped as an application.
 
 When precompiling pipes, there are options to save and view the
-generated \nr{}, Java and JVM Class files. A precompiled pipe has
+generated \nr{}, Java files.
+
+A precompiled pipe has
 the advantage that it can be executed over and over in an application,
 without the need to compile it every time; the performance savings are
 accumulative in this scenario.
@@ -1567,7 +1598,7 @@ pipc -gen -keep testpipe.njp
 This will generate the \nr{} source as well as keep the java source for testpipe.njp.
 
 
-\chapter{Built-in Stages} \label{BuiltinStages} \index{built-in stages})
+\chapter{Built-in Stages} \label{BuiltinStages} \index{built-in stages}
 This section describes the set of built-in stages, i.e. the ones that
 are delivered with the downloadable open source package. These stages
 are directly executable from the NetRexxC.jar file or the NetRexxF.jar
@@ -1625,13 +1656,11 @@ the CMS version of Pipelines. A few differences are unavoidable.
 %% \include{appendixa}
 \backmatter
 %% \listoffigures
-%\listoftables
+\listoftables
 %% \lstlistoflistings
 \printindex
 \clearpage
 \psset{unit=1in}
-
-
 
 \begin{pspicture}(3.5,1in)
   \psbarcode{\isbn}{includetext guardwhitespace}{isbn}
