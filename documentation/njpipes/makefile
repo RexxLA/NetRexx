@@ -1,3 +1,4 @@
+
 CLASSPATH=.:../../build/lib/NetRexxF.jar
 NRX_COMPILE_COMMAND = java -cp $(CLASSPATH) org.netrexx.process.NetRexxC
 NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -utf8
@@ -20,10 +21,11 @@ DOCNAME         := "NetRexx $(RELEASE) Pipelines Guide and Reference.pdf"
 
 all:	$(NRX_OBJS) $(PDFTARGET)
 
-$(TARGET).pdf: $(TEX_SRC)
-	wkhtmltopdf --minimum-font-size 25 --no-outline --page-width 10 -R 0 -L 3 stages.html stages.pdf
-	$(MAKE) -k $(TARGET).bbl
+$(TARGET).pdf: $(TARGET).tex stages.pdf
+#	$(MAKE) -k $(TARGET).bbl
 	$(LATEX_EXE) $(TARGET).tex
+	# bibtex $(TARGET)
+	makeindex $(TARGET)
 	$(RAIL_EXE) $(TARGET)
 	@while ( grep "There were undefined references." $(TARGET).log >/dev/null ); do \
 		echo '** Re-running pdfLaTeX **'; \
@@ -32,10 +34,15 @@ $(TARGET).pdf: $(TEX_SRC)
 	done
 	mv njpipes.pdf $(DOCNAME)
 
-$(TARGET).bbl: $(TEXSRC) $(BIBSRC)
+$(TARGET).bbl: $(TARGET).tex
 	$(LATEX_EXE) $(TARGET).tex
 #	bibtex $(TARGET)
 	makeindex $(TARGET)
+
+stages.pdf: stages.html
+	wkhtmltopdf --minimum-font-size 25 --no-outline --page-width 10 -R 0 -L 3 stages.html stages-tofix.pdf
+	# On fedora, the generated pdf must be 'fixed' by ghostscript
+	gs -o stages.pdf -sDEVICE=pdfwrite stages-tofix.pdf
 
 #
 # target clean removes compiled products
@@ -45,6 +52,6 @@ clean:
 	rm -f *.class
 	rm -f *.crossref
 	rm -f *.aux
-	rm -f *~
+	rm -f *.out
 	rm -f *.pdf
 
