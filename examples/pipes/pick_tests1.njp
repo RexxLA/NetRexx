@@ -1,30 +1,6 @@
-/** pick
-
-           +-NOPAD----+
- >>--PICK--+----------+--+------------+--+------------+--+-==--+--+-----------------+-->
-           +-PAD xorc-+  +-ANYcase-(1)+  +-inputRange-+  +-^==-+  +-inputRange------+
-                         +-CASEANY----+                  +-<<--+  +-delimitedString-+
-                         +-CASEIGNORE-+                  +-<<=-+
-                         +-CASELESS---+                  +->>--+
-                         +-IGNORECASE-+                  +->>=-+
-                                                         +-\==-+
-                                                         +-/==-+(2)
-                                                         +-=---+
-                                                         +-^=--+
-                                                         +-<---+
-                                                         +-<=--+
-                                                         +->---+
-                                                         +->=--+
-                                                         +-\=--+(2)
-                                                         +-/=--+
-
-
- Notes:
-  (1) Can be before PAD/NOPAD. Depreciated.
-  (2) The backslash (\) may need to be escaped, doubled, in some systems shells.
-
-*/
+/** pick tests: pick_tests1.njp */
 /*
+  23/ 2/ 5 Documentation.  Jeff Hennick
   20/ 5/17 Jeff Hennick
 */
 
@@ -147,4 +123,67 @@ pipe (pick_tests1)
    o: ?
    literal line 1.1;line 2.1;line 2;Line 2.2 |
    split ; |
-   c12: ?
+   c12:
+
+/** pick
+
+          +--NOPAD-----+
+>>--PICK--+------------+--+----------------------+--+---------------+-->
+          +--PAD-xorc--+  +--LINENUMBERS--(1)(3)-+  +--| ANYcase |--+
+                          +--LN--(1)(3)----------+
+
+>--+--+---------------------------+--| List |--+--><
+   |  +--+--FROM--+--+---------+--+            |
+   |  |  +--TO----+  +--AFTER--+  |            |
+   |  +--WHILE--------------------+            |
+   +---| Fromto |------------------------------+
+
+Fromto:
+|--FROM--+---------+--| List |--+--TO--+---------+--| List |--+--|
+         +--AFTER--+            |      +--AFTER--+            |
+                                +--COUNT-number---------------+
+
+List:
+|--+---------------------------+--| Test |--|
+   +--| List |--+--AND--(4)-+--+
+                +--OR--(4)--+
+
+Test:
+|--| RangeString |--+--| NonEqualOp |--| RangeString |--+--|
+                    +--| EqualOp |--| CommaList |-------+
+
+CommaList:
+   +------(3)(6)-------+
+   +---,--(4)----------+
+|--v--| RangeString |--+--|
+
+RangeString:
+|--+--+----------------------------------------+--inputRange--+--|
+   |  +--PREVIOUS--(2)(3)--+-------------------|              |
+   |                       +--NOFIRST--(5)(3)--+              |
+   +--delimitedString-----------------------------------------+
+   +--number+--(4)--------------------------------------------+
+
+EqualOp:
+"strict"
+==  ¬==  <<  <<=  >>  >>=  IN  NOTIN  \== (3)  ^== (3)
+
+"numeric"
+=  ¬=  <  <=  >  >=  \= (3) ^= (3)
+
+ANYcase:
+ANYcase  CASEANY  CASEIGNORE  CASELESS  IGNORECASE
+
+Notes:
+(1) NetRexx only. Inserts the original record number followed by a SPACE
+    at the beginning of each output record.
+(2) NetRexx only. Uses the data from the previous record.  Before the first
+    record, this is Rexx "".
+(3) NetRexx Pipelines only.  Not yet in CMS Pipelines.
+(4) CMS Pipelines only.  Not yet in NetRexx Pipelines.
+(5) NetRexx Only. Uses first record data for first record instead of previous "".
+(6) CMS uses ",", NetRexx does not.  CMS limits to right side, NetRexx allows
+    on the left, too; also with any comparison op.
+    NetRexx concats the several ranges.
+
+*/

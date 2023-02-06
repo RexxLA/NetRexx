@@ -1,0 +1,166 @@
+/** pick tests: pick_tests3.njp */
+
+/*
+  23/ 2/ 5 Added tests; documentation.  Jeff Hennick
+  22/ 1/26 Jeff Hennick
+*/
+
+pipe (pick_tests3)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+   literal line 1.1;line 1.2 last;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   d: fanout ?
+
+-- pick linenumbers range = range ?
+   d: |
+   pick linenumbers 6.1 = 8.1 |
+   c1: compare any ~2# 1 pick linenumbers range = range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1 line 1.1;5 Line 2.2  |
+   split ; |
+   c1: ?
+
+-- pick ln dstring = range ?
+   d: |
+   pick ln /2/ = 8.1 |
+   c2: compare any ~2# 2 pick ln dstring = range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2 line 1.2 last;5 Line 2.2  |
+   split ; |
+   c2: ?
+
+-- pick string in range ?
+   d: |
+   pick /line/ in 1.4  |
+   c3: compare any ~2# 3 pick string in range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 last;line 2.1;line 2 |
+   split ; |
+   c3: ?
+
+-- pick dstring notin range?
+   d: |
+   pick /line/ notin 1.4  |
+   c4: compare any ~2# 4 pick string notin range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   c4: ?
+
+-- pick string in line ?
+   d: |
+   pick /line/ in 1.*  |
+   c5: compare any ~2# 5 pick string in line ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 last;line 2.1;line 2 |
+   split ; |
+   c5: ?
+
+-- pick anycase string in line ?
+   d: |
+   pick anycase /line/ in 1.*  |
+   c6: compare any ~2# 6 pick anycase string in line ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 last;line 2.1;line 2;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   c6: ?
+
+
+-- pick range not equal to previous same_range ?
+   literal line 1.1;line 1.2 last;line 2.1;lina 2.1;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   pick 6.3 ^= previous 6.3 |
+   c7: compare any ~2# 7 pick range not equal to previous same_range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 last;line 2.1;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   c7: ?
+
+-- pick previous range not equal to same_range ?
+   literal line 1.1;line 1.2 last;line 2.1;lina 2.1;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   pick previous 6.3 ^= 6.3 |
+   c8: compare any ~2# 8 pick previous range not equal to same_range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal line 1.1;line 1.2 last;line 2.1;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   c8: ?
+
+-- pick range = previous same_range ?
+   literal line 1.1;line 1.2 last;line 2.1;lina 2.1;Line 2.2;LIne 2.3 LAST;LINE 3.1 last |
+   split ; |
+   pick 6.3 = previous 6.3 |
+   c9: compare any ~2# 9 pick range = previous same_range ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Lina 2.1 |
+   split ; |
+   c9:
+
+
+/** pick
+
+          +--NOPAD-----+
+>>--PICK--+------------+--+----------------------+--+---------------+-->
+          +--PAD-xorc--+  +--LINENUMBERS--(1)(3)-+  +--| ANYcase |--+
+                          +--LN--(1)(3)----------+
+
+>--+--+---------------------------+--| List |--+--><
+   |  +--+--FROM--+--+---------+--+            |
+   |  |  +--TO----+  +--AFTER--+  |            |
+   |  +--WHILE--------------------+            |
+   +---| Fromto |------------------------------+
+
+Fromto:
+|--FROM--+---------+--| List |--+--TO--+---------+--| List |--+--|
+         +--AFTER--+            |      +--AFTER--+            |
+                                +--COUNT-number---------------+
+
+List:
+|--+---------------------------+--| Test |--|
+   +--| List |--+--AND--(4)-+--+
+                +--OR--(4)--+
+
+Test:
+|--| RangeString |--+--| NonEqualOp |--| RangeString |--+--|
+                    +--| EqualOp |--| CommaList |-------+
+
+CommaList:
+   +------(3)(6)-------+
+   +---,--(4)----------+
+|--v--| RangeString |--+--|
+
+RangeString:
+|--+--+----------------------------------------+--inputRange--+--|
+   |  +--PREVIOUS--(2)(3)--+-------------------|              |
+   |                       +--NOFIRST--(5)(3)--+              |
+   +--delimitedString-----------------------------------------+
+   +--number+--(4)--------------------------------------------+
+
+EqualOp:
+"strict"
+==  ¬==  <<  <<=  >>  >>=  IN  NOTIN  \== (3)  ^== (3)
+
+"numeric"
+=  ¬=  <  <=  >  >=  \= (3) ^= (3)
+
+ANYcase:
+ANYcase  CASEANY  CASEIGNORE  CASELESS  IGNORECASE
+
+Notes:
+(1) NetRexx only. Inserts the original record number followed by a SPACE
+    at the beginning of each output record.
+(2) NetRexx only. Uses the data from the previous record.  Before the first
+    record, this is Rexx "".
+(3) NetRexx Pipelines only.  Not yet in CMS Pipelines.
+(4) CMS Pipelines only.  Not yet in NetRexx Pipelines.
+(5) NetRexx Only. Uses first record data for first record instead of previous "".
+(6) CMS uses ",", NetRexx does not.  CMS limits to right side, NetRexx allows
+    on the left, too; also with any comparison op.
+    NetRexx concats the several ranges.
+
+*/

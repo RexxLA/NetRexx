@@ -1,15 +1,17 @@
 -- pick.nrx NJPipe Stage
+
 /*
+
  *  Copyright (C) 1997-2020 Ed Tomlinson
- *
+ *  Copyright (C) 2023  Jeffrey Hennick, Jeff @ Jeff-H . com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
- *
  */
 
 /*
- 20/ 5/16  NOPAD, CASELESS
+ 23/ 2/ 5  Major update to mostly CMS; PREVIOUS, LINENUMBERS. Jeff Hennick
+ 20/ 5/16  NOPAD, CASELESS. Jeff Hennick
  20/ 5/15  add \== and /==. Jeff Hennick
  99/05/15  use Emsg.  ejt
  99/05/09  use mrc() instead of rc().  ejt
@@ -17,78 +19,6 @@
  98/07/11  initial release. EJT
 */
 
-/** pick
-
-           +-NOPAD----+
- >>--PICK--+----------+--+------------+--+------------+--+-==--+--+-----------------+-->
-           +-PAD xorc-+  +-ANYcase-(1)+  +-inputRange-+  +-^==-+  +-inputRange------+
-                         +-CASEANY----+                  +-<<--+  +-delimitedString-+
-                         +-CASEIGNORE-+                  +-<<=-+
-                         +-CASELESS---+                  +->>--+
-                         +-IGNORECASE-+                  +->>=-+
-                                                         +-\==-+(2)
-                                                         +-/==-+
-                                                         +-=---+
-                                                         +-^=--+
-                                                         +-<---+
-                                                         +-<=--+
-                                                         +->---+
-                                                         +->=--+
-                                                         +-\=--+(2)
-                                                         +-/=--+
-
-
- Notes:
-  (1) Can be before PAD/NOPAD. Depreciated.
-  (2) The backslash (\) may need to be escaped, doubled, in some systems shells.
-
-*/
-/** pick CMS
-
-            +-NOPAD-----+
- >>--PICK---+-----------+--+------------+---->
-            +-PAD--xorc-+  +-ANYcase----+
-                           +-CASEANY----+
-                           +-CASEIGNORE-+
-                           +-CASELESS---+
-                           +-IGNORECASE-+
-
- >--+--+---------------------+---| List |-+--><
-    |  +-+-FROM-+--+-------+-+            |
-    |  | +-TO---+  +-AFTER-+ |            |
-    |  +-WHILE---------------+            |
-    +-| Fromto |--------------------------+
-
- Fromto:
- |--FROM--+-------+--| List |--+-TO-+-------+--| List |-+--|
-          +-AFTER-+            |    +-AFTER-+           |
-                               +-COUNT--number----------+
-
- List:
- |--+-------------------+--| Test |--|
-    +-| List |--+-AND-+-+
-                +-OR--+
-
- Test:
- |--| RangeString |--+--| NonEqualOp |--| RangeString |--+--|
-                     +--| EqualOp |----| CommaList |-----+
-
- CommaList:
-    +---,---------------+
- |--v--| RangeString |--+--|
-
- RangeString:
- |--+-inputRange-------+--|
-    +-delimitedString--+
-    +-number+----------+
-
- Character Operators:
-  == ^== \== /== << <<= >> >>= IN NOTIN
-
- Numeric Operators
-  = ^= < <= > >=
-
-*/
 
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
@@ -97,9 +27,11 @@ import org.netrexx.njpipes.pipes.
 
 class pick extends stage uses IRange binary
 
-cc = int
-
 anycase = boolean 0
+c_f = int
+outflag = Rexx 1
+linenumbers = Rexx 0
+linenum = Rexx 1
 
 method run()
 
@@ -109,24 +41,59 @@ method run()
    pad  = rexx ' '
    rc = int
    i  = int
-   n1 = int
-   r1 = IRange[]
-   n2 = int
-   r2 = IRange[]
-   out0flag = boolean
-   out1flag = boolean
+   n_f_l = int
+   r_f_l = IRange[]
+   r_f_r = IRange[]
+
+   frcount = -1
+   maxcount = 0
+   too = 0
+   afterto = 0
+   fromto = 0
+   prev = Rexx ""
+
+   p_f_l = 0
+   p_f_r = 0
+   p_w_l = 0
+   p_w_r = 0
+   p_t_l = 0
+   p_t_r = 0
+   p_s_l = 0
+   p_s_r = 0
+
+   nf_f_l = 1
+   nf_f_r = 1
+   nf_w_l = 1
+   nf_w_r = 1
+   nf_t_l = 1
+   nf_t_r = 1
+   nf_s_l = 1
+   nf_s_r = 1
+-- trace results
 
    args = arg()
 
-   w = args.upper().wordpos('NOPAD')
-   if w>0 then do
-      args = args.delword(w,1)
+   parse args w1 rest
+
+   if w1 = 'NOPAD' then do
+      args = rest
    end
 
-   w = args.upper().wordpos('PAD')
-   if w>0 then do
-      pad = GetXorc(args.word(w+1))
-      args = args.delword(w,2)
+   parse args w1 rest
+   if w1 = 'PAD' then do
+      parse rest pad args
+   end
+
+   parse args w1 rest
+   if 'LINENUMBERS'.abbrev(w1.upper,5) then do
+      linenumbers = 1
+      args = rest
+   end
+
+   parse args w1 rest
+   if w1 = 'LN' then do
+      linenumbers = 1
+      args = rest
    end
 
    parse args w1 rest
@@ -135,135 +102,659 @@ method run()
    anycase = rexx 'ANYCASE'.abbrev(w1, 3) | 'CASEANY IGNORECASE CASEIGNORE CASELESS'.wordpos(w1) > 0
    if anycase then args = rest
 
-   r1 = GetIRanges(args)
-   n1 = r1[0].Number()
-   args = r1[0].Residue()
+   parse args w1 rest
+   if w1 = 'FROM' then do
+      from = 1
+      args = rest
+      parse args w1 rest
+      if w1 = "AFTER" then do
+         args = rest
+         fromafter = 1
+      end
+      else fromafter = 0
 
-   if n1=0 then
-      Emsg(11,'Error -' getName() 'Range expected but none found')
+      parse args fw rest
+      if fw.right(1) = '+' then
+        Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
 
-   parse args comp args
-   cc = '== ^== << <<= >> >>= \\== /=='.wordpos(comp)
-   if cc > 6 then cc = 2
-   if cc=0 then do
-     cc = '. . . . . . = ^= < <= > >= \\= /='.wordpos(comp)
-     if cc > 12 then cc = 8
-   end
-   if cc=0 then
-      Emsg(11,'Error -' getName() 'Compare operator expected found: 'comp)
-
-   r2 = GetIRanges(args)
-   n2 = r2[0].Number()
-   args = r2[0].Residue()
-   if n2=0 then
-      y = DString(args).String
-
-   out0flag = outStreamState()=0
-   do
-      out1flag = 1
-      selectOutput(1)
-   catch StageError
-      out1flag = 0
-   end
-
-   select
-      when out0flag & out1flag then
-         loop forever
-            aobj = peekto()
-            robj = Rexx aobj
-            j = 1
-            x = r1[j].SelIRange(robj,pad)
-            loop i=2 to n1
-               x = x||r1[i].SelIRange(robj,pad)
-               if r1[j].endcol()>=r1[i].startcol() then
-                  Emsg(8,'Error -' getName() 'Invalid range (end before start)')
-               j = i
-            end
-            if n2>0 then do
-               j = 1
-               y = r2[j].SelIRange(robj,pad)
-               loop i=2 to n2
-                  y = y||r2[i].SelIRange(robj,pad)
-                  if r2[j].endcol()>=r2[i].startcol() then
-                     Emsg(8,'Error -' getName() 'Invalid range (end before start)')
-                  j = i
-               end
-            end
-            if comp(x,y) then
-               do
-                  selectOutput(0)
-                  output(aobj)
-               end
-            else
-               do
-                  selectOutput(1)
-                  output(aobj)
-               end
-            readto()
+      if fw = 'PREVIOUS' then do
+        p_f_l = 1
+        args = rest
+        parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_f_l = 0
+          args = rest
         end
-     when out1flag then do
-         selectOutput(1)
-         loop forever
-            aobj = peekto()
-            robj = Rexx aobj
-            j = 1
-            x = r1[j].SelIRange(robj,pad)
-            loop i=2 to n1
-               x = x||r1[i].SelIRange(robj,pad)
-               if r1[j].endcol()>=r1[i].startcol() then
-                  Emsg(8,'Error -' getName() 'Invalid range (end before start)')
-               j = i
-            end
-            if n2>0 then do
-               j = 1
-               y = r2[j].SelIRange(robj,pad)
-               loop i=2 to n2
-                  y = y||r2[i].SelIRange(robj,pad)
-                  if r2[j].endcol()>=r2[i].startcol() then
-                     Emsg(8,'Error -' getName() 'Invalid range (end before start)')
-                  j = i
-               end
-            end
-            if \comp(x,y) then
-               output(aobj)
-            readto()
-         end
       end
-   otherwise
-      selectOutput(0)
-      loop forever
-         aobj = peekto()
-         robj = Rexx aobj
-         j = 1
-         x = r1[j].SelIRange(robj,pad)
-         loop i=2 to n1
-            x = x||r1[i].SelIRange(robj,pad)
-            if r1[j].endcol()>=r1[i].startcol() then
-               Emsg(8,'Error -' getName() 'Invalid range (end before start)')
-            j = i
-         end
-         if n2>0 then do
-            j = 1
-            y = r2[j].SelIRange(robj,pad)
-            loop i=2 to n2
-               y = y||r2[i].SelIRange(robj,pad)
-               if r2[j].endcol()>=r2[i].startcol() then
-                  Emsg(8,'Error -' getName() 'Invalid range (end before start)')
-               j = i
-            end
-         end
-         if comp(x,y) then
-            output(aobj)
-         readto()
+
+      r_f_l = GetIRanges(args)
+      n_f_l = r_f_l[0].Number()
+      args = r_f_l[0].Residue()
+      if n_f_l=0 then do
+        dl = DString(args)
+        d_f_l = dl.String
+        args = dl.Residue
       end
-   catch StageError
+
+      parse args comp args
+      c_f = getComp(comp)
+
+      parse args fw rest
+      if fw.right(1) = '+' then
+        Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
+
+      if fw = 'PREVIOUS' then do
+        p_f_r = 1
+        args = rest
+        parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_f_r = 0
+          args = rest
+        end
+      end
+
+      r_f_r = GetIRanges(args)
+      n_f_r = r_f_r[0].Number()
+      args = r_f_r[0].Residue()
+      if n_f_r=0 then do
+        dr = DString(args)
+        d_f_r = dr.String
+        args = dr.Residue
+      end
+   end /* from */
+   else from = 0
+
+   parse args w1 rest
+   if w1 = 'WHILE' then do
+      while = 1
+      args = rest
+
+      parse args fw rest
+      if fw.right(1) = '+' then
+        Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
+
+      if fw = 'PREVIOUS' then do
+        p_w_l = 1
+        args = rest
+        parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_w_l = 0
+          args = rest
+        end
+      end
+
+      r_w_l = GetIRanges(args)
+      n_w_l = r_w_l[0].Number()
+      args = r_w_l[0].Residue()
+      if n_w_l=0 then do
+        dw = DString(args)
+        d_w_l = dw.String
+        args = dw.Residue
+      end
+
+      parse args comp args
+      c_w = getComp(comp)
+
+      parse args fw rest
+      if fw.right(1) = '+' then
+        Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
+
+      if fw = 'PREVIOUS' then do
+        p_w_r = 1
+        args = rest
+        parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_w_r = 0
+          args = rest
+        end
+      end
+
+      r_w_r = GetIRanges(args)
+      n_w_r = r_w_r[0].Number()
+      args = r_w_r[0].Residue()
+      if n_w_r=0 then do
+        dw = DString(args)
+        d_w_r = dw.String
+        args = dw.Residue
+      end
+   end /* while */
+   else while = 0
+
+   parse args w1 rest
+   if w1 = 'TO' then do
+--     tofound= 1
+     too = 1
+     if from then fromto = 1
+--     infrom = 1
+     args = rest
+
+     parse args w1 rest
+     if w1 = "AFTER" then do
+        args = rest
+        afterto = 1
+     end
+
+     parse args fw rest
+     if fw.right(1) = '+' then
+       Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
+
+     if fw = 'PREVIOUS' then do
+       p_t_l = 1
+       args = rest
+       parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_t_l = 0
+          args = rest
+        end
+     end
+
+     r_t_l = GetIRanges(args)
+     n_t_l = r_t_l[0].Number()
+     args = r_t_l[0].Residue()
+     if n_t_l=0 then do
+       dt = DString(args)
+       d_t_l = dt.String
+       args = dt.Residue
+     end
+
+     parse args comp args
+     c_t = getComp(comp)
+
+     parse args fw rest
+     if fw.right(1) = '+' then
+       Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
+
+     if fw = 'PREVIOUS' then do
+       p_t_r = 1
+       args = rest
+       parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_t_r = 0
+          args = rest
+        end
+     end
+
+     r_t_r = GetIRanges(args)
+     n_t_r = r_t_r[0].Number()
+     args = r_t_r[0].Residue()
+     if n_t_r=0 then do
+        dt = DString(args)
+        d_t_r = dt.String
+        args = dt.Residue
+     end
+
+     parse args w1 rest
+     if w1 = 'AFTER' then do
+        args = rest
+        afterto = 1
+     end
+   end  /* to */
+
+   parse args w1 rest
+   if w1 = 'COUNT' then do
+     count = 1
+     frcount = 0
+     parse rest maxcount args
    end
+
+   if args \= '' then do /* simple */
+     parse args fw rest
+     if fw.right(1) = '+' then
+       Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
+
+     if fw = 'PREVIOUS' then do
+       p_s_l = 1
+       args = rest
+       parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_s_l = 0
+          args = rest
+        end
+     end
+
+     r_s_l = GetIRanges(args)
+     n_s_l = r_s_l[0].Number()
+     args = r_s_l[0].Residue()
+     if n_s_l=0 then do
+       ds = DString(args)
+       d_s_l = ds.String
+       args = ds.Residue
+     end
+
+     parse args comp args
+     c_s = getComp(comp)
+
+     parse args fw rest
+     if fw.right(1) = '+' then
+       Emsg(11,'Error -' getName() 'The "number+" range is not yet supported.')
+
+     if fw = 'PREVIOUS' then do
+       p_s_r = 1
+       args = rest
+       parse args fw rest
+        if fw = 'NOFIRST' then do
+          nf_s_r = 0
+          args = rest
+        end
+     end
+
+     r_s_r = GetIRanges(args)
+     n_s_r = r_s_r[0].Number()
+     args = r_s_r[0].Residue()
+     if n_s_r=0 then do
+        ds = DString(args)
+        d_s_r = ds.String
+        args = ds.Residue
+     end
+   end /* simple */
+
+   /*************/
+-- trace results
+  select
+  when fromto then do
+    loop linenum = linenum /* before FROM */
+      aobj = peekto()
+      robj = Rexx aobj
+      if n_f_l>0 then do
+        if p_f_l then
+          if linenum = 0 & nf_f_l then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        x = r_f_l[j].SelIRange(data,pad)
+        loop i=2 to n_f_l
+           x = x||r_f_l[i].SelIRange(data,pad)
+           if r_f_l[j].endcol()>=r_f_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        x = d_f_l
+
+      if n_f_r>0 then do
+        if p_f_r then
+          if linenum = 0 & nf_f_r then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        y = r_f_r[j].SelIRange(data,pad)
+        loop i=2 to n_f_r
+           y = y||r_f_r[i].SelIRange(data,pad)
+           if r_f_r[j].endcol()>=r_f_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        y = d_f_r
+
+      if comp(x,c_f,y) then leave /* got to our FROM line */
+      soutput(aobj, 1)
+      prev = robj
+      readto()
+    end /* before FROM */
+          /* have our FROM line */
+    if fromafter then do
+      soutput(aobj, 1)
+    end
+    else do
+      soutput(aobj, 0)
+    end
+    prev = robj
+    readto()
+
+       /* in FROM now process until the TO line */
+    loop linenum = linenum + 1 /* in FROM */
+      aobj = peekto()
+      robj = Rexx aobj
+      if n_t_l>0 then do
+        if p_t_l then
+          if linenum = 0 & nf_t_l then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        x = r_t_l[j].SelIRange(data,pad)
+        loop i=2 to n_t_l
+           x = x||r_t_l[i].SelIRange(data,pad)
+           if r_t_l[j].endcol()>=r_t_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        x = d_t_l
+
+      if n_t_r>0 then do
+        if p_t_r then
+          if linenum = 0 & nf_t_r then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        y = r_t_r[j].SelIRange(data,pad)
+        loop i=2 to n_t_r
+           y = y||r_t_r[i].SelIRange(data,pad)
+           if r_t_r[j].endcol()>=r_t_r[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        y = d_t_r
+
+      if comp(x,c_t,y) then leave /* got to our TO line */
+      soutput(aobj, 0)
+      prev = robj
+      readto()
+    end  /* in FROM */
+
+        /* have our TO line */
+    if afterto then do
+      soutput(aobj, 0)
+    end
+    else do
+      soutput(aobj, 1)
+    end
+    prev = robj
+    readto()
+
+    loop linenum = linenum + 1 /* after TO */
+      aobj = peekto()
+      soutput(aobj, 1)
+      prev = robj
+      readto()
+    end /* after TO */
+
+   catch StageError
+  end /* fromto */
+
+  when from then do
+    loop linenum = linenum /* before FROM */
+      aobj = peekto()
+      robj = Rexx aobj
+      if n_f_l>0 then do
+        if p_f_l then
+          if linenum = 0 & nf_f_l then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        x = r_f_l[j].SelIRange(data,pad)
+        loop i=2 to n_f_l
+           x = x||r_f_l[i].SelIRange(data,pad)
+           if r_f_l[j].endcol()>=r_f_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        x = d_f_l
+
+      if n_f_r>0 then do
+        if p_f_r then
+          if linenum = 0 & nf_f_r then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        y = r_f_r[j].SelIRange(data,pad)
+        loop i=2 to n_f_r
+           y = y||r_f_r[i].SelIRange(data,pad)
+           if r_f_r[j].endcol()>=r_f_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        y = d_f_r
+
+      if comp(x,c_f,y) then leave /* got to our FROM line */
+      soutput(aobj, 1)
+      prev = robj
+      readto()
+    end /* before FROM */
+          /* have our FROM line */
+    if fromafter then do
+      soutput(aobj, 1)
+    end
+    else do
+      soutput(aobj, 0)
+    end
+    prev = robj
+    readto()
+
+       /* in FROM  */
+    if count then do
+-- trace results
+      loop linenum = linenum + 1 /* in FROM COUNT */
+        frcount = frcount + 1
+        if frcount >= maxcount then leave
+        aobj = peekto()
+        robj = Rexx aobj
+        soutput(aobj, 0)
+        prev = robj
+        readto()
+      end  /* in FROM COUNT*/
+      prev = robj
+      readto()
+
+      loop linenum = linenum + 1 /* after FROM COUNT*/
+        aobj = peekto()
+        soutput(aobj, 1)
+        prev = robj
+        readto()
+      end /* after FROM COUNT */
+    end /* count */
+    else
+    loop linenum = linenum + 1 /* in FROM */
+      aobj = peekto()
+      robj = Rexx aobj
+      soutput(aobj, 0)
+      prev = robj
+      readto()
+    end  /* in FROM */
+
+
+   catch StageError
+  end /* fromto */
+
+  when while then do
+    loop linenum = linenum /* WHILE */
+      aobj = peekto()
+      robj = Rexx aobj
+      if n_w_l>0 then do
+        if p_w_l then
+          if linenum = 0 & nf_w_l then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        x = r_w_l[j].SelIRange(data,pad)
+        loop i=2 to n_w_l
+           x = x||r_w_l[i].SelIRange(data,pad)
+           if r_w_l[j].endcol()>=r_w_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        x = d_w_l
+
+      if n_w_r>0 then do
+        if p_w_r then
+          if linenum = 0 & nf_w_r then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        y = r_w_r[j].SelIRange(data,pad)
+        loop i=2 to n_w_r
+           y = y||r_w_r[i].SelIRange(data,pad)
+           if r_w_r[j].endcol()>=r_w_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        y = d_w_r
+
+      if \ comp(x,c_w,y) then leave /* no more WHILE */
+      soutput(aobj, 0)
+      prev = robj
+      readto()
+    end /* while loop */
+
+    loop linenum = linenum + 1 /* after WHILE */
+      aobj = peekto()
+      soutput(aobj, 1)
+      prev = robj
+      readto()
+    end /* after WHILE */
+
+   catch StageError
+  end /* while */
+
+  when too then do /* to */
+     loop linenum = linenum /* TO */
+      aobj = peekto()
+      robj = Rexx aobj
+      if n_t_l>0 then do
+        if p_t_l then
+          if linenum = 0 & nf_t_l then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        x = r_t_l[j].SelIRange(data,pad)
+        loop i=2 to n_t_l
+           x = x||r_t_l[i].SelIRange(data,pad)
+           if r_t_l[j].endcol()>=r_t_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        x = d_t_l
+
+      if n_t_r>0 then do
+        if p_t_r then
+          if linenum = 0 & nf_t_r then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        y = r_t_r[j].SelIRange(data,pad)
+        loop i=2 to n_t_r
+           y = y||r_t_r[i].SelIRange(data,pad)
+           if r_t_r[j].endcol()>=r_t_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        y = d_t_r
+
+      if comp(x,c_t,y) then leave /* TO line */
+      soutput(aobj, 0)
+      prev = robj
+      readto()
+    end /* to loop */
+
+        /* have our TO line */
+    if afterto then do
+      soutput(aobj, 0)
+    end
+    else do
+      soutput(aobj, 1)
+    end
+    prev = robj
+    readto()
+
+    loop linenum = linenum + 1 /* after to */
+      aobj = peekto()
+      soutput(aobj, 1)
+      prev = robj
+      readto()
+    end /* after WHILE */
+
+   catch StageError
+  end /* to */
+
+  otherwise /* simple */
+     loop linenum = linenum
+      aobj = peekto()
+      robj = Rexx aobj
+      if n_s_l>0 then do
+        if p_s_l then
+          if linenum = 0 & nf_s_l then
+            data = robj
+          else data = prev
+        else data = robj
+        j = 1
+        x = r_s_l[j].SelIRange(data,pad)
+        loop i=2 to n_s_l
+           x = x||r_s_l[i].SelIRange(data,pad)
+           if r_s_l[j].endcol()>=r_s_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        x = d_s_l
+
+      if n_s_r>0 then do
+        j = 1
+        if p_s_r then
+          if linenum = 0 & nf_s_r then
+            data = robj
+          else data = prev
+        else data = robj
+        y = r_s_r[j].SelIRange(data,pad)
+        loop i=2 to n_s_r
+           y = y||r_s_r[i].SelIRange(data,pad)
+           if r_s_r[j].endcol()>=r_s_l[i].startcol() then
+              Emsg(8,'Error -' getName() 'Invalid range (end before start)')
+           j = i
+        end
+      end
+      else
+        y = d_s_r
+
+      if comp(x,c_s,y) then  /* got a line */
+        soutput(aobj, 0)
+      else
+        soutput(aobj, 1)
+      prev = robj
+      readto()
+    catch StageError
+    end /* simple loop */
+  end /* select */
 
    rc = mrc()
    exit(rc*(rc<>12))
 
 
-method comp(x=rexx,y=rexx) returns boolean
+method getComp(comp) signals ThreadQ
+  cc = '== ^== << <<= >> >>= \\== /=='.wordpos(comp)
+  if cc > 6 then cc = 2
+  if cc=0 then do
+    cc = '. . . . . . = ^= < <= > >= \\= /='.wordpos(comp)
+    if cc > 12 then cc = 8
+  end
+  if cc=0 then
+    cc = '. . . . . . . . . . . . IN NOTIN'.wordpos(comp.upper())
+  if cc=0 then
+     Emsg(11,'Error -' getName() 'Compare operator expected found: 'comp)
+  return cc
+
+method comp(x=rexx,cc=rexx,y=rexx) returns boolean
+-- if y = "-- Help File Text End -" then trace results
+-- trace results
+x=x;y=y
 
    if anycase then
       select
@@ -279,6 +770,8 @@ method comp(x=rexx,y=rexx) returns boolean
          when cc=10 then return x.upper()<=y.upper()
          when cc=11 then return x.upper()>y.upper()
          when cc=12 then return x.upper()>=y.upper()
+         when cc=13 then return y.upper().pos(x.upper())>0
+         when cc=14 then return y.upper().pos(x.upper())=0
          otherwise
             return 0
       end
@@ -296,6 +789,83 @@ method comp(x=rexx,y=rexx) returns boolean
          when cc=10 then return x<=y
          when cc=11 then return x>y
          when cc=12 then return x>=y
+         when cc=13 then return y.pos(x)>0
+         when cc=14 then return y.pos(x)=0
          otherwise
             return 0
       end
+
+method soutput(line = Object, stream = 0) signals ThreadQ
+   if outflag[stream] then do
+      selectOutput(stream)
+      if linenumbers then
+        output(linenum line)
+      else
+        output(line)
+   catch StageError
+      outflag[stream] = 0
+   end
+   return
+
+/** pick
+
+          +--NOPAD-----+
+>>--PICK--+------------+--+----------------------+--+---------------+-->
+          +--PAD-xorc--+  +--LINENUMBERS--(1)(3)-+  +--| ANYcase |--+
+                          +--LN--(1)(3)----------+
+
+>--+--+---------------------------+--| List |--+--><
+   |  +--+--FROM--+--+---------+--+            |
+   |  |  +--TO----+  +--AFTER--+  |            |
+   |  +--WHILE--------------------+            |
+   +---| Fromto |------------------------------+
+
+Fromto:
+|--FROM--+---------+--| List |--+--TO--+---------+--| List |--+--|
+         +--AFTER--+            |      +--AFTER--+            |
+                                +--COUNT-number---------------+
+
+List:
+|--+---------------------------+--| Test |--|
+   +--| List |--+--AND--(4)-+--+
+                +--OR--(4)--+
+
+Test:
+|--| RangeString |--+--| NonEqualOp |--| RangeString |--+--|
+                    +--| EqualOp |--| CommaList |-------+
+
+CommaList:
+   +------(3)(6)-------+
+   +---,--(4)----------+
+|--v--| RangeString |--+--|
+
+RangeString:
+|--+--+----------------------------------------+--inputRange--+--|
+   |  +--PREVIOUS--(2)(3)--+-------------------|              |
+   |                       +--NOFIRST--(5)(3)--+              |
+   +--delimitedString-----------------------------------------+
+   +--number+--(4)--------------------------------------------+
+
+EqualOp:
+"strict"
+==  ¬==  <<  <<=  >>  >>=  IN  NOTIN  \== (3)  ^== (3)
+
+"numeric"
+=  ¬=  <  <=  >  >=  \= (3) ^= (3)
+
+ANYcase:
+ANYcase  CASEANY  CASEIGNORE  CASELESS  IGNORECASE
+
+Notes:
+(1) NetRexx only. Inserts the original record number followed by a SPACE
+    at the beginning of each output record.
+(2) NetRexx only. Uses the data from the previous record.  Before the first
+    record, this is Rexx "".
+(3) NetRexx Pipelines only.  Not yet in CMS Pipelines.
+(4) CMS Pipelines only.  Not yet in NetRexx Pipelines.
+(5) NetRexx Only. Uses first record data for first record instead of previous "".
+(6) CMS uses ",", NetRexx does not.  CMS limits to right side, NetRexx allows
+    on the left, too; also with any comparison op.
+    NetRexx concats the several ranges.
+
+*/
