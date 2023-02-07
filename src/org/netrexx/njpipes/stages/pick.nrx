@@ -10,6 +10,7 @@
  */
 
 /*
+ 23/ 2/ 6  FromTo loops to get multiple groups. Jeff Hennick
  23/ 2/ 5  Major update to mostly CMS; PREVIOUS, LINENUMBERS. Jeff Hennick
  20/ 5/16  NOPAD, CASELESS. Jeff Hennick
  20/ 5/15  add \== and /==. Jeff Hennick
@@ -69,7 +70,6 @@ method run()
    nf_t_r = 1
    nf_s_l = 1
    nf_s_r = 1
--- trace results
 
    args = arg()
 
@@ -222,10 +222,8 @@ method run()
 
    parse args w1 rest
    if w1 = 'TO' then do
---     tofound= 1
      too = 1
      if from then fromto = 1
---     infrom = 1
      args = rest
 
      parse args w1 rest
@@ -349,9 +347,8 @@ method run()
    end /* simple */
 
    /*************/
--- trace results
   select
-  when fromto then do
+  when fromto then loop
     loop linenum = linenum /* before FROM */
       aobj = peekto()
       robj = Rexx aobj
@@ -459,17 +456,7 @@ method run()
     else do
       soutput(aobj, 1)
     end
-    prev = robj
-    readto()
-
-    loop linenum = linenum + 1 /* after TO */
-      aobj = peekto()
-      soutput(aobj, 1)
-      prev = robj
-      readto()
-    end /* after TO */
-
-   catch StageError
+  catch StageError
   end /* fromto */
 
   when from then do
@@ -529,7 +516,6 @@ method run()
 
        /* in FROM  */
     if count then do
--- trace results
       loop linenum = linenum + 1 /* in FROM COUNT */
         frcount = frcount + 1
         if frcount >= maxcount then leave
@@ -752,10 +738,6 @@ method getComp(comp) signals ThreadQ
   return cc
 
 method comp(x=rexx,cc=rexx,y=rexx) returns boolean
--- if y = "-- Help File Text End -" then trace results
--- trace results
-x=x;y=y
-
    if anycase then
       select
          when cc=1 then return x.upper()==y.upper()
