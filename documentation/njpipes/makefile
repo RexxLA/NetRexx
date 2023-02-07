@@ -44,11 +44,15 @@ stages.pdf: stages.html
 	# On fedora, the generated pdf must be 'fixed' by ghostscript
 	gs -o stages.pdf -sDEVICE=pdfwrite stages-tofix.pdf
 
+stages.html: Pipeline\ Stages.html
+	cp 'Pipeline Stages.html' stages.html
+
 #
 # target clean removes compiled products
 #
 .PHONY: clean
 clean: 
+	rm -f stages.html
 	rm -f *.class
 	rm -f *.crossref
 	rm -f *.aux
