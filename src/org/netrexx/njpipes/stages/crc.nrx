@@ -1,0 +1,147 @@
+-- crc.nrx NJPipe Stage
+/*
+ *  Copyright (C) 2023 Jeffrey Hennick
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 23/ 2/ 9 New. Jeff Hennick
+*/
+
+/** crc
+            +------------------------------+  +--CRC-32----------+
+   >>--CRC--v-+--------------------------+-+--+------------------+--><
+              +--APPEND------------------+    +--CRC-16-(1)------+
+              +--Each--+---------------+-+    +--CRC-16I-(1)-----+
+              |        +--CRCFIRST-(1)-+ |    +--CCITT-16-(1)----+
+              +--ADDLENgth-(1)-----------+    +--CKSUM-(1)-------+
+                                              +--| Custom (1) |--+
+
+Custom: (1)
+                            +--------------------------+
+|--+--16-BIT--+--hexString--v-+----------------------+-+--|
+   +--32-BIT--+               +--ADDLENgth-----------+
+                              +--COMPLEMENT----------+
+                              +--PRELOAD--hexString--+
+                              +--REFLIN--------------+
+                              +--REFLOUT-------------+
+                              +--XOROUT--hexString---+
+
+Notes:
+(1) CMS Pipelines only; not yet in NetRexx Pipelines.
+
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+import java.util.zip.CRC32
+
+class crc extends stage
+  method run()
+
+  crc = CRC32()
+
+  /* process global options */
+  append = 0
+  each = 0
+  -- crcfirst = 0
+  -- addlength = 0
+
+  parse arg() opt rest
+
+  loop
+    select case opt.upper
+    when 'APPEND' then append = 1
+    when 'EACH' then do
+      each = 1
+      if rest.word(1) = 'CRCFIRST' then do
+        -- crcfirst = 1
+        Emsg(11,'Error -' getName() 'Unimplemented option' opt)
+        parse rest . rest
+      end
+    end
+    -- when 'ADDLENGTH', 'ADDLENGT', 'ADDLENG', 'ADDLEN' then add = 1
+    when 'FIRST', 'ADD' then
+      Emsg(11,'Error -' getName() 'Unimplemented option' opt)
+    otherwise leave
+    end
+    parse rest opt rest
+  end
+
+  crcc32 = 0
+  -- crc16 = 0
+  -- crc16i = 0
+  -- ccitt16 = 0
+  -- cksum = 0
+
+
+  select case opt.upper
+  when 'CRC-32', '' then crcc32 = 1
+  when 'CRC-16' then do
+    -- crc16 = 1
+    Emsg(11,'Error -' getName() 'Unimplemented option' opt)
+  end
+  when 'CRC-16I' then do
+    -- crc16i = 1
+    Emsg(11,'Error -' getName() 'Unimplemented option' opt)
+  end
+  when 'CCITT-16' then do
+    -- ccitt16 = 1
+    Emsg(11,'Error -' getName() 'Unimplemented option' opt)
+  end
+  when 'CKSUM' then do
+    -- cksum = 1
+    Emsg(11,'Error -' getName() 'Unimplemented option' opt)
+  end
+  otherwise
+    Emsg(11,'Error -' getName() 'Unknown type:' opt)
+  end
+
+  second = 1
+  do
+    selectOutput(1)
+  catch stageError
+    second = 0
+  end
+
+  do
+    selectOutput(0)
+  catch stageError
+  end
+
+  select
+  when crcc32 then loop forever
+    record_in = peekto().toString()
+    crc.update(record_in.getBytes())
+    readto()
+    if second | append then do
+      output(Rexx record_in)
+    catch stageError
+    end
+    if each then do
+      if second then
+        selectOutput(1)
+      output(Rexx crc.getValue())
+      crc.reset()
+      selectOutput(0)
+    catch stageError
+    end
+  catch stageError
+    if second & \each & \append then do
+      selectOutput(1)
+    catch stageError
+    end
+    if \each then do
+      output(Rexx crc.getValue())
+    catch stageError
+    end
+    rc = rc()
+  end
+  otherwise
+    Emsg(11,'Error -' getName() 'Unimplemented type:' opt)
+  end
+  Exit(rc*(rc<>12))

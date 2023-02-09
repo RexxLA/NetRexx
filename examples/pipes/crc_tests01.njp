@@ -1,0 +1,103 @@
+-- crc_tests01
+
+/*
+  23/ 2/ 9 New.  Jeff Hennick
+*/
+
+pipe (crc_tests01 )
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    console ?
+
+-- crc - single ?
+   literal Hello World! |
+   crc |
+   c1: compare any ~2# 1 crc - single ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 472456355 |   -- expected result |
+   c1: ?
+
+-- crc - multi ?
+   literal Hello World! |
+   literal Hello World! |
+   crc |
+   c2: compare any ~2# 2 crc - multi ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1309783352 |   -- expected result |
+   c2: ?
+
+-- crc - append ?
+   literal Hello World! |
+   literal Hello World! |
+   crc append |
+   c3: compare any ~2# 3 crc - append ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Hello World!;Hello World!;1309783352 |   -- expected result |
+   split ; |
+   c3: ?
+
+-- crc - each ?
+   literal Hello World! |
+   literal Hello World! |
+   crc each |
+   c4: compare any ~2# 4 crc - each ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 472456355;472456355 |   -- expected result |
+   split ; |
+   c4: ?
+
+-- crc - multi  w/secondary ?
+   literal Hello World! |
+   literal Hello World! |
+   t5: crc |
+   c5: compare any ~2# 5 [Primary] crc - multi w/secondary ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Hello World!;Hello World! |   -- expected result |
+   split ; |
+   c5: ?
+   t5: |
+   s5: compare any ~2# 5 [Secondary] crc - multi w/secondary ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1309783352 |   -- expected result |
+   s5: ?
+
+-- crc each - multi w/secondary ?
+   literal Hello World! |
+   literal Hello World! |
+   t6: crc each |
+   c6: compare any ~2# 6 [Primary] crc each - multi w/secondary ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Hello World!;Hello World! |   -- expected result |
+   split ; |
+   c6: ?
+   t6: |
+   s6: compare any ~2# 6 [Secondary] crc each - multi w/secondary ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 472456355;472456355  |   -- expected result |
+   split ; |
+   s6:
+
+            +------------------------------+  +--CRC-32----------+
+   >>--CRC--v-+--------------------------+-+--+------------------+--><
+              +--APPEND------------------+    +--CRC-16-(1)------+
+              +--Each--+---------------+-+    +--CRC-16I-(1)-----+
+              |        +--CRCFIRST-(1)-+ |    +--CCITT-16-(1)----+
+              +--ADDLENgth-(1)-----------+    +--CKSUM-(1)-------+
+                                              +--| Custom (1) |--+
+
+Custom: (1)
+                            +--------------------------+
+|--+--16-BIT--+--hexString--v-+----------------------+-+--|
+   +--32-BIT--+               +--ADDLENgth-----------+
+                              +--COMPLEMENT----------+
+                              +--PRELOAD--hexString--+
+                              +--REFLIN--------------+
+                              +--REFLOUT-------------+
+                              +--XOROUT--hexString---+
+
+Notes:
+(1) CMS Pipelines only; not yet in NetRexx Pipelines.
+
+*/
