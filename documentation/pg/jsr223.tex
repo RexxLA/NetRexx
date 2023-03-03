@@ -1,6 +1,7 @@
 \chapter{Interfacing to Scripting Languages}
 \nr{} contains standardized Java Scripting
-support\marginpar{\color{gray}3.03}, and the NetRexxC.jar file is a self-contained JSR223 scripting engine. This facility opens up a number of possibilities to interface in a standardized manner with several scripting languages and other infrastructure, and offers an easy way for including interpreted \nr{} code in JVM applications. JSR223 is a standard for interacting with scripting languages that consists of:
+support\marginpar{\color{gray}3.03}, and the NetRexxC.jar file is a
+self-contained \code{javax.script} (formerly called JSR223) scripting engine. This facility opens up a number of possibilities to interface in a standardized manner with several scripting languages and other infrastructure, and offers an easy way for including interpreted \nr{} code in JVM applications. JSR223 is a standard for interacting with scripting languages that consists of:
 \begin{enumerate}
 \item A mechanism to find out for which scripting languages support is
   available
@@ -12,7 +13,9 @@ support\marginpar{\color{gray}3.03}, and the NetRexxC.jar file is a self-contain
 \item Optionally, a way to keep already compiled scripts around for repeated execution (with associated higher performance)
 \end{enumerate}
 
-The JSR223 specification\footnote{\url{http://www.jcp.org/en/jsr/detail?id=223}}
+The JSR223
+specification\footnote{\url{http://www.jcp.org/en/jsr/detail?id=223},
+now deprecated because every JVM >=9 contains it.}
 details the calls that are available in the \keyword{javax.scripting}
 package. To use the JSR223 interface, Java 6 or higher is
 required. The JAR file specification defines a service as a well-known
@@ -26,7 +29,7 @@ corresponds to the fully qualified name of the service class, which is
 \keyword{javax.script.ScriptEngineFactory}. Each line of this file contains the
 fully qualified name of a service provider. The factory
 class of the \nr{} connector is \keyword{org.netrexx.jsr223.NetRexxScriptEngineFactory}. So the file \keyword{META-INF/services/javax.script.ScriptEngineFactory} contains one line with exactly this class name.
-\section{Which JSR223 engines are on my system?}
+\section{Which scripting engines are on my system?}
 The number of JSR223 engines available varies per JVM
 implementation. The following code can be used to list these.
 \lstinputlisting[label=enumeratejsr223,caption=Enumerate the JSR223 Engines on a JVM]{../../examples/jsr223/ListScriptingEngines.nrx} 
@@ -161,11 +164,11 @@ Several applications offer a facility to script functionality using
 the javax.scripting interface, akin to the way applications use the
 RexxSAA interface for this purpose. 
  
-\section{Interfacing between ooRexx and \nr{} using BSF4ooRexx}
+\section{Interfacing with ooRexx using BSF4ooRexx}
 BSF is a system for language interaction that originated in a research project at IBM, and predates JSR223 (and certainly its implementation in Java 6) for a number of years. BSF 2.x has its own interface, while modern BSF versions are an implementation of the JSR223 interfaces. BSF4ooRexx enables a bidirectional interface between ooRexx and Java, and enables one to use the large class library support for Java in ooRexx programs, but likewise the execution of ooRexx code from Java (including \nr{}) programs. BSF4ooRexx contains some special support for JVM programs written in \nr{}.
 
-\section{General jsr-223 Implementation Notes}
-This section describes some notes pertaining to specific jsr223 for
+\section{General scripting implementation notes}
+This section describes some notes pertaining to specific Scripting for
 \nr{} design and implementation decisions.
 
 \begin{itemize}
@@ -173,14 +176,16 @@ This section describes some notes pertaining to specific jsr223 for
 \item The NetRexx script engine is reused unless the script returned via an "exit" statement and the bindings are persistent which means that scripts will see the bindings (Objects) created by previous scripts
 \item Arguments are passed both as the normal \code{arg} string and as the array binding \code{javax.script.argv} i.e. script variable \code{javax\_script\_argv}.
 \item Scripts are executed via the NetRexxA API for interpreting a program from a string so they are not written to files.
-\item The current version of the engine has no other optimization and only support for bare minimum JSR223 features (No compilable, invokeable, preparse or caching or user profiles or console, etc.).
+\item The current version of the engine has no other optimization and
+  only support for bare minimum javax.scripting  features (No compilable, invokeable, preparse or caching or user profiles or console, etc.).
 \item When running as an Ant Script task, properties whose names
   contain periods are not passed to the bindings and must be accessed
-  via project.getProperty('some.name') The workaround is to define a local Ant property as a global first and the scriptengine will overlay the global value with the local value in the bindings map
-\item When running as an Ant Script task, properties can be set via
-  project.setProperty('some.name', 'some value')
+  via \\\code{project.getProperty('some.name')}
+  The workaround is to define a local Ant property as a global first and the scriptengine will overlay the global value with the local value in the bindings map
+\item When running as an Ant Script task, properties can be set via\\
+  \code{project.setProperty('some.name', 'some value')}
 \item Script parms can be passed in an "arg" binding. Parse flags can be passed with a "netrexxflags" binding or in Ant with the usual "ant.netrexx.verbose", etc properties.
 \item Ant scripts can use the nested classpath facility - It is automatically added to the classpath that NetRexx scans. Likewise any path segments from a thread context URLclassloader are added.
 \item The engine will run programs (ie that have a main class) as well as scripts but bindings cannot then be auto added to the program namespace so
-programs have to load bindings like this: \code{NetRexxScriptEngine.getObject("objectname")}
+programs have to load bindings like this:\\ \code{NetRexxScriptEngine.getObject("objectname")}
 \end{itemize}
