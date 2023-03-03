@@ -29,6 +29,7 @@
 /* 1998.05.25 -- pass NETREXX_JAVA setting to java.exe */
 /* 2011.09.01 -- use org.netrexx.process               */
 /* 2011.09.01 -- remove -xms4M                         */
+/* 2023.03.03 -- set CLASSPATH relative to bin, if not set */
 
 parse arg args
 w=wordpos('-run', args)
@@ -37,7 +38,7 @@ w=wordpos('-nocompile', args)
 if w>0 then do; noc=1; end; else noc=0
 
 /* ----- Translate & Compile ----- */
-parse source system .
+parse source system . sourcefile
 select                             /* system-specific options */
   when system='OS/2' then do
     '@echo off'
@@ -48,11 +49,24 @@ select                             /* system-specific options */
     /* Add any options from NETREXX_JAVA environment variable */
     nrjava=value('NETREXX_JAVA',,'OS2ENVIRONMENT')
     if nrjava\='' then javaopts=javaopts nrjava
+    classpath=value('CLASSPATH',,'OS2ENVIRONMENT')
+    env = 'OS2ENVIRONMENT'
     end
   otherwise
     /* Add any options from NETREXX_JAVA environment variable */
     javaopts=value('NETREXX_JAVA',,'ENVIRONMENT')
+    classpath=value('CLASSPATH',,'ENVIRONMENT')
+    env = 'ENVIRONMENT'
+    pathsep=':'
+    if pos('Windows', system) > 0 then pathsep=';' 
   end
+
+if pos('NetRexxF.jar', javaopts) = 0 & pos('NetRexxC.jar', javaopts) = 0 then do
+  if pos('NetRexxF.jar', classpath) = 0 & pos('NetRexxC.jar', classpath) = 0 then do
+    newclasspath=substr(sourcefile, 1, length(sourcefile) - 12)'../lib/NetRexxF.jar'pathsep'.'pathsep''classpath
+    value('CLASSPATH', newclasspath, env)
+  end
+end 
 
 'java ' javaopts 'org.netrexx.process.NetRexxC' args
 

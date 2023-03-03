@@ -29,6 +29,12 @@
 # -----------------------------------------------------------------
 #  2000.08.20 -- initial version derived from NetRexxC.bat
 #  2011.09.29 -- add error message for -run with .nrx case
+#  2023.03.03 -- set CLASSPATH relative to bin, if not set
+
+if test "$(echo $CLASSPATH | grep 'NetRexx.\.jar')" = ""; then
+  thisdir=$(dirname $0)
+  export CLASSPATH="$thisdir/../lib/NetRexxF.jar:.:$CLASSPATH"
+fi  
 
 if test $# -eq 0; then
   echo 'Usage:' $0 '[-run] [other options] filename'
