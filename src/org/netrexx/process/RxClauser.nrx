@@ -31,6 +31,7 @@
 /* 2016.01.01 allow @ as an operator for annotations NETREXX-122      */
 /* 2021.12.31 add RxModel - Jason Martin                              */
 /* 2022.06.16 Optional interactive trace RxSource on constructor --MRE*/
+/* 2023.03.03 Enhancement #45, support shebang --MRE                  */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -405,6 +406,7 @@ class RxClauser
   tok=RxToken            -- token to be returned
   pos=nextpos            -- position in line [origin 1]
   hadblank=0             -- have had blank/whitespace; this is position
+
   loop label collect forever
     if pos>linelen then do    -- at end of line
       ctype=readline()
@@ -414,6 +416,19 @@ class RxClauser
 
     /* determine character type */
       cchar=line[pos-1]
+                                                  -- MRE add shebang support #45
+    if cchar='#' then if lineno=1 then do         -- shebang only on first line 
+      c2=line[pos]
+      if c2='!' then do                           
+        nextpos=linelen+1
+        tok=RxToken(TBD, lineno, pos-1, 1, null)  -- token so far
+        tok.type=RxToken.SP                       -- ignore line, create blank token
+  	    tok.value = line
+   	    if rxt.superflag.diag then say '#RxClauser ' tok.value 'found as shebang'
+        leave collect
+      end  
+    end  
+
 
     select
       when cchar=' ' then /* blank */ do     -- special-case, for speed
@@ -454,7 +469,6 @@ class RxClauser
 	  tok.value = line
 	  if rxt.superflag.diag then say '#RxClauser ' tok.value 'found for passthrough as annotation'
           leave collect; end
-	  
 	  if cchar='/' then if c2='*' then /* nest comment start */ do
         if rxt.program.flag.model=2 then cmt="/*"
             pos=pos+1; nest=1

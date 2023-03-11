@@ -9,6 +9,11 @@
 - a new option -noimplicituses to avoid automatic addition of Classic Rexx compatible classes to 'uses' -see below
 - the package org.netrexx.address is now deprecated, because its work is
   better done by the ADDRESS statement
+- #! shebangs are now supported for systems that support them, such as
+  Linux and macOS - and ignored by the translator (Marc Remes)
+- the launch script nrc now can be run with no CLASSPATH present (Marc Remes)
+- The Classic Rexx (and ooRexx, Regina) functions user() and
+  directory() are added to aid scripting.
 
 ## Pipelines
 - org.netrexx.njpipes.pipes.runner now reads pipeline source from
