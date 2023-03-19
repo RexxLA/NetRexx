@@ -1,0 +1,81 @@
+-- delay_tests01.njp
+/*
+  23/ 3/18 Jeff Hennick
+*/
+
+
+pipe (delay_tests01)
+
+ o: faninany |
+    sort singleok |
+    specs 2-* 1 |
+    cons ?
+
+   literal 1Only "relative times," beginning with a "+" are tested. TODs are not tested here. |
+   o: ?
+
+-- delay [records]  ?
+   literal +5 abc1;+5 def1;+5 ghi1 |
+   split ; |
+   delay +5  |
+   reverse |
+   c1: compare any ~2# 1 delay  [records] ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1cba 5+; 1fed 5+; 1ihg 5+;|
+   split ; |
+   c1: ?
+
+-- delay +time  ?
+   literal abc2;def2;ghi2 |
+   split ; |
+   delay +5  |
+   reverse |
+   c2: compare any ~2# 2 delay +time ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 2cba; 2fed; 2ihg;|
+   split ; |
+   c2: ?
+
+-- delay +time each ?
+   literal abc3;def3;ghi3 |
+   split ; |
+   delay +5 each |
+   reverse |
+   c3: compare any ~2# 3 delay +time each ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 3cba; 3fed; 3ihg;|
+   split ; |
+   c3: ?
+
+-- delay +time once ?
+   literal abc4;def4;ghi4 |
+   split ; |
+   delay +5 once |
+   reverse |
+   c4: compare any ~2# 4 delay +time once ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 4cba; 4fed; 4ihg |
+   split ; |
+   c4:
+
+/** delay -- Delay the stream for a specified time
+
+  >>--DELAY--+-------------------------------------------+-----------------+---><
+             |  +--+--+                                  |  +--EACH-(2)-+  | (1)
+             +--+-----+--+--numberHr:numberMin:numberSec-+--+-----------+--+ (1)
+                         +--numberMin:numberSec----------+  +--ONCE-(2)-+ (1)
+                         +--numberSec--------------------+ (1)
+
+ Notes:
+
+  (1) Arguments are NetRexx Pipelines only, not CMS.
+      CMS (and NetRexx when there is no argument) reads
+      delays as the first word of each record.
+      When present, they follow the CMS conventions
+      for the delay time in records. The + indicates a
+      duration, no + means time of day. The records do NOT
+      have the delay as the first word
+      Clock hours are 24h, so 2pm is 14.
+      Seconds can have decimal point and milliseconds.
+  (2) Used only for "releative time."
+*/
