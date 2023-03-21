@@ -1,4 +1,4 @@
-# NetRexx 4.05 alpha [10 Nov 2022]
+# NetRexx 4.05 beta [10 Mar 2023]
 
 ## Project
 - an ant build.xml (in examples) to build an Android .apk for the NetRexx translator (Jason Martin)
@@ -13,12 +13,14 @@
   Linux and macOS - and ignored by the translator (Marc Remes)
 - the launch script nrc now can be run with no CLASSPATH present (Marc Remes)
 - The Classic Rexx (and ooRexx, Regina) functions user() and
-  directory() are added to aid scripting.
+  directory() are added to aid scripting.(René Jansen)
+- #48 nrws.properties can now be .nrws.properties (though support for the filename without a dot is still there)
 
 ## Pipelines
 - org.netrexx.njpipes.pipes.runner now reads pipeline source from
   stdin when invoked without arguments (Marc Remes) 
 - a new ALL stage (Jeff Hennick)
+- a new DELAY stage (Jeff Hennick)
 
 ## Fixes
 - #38: the ADDRESS environment for SYSTEM is now resolved at runtime, previously a class compiled on another platform
@@ -26,10 +28,10 @@
 - the sqlselect stage has an exception message protected against nullpointers from a failing JDBC driver
 - #33: fix interpreter handling constant properties
 - #35: Rexx date() now standard in all modes (scripting mode and standard mode) -noimplicituses option for breakage
-- adapted qtime.nrx example for #35 (Rene Jansen)
+- adapted qtime.nrx example for #35 (René Jansen)
 - #40: detect unreachable code (Marc Remes)
-- #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending (Rene Jansen)
-- #42 A settings.history=off property in nrws.properties can be used to avoid writing a nrws.history file (Rene Jansen)
+- #41 The Workspace for NetRexx (nrws) now tries to avoid leaving _WS_*.nrx files after ending (René Jansen)
+- #42 A settings.history=off property in nrws.properties can be used to avoid writing a nrws.history file (René Jansen)
 - when interpreting, wait for all threads to complete after main() returned.
 - better diagnostics on failed clgMain (compile-load-go) dynamic compiles, e.g. for pipes and their stage exits
 - an error in RexxTime which could lead to a recursive call has been solved
@@ -40,6 +42,7 @@
   on startup of the translator.
   The restriction is now limited to the $HOME/Library hidden system directory on macOS, NetRexx will not find classes
   in that location.
+- #47 a related issue (but for another part of the user home directory) is solved for windows
 
 # NetRexx 4.04 GA [12 Sep 2022]
 
