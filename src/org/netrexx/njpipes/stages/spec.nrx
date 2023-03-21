@@ -1,4 +1,4 @@
--- spec
+-- spec.nrx Pipeline stage
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson, 2020-2023 RexxLA
  *
@@ -9,7 +9,8 @@
  */
 
 /*
-
+ 23/03/21 Variable countchar was count. It interfered with a class by that name in some cases.  Jeff Hennick
+ 23/02/22 Documentation; givehelp(). Jeff Hennick
  23/ 2/ 6 Added max(0) to 856's endp =. Jeff Hennick
  23/ 1/ 4 Make getSep caseless. Jeff Hennick
  23/ 1/ 2 Add "." for input range = 0.0. Jeff Hennick
@@ -42,158 +43,6 @@
  98/07/17 fix pad operations, output next.n was inserting a space.  EJT
 */
 
-/** specs
-            +-STOP--ALLEOF----+ (3)
- >>--SPECs--+-----------------+-------+-----------------+-------->
-            +-STOP-+-ANYEOF-+-+ (3)   +-COUNTERS-number-+ (12)
-                   +-n------+   (3)
-
-
-       v------------------------------------------------------------+
-   >---+--+-| Group |--------------------------+--+--------------+--+--><
-          +-READ-------------------------------+  +-(1),-(4)(13)-+
-          +-READSTOP---------------------------+ (3)
-          +-WRITE------------------------------+
-          +-SELECT-+-streamnum-+---------------+
-          |        +-streamid--+               |
-          +-OUTSTREAM--streamnum---------------+
-          +-PAD--+-char----+-------------------+
-          |      +-hexchar-+                   |
-          |      +-BLANK---+                   |
-          |      +-SPACE---+                   |
-          +-+-WORDSEParator---+--+--char-----+-+  (7)
-            +-WS--------------+  +-hexchar---+
-            +-FIELDSEparator--+  +-BLANK-----+
-            +-FS--------------+  +-TAB-------+
-                                 +-hexstring-+
-                                 +-qword-----+    (4)(6)
-Group:
- |--| Id |--| Input |--| Conversion |--| Output |--| Alignment |--|
-
-Id:
- |-letter--(14)--:-(2)--|
-
-Input:
- |--+-Words-(1)-wnumberrange----------------------+-------|
-    +-Fields-(1)-fnumberrange---------------------+
-    +-cnumberrange--------------------------------+
-    +-/string/------------------------------------+
-    +-Xhexstring----------------------------------+
-    +-Hhexstring----------------------------------+
-    +-Bbinstring----------------------------------+
-    |            +-FROM--1-------+ +-BY--1-----+  |
-    +-+-RECNO--+-+---------------+-+-----------+--+  (8)
-    | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |
-    +-TODclock------------------------------------+  (3)
-    +-.-------------------------------------------+  (4)(15)
-
-Conversion:
- |-+-------+--+------------------------------+------|
-   +-STRIP-+  +-B2C--------------------------+
-              +-B2X--------------------------+ (4)
-              +-C2B--------------------------+
-              +-C2D--------------------------+
-              +-C2F--------------------------+ (3)
-              +-C2I--------------------------+ (3)
-              +-C2P-+------------+-----------+ (3)
-              |     +-(2)(scale)-+           | (3)
-              +-C2V--------------------------+ (3)
-              +-C2X--------------------------+
-              +-D2C--------------------------+
-              +-D2X--------------------------+ (4)
-              +-F2C--------------------------+ (3)
-              +-I2C--------------------------+ (3)
-              +-P2C-+------------+-----------+ (3)
-              |     +-(2)(scale)-+           | (3)
-              +-V2C--------------------------+ (3)
-              +-X2B--------------------------+ (4)
-              +-X2C--------------------------+
-              +-X2D--------------------------+ (4)
-              +-F2T--------------------------+ (3)
-              +-LOWER------------------------+ (4)
-              +-UPPER------------------------+ (4)
-              +-STRING-----------------------+ (4)(11)
-              +-+-NETREXX-+-delimited_string-+ (4)(10)
-                +-NR------+                    (4)
-Output:
- |--+-Next-+-------+-------+--|
-    |      +-(2).n-+       |
-    +-NEXTWord-+-+-------+-+
-    +-NWord----+ +-(2).n-+ |
-    +-columnrange----------+
-    +-.--------------------+
-
-Alignment:
-    +-Left---+
- |--+--------+--|
-    +-Center-+
-    +-Right--+
-
-Notes:
- (1) Blanks are optional in this position.
- (2) Blanks are not allowed here.
- (3) CMS only. Not yet implemented in njpipes
- (4) NetRexx only. Not yet implemented in CMS
- (5) NetRexx only: READ is giving the same output as READSTOP when
-     the streams are different length.
- (6) A Qword is an optionally quoted word, with single or double marks.
-     If it contains spaces or begins with a quote mark, it must be quoted.
-     It can not begin with a space (the quote mark will be considered
-     a single character, and rest jibberish).
-     If is unquoted and an even number of hexadecimal characters,
-     it will be used as a hexchar or hexstring.
- (7) NetRexx Pipelines ONLY: a single quote character is NOT allowed,
-     use "'" or '"' as appropriate.
- (8) CMS Pipelines, without documenting it, places this right by defualt
-     NetRexx Pipelines follows the documentation and places this left by defualt.
-     Specify the alignment you want to override these defaults.
- (9) CMS has a mini-programming language built in. It uses Control Breaks and
-     Structured Data.
-     NetRexx does not yet have these, but see the NETREXX converter (10).
-(10) The delimited string is any valid NetRexx code. [Yes, you can get in trouble!]
-     It is put into a method and executed for each record.  The selected input data
-     is in the variable DATA. The returned string is output.  The persistent
-     variable array COUNTER[] is available for your use. Each COUNTER is
-     initially 0, but can hold any NetRexx value, including strings. COUNTERs
-     are shared across all NETREXX converters in a stage. Index can be number or string.
-     Fields identified by a fieldid are accessed as field["id"] when the quotes are
-     required, the id is a single letter, case is respected
-(11) The data is processed by the toString() method.
-(12) CMS Only. NetRexx ignores COUNTERS n; it has an unlimited number. See the NETREXX converter.
-(13) NetRexx Only. A comma may be used to separate groups for readability.
-(14) Letter is a single character, a-zA-Z.  Case is respected. BLANK is not permited between
-     letter and : .  The resulting data is available in the NETREXX code as field["letter"].
-(15) NetRexx Pipelines ONLY: A "." for input is "0.0", no data is selected. Variable data is "".
-
-Examples:
-CMS Pipelines has built into the SPEC stage its own programming language.
-It is Rexx-like-but-not-quite-Rexx.  For NetRexx Pipelines we have built in the worlds best scripting language: NetRexx.
-This gives all the power, but with a somewhat different syntax, of the CMS version.
-It is incorporated into the "Conversion" phase, with the key word NETREXX (or NR)
-and a delimitedString containing the NetRexx source.  In running, this code is encapsulated in a method.
-The data selected in the Input phase is available as the variable data.
-And whatever is returned is passed to the Output phase of the stage.
-(As a convenience, if the last statement is not RETURN, the statement "return data" is automatically added.)
-So all of these pipes work the same (giving cba):
-
-    pipe "literal abc | spec 1-* NR /return data.reverse/ 1 | cons"
-    pipe "literal abc | spec 1-* NR @rev = data.reverse; return rev@ 1 | cons"
-    pipe "literal abc | spec 1-* NR %data = data.reverse% 1 | cons"
-    pipe "spec /abc/ NR /data = data.reverse/ 1 | cons"
-
-Using COUNTERS:
-    pipe "literal abc | spec 1-* NR /counter[7]=counter[7]+1;ret=data.reverse counter[7];return ret/ 1 | cons"
-gives cba 1
-
-Using Field Ids (and "." for output position).  In this case the variable data is not used at all.:
-    pipe "literal abc | spec T:1-* . 1 NR @rev = field['T'].reverse; return rev@ 1 | cons"
-    pipe "literal abc | spec T:1-* . t:1 NR @rev = field['T'].reverse; return rev@ 1 | cons"
-"T:" and "t:" are different.
-
-Using comma to separate groups:
-    pipe "literal abc | spec T:1-* 10-16, 1.2 NR @rev = field['T'].reverse; return rev@ 1 | cons"
-
-**/
 
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.stages
@@ -1185,20 +1034,20 @@ class spec extends stage
 /* ****** New 6/22 **** */
   n=n+1;code[n] = 'method codew(data=Rexx, wsep=Rexx, isfield=Rexx 0) returns Rexx signals ThreadQ'
   n=n+1;code[n] = ' safesep = ""'
-  n=n+1;code[n] = ' loop count = 0 to 99'        -- find a non-occuring character string
+  n=n+1;code[n] = ' loop countchar = 0 to 99'        -- find a non-occuring character string
   n=n+1;code[n] = '  safespace = time("L").right(6)'
   n=n+1;code[n] = '  if data.pos(safespace) = 0 then leave'
   n=n+1;code[n] = ' end'
-  n=n+1;code[n] = ' if count > 99 then do'
+  n=n+1;code[n] = ' if countchar > 99 then do'
   n=n+1;code[n] = '   say "Codew could not get safespace"'
   n=n+1;code[n] = '   exit(13)'
   n=n+1;code[n] = ' end'
   n=n+1;code[n] = ' if isfield then do'
-  n=n+1;code[n] = '  loop count = 0 to 99'
+  n=n+1;code[n] = '  loop countchar = 0 to 99'
   n=n+1;code[n] = '   safesep = time("L").right(6) + 1'
   n=n+1;code[n] = '   if data.pos(safesep)=0 & safesep <> safespace then leave'
   n=n+1;code[n] = '  end'
-  n=n+1;code[n] = '  if count > 99 then do'
+  n=n+1;code[n] = '  if countchar > 99 then do'
   n=n+1;code[n] = '   say "Codew could not get safesep"'
   n=n+1;code[n] = '   exit(13)'
   n=n+1;code[n] = '  end'
@@ -1320,3 +1169,159 @@ method xl2c(hex) returns Rexx -- hex string to character string ala Rexx
     cs = cs || hex.substr(i,2).x2c()
   end
 return cs
+
+Method givehelp() static
+return -
+"/** specs -- Rearrange Contents of Records\n" -
+"\n" -
+"            +-STOP--ALLEOF----+ (3)\n" -
+" >>--SPECs--+-----------------+-------+-----------------+-------->\n" -
+"            +-STOP-+-ANYEOF-+-+ (3)   +-COUNTERS-number-+ (12)\n" -
+"                   +-n------+   (3)\n" -
+"\n" -
+"\n" -
+"       v------------------------------------------------------------+\n" -
+"   >---+--+-| Group |--------------------------+--+--------------+--+--><\n" -
+"          +-READ-------------------------------+  +-(1),-(4)(13)-+\n" -
+"          +-READSTOP---------------------------+ (3)\n" -
+"          +-WRITE------------------------------+\n" -
+"          +-SELECT-+-streamnum-+---------------+\n" -
+"          |        +-streamid--+               |\n" -
+"          +-OUTSTREAM--streamnum---------------+\n" -
+"          +-PAD--+-char----+-------------------+\n" -
+"          |      +-hexchar-+                   |\n" -
+"          |      +-BLANK---+                   |\n" -
+"          |      +-SPACE---+                   |\n" -
+"          +-+-WORDSEParator---+--+--char-----+-+  (7)\n" -
+"            +-WS--------------+  +-hexchar---+\n" -
+"            +-FIELDSEparator--+  +-BLANK-----+\n" -
+"            +-FS--------------+  +-TAB-------+\n" -
+"                                 +-hexstring-+\n" -
+"                                 +-qword-----+    (4)(6)\n" -
+"Group:\n" -
+" |--| Id |--| Input |--| Conversion |--| Output |--| Alignment |--|\n" -
+"\n" -
+"Id:\n" -
+" |-letter--(14)--:-(2)--|\n" -
+"\n" -
+"Input:\n" -
+" |--+-Words-(1)-wnumberrange----------------------+-------|\n" -
+"    +-Fields-(1)-fnumberrange---------------------+\n" -
+"    +-cnumberrange--------------------------------+\n" -
+"    +-/string/------------------------------------+\n" -
+"    +-Xhexstring----------------------------------+\n" -
+"    +-Hhexstring----------------------------------+\n" -
+"    +-Bbinstring----------------------------------+\n" -
+"    |            +-FROM--1-------+ +-BY--1-----+  |\n" -
+"    +-+-RECNO--+-+---------------+-+-----------+--+  (8)\n" -
+"    | +-NUMBER-+ +-FROM--fromnum-+ +-BY--bynum-+  |\n" -
+"    +-TODclock------------------------------------+  (3)\n" -
+"    +-.-------------------------------------------+  (4)(15)\n" -
+"\n" -
+"Conversion:\n" -
+" |-+-------+--+------------------------------+------|\n" -
+"   +-STRIP-+  +-B2C--------------------------+\n" -
+"              +-B2X--------------------------+ (4)\n" -
+"              +-C2B--------------------------+\n" -
+"              +-C2D--------------------------+\n" -
+"              +-C2F--------------------------+ (3)\n" -
+"              +-C2I--------------------------+ (3)\n" -
+"              +-C2P-+------------+-----------+ (3)\n" -
+"              |     +-(2)(scale)-+           | (3)\n" -
+"              +-C2V--------------------------+ (3)\n" -
+"              +-C2X--------------------------+\n" -
+"              +-D2C--------------------------+\n" -
+"              +-D2X--------------------------+ (4)\n" -
+"              +-F2C--------------------------+ (3)\n" -
+"              +-I2C--------------------------+ (3)\n" -
+"              +-P2C-+------------+-----------+ (3)\n" -
+"              |     +-(2)(scale)-+           | (3)\n" -
+"              +-V2C--------------------------+ (3)\n" -
+"              +-X2B--------------------------+ (4)\n" -
+"              +-X2C--------------------------+\n" -
+"              +-X2D--------------------------+ (4)\n" -
+"              +-F2T--------------------------+ (3)\n" -
+"              +-LOWER------------------------+ (4)\n" -
+"              +-UPPER------------------------+ (4)\n" -
+"              +-STRING-----------------------+ (4)(11)\n" -
+"              +-+-NETREXX-+-delimited_string-+ (4)(10)\n" -
+"                +-NR------+                    (4)\n" -
+"Output:\n" -
+" |--+-Next-+-------+-------+--|\n" -
+"    |      +-(2).n-+       |\n" -
+"    +-NEXTWord-+-+-------+-+\n" -
+"    +-NWord----+ +-(2).n-+ |\n" -
+"    +-columnrange----------+\n" -
+"    +-.--------------------+\n" -
+"\n" -
+"Alignment:\n" -
+"    +-Left---+\n" -
+" |--+--------+--|\n" -
+"    +-Center-+\n" -
+"    +-Right--+\n" -
+"\n" -
+"Notes:\n" -
+" (1) Blanks are optional in this position.\n" -
+" (2) Blanks are not allowed here.\n" -
+" (3) CMS only. Not yet implemented in njpipes\n" -
+" (4) NetRexx only. Not yet implemented in CMS\n" -
+" (5) NetRexx only: READ is giving the same output as READSTOP when\n" -
+"     the streams are different length.\n" -
+" (6) A Qword is an optionally quoted word, with single or double marks.\n" -
+"     If it contains spaces or begins with a quote mark, it must be quoted.\n" -
+"     It can not begin with a space (the quote mark will be considered\n" -
+"     a single character, and rest jibberish).\n" -
+"     If is unquoted and an even number of hexadecimal characters,\n" -
+"     it will be used as a hexchar or hexstring.\n" -
+" (7) NetRexx Pipelines ONLY: a single quote character is NOT allowed,\n" -
+"     use \"'\" or '\"' as appropriate.\n" -
+" (8) CMS Pipelines, without documenting it, places this right by defualt\n" -
+"     NetRexx Pipelines follows the documentation and places this left by defualt.\n" -
+"     Specify the alignment you want to override these defaults.\n" -
+" (9) CMS has a mini-programming language built in. It uses Control Breaks and\n" -
+"     Structured Data.\n" -
+"     NetRexx does not yet have these, but see the NETREXX converter (10).\n" -
+"(10) The delimited string is any valid NetRexx code. [Yes, you can get in trouble!]\n" -
+"     It is put into a method and executed for each record.  The selected input data\n" -
+"     is in the variable DATA. The returned string is output.  The persistent\n" -
+"     variable array COUNTER[] is available for your use. Each COUNTER is\n" -
+"     initially 0, but can hold any NetRexx value, including strings. COUNTERs\n" -
+"     are shared across all NETREXX converters in a stage. Index can be number or string.\n" -
+"     Fields identified by a fieldid are accessed as field[\"id\"] when the quotes are\n" -
+"     required, the id is a single letter, case is respected\n" -
+"(11) The data is processed by the toString() method.\n" -
+"(12) CMS Only. NetRexx ignores COUNTERS n; it has an unlimited number. See the NETREXX converter.\n" -
+"(13) NetRexx Only. A comma may be used to separate groups for readability.\n" -
+"(14) Letter is a single character, a-zA-Z.  Case is respected. BLANK is not permited between\n" -
+"     letter and : .  The resulting data is available in the NETREXX code as field[\"letter\"].\n" -
+"(15) NetRexx Pipelines ONLY: A \".\" for input is \"0.0\", no data is selected. Variable data is \"\".\n" -
+"\n" -
+"Examples:\n" -
+"CMS Pipelines has built into the SPEC stage its own programming language.\n" -
+"It is Rexx-like-but-not-quite-Rexx.  For NetRexx Pipelines we have built in the worlds best scripting language: NetRexx.\n" -
+"This gives all the power, but with a somewhat different syntax, of the CMS version.\n" -
+"It is incorporated into the \"Conversion\" phase, with the key word NETREXX (or NR)\n" -
+"and a delimitedString containing the NetRexx source.  In running, this code is encapsulated in a method.\n" -
+"The data selected in the Input phase is available as the variable data.\n" -
+"And whatever is returned is passed to the Output phase of the stage.\n" -
+"(As a convenience, if the last statement is not RETURN, the statement \"return data\" is automatically added.)\n" -
+"So all of these pipes work the same (giving cba):\n" -
+"\n" -
+"    pipe \"literal abc | spec 1-* NR /return data.reverse/ 1 | cons\"\n" -
+"    pipe \"literal abc | spec 1-* NR @rev = data.reverse; return rev@ 1 | cons\"\n" -
+"    pipe \"literal abc | spec 1-* NR %data = data.reverse% 1 | cons\"\n" -
+"    pipe \"spec /abc/ NR /data = data.reverse/ 1 | cons\"\n" -
+"\n" -
+"Using COUNTERS:\n" -
+"    pipe \"literal abc | spec 1-* NR /counter[7]=counter[7]+1;ret=data.reverse counter[7];return ret/ 1 | cons\"\n" -
+"gives cba 1\n" -
+"\n" -
+"Using Field Ids (and \".\" for output position).  In this case the variable data is not used at all.:\n" -
+"    pipe \"literal abc | spec T:1-* . 1 NR @rev = field['T'].reverse; return rev@ 1 | cons\"\n" -
+"    pipe \"literal abc | spec T:1-* . t:1 NR @rev = field['T'].reverse; return rev@ 1 | cons\"\n" -
+"\"T:\" and \"t:\" are different.\n" -
+"\n" -
+"Using comma to separate groups:\n" -
+"    pipe \"literal abc | spec T:1-* 10-16, 1.2 NR @rev = field['T'].reverse; return rev@ 1 | cons\"\n" -
+"\n" -
+"*/\n"
