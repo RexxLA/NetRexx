@@ -2,6 +2,8 @@
 
 ## Project
 - an ant build.xml (in examples) to build an Android .apk for the NetRexx translator (Jason Martin)
+- Reworked NetRexx Language Reference documentation
+- Reworked NetRexx Pipelines Guide and Reference documentation
 
 ## Language
 - a new option -deps to list dependencies
