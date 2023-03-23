@@ -1,11 +1,13 @@
--- compare.nrx NJPipe Stage
+-- compare.nrx Pipeline stage
 /*
  *  Copyright (C) 1998, 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  */
+
 /*
+   23/ 2/18  Documentation; givehelp(). Jeff Hennick
    20/ 9/18  Make input records type Rexx.  Jeff Hennick
    20/ 8/ 3  Add ECHO. Jeff Hennick
    20/ 8/ 1  Fix for blanks on both.  Jeff Hennick
@@ -17,48 +19,6 @@
              Fix output for first stream shorter; pad; control charactor transliteration. Jeff Hennick
    98/ 9/22  Added catch to selectInput(0).  JHennick
    98/ 8/24  JHennick
-*/
-/** compare (6)
-
-               +-TRINARY-+  (1)           +-PAD SPACE-+
-  >>--COMPARE--+---------+------------+---+-----------+---+------+---------><
-               +-BINARY--+  (2)       |   +-PAD-Xorc--+   +-ECHO-+  (8)
-               |                      |
-               | <-----------------+  |
-               +--ANY DString------+--+   (4) (5)
-               +--EQUAL DString----+      (4)
-               +--LESS DString-----+  (3) (4)
-               +--MORE DString-----+  (3) (4)
-               +--NOTEQUAL DString-+      (4)
-
-     (1) -1 = Primary is shorter/less, 0 = equal, 1 = Secondary is shorter/less
-     (2) 0 = equal, 1 = not equal
-     (3) Primary is LESS/shorter (or MORE/longer) than secondary
-     (4) DStrings can use any of the following escapes (or the lowercase) for
-         the unequal situation: (Your shell program may require doubled backslashes.)
-                 \C (count) for the record number,
-                 \B (byte) for column number
-                 \P (primary) for the primary stream record (7)
-                 \S (secondary) for the secondary stream record (7)
-                 \L (Least) for then stream number that is shortest, -1 if equal
-                 \M (Most) for the stream number that is longest, -1 if equal
-                 \N (New line) Line break
-     (5) Equal or not, this DString precedes any of the others
-     (6) This is njpipes only, not included in CMS
-     (7) In reporting \P & \S, control charactors, except new line, \n, are transliterated to [blob, 219.d2c()]
-     (8) Without ECHO, this stops and reports at first non-compare. With ECHO, each primary input is reported;
-         after first non-compare primary input stream records continue to be read and reported, but no testing is done.
-     (9) Options work in any order
-
-     Input streams:
-        0: Data 1
-        1: Data 2
-
-     Output streams:
-        0: Result (single record, possibly multiple lines
-        1: Last primary record read at first no match, or end of stream
-        2: Last secondary record read at first no match, or end of stream
-
 */
 
 options nostrictcase nostrictargs nostrictsignal
@@ -328,3 +288,48 @@ method diff() Signals ThreadQ
       output(r1)
    catch StageError
    end
+
+Method givehelp() static
+return -
+"/** compare (6) -- Compare Primary and Secondary streams for equality\n" -
+"\n" -
+"               +-TRINARY-+  (1)           +-PAD SPACE-+\n" -
+"  >>--COMPARE--+---------+------------+---+-----------+---+------+---------><\n" -
+"               +-BINARY--+  (2)       |   +-PAD-Xorc--+   +-ECHO-+  (8)\n" -
+"               |                      |\n" -
+"               | <-----------------+  |\n" -
+"               +--ANY DString------+--+   (4) (5)\n" -
+"               +--EQUAL DString----+      (4)\n" -
+"               +--LESS DString-----+  (3) (4)\n" -
+"               +--MORE DString-----+  (3) (4)\n" -
+"               +--NOTEQUAL DString-+      (4)\n" -
+"\n" -
+"     (1) -1 = Primary is shorter/less, 0 = equal, 1 = Secondary is shorter/less\n" -
+"     (2) 0 = equal, 1 = not equal\n" -
+"     (3) Primary is LESS/shorter (or MORE/longer) than secondary\n" -
+"     (4) DStrings can use any of the following escapes (or the lowercase) for\n" -
+"         the unequal situation: (Your shell program may require doubled backslashes.)\n" -
+"                 \\C (count) for the record number,\n" -
+"                 \\B (byte) for column number\n" -
+"                 \\P (primary) for the primary stream record (7)\n" -
+"                 \\S (secondary) for the secondary stream record (7)\n" -
+"                 \\L (Least) for then stream number that is shortest, -1 if equal\n" -
+"                 \\M (Most) for the stream number that is longest, -1 if equal\n" -
+"                 \\N (New line) Line break\n" -
+"     (5) Equal or not, this DString precedes any of the others\n" -
+"     (6) This is njpipes only, not included in CMS\n" -
+"     (7) In reporting \\P & \\S, control charactors, except new line, \\n, are transliterated to [blob, 219.d2c()]\n" -
+"     (8) Without ECHO, this stops and reports at first non-compare. With ECHO, each primary input is reported;\n" -
+"         after first non-compare primary input stream records continue to be read and reported, but no testing is done.\n" -
+"     (9) Options work in any order\n" -
+"\n" -
+"     Input streams:\n" -
+"        0: Data 1\n" -
+"        1: Data 2\n" -
+"\n" -
+"     Output streams:\n" -
+"        0: Result (single record, possibly multiple lines\n" -
+"        1: Last primary record read at first no match, or end of stream\n" -
+"        2: Last secondary record read at first no match, or end of stream\n" -
+"\n" -
+"*/\n"

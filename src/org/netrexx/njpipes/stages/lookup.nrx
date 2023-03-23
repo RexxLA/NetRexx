@@ -1,3 +1,4 @@
+-- lookup.nrx Pipeline stage
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
  *
@@ -7,60 +8,19 @@
  *
  */
 
--- lookup.nrx NJPipe Stage
--- 99/05/16  selectInput/Output can also generate rc=0, use rc()<=4 in tests.  ejt
--- 99/05/09  use mrc() instead of rc().  ejt
--- 98/09/20  better error reporting.  ejt
--- 98/08/26  fixed, restructuring vars now reset.  ejt
--- 98/08/23  restructured to use doSetup.  ejt
--- 98/08/03  explicit commit(-1) stage can begin waiting on selectAnyInput.  ejt
--- 98/07/30  use SelIRange.  EJT
--- 98/07/07  basic lookup stage.  EJT
--- 98/       exploit stageExit for speedups.  EJT
-
-/** lookup
-
-   in stream 0 are detail records
-   in stream 1 are master records
-   in stream 2 adds to masters
-   in stream 3 delete from masters
-
-   out stream 0 are matched records
-   out stream 1 are unmatched detail records
-   out stream 2 are unmatched or counted master records
-   out stream 3 deleted masters
-   out stream 4 duplicate masters
-   out stream 5 unmatched master deletes
-
-   lookup does not consider an unconnected output stream an error.  It
-   does proprogate EOFs from output streams.
-
-   To increase performance reorder the 'when type=' in method out so the
-   type you use is first in the list and recompile the stage.
-
-
-   >>--LOOKUP--+-------+--+---------+--+---------+--+--------+->
-               +-COUNT-+  +-ANYCASE-+  +-AUTOADD-+  +-BEFORE-+
-
-   >>-+---------+--+----------+--+-----------+--+------------+-------->
-      +-KEYONLY-+  +-SETCOUNT-+  +-INCREMENT-+  +-TRACKCOUNT-+
-
-   >>----------------------------+-------------------------+---------->
-                                 +-inputRange-+------------+
-                                              +-inputRange-+
-
-   >--+---------------------------+---------------------------><
-      +-DETAIL MASTER-------------+
-      +-DETAIL ALLMASTER PAIRWISE-+
-      +-DETAIL ALLMASTER----------+
-      +-DETAIL--------------------+
-      +-MASTER DETAIL-------------+
-      +-MASTER--------------------+
-      +-ALLMASTER DETAIL PAIRWISE-+
-      +-ALLMASTER DETAIL----------+
-      +-ALLMASTER-----------------+
-
+/*
+ 23/02/22  Documentation; givehelp(). Jeff Hennick
+ 99/05/16  selectInput/Output can also generate rc=0, use rc()<=4 in tests.  ejt
+ 99/05/09  use mrc() instead of rc().  ejt
+ 98/09/20  better error reporting.  ejt
+ 98/08/26  fixed, restructuring vars now reset.  ejt
+ 98/08/23  restructured to use doSetup.  ejt
+ 98/08/03  explicit commit(-1) stage can begin waiting on selectAnyInput.  ejt
+ 98/07/30  use SelIRange.  EJT
+ 98/07/07  basic lookup stage.  EJT
+ 98/       exploit stageExit for speedups.  EJT
 */
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -733,3 +693,49 @@ method delm(key=rexx,o=rexx) signals StageError, ThreadQ
          k[key,0] = null
       end
 
+
+Method givehelp() static
+return -
+"/** lookup -- Find Records in a Reference Using a Key Field\n" -
+"\n" -
+"\n" -
+"   >>--LOOKUP--+-------+--+---------+--+---------+--+--------+->\n" -
+"               +-COUNT-+  +-ANYCASE-+  +-AUTOADD-+  +-BEFORE-+\n" -
+"\n" -
+"    >-+---------+--+----------+--+-----------+--+------------+-------->\n" -
+"      +-KEYONLY-+  +-SETCOUNT-+  +-INCREMENT-+  +-TRACKCOUNT-+\n" -
+"\n" -
+"    >----------------------------+-------------------------+---------->\n" -
+"                                 +-inputRange-+------------+\n" -
+"                                              +-inputRange-+\n" -
+"\n" -
+"      +-DETAIL MASTER-------------+\n" -
+"   >--+---------------------------+---------------------------><\n" -
+"      +-DETAIL ALLMASTER PAIRWISE-+\n" -
+"      +-DETAIL ALLMASTER----------+\n" -
+"      +-DETAIL--------------------+\n" -
+"      +-MASTER DETAIL-------------+\n" -
+"      +-MASTER--------------------+\n" -
+"      +-ALLMASTER DETAIL PAIRWISE-+\n" -
+"      +-ALLMASTER DETAIL----------+\n" -
+"      +-ALLMASTER-----------------+\n" -
+"\n" -
+"   in stream 0 are detail records\n" -
+"   in stream 1 are master records\n" -
+"   in stream 2 adds to masters\n" -
+"   in stream 3 delete from masters\n" -
+"\n" -
+"   out stream 0 are matched records\n" -
+"   out stream 1 are unmatched detail records\n" -
+"   out stream 2 are unmatched or counted master records\n" -
+"   out stream 3 deleted masters\n" -
+"   out stream 4 duplicate masters\n" -
+"   out stream 5 unmatched master deletes\n" -
+"\n" -
+"   lookup does not consider an unconnected output stream an error.  It\n" -
+"   does proprogate EOFs from output streams.\n" -
+"\n" -
+"   To increase performance reorder the 'when type=' in method out so the\n" -
+"   type you use is first in the list and recompile the stage.\n" -
+"\n" -
+"*/\n"

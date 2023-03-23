@@ -1,189 +1,202 @@
+-- hostbyaddr.nrx Pipeline stage
+/*
+ *  Copyright (C) 2020 RexxLA
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+   /*
+   *  Change History:
+   *
+   *      2023/02/21 Documentation; givehelp(). Jeff Hennick
+   *      2020-06-10   CK        - Initial kick
+   *
+   */
+
+
 options decimal
 options binary
 import org.netrexx.njpipes.pipes.
 import java.net.
 
-package org.netrexx.njpipes.stages 
+package org.netrexx.njpipes.stages
 
-class hostbyaddr extends stage 
-  
-  /*
-   *  HOSTBYADDR - Resolve a IP Address into an IP Hostname
-   *
-   *  The input to HOSTBYADDR is a list of IP addresses (IPv4 or IPv6).  
-   *  For each IP address the corresponding hostname is determined using the system's name
-   *  resolution method.  The resulting hostname is written to the output stream.    
-   *                                           
-   *  >>-------HOSTBYADDR --------------+---------------+--------><
-   *                                    |               |    
-   *                                    +--INCLUDEIP----+  (1)   
-   *
-   *
-   *  (1) Optional parameter not present in VM/CMS version
-   *
-   *      INCLUDEIP          - Also include the IP address along with the hostname.
-   *                                Output:   <hostname>/<ip address>
-   *                                Example:  dns.google/8.8.8.8
-   *
-   *  Known issues:  The underlying Java method getByName/getHostName does not appear to handle IPv6 addresses 
-   *                 in any known and consistent manner.  Could be related to a host configuration
-   *                 issue but googling shows odd and inconsistent results for getting around this.  
-   *
-   *  Examples:
-   *
-   *   pipe "literal 1.1.1.1 | hostbyaddr | console"
-   *   one.one.one.one
-   *	  
-   *   pipe "literal 8.8.8.8 | hostbyaddr includeip | console"
-   *   dns.google/8.8.8.8
-   *
-   *   pipe "literal 1.1.1.255 | hostbyaddr | console"
-   *   # Input record 1: Unable to determine host name for IP address 1.1.1.255 #
-   *   
-   *   pipe "literal 999 | hostbyaddr | console"
-   *   # Input record 1: 999 is not a valid IP address #
-   *	  
-   *   pipe "literal 2001:4860:4860::8888 | hostbyaddr | console" 
-   *   # Input record 1: Unable to determine host name for IP address 2001:4860:4860::8888 #
-   *
-   *   pipe "literal 999.999.999.999 | hostbyaddr | console"
-   *   # Input record 1: Unable to determine host name for 999.999.999.999 . Check format of IP address provided. #
-   *  
-   *
-   *  Change History:
-   *        
-   *      2020-06-10   CK        - Initial kick
-   *
-   */
+class hostbyaddr extends stage
+  method run() signals ThreadQ
 
-  method run() signals ThreadQ 
-	
     a           = Rexx             /* arguments passed to filter                                */
-	ipaddr      = Rexx             /* IP address pulled from input stream - can be IPv4 or IPv6 */
-	Jipaddr     = Rexx             /* Rexxified view of what Java thinks the IP address is      */
+    ipaddr      = Rexx             /* IP address pulled from input stream - can be IPv4 or IPv6 */
+    Jipaddr     = Rexx             /* Rexxified view of what Java thinks the IP address is      */
     hostname    = Rexx             /* holds name returned by Java getHostName                   */
     rec_num     = Rexx 0           /* current record number being processed                     */
     includeip   = Rexx 0           /* flag for optional inclusion of IP address on output       */
-    
-    /* -- Process any arguments -- */                               
-    
+
+    /* -- Process any arguments -- */
+
     a = Rexx (arg(null))
-    
+
     if a \= null then do
-      
-      a = a.upper()       
+
+      a = a.upper()
       if a.pos("INCLUDEIP") > 0 then includeip = 1
-      
-    end   
-    
-    /* -- Main loop -- */   
-     
-	do label block1 
-	 
-      loop label siempre    forever   
-	    
-	    ipaddr = Rexx peekto()
-	    rec_num = rec_num + 1
- 
+
+    end
+
+    /* -- Main loop -- */
+
+   do label block1
+
+      loop label siempre    forever
+
+       ipaddr = Rexx peekto()
+       rec_num = rec_num + 1
+
         do label block2
-		
-	      if ipaddr = null   then do		  
-	         output("# Input record "rec_num": Missing IP address to evaluate #")
-	         readto()
-	         iterate siempre	    
-	      end /* if ipaddr is null */
-		  
-		 /* 
-		  *  -- The following test has been commented out.  It has been superseded by the next test but the comments have 
-		  *  -- been left in to show some of the weird things that the Java methods do to the data passed to it 
-          *		  
-          *  The Java InetAddress method getByName will happily take a pure integer value and create an IPv4 representation of 
-		  *  it.  For example: 999 will get converted to 0.0.3.231 = 3 x 256 + 231 = 999.  On a true blue CMS machine running 
-		  *  z/VM 7.1 CMS and error will be generated:   
-		  *  FPLTCR1142E Unable to resolve 999 (RXSOCKET error 2001 EINVALIDRXSOCKETCALL Syntax error in RXSOCKET parameter list)
-		  *  We check for a pure integer argument and mimic the CMS error here.
-		  *
-	      *													   
-		  * if ipaddr.datatype('D') then do
-	      *    output("# Input record "rec_num": "ipaddr" is not a valid IP address #")
-	      *    readto()
-	      *    iterate siempre	    
-	      * end	
-         */		  
-	  
+
+         if ipaddr = null   then do
+            output("# Input record "rec_num": Missing IP address to evaluate #")
+            readto()
+            iterate siempre
+         end /* if ipaddr is null */
+
+       /*
+        *  -- The following test has been commented out.  It has been superseded by the next test but the comments have
+        *  -- been left in to show some of the weird things that the Java methods do to the data passed to it
+          *
+          *  The Java InetAddress method getByName will happily take a pure integer value and create an IPv4 representation of
+        *  it.  For example: 999 will get converted to 0.0.3.231 = 3 x 256 + 231 = 999.  On a true blue CMS machine running
+        *  z/VM 7.1 CMS and error will be generated:
+        *  FPLTCR1142E Unable to resolve 999 (RXSOCKET error 2001 EINVALIDRXSOCKETCALL Syntax error in RXSOCKET parameter list)
+        *  We check for a pure integer argument and mimic the CMS error here.
+        *
+         *
+        * if ipaddr.datatype('D') then do
+         *    output("# Input record "rec_num": "ipaddr" is not a valid IP address #")
+         *    readto()
+         *    iterate siempre
+         * end
+         */
+
          /*  . . . and it even gets uglier.  Java will attempt to translate an incomplete IPv4 address to a complete one.
           *  For example 4.5 will get translated to 4.0.0.5.  (Why not 4.5.0.0 or 4.0.5.0?? - arbitrary).  So we are forced
-          *  to check the value passed to see if it has some of the attributes of an IPv4 address.  It turns out we only need to 
-		  *  check that there are 3 '.' in the construct passed.  The Java method getByName will do a deeper check the rest of
-		  *  the value for proper IPv4 format without doing its odd auto-assumption-translate
-		 */
-									
-		  do label ipcheck
-   		  
+          *  to check the value passed to see if it has some of the attributes of an IPv4 address.  It turns out we only need to
+        *  check that there are 3 '.' in the construct passed.  The Java method getByName will do a deeper check the rest of
+        *  the value for proper IPv4 format without doing its odd auto-assumption-translate
+       */
+
+        do label ipcheck
+
              if ipaddr.countstr(":") > 0 then leave ipcheck  /* Implies a potential Ipv6 address so let Java handle                      */
-		  
-			 if ipaddr.countstr('.') = 3 then leave ipcheck  /* Implies a potential IPv4 address that Java will handle correctly without */
-			                                                 /* doing some bizarre interpretation mangling.                              */
+
+          if ipaddr.countstr('.') = 3 then leave ipcheck  /* Implies a potential IPv4 address that Java will handle correctly without */
+                                                          /* doing some bizarre interpretation mangling.                              */
 
              /* If we get here then we know we have a crap IP address */
-													  
-	         output("# Input record "rec_num": "ipaddr" is not a valid IP address #")
-	         readto()
-	         iterate siempre	
-			 
-	      end ipcheck        	  	  
-		  
-          /* Java methods will do some 'adjusting' of the IP address especially if it is an IPv6 address (eg zero decompression).  
-		   * This will screw up our check later on to see if we got a valid reverse name or not (saying check for bad address instead of no reverse).   
-           * So we need to get the Java version of the IP address passed after it has done its 'adjusting' to use in that comparison instead.
-          */	    
-	  
-          JInetAddr  = InetAddress.getByName(ipaddr)	    /* Get Java's view of the IP address passed to the filter                   */														
-		  Jipaddr    = JInetAddr.toString()                 /* Rexxify that view                                                        */
-          Jipaddr    = Jipaddr.substr(2)                    /* Java seems to like putting a leading '/' in the string - so strip it out */
-	
-	      hostname = JInetAddr.getHostName()                /* getHostName does the actual reverse lookup    */
 
-		 /*														   
+            output("# Input record "rec_num": "ipaddr" is not a valid IP address #")
+            readto()
+            iterate siempre
+
+         end ipcheck
+
+          /* Java methods will do some 'adjusting' of the IP address especially if it is an IPv6 address (eg zero decompression).
+         * This will screw up our check later on to see if we got a valid reverse name or not (saying check for bad address instead of no reverse).
+           * So we need to get the Java version of the IP address passed after it has done its 'adjusting' to use in that comparison instead.
+          */
+
+          JInetAddr  = InetAddress.getByName(ipaddr)      /* Get Java's view of the IP address passed to the filter                   */
+          Jipaddr    = JInetAddr.toString()                 /* Rexxify that view                                                        */
+          Jipaddr    = Jipaddr.substr(2)                    /* Java seems to like putting a leading '/' in the string - so strip it out */
+
+         hostname = JInetAddr.getHostName()                /* getHostName does the actual reverse lookup    */
+
+       /*
           *  If the Java InetAddress method getHostName is unable to resolve an IP address to a hostname it returns the passed
-		  *  IP address instead of throwing an UnknownHostException like it does with getAllByName (see HOSTBYNAME).  Bizarrely inconsistent     
-		  *  On a true blue CMS machine running z/VM 7.1 CMS an error is returned: 
+        *  IP address instead of throwing an UnknownHostException like it does with getAllByName (see HOSTBYNAME).  Bizarrely inconsistent
+        *  On a true blue CMS machine running z/VM 7.1 CMS an error is returned:
           *  FPLTCR1142E Unable to resolve <ipaddr> (RXSOCKET error 2056 EIPADDRNOTFOUND IP address not found in ETC HOSTS file)
-	      *  We mimic the CMS error here.                                                                
-		 */
-														   
-		  if hostname =  Jipaddr then do
-	         output("# Input record "rec_num": Unable to determine host name for IP address "ipaddr" #")
-	         readto()
-	         iterate siempre	    
-	      end /* if hostname = ipaddr */		  
+         *  We mimic the CMS error here.
+       */
+
+        if hostname =  Jipaddr then do
+            output("# Input record "rec_num": Unable to determine host name for IP address "ipaddr" #")
+            readto()
+            iterate siempre
+         end /* if hostname = ipaddr */
 
           /* At this point we should have determined the host name for a given IP address.  Write it out.  */
-		  
-	      if includeip then output(hostname"/"ipaddr)              /* write to the output stream */
-		               else output(hostname)
-		  hostname = ""                                            /* prepare for next record    */
-		  ipaddr   = ""
-		  readto()                                                 /* get the next record        */
-		  iterate siempre
-	  
-	    catch java.net.UnknownHostException
-	      do	  
-	        output("# Input record "rec_num": Unable to determine host name for "ipaddr" . Check format of IP address provided. #")
-	        readto()			  
-	        iterate siempre	    
-	      end   /* catch Unknown Host */
-		  
-		catch StageError
-		   rc = rc()
-		
-		end block2
-	
+
+         if includeip then output(hostname"/"ipaddr)              /* write to the output stream */
+                     else output(hostname)
+        hostname = ""                                            /* prepare for next record    */
+        ipaddr   = ""
+        readto()                                                 /* get the next record        */
+        iterate siempre
+
+       catch java.net.UnknownHostException
+         do
+           output("# Input record "rec_num": Unable to determine host name for "ipaddr" . Check format of IP address provided. #")
+           readto()
+           iterate siempre
+         end   /* catch Unknown Host */
+
+      catch StageError
+         rc = rc()
+
+      end block2
+
       end /* loop forever */
-	
-	catch StageError
-	  rc = rc()
-	   
-	end block1 
-    
+
+   catch StageError
+     rc = rc()
+
+   end block1
+
     exit(rc*(rc \= 12))
+
+Method givehelp() static
+return -
+"  /**  hostbyaddr - Resolve a IP Address into an IP Hostname\n" -
+"   *\n" -
+"   *  The input to HOSTBYADDR is a list of IP addresses (IPv4 or IPv6).\n" -
+"   *  For each IP address the corresponding hostname is determined using the system's name\n" -
+"   *  resolution method.  The resulting hostname is written to the output stream.\n" -
+"   *\n" -
+"   *  >>-------HOSTBYADDR --------------+---------------+--------><\n" -
+"   *                                    |               |\n" -
+"   *                                    +--INCLUDEIP----+  (1)\n" -
+"   *\n" -
+"   *\n" -
+"   *  (1) Optional parameter not present in VM/CMS version\n" -
+"   *\n" -
+"   *      INCLUDEIP          - Also include the IP address along with the hostname.\n" -
+"   *                                Output:   <hostname>/<ip address>\n" -
+"   *                                Example:  dns.google/8.8.8.8\n" -
+"   *\n" -
+"   *  Known issues:  The underlying Java method getByName/getHostName does not appear to handle IPv6 addresses\n" -
+"   *                 in any known and consistent manner.  Could be related to a host configuration\n" -
+"   *                 issue but googling shows odd and inconsistent results for getting around this.\n" -
+"   *\n" -
+"   *  Examples:\n" -
+"   *\n" -
+"   *   pipe \"literal 1.1.1.1 | hostbyaddr | console\"\n" -
+"   *   one.one.one.one\n" -
+"   *\n" -
+"   *   pipe \"literal 8.8.8.8 | hostbyaddr includeip | console\"\n" -
+"   *   dns.google/8.8.8.8\n" -
+"   *\n" -
+"   *   pipe \"literal 1.1.1.255 | hostbyaddr | console\"\n" -
+"   *   # Input record 1: Unable to determine host name for IP address 1.1.1.255 #\n" -
+"   *\n" -
+"   *   pipe \"literal 999 | hostbyaddr | console\"\n" -
+"   *   # Input record 1: 999 is not a valid IP address #\n" -
+"   *\n" -
+"   *   pipe \"literal 2001:4860:4860::8888 | hostbyaddr | console\"\n" -
+"   *   # Input record 1: Unable to determine host name for IP address 2001:4860:4860::8888 #\n" -
+"   *\n" -
+"   *   pipe \"literal 999.999.999.999 | hostbyaddr | console\"\n" -
+"   *   # Input record 1: Unable to determine host name for 999.999.999.999 . Check format of IP address provided. #\n" -
+"   */\n"

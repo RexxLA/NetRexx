@@ -1,4 +1,4 @@
-/* dc */
+-- dateconvert.nrx Pipeline stage
 /*
  *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *Distributed under the ICU 1.8.1 License with NO WARRANTIES of ANY kind.
@@ -7,101 +7,10 @@
  */
 
 /*
+ 23/ 2/17 Documentation; givehelp(). Jeff Hennick
  20/ 9/12 Fixed NOW. Jeff Hennick
  20/ 8/22 Added NOW. Jeff Hennick
  20/ 6/26 Added NOON & MIDNIGHT options. Jeff Hennick
-*/
-
-/** dateconvert
-                              (3)
-                 +-- 1-* ------------------------+
->>--DATECONVert--+-------------------------------+--------------------------->
-                 +-| Separator |--| Inputrange |-+
-
-    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+
->---+---------------------------------------+--+-----------------------+------>
-    |                    +-ISOdate----------+  +-WINDOW--signednumber--+
-    +-| Inputformat |-+--+------------------+  +-BASEYEAR--yearnumber--+
-    +--NOW--(5)-------+  +-| Outputformat |-+
-
-                  +--MIDNIGHT--(4)-+
->--+-----------+--+----------------+---------------------------------------->>
-   +--TIMEOUT--+  +--NOON--(4)-----+
-
-
-Separator:  (3)
-
-|--+---------------------------------------+--|
-   +--+--WORDSEParator---+--+--char-----+--+
-      +--WS--------------+  +--hexchar--+
-      +--FIELDSEparator--+  +--BLANK----+
-      +--FS--------------+  +--SPACE----+
-
-Inputrange:  (3)
-|--+--Words-(1)-wnumberrange---+--|
-   +--Fields-(1)-fnumberrange--+
-   +--cnumberrange-------------+
-
-(1): SPACE is optional here.
-(3): NetRexx Pipelines uses IRange which gives a superset of range options.
-(4): NetRexx Pipelines only. What time to assume if blank time on input.
-(5): NetRexx Pipelines only. Do NOT read input stream. Use current local date time.
-     Any Inputrange is ignored.
-
-Inputformat, Outputformat:
-SHOrtdate     }   mm/dd/yy hh:mm:ss.uuuuuu
-USA_SHORT     }
-REXX_DATE_U   }
-
-FULldate      }   mm/dd/yyyyyyy hh:mm:ss.uuuuuu
-USA           }
-
-ISO_SHORT         yy-mm-dd hh:mm:ss.uuuuuu
-ISOdate           yyyyyyy-mm-dd hh:mm:ss.uuuuuu
-DB2_SHORT         yy-mm-dd-hh.mm.ss.uuuuuu
-DB2               yyyyyyy-mm-dd-hh.mm.ss.uuuuuu
-VMDATE  (2)
-NORMAL            dd mmm yyyyyyy hh:mm:ss.uuuuuu
-CSL_SHORT     }   yy/mm/dd hh:mm:ss.uuuuuu
-REXX_DATE_O   }
-CSL               yyyyyyy/mm/dd hh:mm:ss.uuuuuu
-PIPE_SHORT        yymmddhhmmssuuuuuu
-PIPE          }   yyyymmddhhmmssuuuuuu
-REXX_DATE_S   }
-EURSHORT          dd.mm.yy hh:mm:ss.uuuuuu
-EUR               dd.mm.yyyyyyy hh:mm:ss.uuuuuu
-JULIAN_SHORT      yy.ddd hh:mm:ss.uuuuuu
-JULIAN            yyyyyyy.ddd hh:mm:ss.uuuuuu
-TOD_ABSOLUTE }  (2)
-TODABS       }  (2)
-SCIENTIFIC_ABSOLUTE }  (2)
-SCIABS              }  (2)
-POSIX             ssssssss
-TOD_RELATIVE }  (2)
-TODREL       }  (2)
-SCIENTIFIC_RELATIVE }  (2)
-SCIREL              }  (2)
-MET  (2)
-
-The following can be REXX_DATE_x, REXXx, or Rx
-REXX_DATE_B  (2)
-REXX_DATE_C  (2)
-REXX_DATE_D       ddd hh:mm:ss.uuuuuu
-REXX_DATE_E       dd/mm/yy hh:mm:ss.uuuuuu
-REXX_DATE_E_LONG  dd/mm/yyyyyyy hh:mm:ss.uuuuuu
-REXX_DATE_J       yyddd hh:mm:ss.uuuuuu
-REXX_DATE_J_LONG  yyyyddd hh:mm:ss.uuuuuu
-REXX_DATE_M       mmmmmmmmm (output only)
-REXX_DATE_N_SHORT dd mmm yy hh:mm:ss.uuuuuu
-REXX_DATE_N       dd mmm yyyy hh:mm:ss.uuuuuu
-REXX_DATE_W       wwwwwwwww (output only)
-
-(2) Not implemented in NetRexx Pipelines at this time; mainly mainframe useful only.
-
-Bad date records out on secondary, NetRexx Pipelines is more forgiving on input format:
- _LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the
- format; leading zeros/blanks can be ignored except where there is no punctuation.
-
 */
 
 options nostrictcase nostrictargs nostrictsignal nobinary
@@ -266,7 +175,7 @@ do
   end
   else do
     n=n+1;o[n]= '  aobj = peekto()'
-  end  
+  end
   n=n+1;o[n]= '  robj = Rexx aobj'
   /* process line */
 
@@ -362,10 +271,10 @@ do
   n=n+1;o[n]= '  output(oline)'
   if typei = 'NOW' then do
     n=n+1;o[n]= '  leave'
-  end 
+  end
   else do
     n=n+1;o[n]= '  readto()'
-  end  
+  end
   n=n+1;o[n]= 'catch StageError'
   n=n+1;o[n]= '  rc = rc()'
   n=n+1;o[n]= 'end'
@@ -670,3 +579,97 @@ method getOutFormat(name)
       exit 11
     end
   return p',' type
+
+Method givehelp() static
+return -
+"/** dateconvert -- Convert Date Formats\n" -
+"                              (3)\n" -
+"                 +-- 1-* ------------------------+\n" -
+">>--DATECONVert--+-------------------------------+--------------------------->\n" -
+"                 +-| Separator |--| Inputrange |-+\n" -
+"\n" -
+"    +-SHOrtdate ISOdate---------------------+  +-WINDOW -50------------+\n" -
+">---+---------------------------------------+--+-----------------------+------>\n" -
+"    |                    +-ISOdate----------+  +-WINDOW--signednumber--+\n" -
+"    +-| Inputformat |-+--+------------------+  +-BASEYEAR--yearnumber--+\n" -
+"    +--NOW--(5)-------+  +-| Outputformat |-+\n" -
+"\n" -
+"                  +--MIDNIGHT--(4)-+\n" -
+">--+-----------+--+----------------+---------------------------------------->>\n" -
+"   +--TIMEOUT--+  +--NOON--(4)-----+\n" -
+"\n" -
+"\n" -
+"Separator:  (3)\n" -
+"\n" -
+"|--+---------------------------------------+--|\n" -
+"   +--+--WORDSEParator---+--+--char-----+--+\n" -
+"      +--WS--------------+  +--hexchar--+\n" -
+"      +--FIELDSEparator--+  +--BLANK----+\n" -
+"      +--FS--------------+  +--SPACE----+\n" -
+"\n" -
+"Inputrange:  (3)\n" -
+"|--+--Words-(1)-wnumberrange---+--|\n" -
+"   +--Fields-(1)-fnumberrange--+\n" -
+"   +--cnumberrange-------------+\n" -
+"\n" -
+"(1): SPACE is optional here.\n" -
+"(3): NetRexx Pipelines uses IRange which gives a superset of range options.\n" -
+"(4): NetRexx Pipelines only. What time to assume if blank time on input.\n" -
+"(5): NetRexx Pipelines only. Do NOT read input stream. Use current local date time.\n" -
+"     Any Inputrange is ignored.\n" -
+"\n" -
+"Inputformat, Outputformat:\n" -
+"SHOrtdate     }   mm/dd/yy hh:mm:ss.uuuuuu\n" -
+"USA_SHORT     }\n" -
+"REXX_DATE_U   }\n" -
+"\n" -
+"FULldate      }   mm/dd/yyyyyyy hh:mm:ss.uuuuuu\n" -
+"USA           }\n" -
+"\n" -
+"ISO_SHORT         yy-mm-dd hh:mm:ss.uuuuuu\n" -
+"ISOdate           yyyyyyy-mm-dd hh:mm:ss.uuuuuu\n" -
+"DB2_SHORT         yy-mm-dd-hh.mm.ss.uuuuuu\n" -
+"DB2               yyyyyyy-mm-dd-hh.mm.ss.uuuuuu\n" -
+"VMDATE  (2)\n" -
+"NORMAL            dd mmm yyyyyyy hh:mm:ss.uuuuuu\n" -
+"CSL_SHORT     }   yy/mm/dd hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_O   }\n" -
+"CSL               yyyyyyy/mm/dd hh:mm:ss.uuuuuu\n" -
+"PIPE_SHORT        yymmddhhmmssuuuuuu\n" -
+"PIPE          }   yyyymmddhhmmssuuuuuu\n" -
+"REXX_DATE_S   }\n" -
+"EURSHORT          dd.mm.yy hh:mm:ss.uuuuuu\n" -
+"EUR               dd.mm.yyyyyyy hh:mm:ss.uuuuuu\n" -
+"JULIAN_SHORT      yy.ddd hh:mm:ss.uuuuuu\n" -
+"JULIAN            yyyyyyy.ddd hh:mm:ss.uuuuuu\n" -
+"TOD_ABSOLUTE }  (2)\n" -
+"TODABS       }  (2)\n" -
+"SCIENTIFIC_ABSOLUTE }  (2)\n" -
+"SCIABS              }  (2)\n" -
+"POSIX             ssssssss\n" -
+"TOD_RELATIVE }  (2)\n" -
+"TODREL       }  (2)\n" -
+"SCIENTIFIC_RELATIVE }  (2)\n" -
+"SCIREL              }  (2)\n" -
+"MET  (2)\n" -
+"\n" -
+"The following can be REXX_DATE_x, REXXx, or Rx\n" -
+"REXX_DATE_B  (2)\n" -
+"REXX_DATE_C  (2)\n" -
+"REXX_DATE_D       ddd hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_E       dd/mm/yy hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_E_LONG  dd/mm/yyyyyyy hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_J       yyddd hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_J_LONG  yyyyddd hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_M       mmmmmmmmm (output only)\n" -
+"REXX_DATE_N_SHORT dd mmm yy hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_N       dd mmm yyyy hh:mm:ss.uuuuuu\n" -
+"REXX_DATE_W       wwwwwwwww (output only)\n" -
+"\n" -
+"(2) Not implemented in NetRexx Pipelines at this time; mainly mainframe useful only.\n" -
+"\n" -
+"Bad date records out on secondary, NetRexx Pipelines is more forgiving on input format:\n" -
+" _LONG, _SHORT, and normal can all read either 2- or 4-digit years and process per the\n" -
+" format; leading zeros/blanks can be ignored except where there is no punctuation.\n" -
+"\n" -
+"*/\n"

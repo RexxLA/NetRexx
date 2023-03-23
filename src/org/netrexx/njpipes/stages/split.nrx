@@ -1,4 +1,4 @@
--- split.nrx NJPipe Stage
+-- split.nrx Pipeline stage
 /*
  *  Copyright (C) 1998 - 2019  Jeffrey Hennick, JHennick@Delphi.Com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
@@ -7,26 +7,11 @@
  */
 
 /*
+  23/02/23  Documentation; givehelp(). Jeff Hennick
   19/11/20  null input to ''; fix xrange number. JH
   99/05/09  use mrc() instead of rc().  ejt
   98/06/20  Binary; Output blank (but not null) lines; GetXRange.  JHennick
   98/06/12  DString.  Up to CMS documentation. JHennick
-*/
-
-/** split
-
-   >>--SPLIT--+---------+--+-----------------+----------------------------->
-              +-ANYCase-+  +-MINimum--number-+
-
-      +-AT----------------------+           +-BLANK------------------+
-   >--+-------------------------+--+-----+--+------------------------+----><
-      +-+---------+--+-BEFORE-+-+  +-NOT-+  +-+ target +--+--------+-+
-        +-snumber-+  +-AFTER--+                           +-number-+
-
-   target:
-   +--+-xrange----------------------+--------------------------------------+
-      +-+-STRing-+--delimitedString-+
-        +-ANYof--+
 */
 
 options nostrictcase nostrictargs nostrictsignal
@@ -36,16 +21,16 @@ package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
 
 class split extends stage binary
-  
+
   method run()
-    
+
     args = rexx arg()
     w1 = rexx
     s = rexx ''
     anycase = boolean
-    
+
     parse args.upper w1 rest                               -- ANYCASE etc.
-    
+
     if 'ANYCASE'.abbrev(w1, 4) | w1.wordpos('CASEANY IGNORECASE CASEIGNORE') > 0 then
       do
 	anycase = 1
@@ -56,12 +41,12 @@ class split extends stage binary
 	args = arg()
 	anycase = 0
       end
-    
+
     parse args.upper w1 .
-    
+
     min = boolean 'MINIMUM'.abbrev(w1, 3)               -- MINimum
     minn = rexx 0
-    
+
     if min then do
       parse args . minn args
       if \minn.datatype('W') then do
@@ -71,15 +56,15 @@ class split extends stage binary
 	Emsg(11,'Error -' getName() 'MINIMUM' minn 'value must be positive')
       end
     end
-    
+
     parse args.upper w1 w2 .
     parse args . . rest
     org_args = args
-    
+
     before = boolean
     after = boolean 0
     snum = rexx 0
-    
+
     select
       when w1 = 'AT' then parse args . args                  -- AT
       when w1 = 'BEFORE' then do                             -- BEFORE
@@ -103,27 +88,27 @@ class split extends stage binary
       end
       otherwise nop
     end
-    
+
     at = boolean
     at = \(before | after)
-    
+
     parse args.upper w1 .
-    
+
     not = boolean 0
-    
+
     if w1 = 'NOT' then do                                   -- NOT
       not = 1
       parse args . args
     end
-    
+
     parse args.upper w1 w2 .
-    
+
     str = boolean 0
     anyof = boolean 0
-    
+
     infinity = rexx 999999999
     maxsp = rexx infinity
-    
+
     select
       when 'STRING'.abbrev(w1, 3) then do                  -- STRing
 	str = 1
@@ -134,9 +119,9 @@ class split extends stage binary
       otherwise
 	args = '.' args
     end
-    
+
     parse args . args
-    
+
     if str | anyof then do                                   -- DelimitedString
       ds = DString(args)
       s = ds.String
@@ -149,19 +134,19 @@ class split extends stage binary
       -- catch StageError
       --   Emsg(11,'Bad Range')
     end
-    
+
     if maxsp = '' then maxsp = infinity                         -- max splits
-    
+
     if s = '' then s = ' '
-    
+
     if after &  str then snum = snum + s.length() - 1           -- BEFORE  or AFTER
     if before then do
       snum = -snum - 1
       after = 1
     end
-    
+
     -- now lets run this thing
-    
+
     if at then select
       when anyof & anycase then do                             -- AT ANYCASE  ANYOF  \STRING
 	if not then vkey = 'N'
@@ -378,7 +363,7 @@ exit(rc*(rc<>12))
     else
       p = verifyit(needle,haystack,key,offset,p+1)
     return p
-    
+
   method findit(needle,haystack,offset,start) returns rexx
     p = haystack.pos(needle,start)
     if p = 0 then return 0
@@ -387,4 +372,22 @@ exit(rc*(rc<>12))
     else
       p = findit(needle,haystack,offset,p+1)
     return p
-    
+
+
+Method givehelp() static
+return -
+"/** split -- Split Records Relative to a Target\n" -
+"\n" -
+"   >>--SPLIT--+---------+--+-----------------+----------------------------->\n" -
+"              +-ANYCase-+  +-MINimum--number-+\n" -
+"\n" -
+"      +-AT----------------------+           +-BLANK------------------+\n" -
+"   >--+-------------------------+--+-----+--+------------------------+----><\n" -
+"      +-+---------+--+-BEFORE-+-+  +-NOT-+  +-+ target +--+--------+-+\n" -
+"        +-snumber-+  +-AFTER--+                           +-number-+\n" -
+"\n" -
+"   target:\n" -
+"   +--+-xrange----------------------+--------------------------------------+\n" -
+"      +-+-STRing-+--delimitedString-+\n" -
+"        +-ANYof--+\n" -
+"*/\n"

@@ -1,7 +1,5 @@
--- pick.nrx NJPipe Stage
-
+-- pick.nrx Pipeline stage
 /*
-
  *  Copyright (C) 1997-2020 Ed Tomlinson
  *  Copyright (C) 2023  Jeffrey Hennick, Jeff @ Jeff-H . com
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
@@ -10,6 +8,7 @@
  */
 
 /*
+ 23/ 2/17 Documentation; givehelp(). Jeff Hennick
  23/ 2/ 6  FromTo loops to get multiple groups. Jeff Hennick
  23/ 2/ 5  Major update to mostly CMS; PREVIOUS, LINENUMBERS. Jeff Hennick
  20/ 5/16  NOPAD, CASELESS. Jeff Hennick
@@ -789,65 +788,69 @@ method soutput(line = Object, stream = 0) signals ThreadQ
    end
    return
 
-/** pick
-
-          +--NOPAD-----+
->>--PICK--+------------+--+----------------------+--+---------------+-->
-          +--PAD-xorc--+  +--LINENUMBERS--(1)(3)-+  +--| ANYcase |--+
-                          +--LN--(1)(3)----------+
-
->--+--+---------------------------+--| List |--+--><
-   |  +--+--FROM--+--+---------+--+            |
-   |  |  +--TO----+  +--AFTER--+  |            |
-   |  +--WHILE--------------------+            |
-   +---| Fromto |------------------------------+
-
-Fromto:
-|--FROM--+---------+--| List |--+--TO--+---------+--| List |--+--|
-         +--AFTER--+            |      +--AFTER--+            |
-                                +--COUNT-number---------------+
-
-List:
-|--+---------------------------+--| Test |--|
-   +--| List |--+--AND--(4)-+--+
-                +--OR--(4)--+
-
-Test:
-|--| RangeString |--+--| NonEqualOp |--| RangeString |--+--|
-                    +--| EqualOp |--| CommaList |-------+
-
-CommaList:
-   +------(3)(6)-------+
-   +---,--(4)----------+
-|--v--| RangeString |--+--|
-
-RangeString:
-|--+--+----------------------------------------+--inputRange--+--|
-   |  +--PREVIOUS--(2)(3)--+-------------------|              |
-   |                       +--NOFIRST--(5)(3)--+              |
-   +--delimitedString-----------------------------------------+
-   +--number+--(4)--------------------------------------------+
-
-EqualOp:
-"strict"
-==  ¬==  <<  <<=  >>  >>=  IN  NOTIN  \== (3)  ^== (3)
-
-"numeric"
-=  ¬=  <  <=  >  >=  \= (3) ^= (3)
-
-ANYcase:
-ANYcase  CASEANY  CASEIGNORE  CASELESS  IGNORECASE
-
-Notes:
-(1) NetRexx only. Inserts the original record number followed by a SPACE
-    at the beginning of each output record.
-(2) NetRexx only. Uses the data from the previous record.  Before the first
-    record, this is Rexx "".
-(3) NetRexx Pipelines only.  Not yet in CMS Pipelines.
-(4) CMS Pipelines only.  Not yet in NetRexx Pipelines.
-(5) NetRexx Only. Uses first record data for first record instead of previous "".
-(6) CMS uses ",", NetRexx does not.  CMS limits to right side, NetRexx allows
-    on the left, too; also with any comparison op.
-    NetRexx concats the several ranges.
-
-*/
+Method givehelp() static
+return -
+"/** pick -- Select Lines that Satisfy a Relation\n" -
+"\n" -
+"          +--NOPAD-----+\n" -
+">>--PICK--+------------+--+----------------------+--+---------------+-->\n" -
+"          +--PAD-xorc--+  +--LINENUMBERS--(1)(3)-+  +--| ANYcase |--+\n" -
+"                          +--LN--(1)(3)----------+\n" -
+"\n" -
+">--+--+---------------------------+--| List |--+--><\n" -
+"   |  +--+--FROM--+--+---------+--+            |\n" -
+"   |  |  +--TO----+  +--AFTER--+  |            |\n" -
+"   |  +--WHILE--------------------+            |\n" -
+"   +---| Fromto |------------------------------+\n" -
+"\n" -
+"Fromto:\n" -
+"|--FROM--+---------+--| List |--+--TO--+---------+--| List |--+--|\n" -
+"         +--AFTER--+            |      +--AFTER--+            |\n" -
+"                                +--COUNT-number---------------+\n" -
+"\n" -
+"List:\n" -
+"|--+---------------------------+--| Test |--|\n" -
+"   +--| List |--+--AND--(4)-+--+\n" -
+"                +--OR--(4)--+\n" -
+"\n" -
+"Test:\n" -
+"|--| RangeString |--+--| NonEqualOp |--| RangeString |--+--|\n" -
+"                    +--| EqualOp |--| CommaList |-------+\n" -
+"\n" -
+"CommaList:\n" -
+"   +------(3)(6)-------+\n" -
+"   +---,--(4)----------+\n" -
+"|--v--| RangeString |--+--|\n" -
+"\n" -
+"RangeString:\n" -
+"|--+--+----------------------------------------+--inputRange--+--|\n" -
+"   |  +--PREVIOUS--(2)(3)--+-------------------|              |\n" -
+"   |                       +--NOFIRST--(5)(3)--+              |\n" -
+"   +--delimitedString-----------------------------------------+\n" -
+"   +--number+--(4)--------------------------------------------+\n" -
+"\n" -
+"EqualOp:\n" -
+'"strict"\n' -
+"==  ¬== (7) <<  <<=  >>  >>=  IN  NOTIN  \\== (3)  ^== (3)\n" -
+"\n" -
+'"numeric"\n' -
+"=  ¬= (7) <  <=  >  >=  \\= (3) ^= (3)\n" -
+"\n" -
+"ANYcase:\n" -
+"ANYcase  CASEANY  CASEIGNORE  CASELESS  IGNORECASE\n" -
+"\n" -
+"Notes:\n" -
+"(1) NetRexx only. Inserts the original record number followed by a SPACE\n" -
+"    at the beginning of each output record.\n" -
+"(2) NetRexx only. Uses the data from the previous record.  Before the first\n" -
+'    record, this is Rexx "".\n' -
+"(3) NetRexx Pipelines only.  Not yet in CMS Pipelines.\n" -
+"(4) CMS Pipelines only.  Not yet in NetRexx Pipelines.\n" -
+'(5) NetRexx Only. Uses first record data for first record instead of previous "".\n' -
+'(6) CMS uses ",", NetRexx does not.  CMS limits to right side, NetRexx allows\n' -
+"    on the left, too; also with any comparison op.\n" -
+"    NetRexx concats the several ranges.\n" -
+'(7) The CMS "NOT" symbol, of a "minus sign with a right side droop," (¬), shows\n' -
+'     as "3/4" in some fonts.\n' -
+"\n" -
+"*/\n"

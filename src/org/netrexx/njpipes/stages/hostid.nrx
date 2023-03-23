@@ -1,3 +1,20 @@
+-- hostid.nrx Pipeline stage
+/*
+ *  Copyright (C) 2020 RexxLA
+ *
+ *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ *
+ */
+
+   /*  Change History:
+   *
+   *      2023/02/21 Documentation; givehelp(). Jeff Hennick
+   *      2020-06-01   CK        - Initial kick
+   *
+   */
+
 options binary
 
 import org.netrexx.njpipes.pipes.
@@ -5,75 +22,70 @@ import java.net.
 
 package org.netrexx.njpipes.stages
 
-class hostid extends stage 
-  
-  /*
-   *  HOSTID - Write default IP address of the system
-   *
-   *  hostid writes a single output record which contains the IP address of the system. 
-   *  
-   *  Note:  hostid is not the same as hostid on common Unix platforms.
-   *         hostid must be in the first stage of a pipe.  It does not consume any records.     
-   *    
-   *                                           
-   *  HOSTID --------------------------------------->   
-   *
-   *
-   *  (1) The USERid option available under CMS is not applicable and not implemented
-   *
-   *  Arguments:  <none>
-   *
-   *  Examples:
-   *
-   *  Z:\>pipe "hostid | console"
-   *  10.0.2.15
-   *
-   *  Z:\>pipe "literal abc | hostid | console"
-   *  PIPE Error: hostid_2 stage must be the first stage of a pipeline.
-   *  RC=83
-   * 
-   *
-   *  Change History:
-   *        
-   *      2020-06-01   CK        - Initial kick
-   *                                   
-   *
-   *
-   */
+class hostid extends stage
 
-  method run() signals ThreadQ 
-    
+
+  method run() signals ThreadQ
+
     data        = Rexx             /* Rexxified output from stringified output of getAllByName */
 
     if \isFirstStage() then do
        say "PIPE Error: "this.getName()" stage must be the first stage of a pipeline."
        rc = 83
        exit( rc )
-	end
- 
-  
-    /* -- Main loop -- */   
-    
+    end
+
+
+    /* -- Main loop -- */
+
     do
-       loop label siempre    forever   
-	  
-	     data = Rexx InetAddress.getLocalHost().getHostAddress();
-		 output(data)
-		 exit( rc() )
-		
-	     catch java.net.UnknownHostException
-	        do
-	    
-	          output("# Unable to determine hostid (IP address) #")		
-	          exit( rc() )			  
-	    
-	        end   /* catch Unknown Host */
+       loop label siempre    forever
+
+        data = Rexx InetAddress.getLocalHost().getHostAddress();
+       output(data)
+       exit( rc() )
+
+        catch java.net.UnknownHostException
+           do
+
+             output("# Unable to determine hostid (IP address) #")
+             exit( rc() )
+
+           end   /* catch Unknown Host */
 
        end /* loop forever */
-      
+
        catch StageError
          rc = rc()
-      
+
     end /* do (loop forever) */
-    
+
     exit(rc*(rc \= 12))
+
+Method givehelp() static
+return -
+"  /**  hostid - Write default IP address of the system\n" -
+"   *\n" -
+"   *  hostid writes a single output record which contains the IP address of the system.\n" -
+"   *\n" -
+"   *  Note:  hostid is not the same as hostid on common Unix platforms.\n" -
+"   *         hostid must be in the first stage of a pipe.  It does not consume any records.\n" -
+"   *\n" -
+"   *\n" -
+"   *  >>--HOSTID ---------------><\n" -
+"   *\n" -
+"   *\n" -
+"   *  (1) The USERid option available under CMS is not applicable and not implemented\n" -
+"   *\n" -
+"   *  Arguments:  <none>\n" -
+"   *\n" -
+"   *  Examples:\n" -
+"   *\n" -
+"   *  Z:\\>pipe \"hostid | console\"\n" -
+"   *  10.0.2.15\n" -
+"   *\n" -
+"   *  Z:\\>pipe \"literal abc | hostid | console\"\n" -
+"   *  PIPE Error: hostid_2 stage must be the first stage of a pipeline.\n" -
+"   *  RC=83\n" -
+"   *\n" -
+"   */\n"
