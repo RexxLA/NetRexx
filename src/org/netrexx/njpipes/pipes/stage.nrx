@@ -1,12 +1,13 @@
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
- *  Copyright (C) 2011-2020 Rexx Language Association
+ *  Copyright (C) 2011-2023 Rexx Language Association
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  *
  */
 
+-- 2023/03/31 givehelp() was giveHelp.  Jeff Hennick
 -- 2023/02/10 add static help() method
 -- 2020/05/23 added isFirstStage(). Jeff Hennick
 -- 2019/08/02 remove all jitcache references. rvj
@@ -78,45 +79,45 @@ options binary nostrictargs nostrictcase
 -- a stage implementation
 
 class stage public extends utils uses utils, ThreadPool implements _stage, RunnablePool
-  
+
   properties shared volatile
-  
+
   inn     = pnode            -- current input pnode
   outn    = pnode            -- current output pnode
   ev      = stage           -- pointer to this stage (set null for sever)
-  
+
   properties public
-  
+
   T     = Thread            -- the thread for this stage
-  
+
   properties public
-  
+
   p      = pipe             -- main pipe of this stage
   top    = pipe             -- top pipe in this pipeline
-  
+
   isPipe   = boolean        -- can be viewed as a pipe too
   _debug   = int            -- debug level
-  
+
   properties public volatile
-  
+
   going   = boolean         -- flag
-  
+
   sin     = int             -- number of current input stream
   sout    = int             -- number of current output stream
-  
+
   extern  = int             -- threads waiting on external events
-  
+
   _o      = int             -- connected outputs
   _s      = int             -- severed outputs
-  
+
   _rc     = int             -- internal return code
   _err    = StageError      -- StageError that terminated this stage
   level   = int             -- commit level
-  
+
   flag    = int             -- counter
-  
+
   properties public
-  
+
   _mrc     = int
   _arg     = Object         -- arguement when stage was started
   _last    = Object
@@ -126,21 +127,21 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
   _pri     = int
   _eof     = int            -- EOFReport option
   _dyn     = boolean
-  
+
   properties static shared
-  
+
   MAX_WAIT = java.lang.Long.MAX_VALUE    -- wait() calls wait(Long)
-  
+
   properties constant
-  
+
   INCREMENT    = int  256
-  
+
   -- Build an unconnected stage
-  
+
   method stage()
-    
+
     isPipe = 0             -- can be viewed as a pipe object
-    
+
     _pri     = java.lang.Thread.NORM_PRIORITY
     _name    = null
     _debug   = 0            -- debugging off
@@ -150,96 +151,96 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
     _dyn     = 0
     _doSetup = 1
     _eof     = 16
-    
+
     stage_reset()
-    
+
   method stage_reset() protect
-    
+
     -- say 'Reset' this
     super.in  = null
     super.out = null
-    
+
     sin  = -99             -- no selected streams
     sout = -99
-    
+
     inn  = null            -- start at a known state
     outn = null
     ev   = null
-    
+
     flag   = AUTO_COMMIT   -- start at zero
     extern = 0             -- no external event waits
     going  = 0             -- not going just yet
     level  = -2            -- current commit level
-    
+
     _rc  = 0               -- start with zero
-    
+
     if \isPipe then
       _mrc = 0             -- max rc of stage, previous rc for a pipe.
-    
+
     _o   = 0               -- connect outputs
     _s   = 0               -- severed outputs
-    
+
     _err = null            -- reset error
-    
+
     reuse()
-    
-    
+
+
   method reuse()            -- override in stages to reset static stage elements
     return
-    
-    
+
+
     -- Build an argument from a Java command string
-    
+
   method buildArg(a=String[]) returns Rexx static
     work = Rexx(a)
     work[0] = work.words()
     loop i=1 to work[0]
       work[i] = work.word(i)
     end
-    
+
     return work
 
 
     -- run method for runable
 
   method run() signals ThreadQ
-    
+
     say 'Error - run method not overridden by stage or pipe'
     signal ThreadQ('run1')
-    
-    
+
+
     -- get variable context (called in a stage)
-    
+
   method getRexx(n=Rexx) returns Rexx
-    
+
     return p.getRexx(n)
-    
-    
+
+
     -- Get the return code
-    
+
   method rc() returns int
-    
+
     return _rc
-    
-    
+
+
     -- Get the max return code
-    
+
   method mrc() returns int
-    
+
     return _mrc
-    
-    
+
+
     -- set the return code
-    
+
   method rc(n=int)
-    
+
     _rc = n
-    
-    
+
+
     -- set the return code
-    
+
   method rc(e=StageError) returns int
-    
+
     if e=null then
       _rc=0
     else do
@@ -247,74 +248,74 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       _rc = e.rc()
     end
     return _rc
-    
-    
+
+
     -- issue an error
-    
+
   method Error(n=int,s=String) signals StageError
-    
+
     if (p._debug&64)<>0 then
       say _name s' rc='n
-    
+
     _rc = n
     if n>_mrc then
       _mrc = n
-    
+
     signal StageError(n,s)
-    
-    
+
+
   method Emsg(n=int,s=String) signals ThreadQ
-    
+
     if (p._debug&64)<>0 then
       say _name s' rc='n
-    
+
     _rc = n
     if n>_mrc then
       _mrc = n
-    
+
     _err = StageError(n,s)
-    
+
     p.T.Interrupt()   -- kill the pipe
-    
+
     Exit(n)
-    
-    
+
+
     -- set Priority
-    
+
   method setRelPriority(n=int)
-    
+
     _pri = _pri+n
-    
+
     if _pri<java.lang.Thread.MIN_PRIORITY then
       _pri = java.lang.Thread.MIN_PRIORITY
-    
+
     if _pri>java.lang.Thread.MAX_PRIORITY then
       _pri = java.lang.Thread.MAX_PRIORITY
-    
-    
+
+
     -- set the thread name
-    
+
   method setName(n=String)
-    
+
     _name = n
-    
+
     -- get the thread name
-    
+
   method getName() returns String
-    
+
     return _name
-    
+
     -- get if this stage is first working stage in pipe fragment.  Ignores precedding COMMENT stage(s)
     --  added 2020/ 5/23 Jeff Hennick
-    
+
   method isFirstStage() returns boolean
-    
+
     return (this.sin = -99) -- means the input stream is not connected to any other stage
-    
+
     -- set stall time
-    
+
   method setRunaway(i=int)
-    
+
     _stall = i
     if going then do
       if i>p._stall then do
@@ -325,12 +326,12 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       end
     catch NullPointerException
     end
-    
-    
+
+
     -- Get the arguement(s)
-    
+
   method arg() returns Rexx
-    
+
     select
       when _arg=null then
         return ''
@@ -341,14 +342,14 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       otherwise
 	return Rexx(_arg.toString())
     end
-    
+
     -- Get the arguement(s)
-    
+
   method arg(o=Object) returns Object
-    
+
     if o=null then
       return _arg
-    
+
     select
       when netrexx.lang.Rexx>=_arg then do
         _Rexx = netrexx.lang.Rexx _arg
@@ -369,12 +370,12 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       otherwise
         return _arg
     end
-    
-    
+
+
     -- if it exists get value at arg[i]
-    
+
   method arg(a=Rexx) returns Rexx
-    
+
     if _arg=null then
       return ''
     else do
@@ -384,59 +385,59 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       else
         return ''
     end
-    
-    
+
+
     -- Set the arguments(s)
-    
+
   method setArg(a=Rexx,d=boolean 0)
-    
+
     if d then
       _last = _arg
     _arg  = a
     _dyn  = d
-    
-    
+
+
     -- Set the arguments(s)
-    
+
   method setArg(o=Object,d=boolean 0)
-    
+
     if d then
       _last = _arg
     _arg  = o
     _dyn  = d
-    
-    
+
+
     -- Is the do we need to do a setup because of args?
-    
+
   method doSetup() returns boolean
-    
+
     if _doSetup then do
       _doSetup = 0
       return 1
     end
-    
+
     if _dyn then
       return _last\==_arg
-    
+
     return 0
-    
-    
+
+
     -- increment external wait counter
-    
+
   method counter(i=int 0) returns int protect
     extern = extern+i
     return -(extern>0)
-    
-    
+
+
     -- set eofReporting options
-    
+
   method eofReport(a=Rexx) signals StageError
-    
+
     if going then
       n = checkOut()
     else
       n = 0
-    
+
     a = a.upper()
     select
       when a='CURRENT' then do
@@ -454,25 +455,25 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       otherwise
 	Error(11,'Error - invalid parm for eofReport 'a)
     end
-    
-    
+
+
     -- return the return code of the pipe (so far)
-    
+
   method commit() returns int
-    
+
     return p._rc
-    
-    
+
+
     -- set the commit level of this stage to n
-    
+
   method commit(n=int) returns int signals ThreadQ
-    
+
     if (p._debug&16)<>0 then
       if (flag&AUTO_COMMIT)<>0 then
         say 'Autocommitting '_name p' to 'n
       else
         say 'Committing '_name p' to 'n
-    
+
     do protect p                             -- *********** is this ok????
       level = n                             -- commit us
       if \p.commitTo(n) then
@@ -504,17 +505,17 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
         end
     end
     nocommit()
-    
+
     if (p._debug&32)<>0 then
       say 'Committed '_name p' to 'n
-    
+
     return p._rc
-    
-    
+
+
     -- do not commit to -1 at first peek, readto or output
-    
+
   method nocommit() protect
-    
+
     if (flag&AUTO_COMMIT)<>0 then do
       if (flag&SEVER)=0 then do
         inn  = findin(sin)
@@ -522,12 +523,12 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       end
     flag = flag&CLEAR_AUTO
     end
-    
-    
+
+
     -- start a stage selecting default input and output streams
-    
+
   method go()  signals ThreadQ --  signals StageError
-    
+
     -- say 'go' this flag sin (inn<>null) sout (outn<>null) p
     do
       selectInput(0)
@@ -535,9 +536,9 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
     catch StageError   -- will never happen
       Emsg(15,'internal error in go() - should not happen')
     end
-    
+
     -- say 'DEBUG' p._debug
-    
+
     do protect p
       going = 1
       p._active = p._active+going
@@ -551,24 +552,24 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
           say 'Arg '_name' = 'object2Rexx(_arg)
     catch StageError
     end
-    
-    
+
+
     -- current input stream
-    
+
   method inStreamNumber() returns int
-    
+
     return sin
-    
-    
+
+
     -- current output stream
-    
+
   method outStreamNumber() returns int
-    
+
     return sout
-    
-    
+
+
   method inStreamState() returns int
-    
+
     select                         -- not used as yield costs
       when sin=-99 then
         return 3                 -- unconnected
@@ -588,10 +589,10 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       otherwise
         return 1
     end
-    
-    
+
+
   method outStreamState() returns int
-    
+
     select
       when sout=-99 then
         return 3                 -- unconnected
@@ -604,12 +605,12 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       otherwise
         return 1                 -- output waiting (Multi Threaded)
     end
-    
-    
+
+
     -- max defined Input stream
-    
+
   method maxInputStream() returns int
-    
+
     max = -99
     curr = super.in
     loop while curr<>null
@@ -618,12 +619,12 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       curr = curr.nin
     end
     return max
-    
-    
+
+
     -- max defined Output stream
-    
+
   method maxOutputStream() returns int
-    
+
     max = -99
     curr = super.out
     loop while curr<>null
@@ -632,16 +633,16 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       curr = curr.nout
     end
     return max
-    
-    
+
+
     -- Check all output streams
     -- rc = 12 there are no outputs streams
     -- rc =  8 they are all severed
     -- rc =  4 some are severed
     -- rc =  0 all are OK
-    
+
   method checkOut(r=int 0) private returns int
-    
+
     /* i = 0
        s = 0
        curr = super.out
@@ -661,13 +662,13 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
     --    if (flag&SEVER)<>0 then  -- an input severed...
     --       return 2
     return r
-    
-    
+
+
     -- select an input stream.
     -- A stage error will occur if the stream does not exist
-    
+
   method selectInput(stream=int) protect signals org.netrexx.njpipes.pipes.StageError
-    
+
     do
       if stream<>sin then
         if sin=-99 then                 -- allow selection
@@ -719,13 +720,13 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       end
       end
     end
-    
-    
+
+
     -- select an output stream
     -- A stage error will occur if the stream does not exist
-    
+
   method selectOutput(stream=int) protect signals StageError
-    
+
     do
       if stream<>sout then
         if sout=-99 then
@@ -777,15 +778,15 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
       end
       end
     end
-    
-    
+
+
     -- select any input stream (the must reciently referenced stream with
     -- input is selected)
-    
+
   method selectAnyInput signals StageError, ThreadQ
     curr = pnode
     prev = pnode
-    
+
     do
       loop protect this forever
 	if inn=null then
@@ -821,9 +822,9 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
           signal ThreadQ('selectanyinput1')
 	end
       end
-      
+
     catch NullPointerException
-      
+
       if super.in=null then
 	do
           sin = -99
@@ -853,7 +854,7 @@ class stage public extends utils uses utils, ThreadPool implements _stage, Runna
             Error(r,'selectAnyInput reports an eof')
           end
     end
-    
+
 
 -- short the current input and output, the pnode for the input stream is
 -- bypassed and the stages current streams are unlinked.  If the stream
@@ -1490,27 +1491,27 @@ method addpipe(apipe=org.netrexx.njpipes.pipes.pipe)
 
   method dump()
     p.dump()
-    
+
   method putLink(k=Rexx,o=link)
     p.table.put(Object k,Object o)
-    
+
   method getLink(k=Rexx) returns link public
     return link p.table.get(Object k)
-    
-    
+
+
   method setDebug(l=int)
     p._debug = l
-    
+
   method getDebug() returns int
     return p._debug
-    
+
   method getPipeName()
     return p.getName()
-    
+
   method pipStop signals ThreadQ
     p.T.Interrupt()
     exit(12)
 
-  method giveHelp() static
+  method givehelp() static
     return "for this stage no help is available yet"
-    
+

@@ -1,0 +1,73 @@
+-- hold.nrx Pipeline stage
+/*
+ *  Copyright (C) 2023  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+  23/ 3/ 6 New. From changeregex. Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class hold extends stage
+
+method run()
+
+do
+  selectInput(1)
+catch StageError
+  Emsg(11, getName() "No secondary input.")
+end
+
+do
+  second = peekto() -- wait for a secondary input
+
+  do
+    selectOutput(2)
+    output(second)
+    readto()
+    shortStreams()
+  catch StageError
+    -- ignore no secondary output connected
+  end
+
+catch StageError
+  Emsg(11, getName() "Problem with secondary input.")
+end
+
+  -- We have had action on the secondary. Open the Primary!
+
+do
+  selectInput(0)
+catch StageError
+  Emsg(11, getName() "Problem with primary input stream.")
+end
+do
+  selectOutput(0)
+catch StageError
+  Emsg(11, getName() "Problem with primary output stream.")
+end
+do
+  shortStreams()
+catch StageError
+end
+
+rc = mrc()
+
+exit(rc*(rc<>12))
+
+Method givehelp() static
+return -
+"/** hold -- Short both Primary and Secondary Streams, but only after Secondary input\n" -
+"  >>---HOLD---><\n" -
+"\n" -
+" Notes:\n" -
+"  NetRexx Pipelines only, not CMS.\n" -
+"\n" -
+"*/\n"
