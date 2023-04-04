@@ -1,3 +1,4 @@
+-- deblock.nrx Pipeline stage
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
  *
@@ -7,19 +8,13 @@
  *
  */
 
-/* deblock
- *
- * FIXED n        { PAD xorc }
- * C              { EOF xorc {TERMINATE}}
- * J              { EOF xorc {TERMINATE}} -- System.getProperty('line.separator')
- * LINEND xorc    { EOF xorc {TERMINATE}}
- * CRLF           { EOF xorc {TERMINATE}}
- * STRING dstring { EOF xorc {TERMINATE}}
- *
- */
--- 99/05/29  added byte[] logic, fix EOF logic.  ejt
--- 98/08/27  upgraded to use new error reporting & stage template.  ejt
--- 98/08/25  initial.  ejt
+/*
+ 23/ 2/18 Documentation; givehelp(). Jeff Hennick
+ 99/05/29  added byte[] logic, fix EOF logic.  ejt
+ 98/08/27  upgraded to use new error reporting & stage template.  ejt
+ 98/08/25  initial.  ejt
+*/
+
 options nostrictcase nostrictargs nostrictsignal
 options binary
 
@@ -136,7 +131,7 @@ method deblock_setup() private signals StageError
 -- used by StageExits in tcpdata and tcpclient
 
 method residue(a=rexx) returns rexx shared signals StageError
- 
+
    do
       setArg(a)
       deblock_setup()
@@ -185,7 +180,7 @@ method run()
                               bb = null
 			      leave
                            end
-                        else 
+                        else
                            do
                               oo = bb
                               bb = byte[bl]
@@ -368,3 +363,30 @@ method run()
 exit(rc*(rc<>12))
 --stage.exit(rc*(rc<>12))
 
+
+Method givehelp() static
+return -
+"/** deblock -- Deblock External Data Formats\n" -
+"\n" -
+"                       +-80------+\n" -
+"             +--FIXED--+-number--+--+-------------+------------+\n" -
+"             |                      +--PAD--xorc--+ (1)        |\n" -
+">>--DEBLOCK--+-------------------------------------------------+--><\n" -
+"             +-+-C-----------------------+-+-----------+-+-----+\n" -
+"               +-J-----------------------+ +-TERMINATE-+ +-EOF-+\n" -
+"               +-CRLF--------------------+\n" -
+"               +-LINEND xorc-------------+\n" -
+"               +-STRING--delimitedString-+\n" -
+"\n" -
+" CMS has many more mainframe centric formats that NetRexx Pielines does not.\n" -
+" (1) Not CMS Pipelines\n" -
+"\n" -
+" *\n" -
+" * FIXED n        { PAD xorc }\n" -
+" * C              { EOF xorc {TERMINATE}}\n" -
+" * J              { EOF xorc {TERMINATE}} -- System.getProperty('line.separator')\n" -
+" * LINEND xorc    { EOF xorc {TERMINATE}}\n" -
+" * CRLF           { EOF xorc {TERMINATE}}\n" -
+" * STRING dstring { EOF xorc {TERMINATE}}\n" -
+" *\n" -
+" */\n"

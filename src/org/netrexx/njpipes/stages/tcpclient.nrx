@@ -1,3 +1,4 @@
+-- tcpclient.nrx Pipelines stage
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
  *
@@ -6,37 +7,25 @@
  *  and distributing this program.
  *
  */
-/** tcpclient
 
-Simple tcpclient implementation.  The options implemented are similiar to the
-cms definition.
-
-linger      - wait a bit before terminating the last read (units SECONDS)
-timeout     - wait this long before timing reads out (units MS)
-deblock     - If deblock is ommited a copy stage is used.
-group       - similiar to cms.  A delimited string containing a stage is
-              expected.  You can use a run of stages, but its is dangerous
-              since you to know the stage sep character being used...
-greeting    - expect a greeting message and discard it
-nodelay     - use the nodelay option
-keepalive   - enable keep alive socket option
-oneresponse - synchronize cmds/replys
-
+/*
+   23/02/23 Documentation; givehelp(). Jeff Hennick
+   01/05/07 change logic to prevent deadlocks with deblocking stages.  ejt
+   99/05/28 output byte[] since conversions to string can cause problems.  ejt
+   99/05/27 improved timeout logic, fixed rc and termination logic.  ejt
+   98/09/09 now terminated correctly second second time thru.  ejt
+   98/09/09 greetings now handled correctly second time thru.  ejt
+   98/09/07 use byte streams. ejt
+   98/09/06 use bufferedwriter.  ejt
+   98/08/30 optimized, in -2 shorted to out 0.  ejt
+   98/08/28 fixed a commit problem.  ejt
+   98/08/26 added oneresponse, deblock, group options.  ejt
+   98/08/23 optimized using doSetup() logic.  ejt
+   98/08/23 startThread no longer uses a name.  ejt
+   98/07/31 Support threadpool.  ejt
+   98/07/30 use StageError(13,... in stageExit.  ejt
 */
--- 01/05/07 change logic to prevent deadlocks with deblocking stages.  ejt
--- 99/05/28 output byte[] since conversions to string can cause problems.  ejt
--- 99/05/27 improved timeout logic, fixed rc and termination logic.  ejt
--- 98/09/09 now terminated correctly second second time thru.  ejt
--- 98/09/09 greetings now handled correctly second time thru.  ejt
--- 98/09/07 use byte streams. ejt
--- 98/09/06 use bufferedwriter.  ejt
--- 98/08/30 optimized, in -2 shorted to out 0.  ejt
--- 98/08/28 fixed a commit problem.  ejt
--- 98/08/26 added oneresponse, deblock, group options.  ejt
--- 98/08/23 optimized using doSetup() logic.  ejt
--- 98/08/23 startThread no longer uses a name.  ejt
--- 98/07/31 Support threadpool.  ejt
--- 98/07/30 use StageError(13,... in stageExit.  ejt
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -89,9 +78,9 @@ method send(s=BufferedOutputStream,r=Object) private static signals IOException
    end
    s.flush()
 
-method severCallback(type=boolean,stream=int) 
+method severCallback(type=boolean,stream=int)
 
-   if type=1 & (stream=0 | stream=-1) then 
+   if type=1 & (stream=0 | stream=-1) then
       if et.on then
          if counter(0)<>0 then
             et.T.interrupt()
@@ -213,12 +202,12 @@ method run()
 
       if oneresp then
          loop forever                     -- get the command and send it
-            do 
+            do
                selectInput(-2)
             catch StageError
-               if rc()>4 then             -- stream zero servered 
+               if rc()>4 then             -- stream zero servered
                   signal StageError
-               selectInput(-2)            
+               selectInput(-2)
             end
             r = peekto()                  -- read from filter
             do protect et
@@ -312,7 +301,7 @@ method run()
 
 	 if et.on then do protect et
 	       et.notifyAll()
-	 end   
+	 end
 
       end
    end
@@ -411,6 +400,66 @@ pInfo[5] = pInfo[5]' -'pInfo[2]': 'pInfo[6]' 'stg' 'pInfo[6]' 'pInfo[2]': 'pInfo
 
 return 1
 
+Method givehelp() static
+return -
+"/** tcpclient -- Simple tcpclient implementation\n" -
+"\n" -
+">>--TCPCLIENT--IPaddress--number-->\n" -
+"\n" -
+"    +--------------------------------------------+\n" -
+">---+-----------------------------------------+--+-><\n" -
+"    +-| Deblock |-----------------------------+\n" -
+".   +-EMSGSF4-(1)-----------------------------+\n" -
+"    +-GETSOCKName-(1)-------------------------+\n" -
+"    +-GREETING--------------------------------+\n" -
+"    +-KEEPALIVe-------------------------------+\n" -
+"    +-LINGER--number--------------------------+\n" -
+"    |                 +-ANY-------+           |\n" -
+"    +-LOCALIPaddress--+-HOSTID----+-(1)-------+\n" -
+"    |                 +-IPaddress-+           |\n" -
+"    +-LOCALport--number-(1)-------------------+\n" -
+"    +-NODELAY-(2)-----------------------------+\n" -
+"    +-ONERESPONSE-----------------------------+\n" -
+"    +-OOBINLINE-(1)---------------------------+\n" -
+"    +-REUSEADDR-(1)---------------------------+\n" -
+"    +-SECURE-+------------+-+--------+-(1)----+\n" -
+"    |        +-GETSECINFO-+ +-SAFE---+        |\n" -
+"    |                       +-UNSAFE-+        |\n" -
+"    +-SF-(1)----------------------------------+\n" -
+"    +-SF4-(1)---------------------------------+\n" -
+"    +-STATistics-(1)--------------------------+\n" -
+"    +-TIMEOUT--number-------------------------+\n" -
+"    +-USERid--word-(1)------------------------+\n" -
+"\n" -
+"Deblock:\n" -
+"|--DEBLOCK--+-CRLF--------------------+-->\n" -
+"            +-LINEND-+------+---------+\n" -
+"            |        +-xorc-+         |\n" -
+"            +-SF----------------------+\n" -
+"            +-SF4---------------------+\n" -
+"            +-STRING--delimitedString-+\n" -
+"\n" -
+" >--+-------------------------+--|\n" -
+"    +-GROUP--delimitedString--+               1\n" -
+"\n" -
+"(1) CMS Pipelines Only.\n" -
+"(2) NetRexx Pipelines Only.\n" -
+"\n" -
+"The options implemented are similiar to the CMS definition.\n" -
+"\n" -
+"linger      - wait a bit before terminating the last read (units SECONDS)\n" -
+"timeout     - wait this long before timing reads out (units MS)\n" -
+"deblock     - If deblock is ommited a copy stage is used.\n" -
+"group       - similiar to CMS.  A delimited string containing a stage is\n" -
+"              expected.  You can use a run of stages, but its is dangerous\n" -
+"              since you to know the stage sep character being used...\n" -
+"greeting    - expect a greeting message and discard it\n" -
+"nodelay     - use the nodelay option\n" -
+"keepalive   - enable keep alive socket option\n" -
+"oneresponse - synchronize cmds/replys\n" -
+"\n" -
+"*/\n"
+
 
 class tcpclient.ear private implements RunnablePool uses ThreadPool
 
@@ -421,7 +470,7 @@ properties shared volatile
 on = boolean
 
 method go(rr=tcpclient)
-   
+
    r = rr
    T = startThread(this)
 
@@ -432,7 +481,7 @@ method run()
    on = 1
 
    loop label get forever                -- blocked (** may cause probs **)
- 
+
       do
          z = r.counter(1)
          c = r.sin.read(buf)             -- read resp until group is happy
@@ -459,7 +508,7 @@ method run()
 
       do protect this
          loop while r.outStreamState()=1   -- only one output at a time...
-            z = r.counter(1)               -- on _any_ stream 
+            z = r.counter(1)               -- on _any_ stream
             wait()
             z = r.counter(z)
          end
@@ -472,7 +521,7 @@ method run()
       ee = StageError(12,'tcpclient.ear was Interrupted 'ie.getMessage())
 
    catch oe=IOException
--- say "O" z c 
+-- say "O" z c
       z = r.counter(z)
       ee = StageError(12,'tcpclient.ear got IOException 'oe.getMessage())
 
@@ -491,7 +540,7 @@ method run()
 	       z = r.counter(1)               -- on _any_ stream
 	       wait()
 	       z = r.counter(z)
-	    catch InterruptedException   
+	    catch InterruptedException
 	    end
             r.severOutput()
          catch StageError
@@ -499,5 +548,3 @@ method run()
       end
 
    end
-
-

@@ -1,0 +1,324 @@
+-- help.nrx Pipeline stage
+/*
+ *  Copyright (C) 2023  Jeffrey Hennick, Jeff @ Jeff-H . com
+ *  Distributed under the ICU 1.8.1 License with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the license and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+  23/ 4/ 1 Add ?, 64decode & 64encode. Jeff Hennick
+  23/ 2/28 Add CMSOnly list and handling. Jeff Hennick
+  23/ 2/26 Add XRANGE and "?" Stages. Jeff Hennick
+  23/ 2/19 Add stages "--, <, >, >>" handling. Jeff Hennick
+  23/ 2/17 Documentation; givehelp(). Jeff Hennick
+  23/ 2/13 New Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class help extends stage binary
+
+outcon = 0
+
+method run()
+  data = Rexx ""
+
+  outcon = 1
+  do
+    selectOutput(0)
+  catch StageError
+    outcon = 0
+  end
+
+  parse arg() stage_to_help
+  stage_to_help = stage_to_help.lower().changestr(' ','')
+
+  select case stage_to_help
+  when '?' then
+    stage_to_help = 'help'
+  when '--' then
+    stage_to_help = 'comment'
+  when '<' then
+    stage_to_help = 'diskr'
+  when '>' then
+    stage_to_help = 'diskw'
+  when '>>' then
+    stage_to_help = 'diska'
+  when '64decode' then
+    stage_to_help = 'decode64'
+  when '64encode' then
+    stage_to_help = 'encode64'
+  otherwise
+    nop
+  end
+  if stage_to_help = '' then
+    data = "Usage: HELP stage_name."
+  else do
+    meth = ahelp.class.getMethod('H_'stage_to_help,null)
+    data = Rexx meth.invoke(null,null)
+  catch java.lang.IllegalAccessException
+    Emsg(11, "Illegal Access.")
+  catch java.lang.reflect.InvocationTargetException
+    Emsg(11, "Reflection Invocation Target Error.")
+  catch java.lang.NoSuchMethodException
+  do
+    stageClass = class.forName('org.netrexx.njpipes.stages.'stage_to_help.lower())
+    helpMethod = stageClass.getMethod('givehelp',null)
+    data = Rexx helpMethod.invoke(stageClass,null)
+  catch java.lang.ClassNotFoundException
+    cms(stage_to_help)
+  catch java.lang.NoSuchMethodException
+    Emsg(11, "No Help was found for Stage" stage_to_help".")
+  catch java.lang.IllegalAccessException
+    Emsg(11, "Illegal Access.")
+  catch java.lang.reflect.InvocationTargetException
+    Emsg(11, "Reflection Invocation Target Error.")
+  end
+  end
+
+  loop while data \= ''
+    parse data line "\n" data
+    if outcon then
+      output(line)
+    else
+      say line
+  catch StageError
+  end
+
+  rc = mrc()
+  exit(rc*(rc<>12))
+
+method cms(st) signals ThreadQ
+
+cmsonly = Rexx -
+" >>mdsk >>mvs >>oe >>sfs >>sfsslow >mdsk >mvs >oe >sfs <mdsk <mys <oe" -
+" <sfs <sfsslow 3277bfra 3277enc acigroup addrdw adrspace aftfst" -
+" alserv apldecode aplencode asatomc asmcont asmfind asmnfind asmxpnd" -
+" beat bfs bfsdirectory bfsdir bfsquery bfsq bfsreplace bfsrep" -
+" bfsstate bfsstat bfsxecute bfsx block cbrowse brw" -
+" c14to38 cipher ckddeblock cms configure cp delay devinfo" -
+" dfsort diage4 diskback diskfast diskid diskrandom diskupdate eofback" -
+" escape fanintwo fanouttwo fbaread fbawrite fileback filedescriptor" -
+" filefast filerandom filetoken fileupdate fillup filterpack fitting" -
+" fmtfst fullscreen fullscree fullscre fullscr fullscrq fullscrq" -
+" fullscrs gather hfs hfsdirectory hfsdir hfsquery hfsq hfsreplace" -
+" hfsrep hfsstate hfsstat hfsxecute hfsx hlasm hlasmerr httpsplit" -
+" iebcopy if immcmd instore ip2socka ispf jeremy ldrtbls listcat listdsi" -
+" listispf listpds lookup maclib mapmdisk mctoasa mdiskblk mdskrandom" -
+" mdsrand mdskslow mdskupdate mdsupda member members merge mqsc nucext" -
+" optcdj outstore overstr pack parcel pause pds pdsdirect pipcmd pipestop" -
+" polish predselect predesel preface printmc punch qpdecode qpencode qsam" -
+" reader readpds retab rexx rexxvars runpipe scm sec2greg sfsback" -
+" sfsdirectory sfsrandom sfsupdate socka2ip spill sqlcodes stack starmon" -
+" starmsg starsys state statew stem stfle storage strasmfind" -
+" strasmnfind structure struct stsi subcom substring synchronise sync" -
+" synchronize sysdsn sysout sysvar tape tcpchsum threeway trackblock" -
+" trackdeblock trackread tracksquish trackverify trackwrite trackxpand" -
+" trfread tso udp unpack untab update urldeblock uro utf vardrop varfetch" -
+" varload varset vchar vmc vmcdata vmclient vmclisten waitdev warp" -
+" warplist wildcard writepds xab xedit xmsg xpndhi"
+
+if cmsonly.wordpos(st) > 0 then do
+  line = "Stage" st "is only in CMS Pipelines."
+  if outcon then
+    output(line)
+  else
+    say line
+ catch StageError
+   say line
+end
+else
+  Emsg(11, "Stage" st "was not found.")
+exit
+
+method givehelp() static
+return -
+"/** help -- Display Help for Pipelines\n" -
+"\n" -
+">>--+--HELP---+--------+--------------------------------+-->< \n" -
+"    +--AHELP--+        +--word--------------------------+\n" -
+"    +--?-(3)--+        |           +--BUILTINS-(1)---+  |\n" -
+"                       +--MENU-(1)-+-----------------+--+\n" -
+"                       |           +--COMMANDS-(1)---+  |\n" -
+"                       |           +--HOST-(1)-------+  |\n" -
+"                       |           +--MESSAGES-(1)---+  |\n" -
+"                       |           +--OTHER-(1)------+  |\n" -
+"                       |           +--SYNTAX-(1)-----+  |\n" -
+"                       +--MSG-(1)--number---------------+\n" -
+"                       +--number-(1)--------------------+\n" -
+"                       +--SQL-(1)--string---------------+\n" -
+"                       +--SQLCODE-(1)--+----------+-----+\n" -
+"                                       +--number--+\n" -
+"\n" -
+"(1) CMS Pipelines only. Not yet in NetRexx Pielines.\n" -
+"(2) If primary output is connected, lines are propagated,\n" -
+"    otherwise they are sent to the console by ""say.""\n" -
+"(3) ? is the default pipeend character. Here it is useful\n" -
+"    only when a different pipend is defined.\n" -
+"*/\n"
+
+method H_dstring() static
+return H_delimitedstring()
+
+method H_delimitedstring() static
+return -
+"/** delimitedstring -- A string of characters between two occurrances of a delimiter character\n" -
+"\n" -
+"\n" -
+"        |--+--------+--+--<span class=var>delimitedString</span>--+--|\n" -
+"           +-STRing-+  +--<span class=var>DString</span>----------+\n" -
+"\n" -
+"A hexadecimal literal is specified by a leading H or X followed by an\n" -
+"even number of hexadecimal digits. A binary literal is specified by a\n" -
+"leading B followed by a string of 0 and 1; the number of binary digits\n" -
+"must an integral multiple of eight.\n" -
+"\n" -
+"Examples:\n" -
+"       /abc/\n" -
+"       ,,\n" -
+"       xf1f2f3\n" -
+"       b11000001\n" -
+"       str xabx\n" -
+"*/\n"
+
+Method H_irange() static
+return H_inputrange()
+
+Method H_inputrange() static
+return -
+"/** input range -- Section of an input string, by: Character, Word, or Field\n" -
+"\n" -
+"|--+-range--------------+------------|\n" -
+"   |    v----------+    |\n" -
+"   +-(--+----range-+--)-+\n" -
+"   +-(strict-range-+--)-+\n" -
+"\n" -
+" range:\n" -
+"\n" -
+"   v------------------------------+\n" -
+" |-+--+--------------------------+-+-------->\n" -
+"      +-+-FIELDSEParator-+--xorc-+\n" -
+"        +-WORDSEParator--+\n" -
+"\n" -
+"     v----------------------------------+\n" -
+" >--+--+------------------------------+-+--->\n" -
+"       +-SUBSTRing--| rangePart |--OF-+\n" -
+"\n" -
+" >--| rangePart |----|\n" -
+"\n" -
+" rangePart:\n" -
+"\n" -
+" |--+------------+-------------->\n" -
+"    +-| wrdSep |-+\n" -
+"    +-| fldSep |-+\n" -
+"\n" -
+" >--+-snumorstar------------+--------|\n" -
+"    +-snumorstar;snumorstar-+\n" -
+"    +-numorstar-numorstar---+\n" -
+"    +-numorstar.number---+\n" -
+"\n" -
+" wrdSep:\n" -
+"\n" -
+" |--+------------------------+--Words------|\n" -
+"    +-+-WORDSEParator-+-xorc-+\n" -
+"      +-WS------------+\n" -
+"\n" -
+" fldSep:\n" -
+"\n" -
+" |--+-------------------------+--Fields----|\n" -
+"    +-+-FIELDSEParator-+-xorc-+\n" -
+"      +-FS-------------+\n" -
+"\n" -
+"Examples:\n" -
+"      1-*\n" -
+"      word 5\n" -
+"      1;-1\n" -
+"      -18;28\n" -
+"      field 4\n" -
+"*/\n"
+
+
+Method H_qword() static
+return H_qstring()
+Method H_qstring() static
+return -
+"/** qstring -- quote delimited string; if single word, quote marks are optional\n" -
+"\n" -
+"   Examples:\n" -
+"\n" -
+'   "string of words"\n' -
+'   "word"\n' -
+"   'word'\n" -
+"   word\n" -
+"   'She said, " || '"Yes."' || "'\n" -
+"*/\n"
+
+Method H_regexstring() static
+return -
+"/** regex string -- regular expression string defines a search pattern\n" -
+"\n" -
+"\n" -
+"     |--regex_string--|\n" -
+"\n" -
+"NetRexx Pipelines uses its underlying Java's version.\n" -
+"\n" -
+"Examples:\n" -
+"\n" -
+"        a\n" -
+"        A dog\n" -
+"        ^[Aa]?\\s*dog(s)?\n" -
+"*/\n"
+
+Method H_xorc() static
+return -
+"/** xorc -- A character specified as itself or its hexadecimal representation\n" -
+"BLANK,\n" -
+"SPACE,\n" -
+"TAB\n" -
+"are also accepted.\n" -
+"*/\n"
+
+Method H_hexrange() static
+return H_xrange()
+Method H_xrange() static
+return -
+"/** xrange -- the characters in the collating sequence between two specified characters\n" -
+"\n" -
+"For the XRANGE Stage, see below.\n" -
+"\n" -
+"   |--+--xorc---------+--|\n" -
+"      +--xorc-xorc----+\n" -
+"      +--xorc.number--+\n" -
+"\n" -
+"Hex ranges wrap from 0XFF to 0X00\n" -
+"\n" -
+"   Examples:\n" -
+"\n" -
+"   Y\n" -
+"   X-Z\n" -
+"   00-7f\n" -
+"   00.256\n" -
+"   0-00\n" -
+"   BLANK\n" -
+"   40-7f\n" -
+"   blank-7f\n" -
+"   blank.3\n" -
+"   00-blank\n" -
+"\n" -
+"   Note: NetRexx uses UTF-16 (ASCII) and CMS uses EBCDIC\n" -
+"\n" -
+"==================================================================\n" -
+"\n" -
+"/** xrange Stage -- Write a Range of Characters\n" -
+"\n" -
+"   >>--XRANGE--+------------+------><\n" -
+"               +-xrange-----+\n" -
+"               +-xorc--xorc-+\n" -
+"\n" -
+"   Note: NetRexx uses UTF-16 (ASCII) and CMS uses EBCDIC\n" -
+"\n" -
+" */\n"

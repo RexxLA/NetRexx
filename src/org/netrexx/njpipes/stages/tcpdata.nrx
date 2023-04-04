@@ -1,3 +1,4 @@
+-- tcpdata.nrx Pipelines stage
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
  *
@@ -7,33 +8,23 @@
  *
  */
 
-/** tcpdata
-
-Simple tcpdata implementation.
-
-linger      - wait a bit before terminating the last read (units SECONDS)
-timeout     - wait this long before timing reads out (units MS)
-deblock     - If deblock is ommited a copy stage is used.
-group       - similiar to cms.  A delimited string containing a stage is
-              expected.  You can use a run of stages, but its is dangerous
-              since you to know the stage sep character being used...
-nodelay     - use the nodelay option
-oneresponse - synchronize requests/replies
-
+/*
+   23/02/23 Documentation; givehelp(). Jeff Hennick
+   01/05/07 fix deadlocks.  ejt
+   99/05/28 output byte[] since conversions to string can cause problems.  ejt
+   99/05/27 improved timeout logic, fixed rc and termination logic.  ejt
+   98/09/07 use byte streams. ejt
+   98/09/06 use bufferedwriter.  ejt
+   98/08/30 optimized, in -2 shorted to out 0.  ejt
+   98/08/28 fixed a commit problem.  ejt
+   98/08/28 now uses new error handling method.  ejt
+   98/08/26 added oneresponse, deblock, group options.  ejt
+   98/08/23 optimized using doSetup() logic.  ejt
+   98/08/23 startThread no longer uses a name.  ejt
+   98/07/31 Support threadpool.  ejt
+   98/07/30 use StageError(13,... in stageExit.  ejt
 */
--- 01/05/07 fix deadlocks.  ejt 
--- 99/05/28 output byte[] since conversions to string can cause problems.  ejt
--- 99/05/27 improved timeout logic, fixed rc and termination logic.  ejt
--- 98/09/07 use byte streams. ejt
--- 98/09/06 use bufferedwriter.  ejt
--- 98/08/30 optimized, in -2 shorted to out 0.  ejt
--- 98/08/28 fixed a commit problem.  ejt
--- 98/08/28 now uses new error handling method.  ejt
--- 98/08/26 added oneresponse, deblock, group options.  ejt
--- 98/08/23 optimized using doSetup() logic.  ejt
--- 98/08/23 startThread no longer uses a name.  ejt
--- 98/07/31 Support threadpool.  ejt
--- 98/07/30 use StageError(13,... in stageExit.  ejt
+
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
 
@@ -44,28 +35,28 @@ options binary
 class tcpdata public extends stage
 
   properties public
-  
+
   soc    = Socket
   sin    = BufferedInputStream
   sout   = BufferedOutputStream
   e      = StageError
   rc     = int
-  
+
   properties private
-  
+
   linger   = int
   timeout  = int
   nodelay  = boolean
   oneresp  = boolean
   et       = tcpdata.ear
-  
+
   properties private static
-  
+
   bo = [byte 0]
   bc = Class
-  
+
   method send(s=BufferedOutputStream,r=Object) private static signals IOException
-    
+
     select
       when bc.isInstance(r) then
 	do
@@ -85,7 +76,7 @@ class tcpdata public extends stage
     s.flush()
 
   method severCallback(type=boolean,stream=int)
-    
+
     if type=1 & (stream=0 | stream=-1) then
       if et.on then
 	if counter(0)<>0 then
@@ -101,25 +92,25 @@ class tcpdata public extends stage
 	
 
   method tcpdata_setup() signals StageError
-    
+
     bc = bo.getClass()
-    
+
     a = Rexx arg()
-    
+
     linger = int 0
     i = a.wordpos('linger')
     if i>0 then do
       linger = int a.word(i+1)
       a = a.delword(i,2)
     end
-    
+
     timeout = int 0
     i = a.wordpos('timeout')
     if i>0 then do
       timeout = a.word(i+1)
       a = a.delword(i,2)
     end
-    
+
     i = a.wordpos('nodelay')
     if i=0 then
       nodelay = 0
@@ -127,7 +118,7 @@ class tcpdata public extends stage
       nodelay = 1
       a = a.delword(i,1)
     end
-    
+
     i = a.wordpos('oneresponse')
     if i=0 then
       oneresp = 0
@@ -135,23 +126,23 @@ class tcpdata public extends stage
       oneresp = 1
       a = a.delword(i,1)
     end
-    
+
     if a<>'' then
       signal StageError(11,'tcpdata unknown option(s) 'a)
-    
+
     et = tcpdata.ear()                   -- create the ear object
     et.on = 0
-    
+
 
   method run()
 
     rc = 0
-    
+
     do
-      
+
       if doSetup() then
         tcpdata_setup()
-      
+
       commit(-1)
       do
         soc = Socket peekto()
@@ -160,23 +151,23 @@ class tcpdata public extends stage
       end
       soc.setSoTimeout(timeout)
       soc.setTcpNoDelay(nodelay)
-      
+
       if linger>0 then
         soc.setSoLinger(boolean 1,linger)
-      
+
       -- say 'data soc 'soc
       sin  = BufferedInputStream(DataInputStream(soc.getInputStream()))
       sout = BufferedOutputStream(DataOutputStream(soc.getOutputStream()))
-      
+
       selectOutput(-1)                    -- for the output in ear...
-      
+
       et.go(this)                         -- start ear listening for requests
-      
+
       readto()                            -- consume the socket.
-      
+
       if oneresp then
         loop forever
-	  
+	
           do
             selectInput(-2)
           catch StageError
@@ -192,7 +183,7 @@ class tcpdata public extends stage
             et.notifyAll()
           end
           readto()
-	  
+	
           do
             selectInput(0)
           catch StageError
@@ -202,49 +193,49 @@ class tcpdata public extends stage
           r = peekto()                  -- get a reply to send
           if r=null then
             signal StageError          -- cannot send a null
-	  
+	
           send(sout,r)
-	  
+	
           readto()
-	  
+	
         end
       else
         loop forever
-	  
+	
           selectAnyInput()
-	  
+	
           select
-	    
+	
             when inStreamNumber()=0 then do
-	      
+	
               r = peekto()
               send(sout,r)
               readto()
-	      
+	
             end
-	    
+	
             when inStreamNumber()=-2 then do
-	      
+	
               do protect et                 -- block ear's output while we
                 selectOutput(0)            -- grab the stream and pass the
-                shortStreams()          
+                shortStreams()
                 selectOutput(-1)           -- to be processed
                 et.notifyAll()
               end
-	      
+	
             end
-	    
+	
             otherwise
               signal StageError(13,'tcpdata selected unexpected input stream')
           end
-	  
+	
         end
-      
+
     catch e=StageError
-      
+
     catch IOException
       e = StageError(12,'tcpdata got an IOException')
-      
+
     finally
       do protect this
 	
@@ -273,21 +264,21 @@ class tcpdata public extends stage
 	
       end
     end
-    
+
     do protect et
       if rc<=4 then
 	rc = rc(e)
     end
-    
+
     do
       selectOutput(1)
       output(Rexx rc)
     catch StageError
     end
-    
+
     exit(rc*(rc<>12))
-    
-    
+
+
     /*
      * pInfo    = name of pipe,
      * pInfo[1] = stage number in pipe
@@ -315,16 +306,16 @@ class tcpdata public extends stage
 
 
   method stageArg(a=rexx) returns rexx
-    
+
     g = a.upper().wordpos('GROUP')
     if g>0 then
       return DString(a.subword(g+1)).String()
     else
       return ''
-    
-    
+
+
   method stageExit(pInfo=Rexx,o=Rexx) returns boolean signals StageError
-    
+
     g = pInfo[4].upper().wordpos('DEBLOCK')
     if g=0 then
       stg = 'copy'
@@ -340,7 +331,7 @@ class tcpdata public extends stage
       else
 	stg = d.left(d.pos(r)-1)
     end
-    
+
     g = pInfo[4].upper().wordpos('GROUP')
     if g>0 then do
       ds = DString(pInfo[4].subword(g+1))
@@ -350,64 +341,110 @@ class tcpdata public extends stage
 	pInfo[4] = ds.Residue()
       stg = stg' 'pInfo[6]' 'ds.String()
     end
-    
+
     if stg='' then
       signal StageError(13,'Error - 'pInfo' - missing stage/pipe in 'pInfo[4])
     if pInfo[8] then
       signal StageError(13,'Error - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
-    
+
     if pInfo[2]='' then
       pInfo[2] = '_ap_'pInfo[1]                                          -- add label
-    
+
     -- a minus sign infront of a label switches to negitive input streams...
     -- The first time the label is used in data appended to the pipe is it for
     -- stream -1, the second is stream -2.
-    
+
     pInfo[5] = pInfo[5]' -'pInfo[2]': 'pInfo[6]' 'stg' 'pInfo[6]' 'pInfo[2]': 'pInfo[7]     -- add to pipe
-    
+
     return 1
-    
-    
+
+Method givehelp() static
+return -
+"/** tcpdata  -- Read from and Write to a TCP/IP Socket\n" -
+"\n" -
+"             <--------------------------+\n" -
+">>--TCPDATA-v-+--- - ----------------+--+----><\n" -
+"              +-| Deblock |----------+\n" -
+"              +-GETSOCKName-(1)------+\n" -
+".             +-GREETING-(1)---------+\n" -
+"              +-KEEPALIVe-(1)--------+\n" -
+"              +-LINGER--number-------+\n" -
+"              +-NODELAY-(2)----------+\n" -
+"              +-ONERESPONSE----------+\n" -
+"              +-OOBINLINE-(1)--------+\n" -
+"              +-REUSEADDR-(1)--------+\n" -
+"              +-SF-(1)---------------+\n" -
+"              +-SF4-(1)--------------+\n" -
+"              +-+-SECURE---------+(1)+\n" -
+"              | +-TLSLABEL--word-+   |\n" -
+"              +-STATistics-(1)-------+\n" -
+"              +-TIMEOUT-(2)----------+\n" -
+"\n" -
+"Deblock:\n" -
+" |--DEBLOCK--+--CRLF--------------------+--->\n" -
+"             +--LINEND-+------+---------+\n" -
+"             |         +-xorc-+         |\n" -
+"             +--SF----------------------+\n" -
+"             +--SF4---------------------+\n" -
+"             +--STRING--delimitedString-+\n" -
+"\n" -
+">--+------------------------+----|\n" -
+"   +-GROUP--delimitedString-+\n" -
+"\n" -
+"Simple tcpdata implementation.\n" -
+"\n" -
+"linger      - wait a bit before terminating the last read (units SECONDS)\n" -
+"timeout     - wait this long before timing reads out (units MS)\n" -
+"deblock     - If deblock is ommited a copy stage is used.\n" -
+"group       - similiar to cms.  A delimited string containing a stage is\n" -
+"              expected.  You can use a run of stages, but its is dangerous\n" -
+"              since you to know the stage sep character being used...\n" -
+"nodelay     - use the nodelay option\n" -
+"oneresponse - synchronize requests/replies\n" -
+"\n" -
+"*/\n"
+
+
 class tcpdata.ear private implements RunnablePool uses ThreadPool
-  
+
   r  = tcpdata
   T  = Thread
-  
+
   properties shared volatile
   on = boolean
-  
+
   method go(rr=tcpdata)
     r = rr
     T = startThread(this)
-    
+
   method run()
-    
+
     c = int 0
-    
+
     buf = byte[32768]
-    
+
     on = 1
-    
+
     loop forever                          -- blocked (** may cause probs **)
-      
+
       do
         z = r.counter(1)
         c = r.sin.read(buf)             -- read resp until group is happy
         z = r.counter(z)
       catch interruptedIOException       -- timeout option triggers this
-        z = r.counter                   -- so we verify we have an output stream 
+        z = r.counter                   -- so we verify we have an output stream
         do protect this
           loop while r.outStreamState()=1  -- only have one output at a time
             z = r.counter(1)              -- on _any_ stream
             wait()
             z = r.counter(z)
           end
-          r.selectOutput(-1)            -- raise an exception if not there 
+          r.selectOutput(-1)            -- raise an exception if not there
         end
         if c=-1 then
           iterate                       -- when from a timeout
       end
-      
+
       if c=-1 then                       -- eof
         signal IOException('EOF')
 	
@@ -426,16 +463,16 @@ class tcpdata.ear private implements RunnablePool uses ThreadPool
     catch ie=InterruptedException
       z = r.counter(z)
       ee = StageError(12,'tcpdata.ear was Interrupted 'ie.getMessage())
-      
+
     catch ee=StageError
-      
+
     catch oe=IOException
       z = r.counter(z)
       ee = StageError(12,'tcpdata.ear got IOException 'oe.getMessage())
-      
+
     catch ThreadQ
       ee = StageError(15,'tcpdata.ear got an ThreadQ')
-      
+
     finally
       do protect this
         on = 0
@@ -447,7 +484,5 @@ class tcpdata.ear private implements RunnablePool uses ThreadPool
         end
         notifyAll()
       end
-      
+
     end
-    
-    

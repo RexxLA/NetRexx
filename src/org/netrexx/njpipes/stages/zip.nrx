@@ -1,10 +1,17 @@
+-- zip.nrx  Pipelines stage
 /*
  *  Copyright (C) 2019  R.V. Jansen
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
- *  and distributing this program.  
+ *  and distributing this program.
  *
  */
+
+/*
+  23/02/26 Clean up. Documentation; givehelp(). Jeff Hennick
+  19/  /   New. R.V. Jansen
+*/
+
 options nostrictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.stages
 import org.netrexx.njpipes.pipes.
@@ -15,72 +22,91 @@ class zip extends stage
   properties private
   zipEntries = ArrayList
   zipFileName = ''
-  --trace results
+-- trace results
   method run()
 
     a = arg()
     do
       if a = '' then a = Rexx readto()
     catch StageError
-      say 'unzip error'
+      say 'zip error'
     end
 
-    a = arg()
-    if a <> '' then
-      do
-	this.zipFileName=a
+--    a = arg()  -- Removed 23/2/26 JH
+    parse a . '.' fx
+    if fx = '' then a = a'.ZIP'  -- Added 23/2/26 JH
+
+    if a <> '' then do
+        this.zipFileName=a
       end
 
-      do
-	this.zipEntries=ArrayList()
-	loop forever
-          line = Rexx peekto()
-	  this.zipEntries.add(line)
-          readto()
-	catch StageError
-	  rc = rc()
-	end -- loop forever
-      end
+    do
+      this.zipEntries=ArrayList()
+      loop forever
+        line = Rexx peekto()
+        this.zipEntries.add(line.strip('B'))
+        readto()
+      catch StageError
+        rc = rc()
+      end -- loop forever
+    end
 
-      do
-	create()
-      catch FileNotFoundException
-	say 'file not found'
-      catch IOException
-	say 'I/O Exception'
-      end
-      exit(rc*(rc<>12))
-    
+    do
+      create()
+    catch FileNotFoundException
+      say 'file not found'
+    catch IOException
+      say 'I/O Exception'
+    end
+    exit(rc*(rc<>12))
+
   /**
    * method create() does the actual work of creating the zipfile with
    * an entry for every file and copying to the zipoutputstream
    */
   method create() signals IOException
-    len          = int
+    len = int
     do
-      i	 = this.zipEntries.iterator()
-      out	 = ZipOutputStream(FileOutputStream(this.zipFileName))
+      i = this.zipEntries.iterator()
+      out = ZipOutputStream(FileOutputStream(this.zipFileName))
       loop while i.hasNext()
-	infile = String(Rexx i.next())
-	in	 = FileInputStream(infile)
-	out.putNextEntry(ZipEntry(infile))
-	buf	 = byte[1024]
-	len	 = in.read(buf)
-	loop while (len > 0)
-	  out.write(buf,0,len)
-	  len	 = in.read(buf)
-	end
-	do
-	  output(infile)
-	catch s=StageError
-	  say s.getMessage()
-	catch q=ThreadQ
-	  say q.getMessage()
-	end
-      end
+        infile = String(Rexx i.next())
+        in   = FileInputStream(infile)
+        out.putNextEntry(ZipEntry(infile))
+        buf  = byte[1024]
+       len  = in.read(buf)
+       loop while (len > 0)
+         out.write(buf,0,len)
+         len    = in.read(buf)
+       end
+       do
+         output(infile)
+       catch s=StageError
+         say s.getMessage()
+       catch q=ThreadQ
+         say q.getMessage()
+       end
+    end
     catch ioex = IOException
       say ioex.getMessage()
-    end
-    out.close()
-    return
-    
+  end
+  out.close()
+  return
+
+
+Method givehelp() static
+return -
+"/** zip -- Add Files To a new ZIP Archive\n" -
+"\n" -
+">>--ZIP--+-----------+--><\n" -
+"         +--name-(1)-+\n" -
+"\n" -
+"(1) name is the zip file name.  If not provided, the first entry on\n" -
+"    the primary input stream is used.\n" -
+'(1) If no extension is provided in name, ".ZIP" is added.\n' -
+'(1) Any existing file is replaced.\n' -
+"Subsquent records on the primary input stream are filenames to\n" -
+"    be added to the Zip archive file.\n" -
+"File names added passed out on primary out stream.\n" -
+"NetRexx Pipelines only.\n" -
+"*/\n"

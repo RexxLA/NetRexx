@@ -1,3 +1,4 @@
+-- changeparse.nrx Pipeline stage
 /*
  *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *
@@ -7,51 +8,9 @@
  *
  */
 
-/** changeparse
-
-Change the contents of records, using Rexx Parse. Calculations can be done.
-And a final record added.
-
-                 +-FROM-+                        +-TO-+
->>--CHANGEParse--+------+-parse_template_Dstring-+----+-output_template_Dstring-->
-
->--+-----------------------+-->
-   +-BY-by_NetRexx_Dstring-+
-
->--+-----------------------------+--+----------------------------------+--><
-   +-FIRST-first_NetRexx_Dstring-+  +-FINALLY-finally_template_Dstring-+
-
- Records are parsed via the parse_template_delimited_string.
- Variables are named $n, where n is 1 to 9.
- The by_NetRexx_delimited_string is interpreted.  This is 0 or more
- semicolon separated NetRexx statements, probably using the $n variables,
- which can have the value altered.
- Other variables may be used, and are persistent while the stage is active,
- so can be used as accumulators.
- The values of the variables are put into the output_template_delimited_string
- replacing $n.
- For a literal $n that won't be changed, use $$n.
- A first_NetRexx_delimited_string, if present, is interpreted before reading
- any record from the primary input steam.  Any variables used in the
- by_NetRexx_delimited string must be defined here.
- A finally_template_delimited_string, if present, is written as a final
- output record after the primary input stream is finished, using the $n's.
- Any keyword phrases must, in any order, follow any non-keyworded FROM & TO phrases.
-
- Examples:
-   changeparse  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./
-   changeparse from / 2 $1 +1/ to /The second letter is "$1". $$1 won't be changed./
-   changeparse from / . $2 . 50 $5 +5 / to /The product is $1/ by /$1 = $2 * $5/
-   changeparse from / . $2 . 50 $5 +5 / ,
-               to /The product is $1/ ,
-               by /$1 = $2 * $5;$3 = $3 + $1/ ,
-               first /$3 = 0/ ,
-               finally /$3 is the total/
-
-*/
-
 /*
- 20/10/ 6 From PARSE; add FROM, TO, BY & block, FIST & block, FINALLY & block. Jeff Hennick
+  23/ 2/18 Documentation; givehelp(). Jeff Hennick
+  20/10/ 6 From PARSE; add FROM, TO, BY & block, FIST & block, FINALLY & block. Jeff Hennick
 */
 
 options nostrictcase nostrictargs nostrictsignal
@@ -245,3 +204,48 @@ method stageExit(pInfo=Rexx,o=Rexx) returns boolean
     say "*************************************************************"
   end
 return 1
+
+Method givehelp() static
+return -
+"/** changeparse -- Change the contents of records, using Rexx Parse\n" -
+"\n" -
+"Change the contents of records, using Rexx Parse. Calculations can be done.\n" -
+"And a final record added.\n" -
+"\n" -
+"                 +-FROM-+                        +-TO-+\n" -
+">>--CHANGEParse--+------+-parse_template_Dstring-+----+-output_template_Dstring-->\n" -
+"\n" -
+">--+-----------------------+-->\n" -
+"   +-BY-by_NetRexx_Dstring-+\n" -
+"\n" -
+">--+-----------------------------+--+----------------------------------+--><\n" -
+"   +-FIRST-first_NetRexx_Dstring-+  +-FINALLY-finally_template_Dstring-+\n" -
+"\n" -
+" Records are parsed via the parse_template_delimited_string.\n" -
+" Variables are named $n, where n is 1 to 9.\n" -
+" The by_NetRexx_delimited_string is interpreted.  This is 0 or more\n" -
+" semicolon separated NetRexx statements, probably using the $n variables,\n" -
+" which can have the value altered.\n" -
+" Other variables may be used, and are persistent while the stage is active,\n" -
+" so can be used as accumulators.\n" -
+" The values of the variables are put into the output_template_delimited_string\n" -
+" replacing $n.\n" -
+" For a literal $n that won't be changed, use $$n.\n" -
+" A first_NetRexx_delimited_string, if present, is interpreted before reading\n" -
+" any record from the primary input steam.  Any variables used in the\n" -
+" by_NetRexx_delimited string must be defined here.\n" -
+" A finally_template_delimited_string, if present, is written as a final\n" -
+" output record after the primary input stream is finished, using the $n's.\n" -
+" Any keyword phrases must, in any order, follow any non-keyworded FROM & TO phrases.\n" -
+"\n" -
+" Examples:\n" -
+"   changeparse  / 2 $1 +1/ /The second letter is \"$1\". $$1 won't be changed./\n" -
+"   changeparse from / 2 $1 +1/ to /The second letter is \"$1\". $$1 won't be changed./\n" -
+"   changeparse from / . $2 . 50 $5 +5 / to /The product is $1/ by /$1 = $2 * $5/\n" -
+"   changeparse from / . $2 . 50 $5 +5 / ,\n" -
+"               to /The product is $1/ ,\n" -
+"               by /$1 = $2 * $5;$3 = $3 + $1/ ,\n" -
+"               first /$3 = 0/ ,\n" -
+"               finally /$3 is the total/\n" -
+"\n" -
+"*/\n"

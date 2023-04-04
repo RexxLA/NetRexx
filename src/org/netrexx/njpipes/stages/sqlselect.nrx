@@ -1,3 +1,4 @@
+-- sqlselect.nrx Pipeline stage
 /*
  *  Copyright (C) 1997,1998,1999  R.V. Jansen. 2020 Jeff Hennick
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
@@ -6,70 +7,12 @@
  *
  */
 
-/** sqlselect
-
-                                   +-SELECT-(5)+                                    +-;-+
->>--SQLSELECT--+-----------------+-+-----------+-+--------------------------------+-+---+--><
-               +-(-| options |-)-+               +-sql_select_statement_string-(3)+
-
-OPTIONS:
-   +------------------------------------------------+
- |-v-+--------------------------------------------+-+-|
-     |            +-/sqlselect.properties/-+      |
-     +-PROPERTIES-+-filename_Dstring-------+-(5)+-+
-     | +-HEADERS---+                            |
-     +-+-----------+-(5)(6)---------------------+
-     | +-NOHEADERS-+                            |
-     +-URL-Qword-(7)----------------------------+
-     +-JDBCDRIVER-Qword-(7)---------------------+
-     +-DBMS-Qword-(7)(8)------------------------+
-     +-DB_NAME-Qword-(7)(8)---------------------+
-     +-USER-Qword-(7)(8)(10)--------------------+
-     +-PASS-Qword-(7)(8)(10)--------------------+
-
- uses jdbc to select from any jdbc enabled dbms
-
- properties file ("sqlselect.properties" default) is read to find jdbcdriver name and url
- sample properties file:
-
- #JDBC driver name
- #Tue Feb 03 23:29:43 GMT+01:00 1998
- jdbcdriver=com.imaginary.sql.msql.MsqlDriver
- url=jdbc:msql://localhost:1114/TESTDB
- # the following are not needed for some DBMS, ex: SQLite
- user=db_user_name
- pass=password_for_db
-
- if this file is not found default (compiled in) values are used
-
- (1) when using a sqlselect * (all columns) from the commandline, quote the query
- as in java pipes.compiler (query) "sqlselect * from dept | console"
- (2) the netrexx/jdbc combination is extremely case sensitive for column and table names
- (3) if no sql_select_string is specified, it is read from the primary input stream.
-     this is optional in NetRexx Pipelines only. CMS does not use the stream input.
- (4) a maximum of only one record is ever read from the primary input stream.
- (5) NetRexx Pipelines only
- (6) CMS Pipelines is implied HEADERS only.
- (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.
- (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.
-     DB_name is the file name.  These are used in place of URL and JDBCDRIVER.
-     SQLite is the only one tested as of 8/15/20.
- (9) the SQL stage uses NOHEADERS as the default.
- (10) USER & PASS are needed for some DBMSs and not others, ex. SQLite.
-
- Priority order for URL, JDBCDRIVER, DBMS, DB_NAME, USER, & PASS (first one found rules):
-   1. option in the SQL command string
-   2. from secondary input stream
-   3. from "sqlselect.properties" file
-      or from file specified by PROPERTIES option
-   4. Builtin
-*/
-
 /*
- 8/17/20 Added MySQL as dbms.  Jeff Hennick
- 8/15/20 Added URL, JDBCDRIVER, DBMS, & DB_NAME, USER & PASS; documentation. Jeff Hennick
- 8/13/20 Added PROPERTIES, HEADERS, NOHEADERS, SELECT; documentation. Jeff Hennick
-  /  /97 New Rene V Jansen
+ 23/02/23 Documentation; givehelp(). Jeff Hennick
+ 20/ 8/17 Added MySQL as dbms.  Jeff Hennick
+ 20/ 8/15 Added URL, JDBCDRIVER, DBMS, & DB_NAME, USER & PASS; documentation. Jeff Hennick
+ 20/ 8/13 Added PROPERTIES, HEADERS, NOHEADERS, SELECT; documentation. Jeff Hennick
+ 97/  /   New Rene V Jansen
 */
 
 options nostrictcase nostrictargs nostrictsignal nobinary
@@ -200,7 +143,7 @@ method run()
     if jdbcdriver = "com.ibm.db2.jcc.DB2Driver" then
       do
 	/* db2 z/OS does not like to override uid/pw in url
-	 * when it was already in properties */ 
+	 * when it was already in properties */
 	jdbcCon = Connection DriverManager.getConnection(url)
       end
     else do
@@ -346,3 +289,64 @@ trace off
   end
   if kind > 0 & retw <> '' then ret = retw
   return ret
+
+Method givehelp() static
+return -
+"/** sqlselect -- Query a Database and Format Result\n" -
+"\n" -
+"                                   +-SELECT-(5)+                                    +-;-+\n" -
+">>--SQLSELECT--+-----------------+-+-----------+-+--------------------------------+-+---+--><\n" -
+"               +-(-| options |-)-+               +-sql_select_statement_string-(3)+\n" -
+"\n" -
+"OPTIONS:\n" -
+"   +------------------------------------------------+\n" -
+" |-v-+--------------------------------------------+-+-|\n" -
+"     |            +-/sqlselect.properties/-+      |\n" -
+"     +-PROPERTIES-+-filename_Dstring-------+-(5)+-+\n" -
+"     | +-HEADERS---+                            |\n" -
+"     +-+-----------+-(5)(6)---------------------+\n" -
+"     | +-NOHEADERS-+                            |\n" -
+"     +-URL-Qword-(7)----------------------------+\n" -
+"     +-JDBCDRIVER-Qword-(7)---------------------+\n" -
+"     +-DBMS-Qword-(7)(8)------------------------+\n" -
+"     +-DB_NAME-Qword-(7)(8)---------------------+\n" -
+"     +-USER-Qword-(7)(8)(10)--------------------+\n" -
+"     +-PASS-Qword-(7)(8)(10)--------------------+\n" -
+"\n" -
+" uses jdbc to select from any jdbc enabled dbms\n" -
+"\n" -
+" properties file (\"sqlselect.properties\" default) is read to find jdbcdriver name and url\n" -
+" sample properties file:\n" -
+"\n" -
+" #JDBC driver name\n" -
+" #Tue Feb 03 23:29:43 GMT+01:00 1998\n" -
+" jdbcdriver=com.imaginary.sql.msql.MsqlDriver\n" -
+" url=jdbc:msql://localhost:1114/TESTDB\n" -
+" # the following are not needed for some DBMS, ex: SQLite\n" -
+" user=db_user_name\n" -
+" pass=password_for_db\n" -
+"\n" -
+" if this file is not found default (compiled in) values are used\n" -
+"\n" -
+" (1) when using a sqlselect * (all columns) from the commandline, quote the query\n" -
+" as in java pipes.compiler (query) \"sqlselect * from dept | console\"\n" -
+" (2) the netrexx/jdbc combination is extremely case sensitive for column and table names\n" -
+" (3) if no sql_select_string is specified, it is read from the primary input stream.\n" -
+"     this is optional in NetRexx Pipelines only. CMS does not use the stream input.\n" -
+" (4) a maximum of only one record is ever read from the primary input stream.\n" -
+" (5) NetRexx Pipelines only\n" -
+" (6) CMS Pipelines is implied HEADERS only.\n" -
+" (7) A Qword is an optionally quoted word. If it contains spaces, it must be quoted.\n" -
+" (8) EXPERIMENTAL Subject to change. DBMS is the kind of database, e.g. SQLite.\n" -
+"     DB_name is the file name.  These are used in place of URL and JDBCDRIVER.\n" -
+"     SQLite is the only one tested as of 8/15/20.\n" -
+" (9) the SQL stage uses NOHEADERS as the default.\n" -
+" (10) USER & PASS are needed for some DBMSs and not others, ex. SQLite.\n" -
+"\n" -
+" Priority order for URL, JDBCDRIVER, DBMS, DB_NAME, USER, & PASS (first one found rules):\n" -
+"   1. option in the SQL command string\n" -
+"   2. from secondary input stream\n" -
+"   3. from \"sqlselect.properties\" file\n" -
+"      or from file specified by PROPERTIES option\n" -
+"   4. Builtin\n" -
+"*/\n"

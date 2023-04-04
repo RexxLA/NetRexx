@@ -1,32 +1,17 @@
--- digest.nrx NJPipe Stage
+-- digest.nrx Pipeline stage
 /*
  *  Copyright (C) 2020 rvj
- *  based on Jeff's encode64 
+ *  based on Jeff's encode64
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
  */
 
 /*
- 2021-08-17 New. rvj
+  23/ 2/20 Documentation; givehelp(). Jeff Hennick
+  21-08-17 New. rvj
 */
 
-/** digest
-                     +-MD5--+
-   >>--+-DIGEST-+--+-+-SHA1-+--><
-                     +-SHA256---+
-                     +-SHA384---+
-                     +-SHA512---+
-*/
-
-/*
-   NOTE: CMS has MD5, SHA1, SHA256, SHA384 and SHA 512
-   NetRexx Pipelines has (dependent on the JVM implementation)
-   MD2, MD5, SHA1, SHA224, SHA256, SHA384, SHA512, SHA512/224, SHA512/256
-   Netrexx Pipelines does not (yet) have APPEND, VERIFY and NOT
-   NetRexx Pipelines returns the bytearray as a HEX string
-   CMS returns a char array into the pipeline
-*/
 
 options nostrictcase nostrictargs nostrictsignal
 package org.netrexx.njpipes.stages
@@ -38,7 +23,7 @@ class digest extends stage
 
 method run()
   parse arg().upper opt restup
-  
+
   if restup <> '' then do
     parse arg() opt rest
     Emsg(11, 'Extra argument found:' rest'.')
@@ -47,9 +32,9 @@ method run()
   do
     select case opt
       when '', 'SHA1' then
-	md = MessageDigest.getInstance('SHA1')
+        md = MessageDigest.getInstance('SHA1')
       otherwise
-	md = MessageDigest.getInstance(opt)
+        md = MessageDigest.getInstance(opt)
     end
   catch java.security.NoSuchAlgorithmException
     say 'No such digest algorithm implemented'
@@ -67,9 +52,9 @@ method run()
       rc = rc()
     end -- do
 
-    end  
+    end
   do
-    s=Rexx
+--    s=Rexx
     opr = md.digest()           -- when done, compute digest
     hexString = StringBuffer()
     loop i=0 to opr.length-1
@@ -84,6 +69,27 @@ method run()
   catch org.netrexx.njpipes.pipes.StageError
     rc = rc()
   end -- do
-  
+
   Exit(rc*(rc<>12))
-  
+
+
+Method givehelp() static
+return -
+"/** digest -- Compute a Message Digest\n" -
+"\n" -
+"   >>--DIGEST--+-SHA1-----------+--+------------------------+--><\n" -
+"               +-SHA224---------+  +--APPEND-(1)------------+\n" -
+"               +-SHA256---------+  +--VERIFY-(1)-+----------+\n" -
+"               +-SHA384---------+                +--NOT-(1)-+\n" -
+"               +-SHA512---------+\n" -
+"               +-MD5------------+\n" -
+"               +-MD2-(2)--------+\n" -
+"               +-SHA512/224-(2)-+\n" -
+"               +-SHA512/256-(2)-+\n" -
+"\n" -
+"(1) CMS Pipelines only.\n" -
+"(2) NetRexx Pipelines only (dependent on the JVM implementation).\n" -
+"\n" -
+"   NetRexx Pipelines returns the bytearray as a HEX string\n" -
+"   CMS returns a char array into the pipeline\n" -
+"*/\n"

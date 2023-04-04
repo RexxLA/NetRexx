@@ -1,0 +1,130 @@
+-- alter.nrx Pipeline stage
+/*
+ *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the licence and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+  23/ 3/ 2 New. From changeregex. Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal nobinary
+
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class alter extends stage uses IRange
+
+method run() public
+
+   args = Rexx ''
+   outl = Rexx ''
+
+   c = Rexx 1
+   fc = Rexx ' '
+   tc = Rexx ' '
+
+   args = arg()
+
+   loop c = 1 while args <> ""
+
+   parse args fw rest
+
+   if fw = 'FROM' then args = rest
+
+   parse args from_str args
+
+   if from_str = ',' then do
+     parse args from_str args
+     if args = '' then leave
+   end
+
+   parse from_str fp ',' sp
+
+   if fp <> from_str then do
+     if fp = '' then from_str = sp
+     else args = sp args
+   end
+
+   parse args fw rest
+
+   if fw = 'TO' then args = rest
+
+   parse args to_str args
+
+   parse to_str to_str ',' sp
+
+   args = sp args
+
+   if to_str = '' then
+     Emsg(11, 'Missing arguments:' arg())
+
+   if from_str.length > 2 then do
+     parse from_str c1 +1 rest
+     if 'XH'.pos(c1.upper) > 0 & rest.datatype('X') then
+       from_str = rest.x2c
+   end
+   if from_str.length > 1 & from_str.datatype('W') then
+     from_str = from_str.d2c
+
+   if to_str.length > 2 then do
+     parse to_str c1 +1 rest
+     if 'XH'.pos(c1.upper) > 0 & rest.datatype('X') then
+       to_str = rest.x2c
+   end
+   if to_str.length > 1 & to_str.datatype('W') then
+     to_str = to_str.d2c
+
+   if from_str.length <> 1 then
+     Emsg(11, 'Improper argument:' from_str)
+
+   if to_str.length <> 1 then
+     Emsg(11,  'Improper argument:' to_str)
+
+   fc[c] = from_str
+   tc[c] = to_str
+
+   end
+
+   loop forever
+      outl = Rexx peekto()
+
+      loop p = 1 to c-1
+        outl = outl.changestr(fc[p], tc[p])
+      end
+
+      output(outl)
+
+      readto()
+   catch StageError
+   end
+
+   rc = mrc()
+
+exit(rc*(rc<>12))
+
+Method givehelp() static
+return -
+"/** alter -- Change the contents of records, from one character to another\n" -
+"                +--,--+\n" -
+"             +--+-----+--------------------------------------+ \n" -
+"             |   +-FROM-+               +-TO-+               |\n" -
+"  >>--ALTER--v---+------+--+-char1---+--+----+--+-char2---+--+--><\n" -
+"                           +-decimal-+          +-decimal-+ \n" -
+"                           +-Hhex----+          +-Hhex----+ \n" -
+"                           +-Xhex----+          +-Xhex----+ \n" -
+"\n" -
+" Notes:\n" -
+"  An variation on the theme of Xedit's ALTER.\n" -
+"  There are pairs of char1s and char2s, optionally separated by commas.\n" -
+"  For each pair of char1 and char2, this changes ALL char1s to char2,\n" -
+"  like Xedit's 4th and 5th parameters were 1 and 1." -
+"  The chars can be single characters," -
+"   2 or 3 digit decimal numerical representations," -
+"   or beginning with H, h, X, or x hexidecimal representations.\n" -
+"  NetRexx Pipelines only, not CMS.\n" -
+"\n" -
+"*/\n"
