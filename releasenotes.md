@@ -17,6 +17,7 @@
   directory() are added to aid scripting.(René Jansen)
 - #48 nrws.properties can now be .nrws.properties (though support for the filename without a dot is still there)
 - when c2x and c2d are called in non-oo notation, these are compatible with Classic Rexx, which accepts strings.
+- a Classic Rexx compatible random() function is added.
 
 ## Pipelines
 - org.netrexx.njpipes.pipes.runner now reads pipeline source from
