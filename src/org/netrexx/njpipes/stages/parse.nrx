@@ -9,6 +9,7 @@
  */
 
 /*
+ 23/ 4/13 Changed $n variables to _n to avoid NetRexx's use of $1 internally.  Jeff Hennick
  23/02/22 Documentation; givehelp(). Jeff Hennick
  20/ 6/29 Jeff Hennick
 */
@@ -83,10 +84,23 @@ do
   end
 
   one = 1.d2c()
-  ot = ot.changestr('$$',one)
+
+          /* 4/13/2023 process depreciated "$n" variables to "_n" */
+  if pt.pos('$') > 0 then do
+    pt = pt.changestr('$', "_")
+    ot = ot.changestr('$$',one)
+    loop i = 1 for 9
+      ot = ot.changestr("$"i,'_'i)
+    end
+    ot = ot.changestr(one,'$$')
+  end
+         /* 4/13/2023 end */
+
+
+  ot = ot.changestr('__',one)
   ot = ot.changestr('"','""')
   loop i = 1 for 9
-    ot = ot.changestr("$"i,'"$'i'"')
+    ot = ot.changestr("_"i,'"_'i'"')
   end
 
   if  otempl.Residue() <> '' then do
@@ -110,12 +124,12 @@ do
   n=n+1;o[n]= 'loop forever'
        /* See what input we have. */
   n=n+1;o[n]= '  line = Rexx peekto()'
-  n=n+1;o[n]= '  line = line.changestr("$",one)'
+  n=n+1;o[n]= '  line = line.changestr("__",one)'
 
   n=n+1;o[n]= '  parse line' pt
 
   n=n+1;o[n]= '  ol = Rexx "'ot'"'
-  n=n+1;o[n]= '  ol = ol.changestr(one,"$")'
+  n=n+1;o[n]= '  ol = ol.changestr(one,"__")'
 
   n=n+1;o[n]= '  output(ol)'
 
@@ -158,12 +172,15 @@ return -
 ">>--PARSE--parse_template_Dstring---output_template_Dstring--><\n" -
 "\n" -
 " Records are parsed via the parse_template_delimited_string.\n" -
-" Variables are named $n, where n is 1 to 9.\n" -
+" Variables are named _n, where n is 1 to 9.\n" -
 " The values of the variables are put into the output_template_delimited_string\n" -
-" replacing $n.\n" -
-" For a literal $n that won't be changed, use $$n.\n" -
+" replacing _n.\n" -
+" For a literal _n that won't be changed, use __n.\n" -
 "\n" -
 " Example:\n" -
-"   parse  / 2 $1 +1/ /The second letter is \"$1\". $$1 won't be changed./\n" -
+"   parse  / 2 _1 +1/ /The second letter is \"_1\". __1 won't be changed./\n" -
 "\n" -
+" Note:\n" -
+"   Variable names ""$n"" instead of ""_n"" are deprecated.\n" -
+"   At some time they may not be supported.\n" -
 "*/\n"

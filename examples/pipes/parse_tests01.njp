@@ -1,3 +1,27 @@
+/** parse -- Rearrange Contents of Records using Rexx Parse
+
+>>--PARSE--parse_template_Dstring---output_template_Dstring--><
+
+ Records are parsed via the parse_template_delimited_string.
+ Variables are named _n, where n is 1 to 9.
+ The values of the variables are put into the output_template_delimited_string
+ replacing _n.
+ For a literal _n that won't be changed, use __n.
+
+ Example:
+   parse  / 2 _1 +1/ /The second letter is \"_1\". __1 won't be changed./
+
+ Note:
+   Variable names "$n" instead of "_n" are deprecated.
+   At some time they may not be supported.
+
+*/
+
+/*
+  23/ 4/13 Depreciated $n to _n. Documentation. Jeff Hennick
+  20/ 6/29 New.  Jeff Hennick
+*/
+
 pipe (parse_tests01)
 
  o: faninany |
@@ -5,10 +29,18 @@ pipe (parse_tests01)
     specs 2-* 1 |
     cons ?
 
--- parse dstring dstring ?
+-- parse dstring dstring with _n ?
+   literal aza |
+   parse  / 2 _1 +1/ /The second letter is "_1". __1 won't be changed./ |
+   c1: compare any ~2# 1 parse dstring dstring with _n~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "z". __1 won't be changed. |
+   c1: ?
+
+-- parse dstring dstring with $n ?
    literal aza |
    parse  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./ |
-   c1: compare any ~2# 1 parse dstring dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   c2: compare any ~2# 2 parse dstring dstring with $n~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal The second letter is "z". $1 won't be changed. |
-   c1: ?
+   literal The second letter is "z". $$1 won't be changed. |
+   c2: ?
