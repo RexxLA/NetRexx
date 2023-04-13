@@ -1394,89 +1394,90 @@ command. The pipeline would be, for example:
   pipe literal cmd /c dir | command | sort | console
 \end{lstlisting}
 
-\section{TCP/IP Networking}
-As the built-in stages all work on data that is dispatched through the
-pipeline, irrespective of which device driver is used, it is also
-convenient to do network programming using a set of pipelines.
+% \section{TCP/IP Networking}
+% As the built-in stages all work on data that is dispatched through the
+% pipeline, irrespective of which device driver is used, it is also
+% convenient to do network programming using a set of pipelines.
+% 
+% The \emph{tcplisten} stage can be used as a network device driver, as
+% in CMS, but limited to specification of the port and a timeout value. Below an example of how to implement a sample TCP/IP
+% client/server application.
+% \begin{lstlisting}
+% -- one shot tcpip server
+% 
+% pipe (tcpserv stall 60000 debug 0 )
+%    tcplisten 1958 timeout 15000 | tcpexample
+% 
+% -- one shot tcpip requestor
+% 
+% pipe (tcpreq stall 60000 debug 0 )
+%    random {} |
+%    specs *-* 1 ,\n, next |
+%    tcpclient deblock c localhost 1958 timeout 10000 linger 500 oneresponse |
+%    rexx to console
+% 
+% -- a single tasking server
+% 
+% options binary
+% import org.netrexx.njpipes.pipes.
+% class tcpexample extends stage
+% 
+% method run() public
+% 
+%    loop forever
+% 
+%       peekto()
+% 
+%       callpipe (tcplog stall 15000 debug 0)
+%          *in0: |
+%          take first 1 |
+%          console |
+%       f: fanin |
+%          tcpdata timeout 10000 deblock C oneresponse |
+%          elastic |
+%          insert /\n/ after |
+%       f:
+% 
+%    catch StageError
+%       rc = rc()
+%    end
+% 
+% exit(rc*(rc<>12))
+% \end{lstlisting}
+% This example needs to be compiled with the pipes compiler, see
+% \emph{TCP/IP Client/Server compile}, which yields the classes tcpserv
+% and tcpreq, for the server and the requester component. 
+% \begin{figure}[h]
+%   \includegraphics[width=0.75\textwidth]{images/tcpcompile}
+%   \caption{TCP/IP Client/Server compile}
+%   \label{fig:tcpcompile}
+% \end{figure}
+% 
+% Now we can start the generated pipelines each in their own shell
+% window. As can be seen in \emph{TCP/IP server}, the class keeps
+% waiting on connections on port 1958 - which is arbitrary, but
+% specified in the pipeline source.
+% 
+% \begin{figure}[h]
+%   \includegraphics[width=0.75\textwidth]{images/tcpserv}
+%   \caption{TCP/IP server}
+%   \label{fig:tcpcompile}
+% \end{figure}
+% 
+% In another window, we can start the \emph{TCP/IP requestor}, which
+% when given port 1958 as argument, connects to the server, and displays
+% a series of random numbers that is sent to it.
+% 
+% \begin{figure}[h]
+%   \includegraphics[width=0.75\textwidth]{images/tcpreq}
+%   \caption{TCP/IP requestor}
+%   \label{fig:tcpcompile}
+% \end{figure}
+% 
+% Note that the stage \emph{tcpexample} from the \emph{tcpserver}
+% pipeline is a custom stage that is written in this tcpexample.njp
+% file.
 
-The \emph{tcplisten} stage can be used as a network device driver, as
-in CMS, but limited to specification of the port and a timeout value. Below an example of how to implement a sample TCP/IP
-client/server application.
-\begin{lstlisting}
--- one shot tcpip server
-
-pipe (tcpserv stall 60000 debug 0 )
-   tcplisten 1958 timeout 15000 | tcpexample
-
--- one shot tcpip requestor
-
-pipe (tcpreq stall 60000 debug 0 )
-   random {} |
-   specs *-* 1 ,\n, next |
-   tcpclient deblock c localhost 1958 timeout 10000 linger 500 oneresponse |
-   rexx to console
-
--- a single tasking server
-
-options binary
-import org.netrexx.njpipes.pipes.
-class tcpexample extends stage
-
-method run() public
-
-   loop forever
-
-      peekto()
-
-      callpipe (tcplog stall 15000 debug 0)
-         *in0: |
-         take first 1 |
-         console |
-      f: fanin |
-         tcpdata timeout 10000 deblock C oneresponse |
-         elastic |
-         insert /\n/ after |
-      f:
-
-   catch StageError
-      rc = rc()
-   end
-
-exit(rc*(rc<>12))
-\end{lstlisting}
-This example needs to be compiled with the pipes compiler, see
-\emph{TCP/IP Client/Server compile}, which yields the classes tcpserv
-and tcpreq, for the server and the requester component. 
-\begin{figure}[h]
-  \includegraphics[width=0.75\textwidth]{images/tcpcompile}
-  \caption{TCP/IP Client/Server compile}
-  \label{fig:tcpcompile}
-\end{figure}
-
-Now we can start the generated pipelines each in their own shell
-window. As can be seen in \emph{TCP/IP server}, the class keeps
-waiting on connections on port 1958 - which is arbitrary, but
-specified in the pipeline source.
-
-\begin{figure}[h]
-  \includegraphics[width=0.75\textwidth]{images/tcpserv}
-  \caption{TCP/IP server}
-  \label{fig:tcpcompile}
-\end{figure}
-
-In another window, we can start the \emph{TCP/IP requestor}, which
-when given port 1958 as argument, connects to the server, and displays
-a series of random numbers that is sent to it.
-
-\begin{figure}[h]
-  \includegraphics[width=0.75\textwidth]{images/tcpreq}
-  \caption{TCP/IP requestor}
-  \label{fig:tcpcompile}
-\end{figure}
-
-Note that the stage \emph{tcpexample} from the \emph{tcpserver}
-pipeline is a custom stage that is written in this tcpexample.njp
-file.
 \section{Selecting from relational databases}
 
 Using the built-in \emph{sqlselect} stage you can select data, using
