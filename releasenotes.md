@@ -1,4 +1,4 @@
-# NetRexx 4.05 beta [10 Mar 2023]
+# NetRexx 4.05 GA [10 May 2023]
 
 ## Project
 - an ant build.xml (in examples) to build an Android .apk for the NetRexx translator (Jason Martin)
@@ -7,7 +7,6 @@
 
 ## Language
 - a new option -deps to list dependencies
-- tools to assist build systems, like ninja build
 - a new option -noimplicituses to avoid automatic addition of Classic Rexx compatible classes to 'uses' -see below
 - the package org.netrexx.address is now deprecated, because its work is better done by the ADDRESS statement
 - #! shebangs are now supported for systems that support them, such as
@@ -20,8 +19,8 @@
 - a Classic Rexx compatible random() function is added.
 
 ## Pipelines
-- org.netrexx.njpipes.pipes.runner now reads pipeline source from
-  stdin when invoked without arguments (Marc Remes) 
+- org.netrexx.njpipes.pipes.runner now reads pipeline source from stdin
+  when invoked without arguments (Marc Remes) 
 - a new ALL stage (Jeff Hennick)
 - a new DELAY stage (Jeff Hennick)
 
