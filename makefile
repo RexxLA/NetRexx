@@ -53,5 +53,6 @@ package:
 	java -jar ant/ant-launcher.jar package
 
 .PHONY: upload
-	tar --exclude='.git' -zcvf netrexx-4.05-20230416.tar.gz .
+upload:
+	tar --exclude='.git' --exclude='Documentation' --exclude='examples' -zcvf netrexx-4.05-20230416.tar.gz .
 	scp netrexx-4.05-20230416.tar.gz netrexx@rexxla.org:website/packages
