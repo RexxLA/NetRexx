@@ -54,5 +54,7 @@ package:
 
 .PHONY: upload
 upload:
-	tar --exclude='.git' --exclude='Documentation' --exclude='examples' -zcvf netrexx-4.05-20230416.tar.gz .
-	scp netrexx-4.05-20230416.tar.gz netrexx@rexxla.org:website/packages
+	tar --exclude='build/classes' --exclude='.git' --exclude='documentation' --exclude='examples' -zcvf netrexx-4.05-beta.tar.gz .
+	scp netrexx-4.05-beta.tar.gz netrexx@rexxla.org:website/packages
+	shasum -a 256 netrexx-4.05-beta.tar.gz
+
