@@ -1,22 +1,5 @@
 /** parse -- Rearrange Contents of Records using Rexx Parse
 
->>--PARSE--parse_template_Dstring---output_template_Dstring--><
-
- Records are parsed via the parse_template_delimited_string.
- Variables are named _n, where n is 1 to 9.
- The values of the variables are put into the output_template_delimited_string
- replacing _n.
- For a literal _n that won't be changed, use __n.
-
- Example:
-   parse  / 2 _1 +1/ /The second letter is \"_1\". __1 won't be changed./
-
- Note:
-   Variable names "$n" instead of "_n" are deprecated.
-   At some time they may not be supported.
-
-*/
-
 /*
   23/ 4/13 Depreciated $n to _n. Documentation. Jeff Hennick
   20/ 6/29 New.  Jeff Hennick
@@ -37,10 +20,150 @@ pipe (parse_tests01)
    literal The second letter is "z". __1 won't be changed. |
    c1: ?
 
--- parse dstring dstring with $n ?
+-- depreciated parse dstring dstring with $n ?
    literal aza |
    parse  / 2 $1 +1/ /The second letter is "$1". $$1 won't be changed./ |
-   c2: compare any ~2# 2 parse dstring dstring with $n~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   c2: compare any ~2# 2 depreciated parse dstring dstring with $n~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
    literal The second letter is "z". $$1 won't be changed. |
    c2: ?
+
+-- parse dstring NR dstring dstring ?
+   literal aza |
+   parse  / 2 _1 +1/ NR / _1 = _1.upper/ /The second letter is "_1". __1 won't be changed./ |
+   c3: compare any ~2# 3 parse dstring NR dstring dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "Z". __1 won't be changed. |
+   c3: ?
+
+-- parse dstring NetRexx dstring dstring ?
+   literal aza |
+   parse  / 2 _1 +1/ NetRexx / _1 = _1.upper/ /The second letter is "_1". __1 won't be changed./ |
+   c4: compare any ~2# 4 parse dstring NetRexx dstring dstring~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal The second letter is "Z". __1 won't be changed. |
+   c4: ?
+
+-- parse dstring nr dstring dstring w/counter ?
+   literal aza, efg, hij |
+   split , |
+   parse  / 2 _1 +1/ nr /counter[1]=counter[1]+1; _2=counter[1]/ /Count = _2/ |
+   c5: compare any ~2# 5 parse dstring nr dstring dstring w/ counter ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Count = 1; Count = 2; Count = 3; |
+   split ; |
+   c5: ?
+
+-- parse dstring NR dstring FINALLY dstring dstring ?
+   literal aza, efg, hij |
+   split , |
+   parse /2 _1 +1/ NR /counter[1]=counter[1]+1;_9=counter[1]/ FINALLY /return "Count:" counter[1]/ /_9/ |
+   c6: compare any ~2# 6 parse dstring NR dstring FINALLY dstring dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;2;3;Count: 3|
+   split ; |
+   c6: ?
+
+-- parse dstring NR dstring dstring FINALLY dstring ?
+   literal aza, efg, hij |
+   split , |
+   parse /2 _1 +1/ NR /counter[1]=counter[1]+1;_9=counter[1]/ /_9/ FINALLY /return "Count:" counter[1]/ |
+   c7: compare any ~2# 7 parse dstring NR dstring dstring FINALLY dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;2;3;Count: 3|
+   split ; |
+   c7: ?
+
+-- parse dstring NR dstring FINALLY dstring ?
+   literal aza, efg, hij |
+   split , |
+   parse /2 _1 +1/ NR /counter[1]=counter[1]+1;_9=counter[1]; return _9/ FINALLY /return "Count:" counter[1]/ |
+   c8: compare any ~2# 8 parse dstring NR dstring FINALLY dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;2;3;Count: 3|
+   split ; |
+   c8: ?
+
+-- parse dstring NR dstring ?
+   literal aza, efg, hij |
+   split , |
+   parse /2 _1 +1/ NR /counter[1]=counter[1]+1;_9=counter[1]; return _9/ |
+   c9: compare any ~2# 9 parse dstring NR dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1;2;3|
+   split ; |
+   c9: ?
+
+-- parse dstring FINALLY dstring ?
+   literal aza, efg, hij |
+   split , |
+   parse /2 _1 +1/ FINALLY /return "Done"/ |
+   c10: compare any ~2#10 parse dstring FINALLY dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal Done|
+   split ; |
+   c10: ?
+
+-- parse dstring NR upper dstring ?
+   literal aza, efg, hij |
+   split , |
+   parse  / _1 2 _2 +1 _3/ NR /_2 = _2.upper/ /_1_2_3/ |
+   c11: compare any ~2#11 parse dstring NR upper dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aZa;eFg;hIj|
+   split ; |
+   c11: ?
+
+-- parse dstring NR dstring dstring FINALLY dstring ?
+   literal aza;e2g;hij |
+   SPLIT ; |
+
+   parse  /_1 2 _2 +1 _3/ ,
+    NR /if _2.datatype('l') then counter['c'] = counter['c'] + 1; _2 = _2.upper/,
+    /_1_2_3/ ,
+    FINALLY /return counter['c'] 'changed up'/ |
+   c12: compare any ~2#12 parse dstring NR dstring dstring FINALLY dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal aZa;e2g;hIj;2 changed up|
+   split ; |
+   c12:
+
+
+/** parse -- Rearrange Contents of Records using Rexx Parse
+
+>>--PARSE--parse_template_Dstring-->
+
+ >--+-----------------------------+-->
+    +-+-NETREXX-+-NetRexx_Dstring-+
+      +-NR------+
+
+ >--+-------------------------+-->
+    +-output_template_Dstring-+
+
+ >--+---------------------------------+--><
+    +-FINALLY-finally_NetRexx_Dstring-+
+
+ Records are parsed via the parse_template_delimited_string.
+ Variables are named _n, where n is 1 to 9.
+ The values of the variables are put into the output_template_delimited_string
+ replacing _n.
+ For a literal _n that won't be changed, use __n.
+ The NetRexx_Dstring and finally_NetRexx_Dstring are any valid NetRexx statement
+ or ;-separated statements that may use and set the ""_n"" variables.
+ The string \n will split the string into separate ouput records.
+ The special indexed variable COUNTER[] is also available in these Dstrings.
+ Note: Now depreciated: "$n" instead of "_n"; no NR or FINALLY.
+
+ Examples:
+   parse  / 2 _1 +1/ /The second letter is \"_1\". __1 won't be changed./
+
+   parse  / _1 2 _2 +1 _3/ NR /_2 = _2.upper/ /_1_2_3/
+
+   PARSE  /_1 2 _2 +1 _3/ ,
+    NR /if _2.datatype('l') then counter['c'] = counter['c'] + 1; _2 = _2.upper/ ,
+    /_1_2_3/ ,
+    FINALLY /return counter['c'] 'changed to upper'/
+
+   parse /2 _1 +1/ NR /counter[1]=counter[1]+1/ FINALLY /_9="Count:" counter[1]/ /_9/
+
+*/

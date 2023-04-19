@@ -3,6 +3,7 @@
 <html style='height: 100%'>
 <head>
 <!--
+   23/ 4/13 PARSE: Added NR/NetRexx and FINALLY options. Jeff Hennick
    23/ 4/13 Modified PARSE to use _1 instead of $1 variables.  Jeff Hennick
    23/ 4/ 3 add HELP, AHELP, ? for NJP.  Jeff Hennick
    23/ 3/19 add DELAY. Jeff Hennick
@@ -3388,19 +3389,53 @@ Pipes for NetRexx only.
 <br><span class="n309 n405"></span></td>
 <td class=desc><p-title>Rearrange Contents of Records</p-title>
 <div><div class=p-ddiv><div class='p-diag box'><div class='p-dt'>NetRexx</div>
-&#x25B6;&#x25B6;--PARSE--<span class='var sdstring'>parse_template_Dstring</span>---<span class='var sdstring'>output_template_Dstring</span>--&#x25B6;&#x25C4;</div></div>
+&#x25B6;&#x25B6;--PARSE--<span class='var sdstring'>parse_template_Dstring</span>--&#x25B6;
+<br>
+&#x25B6;--+--------------------------------------------+---&#x25B6;
+   +--+--NETREXX--+--<span class='var sdstring'>NetRexx_statement_Dstring</span>--+
+      +--NR-------+
+<br>
+&#x25B6;--+-------------------------+--&#x25B6;
+   +<span class='var sdstring'>output_template_Dstring</span>--+
+<br>
+&#x25B6;--+--------------------------------------+----&#x25B6;&#x25C4;
+   +--FINALLY--<span class='var sdstring'>NetRexx_statement_Dstring</span>--+
+</div></div>
 <div class=p-note><ul>
 <li>Records are parsed via the parse_template_delimited_string.
 <li>Variables are named _n, where n is 1 to 9.
 <li>The values of the variables are put into the output_template_delimited_string
  replacing _n.
 <li>For a literal _n that won't be changed, use __n.
-<li>(As of 4.05) Variable names "$n" instead of "_n" are deprecated.
-<br>   At some time they may not be supported.
+<li>The two NetRexx_statement_Dstrings are single statements, or multiple
+statements separated by ";"s.
+ <ul>
+  <li>The _n variables can be used and changed.
+  <li>The string <b>\n</b> will split the string into separate ouput records.
+  <li>The special indexed REXX variable COUNTER[] is also available in these Dstrings.
+  This is specific to a PARSE stage, but persists between records. All the indexed
+  values are initiated to 0. Both indexes and values can be strings.
+  <li>This is powerful and has the possibility of doing damage to your pipe.
+  <br>You have been warned!
+ </ul>
+<li>If the NR NetRexx_statement_Dstring returns a value, it is used as the
+output instead of the optional output_template_Dstring.
+<li>The FINALLY's statement_Dstring is executed after the last input record has been
+processed.  The value returned is put out as an "extra" output record.
+<li>(As of 4.05) Variable names of "$n" are depreciated, and can not be used
+with NETREXX or FINALLY options.
 <li>NetRexx Pipelines only.
 <li>.
-<li> Example:
- <br> &nbsp;  <span class=examp>parse  / 2 _1 +1/ /The second letter is "_1". __1 won't be changed./</span>
+<li> Examples:
+ <ul>
+  <li><span class=examp>parse  / 2 _1 +1/ /The second letter is "_1". __1 won't be changed./</span>
+  <li><span class=examp>parse /2 _1 +1/ NR /counter[1]=counter[1]+1; _9=counter[1]/  /_9/ FINALLY /return "Count:" _9/</span>
+  <li><span class=examp>PARSE  /_1 2 _2 +1 _3/ ,
+    <br>NR /if _2.datatype('L') then counter['c'] = counter['c'] + 1; _2 = _2.upper/ ,
+    <br>/_1_2_3/ ,
+    <br>FINALLY /return counter['c'] 'Changed to upper'/</span>
+ </ul>
+
 </li></ul></div></td></tr>
 
 

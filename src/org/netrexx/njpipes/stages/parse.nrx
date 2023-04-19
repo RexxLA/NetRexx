@@ -1,6 +1,6 @@
 -- parse.nrx Pipeline stage
 /*
- *  Copyright (C) 2020  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *  Copyright (C) 2020, 2023  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -9,7 +9,8 @@
  */
 
 /*
- 23/ 4/13 Changed $n variables to _n to avoid NetRexx's use of $1 internally.  Jeff Hennick
+ 23/ 4/19 Added support for depreciated $n. Jeff Hennick
+ 23/ 4/13 _n was $n; adding NR option.  Jeff Hennick
  23/02/22 Documentation; givehelp(). Jeff Hennick
  20/ 6/29 Jeff Hennick
 */
@@ -24,6 +25,9 @@ class parse extends stage
 options = Rexx
 optionsup = Rexx
 
+ss = Rexx "" -- output intermediate source array
+sline = int 0 -- output source last line number
+lline = Rexx "" -- logic line being built
 
 
   -- The run method of this stage should never get called
@@ -58,10 +62,23 @@ method run()
    *
    */
 
-method stageExit(pInfo=Rexx,o=Rexx) returns boolean
+method stageExit(pInfo=Rexx,code=Rexx) returns boolean
 do
   pid  = pInfo
   name = pInfo[3]
+  ucode = Rexx ''
+  lcode = Rexx ''
+  ot = Rexx ''
+  uf = Rexx ''
+  lf = Rexx ''
+  one = 1.d2c()
+
+  if pInfo[8] then
+    signal StageError(13,'Error (parse) - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
+
+
+  nrcall = 0
+-- trace results
 
   templates = pInfo[4]
 
@@ -74,36 +91,85 @@ do
     exit 11
   end
 
-  otempl = DString(ptempl.Residue())
+  dol = pt.pos('$') > 0
+
+  optstr = ptempl.Residue()
+
+  parse optstr w1 rest
+
+  if w1 = 'NR' | w1 = 'NETREXX' then do
+    ctemp1 = Dstring(rest)
+    ucode = ctemp1.String()
+    optstr = ctemp1.Residue()
+    nrcall = 1
+
+             /* ensure the user function ends with "return data" if needed */
+        ucode = ucode.strip('B').strip('T',';') -- clean it up
+        lsc = ucode.lastpos(';') + 1
+        parse ucode . =(lsc) verb . rest  -- what is last statement?
+        if verb \= 'return' then ucode = ucode';return ""' -- add a return if needed
+
+    uf[0] = 'method user()'
+    uf[1] = ' 'ucode
+  end
+
+  parse optstr w1 rest
+
+  if w1 = 'FINALLY' then do    -- first possible position
+    ctemp1 = Dstring(rest)
+    lcode = ctemp1.String()
+    optstr = ctemp1.Residue()
+    nrfinally = 1
+
+         /* ensure the user function ends with "return data" if needed */
+    lcode = lcode.strip('B').strip('T',';') -- clean it up
+    lsc = lcode.lastpos(';') + 1
+    parse lcode . =(lsc) verb . rest  -- what is last statement?
+    if verb \= 'return' then lcode = lcode';return ""' -- add a return if needed
+
+    lf[0] = 'method last()'
+    lf[1] = ' 'lcode
+  end
+
+  otempl = DString(optstr)
   ot = otempl.String()
+  optstr = otempl.Residue()
 
-  if ot = '' then do
-    -- Emsg(11, 'Parse -- no output template found in' ptempl.Residue())
-    say 'Parse -- no output template found in' ptempl.Residue() 'RC = 11'
-    exit 11
+  if dol & \nrcall & \nrfinally then do -- accomdate depreciated style
+    pt = pt.changestr('$$', one)
+    pt = pt.changestr('$', '_')
+    pt = pt.changestr(one, '$$')
+    ot = ot.changestr('$$', one)
+    ot = ot.changestr('$', '_')
+    ot = ot.changestr(one, '$$')
   end
 
-  one = 1.d2c()
+  parse optstr w1 rest
 
-          /* 4/13/2023 process depreciated "$n" variables to "_n" */
-  if pt.pos('$') > 0 then do
-    pt = pt.changestr('$', "_")
-    ot = ot.changestr('$$',one)
-    loop i = 1 for 9
-      ot = ot.changestr("$"i,'_'i)
-    end
-    ot = ot.changestr(one,'$$')
+  if w1 = 'FINALLY' then do    -- second possible position
+    ctemp1 = Dstring(rest)
+    lcode = ctemp1.String()
+    optstr = ctemp1.Residue()
+    nrfinally = 1
+
+         /* ensure the user function ends with "return data" if needed */
+    lcode = lcode.strip('B').strip('T',';') -- clean it up
+    lsc = lcode.lastpos(';') + 1
+    parse lcode . =(lsc) verb . rest  -- what is last statement?
+    if verb \= 'return' then lcode = lcode';return ""' -- add a return if needed
+
+    lf[0] = 'method last()'
+    lf[1] = ' 'lcode
   end
-         /* 4/13/2023 end */
-
 
   ot = ot.changestr('__',one)
   ot = ot.changestr('"','""')
   loop i = 1 for 9
     ot = ot.changestr("_"i,'"_'i'"')
   end
+  ot = ot.changestr(one,'__')
 
-  if  otempl.Residue() <> '' then do
+  if optstr <> '' then do
     -- Emsg(11, 'Parse -- Unknown extra:' otempl.Residue())
     say 'Parse -- Unknown extra:' otempl.Residue() 'RC = 11'
     exit 11
@@ -111,37 +177,85 @@ do
 
 
   /* make the generated stage */
-  n=0
   cname = stageName(name,pid,pInfo[1])
 
 
-  n=n+1;o[n]= 'class 'cname' extends stage private'
-  n=n+1;o[n]= '--trace results'
-  n=n+1;o[n]= 'one = 1.d2c()'
+  s('class 'cname' extends stage private')
+  -- s('trace results')
+  s('one = 1.d2c()')
 
-  n=n+1;o[n]= ''
-  n=n+1;o[n]= 'method run()'
-  n=n+1;o[n]= 'loop forever'
+
+  s('counter = Rexx 0') -- available for use in user functions
+
+  loop n = 1 to 9
+   s('_'n' = Rexx ""')
+  end
+
+  s('')
+  s('method run()')
+  s('loop forever')
        /* See what input we have. */
-  n=n+1;o[n]= '  line = Rexx peekto()'
-  n=n+1;o[n]= '  line = line.changestr("__",one)'
+  s('  line = Rexx peekto()')
+  s('  line = line.changestr("__",one)')
 
-  n=n+1;o[n]= '  parse line' pt
+  s('  parse line' pt)
 
-  n=n+1;o[n]= '  ol = Rexx "'ot'"'
-  n=n+1;o[n]= '  ol = ol.changestr(one,"__")'
+  s('  ol = Rexx null')
 
-  n=n+1;o[n]= '  output(ol)'
+  if nrcall then do
+    s('  ol = user()')
+  end
+
+  if ot <> "" then do
+    s('  ol = Rexx "'ot'"')
+  end
+
+  s('  if ol <> null then do')
+  s('    loop while ol <> ""')
+  s('      parse ol o "\\n" ol')
+  s('      output(o)')
+  s('    end')
+  s('  end')
 
        /* Go on to the next one. */
-  n=n+1;o[n]= '  readto()'
-  n=n+1;o[n]= 'catch StageError'  /* Most likely end of input */
-  n=n+1;o[n]= '  rc = rc()'
-  n=n+1;o[n]= 'end'
+  s('  readto()')
+  s('catch StageError'  /* Most likely end of input */)
+  s('  rc = rc()')
 
-  n=n+1;o[n]= 'exit(rc*(rc<>12))'
+  if nrfinally then do
+    s(' do')
+    s('   o = last()')
+    s('   loop while o <> ""')
+    s('     parse o ol "\\n" o')
+    s('     output(ol)')
+    s('   end')
+    s(' catch StageError'  /* Most likely end of input */)
+    s(' end')
+  end
 
-  o[0] = n
+  s('end')
+
+  s('exit(rc*(rc<>12))')
+
+  if nrcall then do
+    s(' ')
+    s(uf[0])
+    s(uf[1])
+    s(' ')
+  end
+
+  if nrfinally then do
+    s(' ')
+    s(lf[0])
+    s(lf[1])
+    s(' ')
+  end
+
+ ss[0] = sline
+ loop i = 0 to sline
+  code[i] = ss[i]
+ end
+
 
   pInfo[3] = cname
   pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
@@ -155,32 +269,59 @@ do
   nn = Rexx
   if sc then do
     say "*************************************************************"
-    loop nn = 1 for o[0]
+    loop nn = 1 for ss[0]
       if sn then l = nn.right(3)" "
       else l = ""
-      say l""o[nn]
+      say l""ss[nn]
     end
     say "*************************************************************"
   end
 end
 return 1
 
+method s(source)
+ sline = sline + 1
+ ss[sline] = source
+return
+
 Method givehelp() static
 return -
 "/** parse -- Rearrange Contents of Records using Rexx Parse\n" -
 "\n" -
-">>--PARSE--parse_template_Dstring---output_template_Dstring--><\n" -
+">>--PARSE--parse_template_Dstring-->\n" -
+"\n" -
+" >--+-----------------------------+-->\n" -
+"    +-+-NETREXX-+-NetRexx_Dstring-+\n" -
+"      +-NR------+\n" -
+"\n" -
+" >--+-------------------------+-->\n" -
+"    +-output_template_Dstring-+\n" -
+"\n" -
+" >--+---------------------------------+--><\n" -
+"    +-FINALLY-finally_NetRexx_Dstring-+\n" -
 "\n" -
 " Records are parsed via the parse_template_delimited_string.\n" -
 " Variables are named _n, where n is 1 to 9.\n" -
 " The values of the variables are put into the output_template_delimited_string\n" -
 " replacing _n.\n" -
 " For a literal _n that won't be changed, use __n.\n" -
+" The NetRexx_Dstring and finally_NetRexx_Dstring are any valid NetRexx statement\n" -
+" or ;-separated statements that may use and set the ""_n"" variables.\n" -
+" The string \n will split the string into separate ouput records.\n" -
+" The special indexed variable COUNTER[] is also available in these Dstrings.\n" -
+" Note: Now depreciated: ""$n"" instead of ""_n""; no NR or FINALLY.\n" -
 "\n" -
-" Example:\n" -
+" Examples:\n" -
 "   parse  / 2 _1 +1/ /The second letter is \"_1\". __1 won't be changed./\n" -
 "\n" -
-" Note:\n" -
-"   Variable names ""$n"" instead of ""_n"" are deprecated.\n" -
-"   At some time they may not be supported.\n" -
+"   parse  / _1 2 _2 +1 _3/ NR /_2 = _2.upper/ /_1_2_3/\n" -
+"\n" -
+"   PARSE  /_1 2 _2 +1 _3/ ,\n" -
+"    NR /if _2.datatype('l') then counter['c'] = counter['c'] + 1; _2 = _2.upper/ ,\n" -
+"    /_1_2_3/ ,\n" -
+"    FINALLY /return counter['c'] 'changed to upper'/\n" -
+"\n" -
+"   parse /2 _1 +1/ NR /counter[1]=counter[1]+1/ FINALLY /_9=""Count:"" counter[1]/ /_9/\n" -
+"\n" -
 "*/\n"
+
