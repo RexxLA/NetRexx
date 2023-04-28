@@ -1407,6 +1407,8 @@ In addition to the \texttt{all} and \texttt{methods} tracing implied by \texttt{
 
 \item[Expressions] will have their evaluations shown if not shown for as a part of \texttt{properties} or \texttt{local variable} trace output. Such evaluations are indicated by \texttt{>>>}
 \end{description}
+\item[\textbf{int}] will stop execution of the \nr{} program, allow single stepping through the program and provide read and write access to variables and properties. 
+To leave the interactive trace type \texttt{trace off} at the \texttt{*->} prompt.
 \item[\textbf{off}] \texttt{trace off} disables tracing. No further tracing output will take place.
 \end{description} 
 
@@ -1437,6 +1439,104 @@ Each variable can appear only \textit{once} in a \texttt{trace} statement.
 A variable name may that of any type - including arrays (without the \texttt{[]}).
 
 Program tracing options never alter the list of watched variables. If tracing has previously been turned off then variable tracing may be resumed simply with a \texttt{trace var} statement.
+
+\section{Interactive tracing}
+\index{Interactive tracing}
+
+Interactive tracing is activated by the \keyword{trace int} instruction, 
+which will cause the interpreter to stop and present the interactive 
+trace prompt. 
+
+Pressing [Enter] continuously, single-steps and executes 
+every clause in the program. Variables and properties are accessible in 
+both read and write mode.
+
+Typing '?' shows the interactive trace capabilities:
+\begin{lstlisting}
+    *-> ?
+Experimental interactive trace :
+  press [Enter] to trace interactively
+  type '=' to reinterpret current clause
+  type '-[n]' to show previous n clause(s), shows current clause if n is absent
+  type '+[n]' to show next n clause(s), shows next clause if n is absent
+  type 'trace off' to stop tracing
+  any other clause entered must be either an assignment or a SAY instruction
+    *-> 
+\end{lstlisting}
+
+Given below trace.nrx program, 
+\begin{lstlisting}
+class trace
+  properties public static
+  p = 1
+ 
+  method main(args=String[]) static
+    say 'interactively tracing..'
+    trace int
+    i=0
+    say 'i='i 
+    i=traced(i)
+    say 'Hello world'||'!'.copies(i)
+
+  method traced(arg=Rexx) static
+    say 'traced called with arg:'arg  
+    return arg+p
+\end{lstlisting}
+
+a sample interactive trace session might look as follows:
+
+
+\begin{lstlisting}
+$ nrc -exec trace
+NetRexx portable processor 4.04
+Copyright (c) RexxLA, 2011,2022.   All rights reserved.
+Parts Copyright (c) IBM Corporation, 1995,2008.
+Program trace.nrx
+  === class trace ===
+    function main(String[])
+    function traced(Rexx)
+===== Exec: trace =====
+interactively tracing..
+    *->                                       -- interrupted at trace int, single-step
+    --- trace.nrx
+  8 *=*     i=0
+    >v> i "0"
+    *->                                       -- single-step
+  9 *=*     say 'i='i 
+    >>> "i=0"
+i=0
+    *-> i=2                                   -- update variable i
+    *-> =                                     -- re-execute current clause
+    >>> "i=2"
+i=2
+    *-> say 'p='p                             -- say something
+p=1
+    *-> p=2                                   -- update property p
+    *-> say 'p='p
+p=2
+    *->                                       -- single-step
+ 10 *=*     i=traced(i)                       
+    >>> "2"
+traced called with arg:2
+    >v> i "4"
+    *->                                       -- single-step
+ 11 *=*     say 'Hello world'||'!'.copies(i)
+    >>> "4"
+    >>> "Hello world!!!!"
+Hello world!!!!
+    *-> i=-1                                  -- update variable
+    *-> i=traced(i)                           -- call method
+traced called with arg:-1
+    *-> say 'i='i                             -- say something
+i=1
+    *-> =                                     -- re-execute
+    >>> "1"
+    >>> "Hello world!"
+Hello world!
+    *-> trace off                             -- trace off
+Processing of 'trace.nrx' complete
+
+\end{lstlisting}
 
 \section{Examples}
 \subsection{Program Trace}
@@ -1587,6 +1687,7 @@ Running this will produce the output below
 It can be seen that only the lines that contain watched variables are traced. This the variable assignments on lines 9, 10 and 11 are displayed, since the variables being watched from line 7 to line 12 are \texttt{a, b, c, d, e, f} and \texttt{y}.
 
 Following this, however only the assignment to variable \texttt{y} is shown, since the variables \texttt{a, b ,c d} and \texttt{e} are removed from the list with the command \mbox{\texttt{trace var -a -c -d -e}}.
+
 
 \section{Tracing Notes}
 One further prefix may be encountered in the trace outout \texttt{+++} which signifies an error.

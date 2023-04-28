@@ -320,6 +320,20 @@ the trace output would be:
    >v> before "0"
    >v> after "142857143"
 \end{lstlisting}
+\subsection{Interactive trace prompt}
+
+Typing '?' on the interactive trace prompt shows the interactive trace capabilities:
+\begin{lstlisting}
+    *-> ?
+Experimental interactive trace :
+  press [Enter] to trace interactively
+  type '=' to reinterpret current clause
+  type '-[n]' to show previous n clause(s), shows current clause if n is absent
+  type '+[n]' to show next n clause(s), shows next clause if n is absent
+  type 'trace off' to stop tracing
+  any other clause entered must be either an assignment or a SAY instruction
+    *-> 
+\end{lstlisting}
  \textbf{Notes:}
 \begin{enumerate}
 \item 
@@ -340,100 +354,3 @@ tracing overhead is not accidentally incurred.}
 externally, without requiring modification to the program.
 \end{enumerate}
 
-\subsection{Interactive tracing}
-\index{Interactive tracing}
-
-Interactive tracing is activated by the \keyword{trace int} instruction, 
-which will cause the interpreter to stop and present the interactive 
-trace prompt. 
-
-Pressing [Enter] continuously, single-steps and executes 
-every clause in the program. Variables and properties are accessible in 
-both read and write mode.
-
-Typing '?' shows the interactive trace capabilities:
-\begin{lstlisting}
-    *-> ?
-Experimental interactive trace :
-  press [Enter] to trace interactively
-  type '=' to reinterpret current clause
-  type '-[n]' to show previous n clause(s), shows current clause if n is absent
-  type '+[n]' to show next n clause(s), shows next clause if n is absent
-  type 'trace off' to stop tracing
-  any other clause entered must be either an assignment or a SAY instruction
-    *-> 
-\end{lstlisting}
-
-Given below trace.nrx program, 
-\begin{lstlisting}
-class trace
-  properties public static
-  p = 1
- 
-  method main(args=String[]) static
-    say 'interactively tracing..'
-    trace int
-    i=0
-    say 'i='i 
-    i=traced(i)
-    say 'Hello world'||'!'.copies(i)
-
-  method traced(arg=Rexx) static
-    say 'traced called with arg:'arg  
-    return arg+p
-\end{lstlisting}
-
-a sample interactive trace session might look as follows:
-
-
-\begin{lstlisting}
-$ nrc -exec trace
-NetRexx portable processor 4.04
-Copyright (c) RexxLA, 2011,2022.   All rights reserved.
-Parts Copyright (c) IBM Corporation, 1995,2008.
-Program trace.nrx
-  === class trace ===
-    function main(String[])
-    function traced(Rexx)
-===== Exec: trace =====
-interactively tracing..
-    *->                                       -- interrupted at trace int, single-step
-    --- trace.nrx
-  8 *=*     i=0
-    >v> i "0"
-    *->                                       -- single-step
-  9 *=*     say 'i='i 
-    >>> "i=0"
-i=0
-    *-> i=2                                   -- update variable i
-    *-> =                                     -- re-execute current clause
-    >>> "i=2"
-i=2
-    *-> say 'p='p                             -- say something
-p=1
-    *-> p=2                                   -- update property p
-    *-> say 'p='p
-p=2
-    *->                                       -- single-step
- 10 *=*     i=traced(i)                       
-    >>> "2"
-traced called with arg:2
-    >v> i "4"
-    *->                                       -- single-step
- 11 *=*     say 'Hello world'||'!'.copies(i)
-    >>> "4"
-    >>> "Hello world!!!!"
-Hello world!!!!
-    *-> i=-1                                  -- update variable
-    *-> i=traced(i)                           -- call method
-traced called with arg:-1
-    *-> say 'i='i                             -- say something
-i=1
-    *-> =                                     -- re-execute
-    >>> "1"
-    >>> "Hello world!"
-Hello world!
-    *-> trace off                             -- trace off
-Processing of 'trace.nrx' complete
-
-\end{lstlisting}
