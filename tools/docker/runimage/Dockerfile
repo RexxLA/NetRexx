@@ -14,8 +14,8 @@ apt-get install git -y && \
 apt-get install openjdk-11-jdk-headless -y && \
 apt-get install zip -y && \
 apt-get install wget -y && \
-wget http://netrexx.org/files/NetRexx-4.05-alpha.zip && \
-unzip NetRexx-4.05-alpha.zip && \
+wget http://netrexx.org/files/NetRexx-4.05-GA.zip && \
+unzip NetRexx-4.05-GA.zip && \
 apt-get install nano -y && \
 apt-get install zsh -y && \
 chmod +x /bin/nrc && \

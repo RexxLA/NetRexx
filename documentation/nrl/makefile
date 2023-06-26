@@ -2,7 +2,7 @@ CLASSPATH=.:../../build/lib/NetRexxF.jar
 NRX_COMPILE_COMMAND = java -cp $(CLASSPATH) org.netrexx.process.NetRexxC
 NRX_COMPILE_FLAGS = -comments -sourcedir -time -keepasjava -replace -warnexit0 -compact -nocrossref -utf8
 
-TARGET		:= nrl
+TARGET		:= netrexx-book
 PDFTARGET	:= $(TARGET).pdf
 TEX_SRC		:= $(wildcard *.tex)
 NRX_SRC		:= $(wildcard *.nrx)
@@ -23,14 +23,14 @@ all:	$(NRX_OBJS) $(PDFTARGET)
 
 $(TARGET).pdf: $(TEX_SRC)
 	$(MAKE) -k $(TARGET).bbl
+#	$(RAIL_EXE) $(TARGET)
 	$(LATEX_EXE) $(TARGET).tex
-	$(RAIL_EXE) $(TARGET)
 	@while ( grep "There were undefined references." $(TARGET).log >/dev/null ); do \
 		echo '** Re-running pdfLaTeX **'; \
 		$(LATEX_EXE) $(TARGET).tex; \
 		makeindex $(TARGET); \
 	done
-	mv nrl.pdf $(DOCNAME)
+	mv $(TARGET).pdf $(DOCNAME)
 $(TARGET).bbl: $(TEXSRC) $(BIBSRC)
 	$(LATEX_EXE) $(TARGET).tex
 #	bibtex $(TARGET)
