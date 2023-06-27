@@ -1,0 +1,210 @@
+
+/* select stage */
+/*
+ *  Copyright (C) 2023  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *Distributed under the ICU 1.8.1 License with NO WARRANTIES of ANY kind.
+ *  See LICENSE for the license and information on using, copying, modifying,
+ *  and distributing this program.
+ */
+
+/*
+ 23/ 5/31 New. From parse.  Jeff Hennick
+*/
+
+options nostrictcase nostrictargs nostrictsignal nobinary
+package org.netrexx.njpipes.stages
+
+import org.netrexx.njpipes.pipes.
+
+class select extends stage
+
+ss = Rexx "" -- output intermediate source array
+sline = int 0 -- output source last line number
+
+  -- The run method of a stageExit stage should never get called
+method run()
+  say 'Error: the RUN method should never be called.'
+  rc = 16
+  exit(rc)
+
+
+  /*
+   * pInfo    = name of pipe,
+   * pInfo[1] = stage number in pipe
+   * pInfo[2] = stage label, null if no label
+   * pInfo[3] = stage name
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of pipe
+   * pInfo[6] = sep
+   * pInfo[7] = end
+   * pInfo[8] = not modifier active
+   * pInfo[9] = stage is a driver
+   * code     = ''
+   * code[0]  = 0
+   *
+   * When compilerExit returns with true, the compiler expects:
+   *
+   * pInfo[2] = stage label
+   * pInfo[3] = name of stage
+   * pInfo[4] = stage arguements
+   * pInfo[5] = rest of the pipe
+   * code[0]  = number of lines generated
+   * code[n]  = line n
+   *
+   */
+
+method stageExit(pInfo=Rexx,code=Rexx) returns boolean
+--trace results
+  pid  = pInfo
+  name = pInfo[3]
+  ucode = Rexx ''
+  uf = Rexx ''
+
+  if pInfo[8] then
+    signal StageError(13,'Error (parse) - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
+
+  optstr = pInfo[4]
+
+  ptempl = DString(optstr)
+  pt = ptempl.String()
+
+  if pt = '' then do
+    -- Emsg(11, 'Select -- no NetRexx found in' optstr)
+    say 'Select -- no NetRexx found in' optstr 'RC = 11'
+    exit 11
+  end
+
+  optstr = ptempl.Residue()
+
+             /* ensure the user function ends with "return data"  */
+  ucode = pt.strip('B').strip('T',';') -- clean it up
+  lsc = ucode.lastpos(';') + 1
+  parse ucode . =(lsc) verb . -- what is last statement?
+  if verb \= 'return' then do
+    -- Emsg(11, 'Select -- no RETURN found in' optstr)
+    say 'Select -- no RETURN found in' optstr 'RC = 11'
+    exit 11
+  end
+
+    uf[0] = 'method user(rec, prev);-- trace results'
+    uf[1] = ' 'ucode
+
+
+  if optstr <> '' then do
+    -- Emsg(11, 'Select-- Unknown extra:' optstr)
+    say 'Parse -- Unknown extra:' optstr 'RC = 11'
+    exit 11
+  end
+
+
+  /* make the generated stage */
+  cname = stageName(name,pid,pInfo[1])
+
+  s('class 'cname' extends stage private')
+  s('s = Rexx 1')
+
+  s('')
+  s('method run()')
+--  s('trace results')
+  s('ol = Rexx null')
+  s('prev = Rexx ""')
+  s('loop forever')
+       /* See what input we have. */
+  s('  rec = Rexx peekto()')
+       /* See if it matches our selection crieria */
+  s('  ol = user(rec, prev)')
+       /* Try putting it out on the proper output stream */
+  s('  select')
+  s('    when ol = 1  then')
+  s('      out(0, rec)')
+  s('    when ol = 0  then')
+  s('      out(1, rec)')
+  s('    otherwise')
+  s('      out(ol, rec)')
+  s('  end')
+       /* Go on to the next one. */
+  s('  prev = rec')
+  s('  readto()')
+  s('catch StageError'  /* Most likely end of input */)
+  s('  rc = rc()')
+
+  s('end')
+
+  s('exit(rc*(rc<>12))')
+
+  s('method out(number, rec) signals ThreadQ')
+  s('  if s[number] then do')
+  s('    selectOutput(number)')
+  s('    output(rec)')
+  s('  catch StageError')
+  s('    do')
+  s('      selectOutput(0)')
+  s('    catch StageError')
+  s('    end')
+  s('    s[number] = 0')
+  s('  end')
+
+  s(uf[0]) /* User's function from dstring */
+  s(uf[1])
+         /* convert from property to argument */
+  ss[0] = sline
+  loop i = 0 to sline
+    code[i] = ss[i]
+  end
+        /* some bookkeeping */
+  pInfo[3] = cname
+  pInfo[4] = 'arg(_)'                     -- magic passthru value for arg()
+
+  /* show off the generated code if desired */
+--  show_generated(1)
+
+return 1  /* stageExit */
+
+
+method show_generated(numbers = 0)
+  say '*************************************************************'
+  loop n = 1 for sline
+    if numbers then l = n.right(3)' '
+    else l = ''
+    say l''ss[n]
+  end
+  say '*************************************************************'
+return
+
+method s(line) -- add a line to the source array
+  sline = sline + 1
+  ss[sline] = line
+return
+
+Method givehelp() static
+return -
+"/** select -- Select Records using user logic\n" -
+"\n" -
+">>--SELECT--+--T/F_NetRexx_Dstring----+-->\n" -
+"            +--Digit_NetRexx_Dstring--+\n" -
+"\n" -
+" Records are selected by evaluating the NetRexx T/F_Delimited_string.\n" -
+" The Dstring is placed in a method that supplies the \n" -
+" record in the variable rec.  The previous record is in prev.\n" -
+" The method returns 1 to select the record to the primary output stream,.\n" -
+" or 0 to send it to the secondary stream.\n" -
+"\n" -
+" Alternatively with a Digit_NetRexx_Dstring, which evaluates to a 0 to 9 digit,\n" -
+" the method can return the number of any output stream,.\n" -
+" but NOTE: the primary and secondary numbers, 0 & 1 are reversed per\n" -
+" the above logic. Other streams have their corresponding number.\n" -
+"\n" -
+" Any other return value results in the record being discarded.\n" -
+"\n" -
+" Any record sent to a disconnected stream is discarded.\n" -
+"\n" -
+" Caution: Since any NetRexx statement can be used, this is powerful and could\n" -
+" cause problems.  Also, due to the late compiling, at stage run time, debugging\n" -
+" can be difficult.  The reported line numbers have nothing to do with your code.\n" -
+"\n" -
+" Examples:\n" -
+"   select /return rec.pos('2') > 0/\n" -
+"\n" -
+"   select /parse rec 2 r +1;parse prev 2 p +1; return r \= p/\n" -
+"\n" -
+"*/\n"
