@@ -1,4 +1,12 @@
-# NetRexx 4.05 GA [10 May 2023]
+# NetRexx 4.06 GA [10 Aug 2023]
+
+## Documentation
+- new layout for the Pipelines railroad diagrams
+- old railroad diagrams and chapters about Structured Data and Threadpool are removed from NRL
+- NRL Available as printed book ("The NetRexx Language")
+
+## Pipelines
+- a new SELECT stage is added by Jeff Hennick
 
 ## Project
 - an ant build.xml (in examples) to build an Android .apk for the NetRexx translator (Jason Martin)
