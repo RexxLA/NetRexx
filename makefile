@@ -58,3 +58,7 @@ upload:
 	scp netrexx-4.05-ga.tar.gz netrexx@rexxla.org:website/packages
 	shasum -a 256 netrexx-4.05-ga.tar.gz
 
+.PHONY: dotest
+dotest:
+	rm `find . | grep lastTestRun.ts`
+	java -jar ant/ant-launcher.jar run.tests
