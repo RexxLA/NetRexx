@@ -1,4 +1,7 @@
-# NetRexx 4.06 GA [10 Aug 2023]
+# NetRexx 4.06 A [10 Sep 2023]
+
+## Fixes
+- NetRexx-56 Variable interpolation in address statement (Marc Remes)
 
 ## Documentation
 - new layout for the Pipelines railroad diagrams
@@ -7,6 +10,8 @@
 
 ## Pipelines
 - a new SELECT stage is added by Jeff Hennick
+
+# NetRexx 4.05 GA [10 May 2023]
 
 ## Project
 - an ant build.xml (in examples) to build an Android .apk for the NetRexx translator (Jason Martin)
