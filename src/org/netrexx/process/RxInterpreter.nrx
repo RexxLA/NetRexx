@@ -40,6 +40,7 @@
 /* 2022.06.16 Interactive trace assign and say implementation --MRE   */
 /* 2022.10.13 no need anymore for final modifier access -- MRE        */
 /*                                              undo issue #80 fix    */
+/* 2024.01.03 fix issue #49 with protected blocks --MRE               */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -937,7 +938,10 @@ loop label interactive
           clause=cursor.curclause            -- update
         end
         otherwise do
-          cursor.curnewprot=0                -- defuse
+-- MRE fix https://github.com/RexxLA/NetRexx/issues/49
+-- defuse later at the end of the protected block
+-- object must remain locked until END clause
+--          cursor.curnewprot=0                -- defuse
           /* === now interpret a clause [unless skipping one] === */
           if cursor.curskipone then do
             cursor.curskipone=0
@@ -949,6 +953,7 @@ loop label interactive
             -- let the caller carry on (unprotected or differently protected)
           if cursor.curendprot then do
             cursor.curendprot=0
+            cursor.curnewprot=0                -- MRE defuse here    
             return
           end
         catch s=RxSignal                      -- wrapped exception raised
