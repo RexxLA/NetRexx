@@ -58,6 +58,7 @@
 /* 2011.10.28 mod to allow subclassing Rexx class with indexing  *KK*     -- issue #31     */
 /* 2012.12.23 if indexed access to Rexx subtype, cast return type to subclass --	KK  ---- issue #31 */
 /* 2016.01.01 support for NETREXX-122 (annotations)                   */
+/* 2024.01.10 detect \\ disguised as \U005C      -- MRE fix issue #55 */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -2303,7 +2304,13 @@ end sqstub
   loop label escapes forever
     q=int quoted.pos('\\', start)
     if q=0 then leave escapes
-    parse quoted left =(q) +1 echar +1 rest
+                         -- MRE fix #55 Unicode literal example fails to compile, interprets OK
+    p=int quoted.substr(q, 6).upper().pos('\\U005C')      -- check if \\ is disguised as \U005C
+    if p=0 then parse quoted left =(q) +1 echar +1 rest   -- not a unicoded \\
+    else do
+      quoted = quoted.substr(1, q)'\\'quoted.substr(q+6)  -- disguised \\, uncover and iterate
+      iterate
+    end
     if q=1 then left='' /* fixup */
     if echar=='' then uchar=char ' '
                  else uchar=Character.toUpperCase(echar)
@@ -2329,6 +2336,7 @@ end sqstub
         /* protect CR and LF gotchas */
         if useuni=='000D' then uni='r'
          else if useuni=='000A' then uni='n'
+         else if useuni=='005C' then uni='\\'     -- this is \\ as unicode
          else uni='u'uni
         escape='\\'uni
         q=q+4
