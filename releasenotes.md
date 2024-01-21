@@ -2,6 +2,9 @@
 
 ## Fixes
 - NetRexx-56 Variable interpolation in address statement (Marc Remes)
+- NetRexx-49 Interpreter fails in synchronised section (Marc Remes)
+- NetRexx-55 Unicode literal example fails to compile, interprets OK (Marc Remes)
+- NetRexx-54 Interpreter fails with module issue while looping over char array (Marc Remes)
 
 ## Documentation
 - new layout for the Pipelines railroad diagrams
