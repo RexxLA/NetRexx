@@ -1,0 +1,661 @@
+import javax.swing.SwingUtilities
+import javax.swing.JFrame
+import javax.swing.JPanel
+import javax.swing.BorderFactory
+import java.awt.Color
+import java.awt.Dimension
+import java.awt.Graphics
+import java.awt.image.BufferedImage
+import java.awt.event.MouseEvent
+import java.awt.event.MouseListener
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseMotionListener
+import java.awt.event.MouseMotionAdapter
+
+
+numeric digits 64
+
+class ViewFrame extends JFrame implements WindowFocusListener, WindowListener
+
+properties private
+   v = ViewPort
+
+method ViewFrame(view = ViewPort)
+  super()
+  v = view
+  addWindowFocusListener(this)
+  addWindowListener(this)
+--  setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+method windowLostFocus(e = WindowEvent) 
+
+method windowGainedFocus(e = WindowEvent)
+  v.iframe.setFocusableWindowState(0)
+  v.iframe.setVisible(1)
+  v.iframe.setFocusableWindowState(1)
+
+method windowIconified(e = WindowEvent)
+method windowDeiconified(e = WindowEvent)
+
+method windowClosing(e = WindowEvent)
+  v.iframe.dispose()
+  dispose()
+  v.uview.runningThreads = v.uview.runningThreads + 1             -- leave loop
+
+method windowClosed(e = WindowEvent)
+method windowActivated(e = WindowEvent)
+method windowDeactivated(e = WindowEvent)
+method windowOpened(e = WindowEvent)
+
+
+class ViewPanel  extends JPanel implements MouseListener, MouseMotionListener, -
+                                           KeyListener, ComponentListener, - 
+                                           ActionListener
+
+  properties private 
+
+    resizeTimer = javax.swing.Timer
+    frame = JFrame
+
+  properties public
+  
+    uv = UnivViewPort
+    v  = ViewPort
+    zframe = ZoomFrame
+
+
+  method ViewPanel(width, height, uview = UnivViewPort, view = ViewPort, f = JFrame)
+    uv    = uview
+    v     = view
+    frame = f
+    resizeTimer = null
+    
+    setPreferredSize(Dimension(width, height))
+    setBorder(BorderFactory.createLineBorder(Color.black))
+    
+    addMouseListener(this)
+    addMouseMotionListener(this)
+    addComponentListener(this)
+    addKeyListener(this)
+
+    zframe = ZoomFrame(v.width, v.height, this)
+
+
+  method windowLostFocus(e = WindowEvent) 
+
+  method windowGainedFocus(e = WindowEvent)
+    v.iframe.setFocusableWindowState(0)
+    v.iframe.setVisible(1)
+    v.iframe.setFocusableWindowState(1)
+
+  method componentHidden(e = ComponentEvent)
+  method componentShown(e = ComponentEvent) 
+  method componentMoved(e = ComponentEvent) 
+  
+  method componentResized(e = ComponentEvent)
+    if resizeTimer = null then do
+      resizeTimer = javax.swing.Timer(500, this)
+      resizeTimer.setRepeats(0);
+--      say 'timer started'
+    end
+    else do
+      resizeTimer.restart 
+    end
+    
+    
+  method ActionPerformed(e = ActionEvent)
+    if e.getSource() == resizeTimer then do
+      resizeTimer = null
+      newheight = this.getHeight()
+      nw = newHeight * 4/3
+      newwidth = nw.format(null, 0)
+
+      this.setPreferredSize(Dimension(newwidth, newheight))
+      frame.pack()
+      v.resize(newwidth, newheight)
+      uv.map.Resize(int newwidth, newheight, uv)
+      zframe = ZoomFrame(v.width, v.height, this)
+    end
+   
+    method paintComponent( g=Graphics ) 
+      super.paintComponent(g)
+      g.drawImage(v.image, 0, 0, this)
+
+      zframe.paint(g)
+
+
+    method keyPressed( e=KeyEvent)
+  
+    method keyTyped(e=KeyEvent)
+      ch = e.getKeyChar()
+
+      if ch = '+' then do 
+        zframe.setWidth(int zframe.getWidth() + 4)
+        zframe.move(zFrame.getX(), zFrame.getY(), 1)
+      end
+      if ch = '-' then do
+        zframe.setWidth(int zframe.getWidth() - 4)
+        zframe.move(zFrame.getX(), zFrame.getY(), +5)
+      end
+
+    method keyReleased(e=KeyEvent)
+      k = e.getKeyCode()
+      if k == KeyEvent.VK_ENTER then do
+        zframe.updateInfo()
+        parse zframe.getLRTB() l r t b
+        parse v.iFrame.getRealImaginary re im 
+        uv.map.Init(l, r, t, b, 400, 300, re, im)
+
+      end
+
+	method mouseExited(e = MouseEvent)
+	method mouseEntered(e = MouseEvent)
+	method mousePressed(e = MouseEvent )
+	method mouseReleased(e = MouseEvent)
+
+	method mouseMoved(e = MouseEvent)
+	  if uv.view.iframe.cursor.isSelected() then do
+      uv.view.iframe.setXY(uv.UnivGetX(e.getX()), uv.UnivGetY(e.getY()))
+      zframe.updateInfo()
+    end
+
+	method mouseDragged( e=MouseEvent ) 
+    zframe.setWidth(int zframe.getWidth() + 1)
+	  zframe.move(e.getX(), e.getY())
+
+		
+	method mouseClicked(e = MouseEvent)
+	  if e.getClickCount() == 2 then do
+      parse zframe.getLRTB() l r t b
+      parse v.iFrame.getRealImaginary re im
+      uv.map.Init(l, r, t, b, 400, 300, re, im)
+    end
+	  else if e.getButton() == MouseEvent.BUTTON2 then do
+      zframe.setWidth(int zframe.getWidth() - 1)
+    end
+    else if e.getButton() == MouseEvent.BUTTON1 then do
+      xm = e.getX()
+      ym = e.getY()
+      zframe.move(xm, ym)
+    end
+
+
+
+
+
+		
+
+class ZoomFrame  
+
+  properties private 
+    xPos      = int 
+    yPos      = int 
+    width     = int 
+    height    = int 
+    maxwidth  = int
+    maxheight = int
+    panel     = ViewPanel
+    l         = double
+    r         = double
+    t         = double
+    b         = double 
+
+  method ZoomFrame(maxw, maxh, p= ViewPanel)
+    xPos = 320
+    yPos = 130
+    width = 40
+    height = width * 3/4
+    maxwidth = maxw
+    maxheight = maxh
+    panel = p
+
+  method setX( xP=int ) 
+    xPos = xP
+    updateInfo()
+
+  method setY( yP=int ) 
+    yPos = yP
+    updateInfo()
+
+  method getX  returns int
+    return xPos
+
+  method getY  returns int
+    return yPos
+
+  method setWidth(w=int)
+    neww = w 
+    h = w * 3/4
+    newh= h.format(null,0)
+    if yPos + newh >= maxheight then return
+    if xPos + neww >= maxwidth then return 
+    width = neww
+    height= newh
+    updateInfo()
+
+  method getWidth  returns int
+    return width
+
+  method getHeight  returns int
+    return height
+
+  method paint( g=Graphics ) 
+    g.setColor(Color.BLACK)
+    g.drawRect(xPos, yPos, width, height)
+    l = 20
+--    g.setColor(Color.WHITE)
+    hw = (width/2).format(null,0)
+    hh = (height/2).format(null,0)
+    g.drawLine(xpos+hw-10, ypos+hh, xpos+hw+10, ypos+hh)
+    g.drawLine(xpos+hw, ypos+hh-10, xpos+hw, ypos+hh+10)
+
+  method move( x=int,  y=int, force = 0)  
+    CURR_X = xPos
+    CURR_Y = yPos
+    CURR_W = width
+    CURR_H = height
+    OFFSET = 1
+--    OFFSET = OFFSET + force
+    if x + CURR_W >= maxwidth then return
+    if y + CURR_H >= maxheight then return
+
+    if (CURR_X \== x) | (CURR_Y \== y) | force > 0 then do 
+      panel.repaint(CURR_X, CURR_Y, int CURR_W + OFFSET + force, int CURR_H + OFFSET + force)
+      xPos = x
+      yPos = y
+      panel.repaint(xPos, yPos, int width + OFFSET, int height + OFFSET)
+    end
+    if panel.v.iFrame.crosshair.isSelected() then do
+      parse getCrosshair() cx cy
+      panel.v.iframe.setXY(cx, cy)
+    end
+    updateInfo()
+      
+  method updateInfo()
+    parse panel.uv.UnivGetPoint(xPos, yPos) l  b
+    parse panel.uv.UnivGetPoint(xPos+width, yPos+height) r t
+
+    panel.v.iFrame.setzLR(l, r)
+    panel.v.iFrame.setzTB(t, b)
+
+  method getLRTB
+    return l r t b
+
+  method getCrosshair
+    hw = (width/2).format(null,0)
+    hh = (height/2).format(null,0)
+    parse panel.uv.UnivGetPoint(xPos+hw, yPos+hh) cx cy
+    return cx cy
+
+
+
+class InfoFrame extends JFrame implements WindowFocusListener, ActionListener
+
+  properties private
+    uv      = UnivViewPort
+    v       = ViewPort
+
+    tMaxIter= JTextField
+    tLeft   = JTextField
+    tRight  = JTextField
+    tTop    = JTextField
+    tBottom = JTextField
+    tx      = JTextField
+    ty      = JTextField
+    zLeft   = JTextField
+    zRight  = JTextField
+    zTop    = JTextField
+    zBottom = JTextField
+
+    cReal      = JTextField
+    cImaginary = JTextField
+    bound      = JTextField
+
+  properties public
+    animate   = JButton
+    help      = JButton
+    calculate = JButton
+    flip      = JButton
+    monochrome = JCheckbox
+    cursor    = JRadioButton
+    crosshair = JRadioButton
+
+
+  method InfoFrame(title, uview = UnivViewPort, view = ViewPort)
+    super(title)
+    uv = uview
+    v  = view
+
+    addWindowFocusListener(this)
+
+    setLocation(v.width + 3, 0)
+    panel = JPanel()
+    panel.setPreferredSize(Dimension(300, 400))
+
+    panel.setLayout(GridBagLayout())
+    panel.setOpaque(1)
+    getContentPane().add(panel)
+
+--    c.gridx = 0
+--    c.gridy = 0
+--   c.weightx = 0.5
+--    panel.add(JLabel(uv.type,SwingConstants.CENTER),c)
+    this.setTitle(uv.type)
+
+    c = GridBagConstraints()
+    c.fill = GridBagConstraints.HORIZONTAL
+    c.gridx = 0
+    c.gridy = 0
+    c.weightx = 0.1
+    panel.add(JLabel("max iterations"),c)
+    c.gridx = 1
+    c.gridy = 0
+    c.weightx = 3
+    tMaxIter = JTextField(uv.depth,100)
+    tMaxIter.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(tMaxIter,c)
+
+    c.gridx = 0
+    c.gridy = 1
+    c.weightx = 0.1
+    panel.add(JLabel("left"),c)
+    c.gridx = 1
+    c.gridy = 1
+    c.weightx = 3
+    tLeft = JTextField(uv.left,100)
+    tLeft.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(tLeft,c)
+
+    c.gridx = 0
+    c.gridy = 2
+    c.weightx = 0.1
+    panel.add(JLabel("right"),c)
+    c.gridx = 1
+    c.gridy = 2
+    c.weightx = 3
+    tRight = JTextField(uv.right,100)
+    tRight.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(tRight,c)
+
+    c.gridx = 0
+    c.gridy = 3
+    c.weightx = 0.1
+    panel.add(JLabel("top"),c)
+    c.gridx = 1
+    c.gridy = 3
+    c.weightx = 3
+    tTop = JTextField(uv.top,100)
+    tTop.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(tTop,c)
+
+    c.gridx = 0
+    c.gridy = 4
+    c.weightx = 0.1
+    panel.add(JLabel("bottom"),c)
+    c.gridx = 1
+    c.gridy = 4
+    c.weightx = 3
+    tBottom = JTextField(uv.bottom,100)
+    tBottom.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(tBottom,c)
+
+    c.gridx = 0
+    c.gridy = 5
+    c.weightx = 0.5
+    panel.add(JLabel("cReal"),c)
+    c.gridx = 1
+    c.gridy = 5
+    c.weightx = 3
+    cReal = JTextField(uv.cReal,100)
+    cReal.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(cReal,c)
+
+    c.gridx = 0
+    c.gridy = 6
+    c.weightx = 0.5
+    panel.add(JLabel("cImaginary"),c)
+    c.gridx = 1
+    c.gridy = 6
+    c.weightx = 3
+    cImaginary = JTextField(uv.cImaginary,100)
+    cImaginary.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(cImaginary,c)
+
+    c.gridx = 0
+    c.gridy = 7
+    c.weightx = 0.5
+    panel.add(JLabel("bound"),c)
+    c.gridx = 1
+    c.gridy = 7
+    c.weightx = 3
+    bound = JTextField(uv.bound,100)
+    bound.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(bound,c)
+
+    if uv.type = 'Mandelbrot Set' then do
+      cReal.setEnabled(0)
+      cImaginary.setEnabled(0)
+      bound.setEnabled(0)
+    end
+
+    c.gridx = 0
+    c.gridy = 8
+    c.weightx = 0.2
+    calculate = JButton("calculate")
+    panel.add(calculate,c)
+    calculate.addActionListener(this)
+    c.gridx = 1
+    c.gridy = 8
+    c.weightx = 0.5
+    animate = JButton("animate")
+    panel.add(animate,c)
+    animate.addActionListener(this)
+    animate.setEnabled(0)
+
+    c.gridx = 0
+    c.gridy = 9
+    c.weightx = 0.5
+    monochrome = JCheckBox("monochrome")
+    panel.add(monochrome,c)
+    monochrome.addActionListener(this)
+
+
+    c.gridx = 0
+    c.gridy = 10
+    c.weightx = 0.5
+
+    cursor = JRadioButton("Cursor pos                x", 1)
+    cursor.SetHorizontalAlignment(SwingConstants.RIGHT)
+    panel.add(cursor,c)
+    cursor.addActionListener(this)
+
+    c.gridx = 1
+    c.gridy = 10
+    c.weightx = 3
+    tx = JTextField("")
+    tx.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(tx,c)
+
+    c.gridx = 0
+    c.gridy = 11
+    c.weightx = 0.5
+    crosshair = JRadioButton("Crosshair pos          y", 0)
+    crosshair.SetHorizontalAlignment(SwingConstants.RIGHT)
+    panel.add(crosshair,c)
+    crosshair.addActionListener(this)
+
+    c.gridx = 1
+    c.gridy = 11
+    c.weightx = 3
+    ty = JTextField("")
+    ty.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(ty,c)
+
+    c.gridx = 0
+    c.gridy = 12
+    c.weightx = 0.5
+    panel.add(JLabel("zLeft"),c)
+    c.gridx = 1
+    c.gridy = 12
+    c.weightx = 3
+    zLeft = JTextField("")
+    zLeft.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(zLeft,c)
+
+    c.gridx = 0
+    c.gridy = 13
+    c.weightx = 0.5
+    panel.add(JLabel("zRight"),c)
+    c.gridx = 1
+    c.gridy = 13
+    c.weightx = 3
+    zRight = JTextField("")
+    zRight.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(zRight,c)
+
+    c.gridx = 0
+    c.gridy = 14
+    c.weightx = 0.5
+    panel.add(JLabel("zTop"),c)
+    c.gridx = 1
+    c.gridy = 14
+    c.weightx = 3
+    zTop = JTextField("")
+    zTop.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(zTop,c)
+
+    c.gridx = 0
+    c.gridy = 15
+    c.weightx = 0.5
+    panel.add(JLabel("zBotttom"),c)
+    c.gridx = 1
+    c.gridy = 15
+    c.weightx = 3
+    zBottom = JTextField("")
+    zBottom.SetHorizontalAlignment(JTextField.RIGHT)
+    panel.add(zBottom,c)
+
+    c.gridx = 0
+    c.gridy = 16
+    c.weightx = 0.5
+    help = JButton("help")
+    panel.add(help,c)
+    help.addActionListener(this)
+
+    c.gridx = 1
+    c.gridy = 16
+    c.weightx = 0.5
+    flip = JButton("flip")
+    panel.add(flip,c)
+    flip.addActionListener(this)
+
+    pack()
+    setVisible(1)
+
+  method setXY(x, y)
+    tx.setText(x.format(null,16))
+    ty.setText(y.format(null,16))
+
+  method setzLR(x, y)
+    zLeft.setText(x.format(null,16))
+    zRight.setText(y.format(null,16))
+
+  method setzTB(x,y)
+    zTop.setText(x.format(null,16))
+    zBottom.setText(y.format(null,16))
+
+  method getzTL()
+    return zTop.getText() zLeft.getText()
+
+  method getLRTB()
+    return tLeft.getText() tRight.getText() tTop.getText() tBottom.getText()
+
+  method getRealImaginary()
+    return cReal.getText() cImaginary.getText()
+
+  method windowLostFocus(e = WindowEvent)
+
+  method windowGainedFocus(e = WindowEvent)
+    v.frame.setFocusableWindowState(0)
+    v.frame.setVisible(1)
+    v.frame.setFocusableWindowState(1)
+
+
+  method actionPerformed(e = ActionEvent)
+
+     if e.getSource() == help then do
+       txt = ' click mouse to move zoom frame \n'-
+             '''+'' or ''-'' to resize zoom frame, or drag mouse \n'-
+             'press Enter or double-click to zoom \n'-
+             '''calculate'' takes # iterations and left, right, top, bottom\n'-
+             '(and real, imaginary numbers, boundary for Julia sets) \n'-
+             'and calculates \n'-
+             '''animate'' cycles through colours \n'-
+             '''flip'' flips between Mandelbrot set and Julia set \n'-
+             'resize window for more detail \n'
+       say txt
+
+      JOptionPane.showInternalMessageDialog(null, txt, -
+               'help', JOptionPane.INFORMATION_MESSAGE);
+
+     end
+     else if e.getSource() == calculate then do
+       uv.depth = tMaxIter.getText()
+       parse getLRTB l r t b
+       if uv.type = 'Julia Set' then do
+         uv.cReal      = cReal.getText()
+         uv.cImaginary = cImaginary.getText()
+         uv.bound      = bound.getText()
+       end
+       uv.map.Zoom(l, r, t, b, uv)
+     end
+
+     else if e.getSource() == animate then do
+       if v.animating == 1 then do
+         v.animating = 0     -- stop animation loop
+       end
+       else do
+         uv.map.Animate()
+       end
+     end
+
+     else if e.getSource() == monochrome then do
+       v.animating = 0       -- stop animation loop
+       if v.monochrome == 1 then do
+         v.monochrome = 0
+       end
+       else do
+         v.monochrome = 1
+       end
+     end
+
+     else if e.getSource() == cursor then do
+       if cursor.isSelected() then do
+         crosshair.setSelected(0)
+       end
+       else do
+         crosshair.setSelected(1)
+         parse v.panel.zframe.getCrosshair() cx  cy
+         v.iframe.setXY(cx, cy)
+       end
+     end
+
+     else if e.getSource() == crosshair then do
+       if crosshair.isSelected() then do
+         cursor.setSelected(0)
+         parse v.panel.zframe.getCrosshair() cx  cy
+         v.iframe.setXY(cx, cy)
+       end
+       else do
+         cursor.setSelected(1)
+       end
+      end
+
+     else if e.getSource() == flip then do
+       uv.map.Flip()
+     end
+
+     else do
+       say 'actionPerformed 'e.getSource()
+     end
+

@@ -1,0 +1,143 @@
+
+numeric digits 64
+
+class ViewPort public
+
+
+  properties public
+	  width  = int
+	  height = int 
+	  uview  = UnivViewPort  
+	  frame  = ViewFrame
+    iframe = InfoFrame
+	  panel  = ViewPanel
+	  image  = BufferedImage
+    animating  = 0
+    monochrome = 0
+
+    white = int
+    black = int
+    almostblack = int
+
+	method ViewPort(w, h, uv=UnivViewPort) 
+    super()
+    width  = w
+    height = h
+    uview  = uv
+
+    black = Color.BLACK.getRGB()
+    white = Color.WHITE.getRGB()
+    almostblack = black +1
+
+    frame = ViewFrame(this)
+    panel = ViewPanel(width, height, uview, this, frame)
+    image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    iframe = InfoFrame("info", uview, this)
+    frame.add(panel)
+    frame.pack()
+    frame.setVisible(1)
+    panel.setRequestFocusEnabled(1)
+    panel.requestFocusInWindow()
+    panel.grabFocus()
+
+  
+  method setPoint(x, y, c)
+    do
+      if c = 0 then do
+         image.setRGB(x, y, black)
+   	  end
+      else do
+        if monochrome then do
+          if c // 2 == 0 then  image.setRGB(x, y, white)
+          else                 image.setRGB(x, y, almostblack)
+
+        end
+        else do
+          h = c/100;
+          image.setRGB(x, y, Color.HSBtoRGB(h, 1, 1))
+        end
+      end
+    catch java.lang.ArrayIndexOutOfBoundsException
+        nop                                         -- catch exception if calculating while resizing
+    end
+
+    panel.repaint(x, y, 1, 1)
+
+  method getPoint(x, y)
+    c = image.getRGB(x,y)
+    return c
+
+
+  method resize(newwidth, newheight)
+    width = newwidth
+    height = newheight
+    image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+
+  method animate()
+    say 'animating viewport'
+    a = ViewPortAnimator(this)
+    t = Thread(a)
+    t.start()
+
+class ViewPortAnimator implements Runnable
+  properties private
+    view = ViewPort
+
+  method ViewPortAnimator(v = ViewPort)
+    view = v
+
+  method run
+    say 'animation thread 'Thread.currentThread().getName()' started'
+    view.iFrame.animate.setText("stop animation")
+
+    view.animating = 1
+
+    bufsize = 3 * view.height * view.width
+    buf = int[bufsize]
+    r = WritableRaster
+    r = view.image.getRaster()
+    r.getPixels(0, 0, view.width, view.height, buf )
+
+    i = 0
+    j = 0
+    loop forever
+      i = 0
+
+      loop i = 0 to bufsize -1 by 3
+        if buf[i] == 0 & buf[i+1] == 0 & buf[i+2] == 0 then nop      -- it's black
+        else do
+          if view.monochrome then do
+            if buf[i] = 0 then do          -- almost black
+              buf[i] = 255
+              buf[i+1] = 255
+              buf[i+2] = 255
+            end
+            else do
+              buf[i] = 0
+              buf[i+1] = 0
+              buf[i+2] = 1
+            end
+          end
+          else do
+--          buf[i] = buf[i]-4
+            buf[i+1] = buf[i+1]-2
+            buf[i+2] = buf[i+2]-1
+          end
+        end
+        j = j + 1
+      end
+      do
+        r.setPixels(0, 0, view.width, view.height,  buf);
+        view.panel.repaint(0,0, view.width, view.height)
+        if view.monochrome then Thread.sleep(600)
+
+      catch java.lang.InterruptedException
+        nop
+      catch java.lang.ArrayIndexOutOfBoundsException
+        nop
+      end
+      if view.animating == 0 then leave
+    end
+
+    view.iFrame.animate.setText("animate")
+    say 'animation thread 'Thread.currentThread().getName()' done'
