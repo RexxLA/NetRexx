@@ -14,6 +14,10 @@
 ## Pipelines
 - a new SELECT stage is added by Jeff Hennick
 
+## Examples
+- chaos fractal generator in examples/chaos illustrates how easy Swing components and other Java features are manipulated in NetRexx. And the wonderful imaginary images are free;
+
+
 # NetRexx 4.05 GA [10 May 2023]
 
 ## Project
