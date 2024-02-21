@@ -1,27 +1,24 @@
-
 numeric digits 64
-
 
 class MapJuliaSet public extends Thread implements Chaos
 
-
   properties  public
-    uview    = UnivViewPort
-    x0       = double 0.0
-    y0       = double 0.0
-   	maxIteration = 10
-	  left     = double
-	  right    = double
-	  top      = double
-	  bottom   = double
-	  width    = int
-	  height   = int
-
-    cReal      = double 0.7454054
-    cImaginary = double 0.1130063
-    bound      = double 60
-
-
+  uview    = UnivViewPort
+  x0       = double 0.0
+  y0       = double 0.0
+  maxIteration = 10
+  left     = double
+  right    = double
+  top      = double
+  bottom   = double
+  width    = int
+  height   = int
+  
+  cReal      = double 0.7454054
+  cImaginary = double 0.1130063
+  bound      = double 60
+  
+  
   method main( args=String[] ) static 
     l = -2.0
     r = +2.0
@@ -31,108 +28,108 @@ class MapJuliaSet public extends Thread implements Chaos
     h = 300
     re = 0.7454054
     im = 0.1130063
-
+    
     MapJuliaSet(l, r, t, b, w, h, re, im)
-	  
-
+    
+    
   method run() 
     calcJuliaSet()
-
--- MapChaos implementors
-
--- initial
+    
+    -- MapChaos implementors
+    
+    -- initial
   method Init(l, r, t, b, w, h, re, im)
     MapJuliaSet(l, r, t, b, w, h, re, im)
-
--- zoom in
+    
+    -- zoom in
   method Zoom(l, r, t, b, uv = UnivViewPort)
     MapJuliaSet(l, r, t, b, uv)
-
--- resize
+    
+    -- resize
   method Resize(w , h , uv = UnivViewPort)
     uv.view.animating = 0          -- stop possible animation
     MapJuliaSet(w , h , uv)
-
--- animate
+    
+    -- animate
   method Animate()
     uview.view.animate()
-
--- flip mandelbrot-julia set
+    
+    -- flip mandelbrot-julia set
   method Flip()
     MapMandelbrotSet(uview.left, uview.right, uview.top, uview.bottom, uview.view.width, uview.view.height)
-
-
+    
+    
   method MapJuliaSet(l, r, t, b, w, h, re, im)
     say 'Mapping juliaset ' l  r  t  b w h re im
     left   = l
-  	right  = r   
-  	top    = t   
-  	bottom = b
+    right  = r   
+    top    = t   
+    bottom = b
     width  = w  
-	  height = h 
+    height = h 
     
     cReal  = re
     cImaginary = im
-
+    
     uview = UnivViewPort(l, r, t, b, width, height, cReal, cImaginary, bound)
     uview.map = this
-
-  	this.start()
-
-method MapJuliaSet(l, r, t, b, uv = UnivViewPort)
+    
+    this.start()
+    
+  method MapJuliaSet(l, r, t, b, uv = UnivViewPort)
     say 'Remapping juliaset 'l r t b uv.depth'#' cReal cImaginary bound
     width  = uv.view.width  
-	  height = uv.view.height 
-
+    height = uv.view.height 
+    
     left   = l
-  	right  = r   
-  	top    = t   
-  	bottom = b
-
+    right  = r   
+    top    = t   
+    bottom = b
+    
     uview  = uv
     uview.left   = left
     uview.right  = right
     uview.top    = top
     uview.bottom = bottom
---    uview.view.monochrome = uv.view.monochrome
-
-  	this.start()
-  
-
+    --    uview.view.monochrome = uv.view.monochrome
+    
+    this.start()
+    
+    
   method MapJuliaSet(w , h , uv = UnivViewPort)
     say 'Remapping juliaset 'uv.left uv.right uv.top uv.bottom w h uv.depth'#'
     width  = w  
-  	height = h
-
+    height = h
+    
     uview  = uv
     left   = uv.left
-  	right  = uv.right   
-  	top    = uv.top   
-  	bottom = uv.bottom
---    uview.view.monochrome = uv.view.monochrome
-
-
-  	this.start()
-  
-       
+    right  = uv.right   
+    top    = uv.top   
+    bottom = uv.bottom
+    --    uview.view.monochrome = uv.view.monochrome
+    
+    
+    this.start()
+    
+    
   method CalcJuliaSet()
     say 'thread 'Thread.currentThread().getName()' started'
     uview.view.iFrame.animate.setEnabled(0)
     uview.runningThreads = uview.runningThreads + 1
-
+    
     loop while uview.runningThreads > 1         -- make sure only one tread is running per universal view
-       date('C')                                -- waiting for the loop below to leave and decrease counter
+      date('C')                                -- waiting for the loop below to leave and decrease counter
     end
-
+    
     dxPix = double
     dyPix = double
-    	 
+    
     dxPix = (right - left) / width
     dyPix = (top - bottom) / height
-       
+    
     y = double
     x = double
-
+    
     y = bottom
     loop label outerloop for height
       x = left
@@ -140,46 +137,46 @@ method MapJuliaSet(l, r, t, b, uv = UnivViewPort)
         i = JuliaSetCompute(x, y)
         uview.UnivSetPoint(x, y, i)
         x = x + dxPix
-
+	
         if uview.runningThreads > 1 then leave outerloop
       end
       y = y + dyPix
     end
-
+    
     uview.runningThreads = uview.runningThreads - 1       -- decrease
     if uview.runningThreads == 0 then uview.view.iFrame.animate.setEnabled(1)
-
+    
     say 'thread 'Thread.currentThread().getName()' done'
-       
-
+    
+    
   method JuliaSetCompute(xcReal = double, ycImaginary = double)  binary
     i = 0
-
+    
     maxIteration = uview.depth
     bound        = uview.bound
     cReal        = uview.cReal
     cImaginary   = uview.cImaginary
-
+    
     y = double
     x = double
     xSq = double
     ySq = double
     dSq = double
-
+    
     x = xcReal
     y = ycImaginary
     xSq = x*x
     ySq = y*y
     dSq = xSq + ySq
-   	loop forever
-   	  i = i + 1
+    loop forever
+      i = i + 1
       y = x * y
       y = y + y - cImaginary
       x = xSq - ySq - cReal
       xSq = x*x
       ySq = y*y
       dSq = xSq + ySq
-
+      
       if i > maxIteration then do
         i = 0
         leave
@@ -187,4 +184,4 @@ method MapJuliaSet(l, r, t, b, uv = UnivViewPort)
       if dsq > bound then leave
     end
     return i
-
+    
