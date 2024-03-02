@@ -1,4 +1,4 @@
-# NetRexx 4.06 A [10 Sep 2023]
+# NetRexx 4.06 A [2 Mar 2024]
 
 ## Fixes
 - NetRexx-56 Variable interpolation in address statement (Marc Remes)
