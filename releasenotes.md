@@ -1,4 +1,12 @@
-# NetRexx 4.06 A [2 Mar 2024]
+# NetRexx 4.0-Alpha []
+
+## Fixes
+- NetRexx-57 Spurious E output removed in SPECS stage with FS specified (Marc Remes)
+- NetRexx-59 Java 9 and later disallow _ (underscore) as variable name, Java compiler fails (Marc Remes)
+  (_ allowed again but Java sees $_)
+- NetRexx-60 Javafx jar download location changed in readme. EnzoLCD example fixed.
+
+# NetRexx 4.06 GA [2 Mar 2024]
 
 ## Fixes
 - NetRexx-56 Variable interpolation in address statement (Marc Remes)

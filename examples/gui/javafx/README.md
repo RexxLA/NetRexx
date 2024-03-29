@@ -1,7 +1,7 @@
 # Running the JavaFX examples
-This directory has two samples that illustrate the usage of JavaFX user interface code using NetRexx. They focus on the new functionality in which the JavaFX libraries are packages in Java Modules, and we use the JPMS for compilation and execution. For Java 8, the JavaFX library needs to be on the CLASSPATH (for the EnzoLCD example, also the includes Enzo-0.3.6.jar)and everything will work. For the JPMS version, which works starting NetRexx 4.0.3, the following steps can be executed:
+This directory has two samples that illustrate the usage of JavaFX user interface code using NetRexx. They focus on the new functionality in which the JavaFX libraries are packages in Java Modules, and we use the JPMS for compilation and execution. For Java 8, the JavaFX library needs to be on the CLASSPATH (for the EnzoLCD example, also the included Enzo-0.3.6.jar)and everything will work. For the JPMS version, which works starting NetRexx 4.0.3, the following steps can be executed:
 
-1) First, if you did not do this already, download the JavaFX SDK from JavaFX.io
+1) First, if you did not do this already, download the JavaFX SDK from https://openjfx.io
 (Choose the right platform (OS and architecture) from the dropdowns)
 2) Unzip this directory to somewhere on your disk. Note down this location.
 E.g. apps/javafx-18/
