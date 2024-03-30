@@ -1,6 +1,7 @@
-# NetRexx 4.0-Alpha []
+# NetRexx 4.07-Alpha []
 
 ## Fixes
+- NetRexx-21 superfluous warning on crossref option ("overrides program default")
 - NetRexx-57 Spurious E output removed in SPECS stage with FS specified (Marc Remes)
 - NetRexx-59 Java 9 and later disallow _ (underscore) as variable name, Java compiler fails (Marc Remes)
   (_ allowed again but Java sees $_)
