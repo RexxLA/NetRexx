@@ -15,6 +15,10 @@ E.g. `export PATH_TO_FX=/Users/rvjansen/javafx-18/lib`; be sure to change the us
 
 This will tell you it has picked up the JDK_JAVA_OPTIONS:
 
+If you don't want to see the "picked up ..." message, don't set the environt variables and just add the modules to the java startup:  
+	
+	java --module-path=/Users/rvjansen/apps/javafx-sdk-22/lib --add-modules=javafx.controls TreeViewSampleNRX
+
 ```
 ➜  javafx git:(master) ✗ nrc TreeViewSampleNRX
 NOTE: Picked up JDK_JAVA_OPTIONS: --module-path=/Users/rvjansen/apps/javafx-sdk-18/lib --add-modules=javafx.controls
