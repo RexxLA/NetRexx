@@ -11,11 +11,11 @@ RUN apt-get update && \
 apt-get install apt-utils -y && \
 apt-get install readline-common -y && \
 apt-get install git -y && \
-apt-get install openjdk-11-jdk-headless -y && \
+apt-get install openjdk-17-jdk-headless -y && \
 apt-get install zip -y && \
 apt-get install wget -y && \
-wget http://netrexx.org/files/NetRexx-4.05-GA.zip && \
-unzip NetRexx-4.05-GA.zip && \
+wget http://netrexx.org/files/NetRexx-4.06-GA.zip && \
+unzip -o NetRexx-4.06-GA.zip && \
 apt-get install nano -y && \
 apt-get install zsh -y && \
 chmod +x /bin/nrc && \
