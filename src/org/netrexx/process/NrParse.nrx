@@ -17,6 +17,7 @@
 /* 1996.08.03 Add tracing                                             */
 /* 1998.05.21 Add assigns to tracing                                  */
 /* 2000.03.05 Rework for interpretation                               */
+/* 2024.07.05 Parsing special words and variables --MRE fix issue #63 */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -393,13 +394,22 @@ class NrParse implements RxClauseParser uses RxCode
     end r
 
   /* 4. re-evaluate the term and invoke the parser */
+
+  -- MRE fix issue #63
+  -- When interpreting parsing special words into identically named variables
+  -- the termparser erroneously picks up the variable created in pass2 instead of the special word
+  -- Only happened when var is named identical to special word : 'parse source source'
+
+  oterm = term                                      -- keep term where special word is already resolved
   term=rxt.tparser.evalterm(cursor, term.begoff, 1) -- is RHS term
+  if term.value == null then term = oterm           -- MRE must be special words and vars, use old term
+
   if termconv\=null then do
     tok=cursor.curclause.tokens[term.begoff]
     converter.convertcode(cursor, RxType.REXX_TYPE, termconv.proc, term, tok)
     end
-  -- say '# T:' (Rexx term.value) term.type
-  -- say '#  :' term.begoff cursor.curclause.showtokens
+--   say '# T:' (Rexx term.value) term.type
+--   say '#  :' term.begoff cursor.curclause.showtokens
   RexxParse.parse(Rexx term.value, chars, rexxes)
 
   /* 5. Copy OUT values from the references list (except placeholders) */
