@@ -40,17 +40,19 @@ numeric digits 20
 /*   first parse in method is on first string only (but sets same    */
 /*     number of variables)                                          */
 
-parse source   source  1 opsystem .
-source=source
-parse version  version
+parse source   mysource  1 opsystem .
+mysource=mysource
+
+
+parse version  myversion
 dstats=1
 count=100
 /* Repetition count */
 averaging=100
 /* Averaging-over count */
-rexxcps='2.1n'      /* REXXCPS version */    
+rexxcps='2.1n'      /* REXXCPS version */
 say '----- REXXCPS' rexxcps '-- Measuring NetRexx clauses/second -----'
-say ' NetRexx version is:' version
+say ' NetRexx version is:' myversion
 say '          System is:' opsystem
 say '          Averaging:' averaging 'measures of' count 'iterations'
 
@@ -62,7 +64,7 @@ loop for averaging
     empty=empty+System.nanoTime()-start
   end
   fempty=empty/averaging
-  
+
   /* ----- Now the true timer loop .. average timing again ----- */
   full=long 0
   loop for averaging
@@ -126,7 +128,8 @@ loop for averaging
     say 'Time for one iteration (1000 clauses) was:' looptime 'seconds'
   end
   /* And finally, the Result... */
-  cps = (1000000000/looptime+0.5)
+  -- cps = (1000000000/looptime+0.5)
+  cps = (1000/looptime+0.5)
   cps = cps.substr(1,cps.pos('.')-1)
   say
   say'     Performance:' formatThousands(cps) 'NetRexx clauses per second'
@@ -134,21 +137,21 @@ loop for averaging
   say
   p1=p1;p2=p2;p3=p3;p4=p4;p5=p5;p6=p6;p7=p7;p8=p8;v1=v1;v2=v2
   exit
-  
-  
+
+
   /* Target routine for the timed CALL - called 14 times */
   method subroutine(arg1, arg2) constant
     parse arg1.upper a1 a2 a3 . a4
     parse a3 b1 b2 b3 .
-    
+
     loop for 1; rc=a1 a2 a3; parse rc c1 c2 c3;end
       b1=b1;b2=b2;b3=b3
       a1=a1;a2=a2;a3=a3;a4=a4
       c1=c1;c2=c2;c3=c3
-      
-      
+
+
       return
-      
+
       /* as we do not have locales yet, format with underscores */
   method formatThousands(n) static
     mn = n.reverse()
@@ -158,4 +161,3 @@ loop for averaging
       raw = raw.substr(2)
     end
     return raw
-    
