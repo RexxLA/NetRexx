@@ -1,6 +1,6 @@
 # The NetRexx Language
 
-NetRexx is a dialect of the REXX programming language to run on the Java virtual machine. It supports a classic REXX syntax, with no reserved keywords, along with considerable additions to support object-oriented programming in a manner compatible with Java's object model, yet can be used as both a compiled and an interpreted language, with an option of using only data types native to the JVM or the NetRexx runtime package. Originally from IBM, NetRexx is the creation of Mike Cowlishaw, the 'Father of Rexx'. This IBM product has been open sourced in 2011.
+NetRexx is a variant of the REXX programming language to run on the Java virtual machine. It supports a classic REXX syntax, with no reserved keywords, along with considerable additions to support object-oriented programming in a manner compatible with Java's object model, yet can be used as both a compiled and an interpreted language, with an option of using only data types native to the JVM or the NetRexx runtime package. Originally from IBM, NetRexx is the creation of Mike Cowlishaw, the 'Father of Rexx'. This IBM product has been open sourced in 2011.
 
 Features
 - Part of the Rexx family of languages
