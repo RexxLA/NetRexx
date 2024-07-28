@@ -927,7 +927,16 @@ class compiler extends Object public
 
     return rc
 
-
+  /**
+   * This is a bit complicated because we allow so many options. This is the intention:
+   * - the pipc compiler can compile from an .njp file supplied without extension
+   * - it can compile an .nrx file which has pipes embedded
+   * - it can compile from a .java file with pipes embedded (deprecated)
+   * - it should compile a pipe specification in another file with explicit extension
+   * - it should protect an .nrx file when that already exists
+   *
+   * - also, it is called from the pipes runner which gives it a synthesized name  
+   */
   method compiler(a = rexx,squelch=0,pipeClassName=Rexx(''),shouldExit=1 )
     keep   = boolean 0             -- assume nokeep
     nokeep = Rexx ''               -- generated .nrx files to delete
@@ -940,6 +949,27 @@ class compiler extends Object public
     xref   = '-nocrossref'
 
     parse a . '(' name compopts ')' text
+
+    /* protect potentially precious .nrx source here */
+    parse a fn '.' ext
+    if \squelch then if fn <> '' then do
+      if ext='' then ext='njp'
+      ext=ext.upper()
+      select
+	when ext <> 'NRX' then do
+	  f=File null
+	  f=java.io.file(String fn'.nrx')
+	  if f.exists() then do
+	    say "pipc047e: A '"fn".nrx' file exists. Please move it out of the way"
+	    exit
+	  end
+	end
+	otherwise
+	  nop
+      end
+    end
+    trace off
+    
     if name<>'' then                      -- from command line
       do
         i = compopts.wordpos('-gen')
@@ -981,9 +1011,10 @@ class compiler extends Object public
       njp = java.io.file(String w'.njp')
       nrx = java.io.file(String w'.nrx')
       grp = java.io.file(String w'.grp')
-
+      oth = java.io.file(String w'.'ext)
+      
       select
-        when w     = '-gen' then             -- options for pipes
+        when w = '-gen' then             -- options for pipes
           keep = 1
         when w = '-nogen' then           -- options for pipes
           keep = 0
@@ -993,7 +1024,36 @@ class compiler extends Object public
           xref	       = w
         when w.left(1) = '-' then         -- pass to netrexx
           parms	       = parms' 'w
-        when njp.exists() then
+
+	when oth.exists() then
+          do
+            savekeep   = keep
+            if verb    = w then say 'pipc045i: Processing 'w'.'ext
+	
+            aa	       = rexx ''
+            aa['fin']  = w'.'ext
+            aa['xout'] = w
+            ll	       = rexx ''
+	    r	       = processNjp.get(aa).setContext(ll).runpipe()
+            ll[1]      = ll[1].strip('L')
+            if r>rc then
+              rc = r
+            if ll[1]<>'' then do
+              if verb = w then say 'Built 'll[1]
+              parms   = parms' 'll[1]
+              work    = 1
+              if \keep then
+                nokeep = nokeep' 'll[1]
+              if parms.strip('T').right(5) = '.java' then do
+                i     = parms.words()
+                jlist = jlist' 'parms.word(i)
+                parms = parms.delword(i)
+              end
+            end
+            keep = savekeep
+          end
+
+	when njp.exists() then
           do
             savekeep   = keep
             if verb    = w then say 'pipc045i: Processing 'w'.njp'
@@ -1020,13 +1080,13 @@ class compiler extends Object public
             end
             keep = savekeep
           end
-	
+
         when nrx.exists then
           do
             parms = parms' 'w
             work  = 1
           end
-	
+
         when grp.exists then
           do
             say 'Expanding group 'w
@@ -1045,9 +1105,7 @@ class compiler extends Object public
           say 'Error - 'w' is unrecognized.  Does the file exist?'
           if 2>rc then
             rc = 2
-	
       end
-
     end
 
     if work then do

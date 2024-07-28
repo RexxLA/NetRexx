@@ -50,5 +50,10 @@ The pipes compiler can issue the following error messages:
 |pipc044i| Building pipe 'name'|
 |pipc045i| Processing 'w' .njp|
 |pipc046e| 'file' is unrecognized. Does the file exist?|
+|pipc047e| An .nrx file exists. Please move it out of the way.|
+|pipc048e| Run method not overridden by stage or  pipe|
+|pipc049e| No outputs for eofReport(current) to report on|
+|pipc050e| No outputs for eofReport(all)to report on|
+|pipc051e| Invalid parm for eofReport|
 
 Table: Pipes compiler error messages.
