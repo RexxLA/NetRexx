@@ -74,7 +74,7 @@ class compiler extends Object public
     if a.pos('(')<a.pos(')') then
       parse a . '(' opts ')' work
     else do
-      say 'Error - name of pipe is missing'
+      say 'pipc001e: Error - name of pipe is missing'
       return 16
     end
 
@@ -102,7 +102,7 @@ class compiler extends Object public
     i	     = opts.wordpos('runaway')
     if i>0 then do
       if \opts.word(i+1).datatype('W') then do
-        say 'Error - runaway time must be numeric'
+        say 'pipc002e: Error - runaway time must be numeric'
         return 16
       end
     stall    = opts.word(i+1)
@@ -112,7 +112,7 @@ class compiler extends Object public
     i	     = opts.wordpos('stall')
     if i>0 then do
       if \opts.word(i+1).datatype('W') then do
-        say 'Error - stall time must be numeric'
+        say 'pipc003e: Error - stall time must be numeric'
         return 16
       end
     stall    = opts.word(i+1)
@@ -154,7 +154,7 @@ class compiler extends Object public
       lvl    = opts.word(i+1)
       opts   = opts.delword(i,2)
       if \lvl.datatype('W') then do
-        say 'Error - debug level must be numeric, found 'lvl
+        say 'pipc004e: Error - debug level must be numeric, found 'lvl
         return 16
       end
     end
@@ -208,7 +208,7 @@ class compiler extends Object public
 	-- substitute the disk stages here for the VM abbreviations < > >>
 	-- say '---------->' stg
 	if stg.word(1) = 'pipe' then do
-          say 'Error - pipe statement within a pipe specification'
+          say 'pipc005e: Error - pipe statement within a pipe specification'
 	  exit
 	end
 	select
@@ -246,15 +246,15 @@ class compiler extends Object public
           /* special processing to use pipes as stages */
           when stg.word(1).pos('=')>0 then do
             if piece<>'' then do
-              say 'Error - pipe definition 'stg' must be terminated by 'pend
+              say 'pipc011e: Error - pipe definition 'stg' must be terminated by 'pend
               return 16
             end
           if stg.words()<2 then do
-            say 'Error - pipe definition 'stg' must define a pipe'
+            say 'pipc012e: Error - pipe definition 'stg' must define a pipe'
             return 16
           end
           if label<>'' then do
-            say 'Error - pipe definition 'stg' cannot be labeled'
+            say 'pipc0015e: Error - pipe definition 'stg' cannot be labeled'
             return 16
           end
           m = m+1
@@ -264,29 +264,29 @@ class compiler extends Object public
 	
           when stg.word(1).pos('.')>0 then do
             if label<>'' then do
-              say 'Error - pipe used as stage 'stg' cannot be labeled'
+              say 'pipc0015e: Error - pipe used as stage 'stg' cannot be labeled'
               return 16
             end
           if stg.word(1).countstr('.')<>2 then do
-            say 'Error - pipe as stage definition 'stg' is missing a period'
+            say 'pipc020: Error - pipe as stage definition 'stg' is missing a period'
             return 16
           end
           if r[stg.word(1)] then
             r[stg.word(1)] = 0         -- must be recorded before stageExit
           else do
-            say 'Error - duplicate pipe as stage at 'stg
+            say 'pipc039e: Error - duplicate pipe as stage at 'stg
             return 16
           end
           end
 	
           when stg.left(1)			    = '*' then do
-            say 'Error - missing : in connector at 'stg
+            say 'pipc040e: Error - missing : in connector at 'stg
             return 16
           end
 	
           when label.left(1)			    = '*' then
             if stg<>'' then do
-              say 'Error - cannot define connectors as stages labels 'stg
+              say 'pipc041e: Error - cannot define connectors as stage labels 'stg
               return 16
             end
 	
@@ -351,7 +351,7 @@ class compiler extends Object public
                 if stgi.stageExit(pInfo,code[i+1]) then do
                   label				    = pInfo[2].strip('B')
                   if label.left(2)		    = '--' then do
-                    say 'Warning - stageExits overloaded label at 'stg
+                    say 'pipc042w: Warning - stageExits overloaded label at 'stg
                     return 16
                   end
                   if label.left(1)<>'-' then
@@ -387,11 +387,11 @@ class compiler extends Object public
             if stg<>'' then
               do                              -- define a label, build stage
                 if l[label]>0 then do
-                  say 'Error - Label 'label' already used'
+                  say 'pipc013e: Error - Label 'label' already used'
                   return 16
                 end
                 if label.datatype('W') then do
-                  say 'Error - Label 'label' must not be numeric'
+                  say 'pipc014e: Error - Label 'label' must not be numeric'
                   return 16
                 end
                 i	 = i+1
@@ -405,7 +405,7 @@ class compiler extends Object public
                 if label.left(1)		    = '*' then
                   do
                     if label.length()<3 then do
-                      say 'Error - connectors must be named'
+                      say 'pipc016e: Error - connectors must be named'
                       return 16
                     end
                     k	   = k+1                -- define a link connector
@@ -415,11 +415,11 @@ class compiler extends Object public
                 else                         -- replace with stage number
                 do
                   if l[label]			    = 0 then do
-                    say 'Error - Label 'label' not defined'
+                    say 'pipc017e: Error - Label 'label' not defined'
                     return 16
                   end
                   if c[p,j-1]			    = l[label] then do
-                    say 'Error - Use a nop stage between 'label' definition a second use'
+                    say 'pipc018e: Error - Use a nop stage between 'label' definition a second use'
                     return 16
                   end
                   c[p,j]			    = l[label]
@@ -646,7 +646,7 @@ class compiler extends Object public
         if stg.pos('(')>=stg.pos(')') then    -- constructor processing (sort)
           o[n+1] = '   _s_'i' = 'stg'()'
         else do
-          say 'Error - stage contructor must be (), found: 'stg
+          say 'pipc043e: Error - stage constructor must be (), found: 'stg
           return 16
         end
         if stg.right(i.length()) = i then
@@ -713,7 +713,7 @@ class compiler extends Object public
 		select
                   when r[s[c[i,j-1]]]+r[s[c[i,j]]]  = 0 then
                     do
-                      say 'Error - need to use a nop stage between 's[c[i,j-1]]' 'ssep' 's[c[i,j]]
+                      say 'pipc022e: Error - need to use a nop stage between 's[c[i,j-1]]' 'ssep' 's[c[i,j]]
                       return 16
                     end
                   when \r[s[c[i,j-1]]] then
@@ -963,7 +963,7 @@ class compiler extends Object public
         if compopts.pos('crossref')>0 then
           xref	 = ''
 	
-        if verb	 = '' then say 'Building pipe 'name
+        if verb	 = '' then say 'pipc044i: Building pipe 'name
 	
         rc = compile('( 'name' 'compopts' ) 'text, squelch, pipeClassName, shouldExit)
 	if squelch then return
@@ -996,7 +996,7 @@ class compiler extends Object public
         when njp.exists() then
           do
             savekeep   = keep
-            if verb    = w then say 'Processing 'w'.njp'
+            if verb    = w then say 'pipc045i: Processing 'w'.njp'
 	
             aa	       = rexx ''
             aa['fin']  = w'.njp'
@@ -1063,9 +1063,9 @@ class compiler extends Object public
 	jx[7] = '-d'
 	jx[8] = '-target'
 	
-	i					    = 1
+	i = 1
 	loop label outer while i<=parms.words()
-          loop j				    = 1 to 8
+          loop j = 1 to 8
             if parms.word(i).abbrev(jx[j]) then do
               if j<4 then
 		do
@@ -1158,7 +1158,7 @@ class compiler extends Object public
 	loop i=1 to nokeep.words()
 	  fid = java.io.file(String nokeep.word(i))
 	  if \fid.delete() then
-            say 'Warning - could not delete 'nokeep.word(i)
+            say 'pipc025w: Warning - could not delete 'nokeep.word(i)
 	end i
       end
     end
