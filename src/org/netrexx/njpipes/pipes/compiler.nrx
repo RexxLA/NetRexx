@@ -80,6 +80,14 @@ class compiler extends Object public
 
     parse opts pInfo opts
 
+    fn = pInfo
+    fo=File null
+    fo=java.io.file(String fn'.nrx')
+    if fo.exists() then do
+      say "pipc047e: A '"fn".nrx' file exists. Please move it out of the way"
+      exit
+    end
+
     -- standard headers
     o	 = rexx ''
     o[1] = '/* 'pInfo NrVersion().getPipesVersion()' */'
@@ -951,7 +959,13 @@ class compiler extends Object public
     parse a . '(' name compopts ')' text
 
     /* protect potentially precious .nrx source here */
-    parse a fn '.' ext
+    if name <> '' then do
+      ext = ''
+      fn = name
+    end
+    else do
+      parse a fn '.' ext
+    end
     if \squelch then if fn <> '' then do
       if ext='' then ext='njp'
       ext=ext.upper()
@@ -968,8 +982,7 @@ class compiler extends Object public
 	  nop
       end
     end
-    trace off
-    
+
     if name<>'' then                      -- from command line
       do
         i = compopts.wordpos('-gen')
@@ -1003,6 +1016,7 @@ class compiler extends Object public
         end
       end
     else                                     -- from a list of files
+
     loop while a<>''
 
       parse a w ' ' a                    -- get stripped word
