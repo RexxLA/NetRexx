@@ -37,7 +37,7 @@ The pipes compiler can issue the following error messages:
 |pipc031e| *: connectors not implemented.  Use *in: or *out:|
 |pipc032e| Connector 'w1' should start with *in or *out|
 |pipc033e| Missing colon at 'w1'|
-|pipc034e  Connect 'w1' cannot contain a period|
+|pipc034e|  Connect 'w1' cannot contain a period|
 |pipc035e| cannot connect 'in' to an input stream with 'key'|
 |pipc036e| Pipe fragment 'sub' needs atleast one 'sep'|
 |pipc037e| Cannot connect 'out' to an output stream with 'key'|
