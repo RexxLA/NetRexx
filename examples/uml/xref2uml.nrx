@@ -1,0 +1,107 @@
+
+/*
+  xref2uml.nrx
+  build Class Diagrams from NetRexx sourcecode
+
+  create PlantUML text files from NetRexx xref2 crossfiles
+  see https://plantuml.com/
+  compile nrx file(s) with -crossref option
+  generate uml file with 'java xref2uml *crossref >X.uml' (assuming the shell expands the asterisk, otherwise give complete list of files)
+  generate Class Diagrams as svg with 'java -jar plantuml-bsd-1.2024.6.jar -tsvg X.uml'
+  or pdf (needs more jars) with 'java -jar plantuml-bsd-1.2024.6.jar -tpdf X.uml'
+*/
+
+--crossref2 format
+-- 'class':classname:fullname:visibility:modifier:extends:implements
+-- 'method':classname:name ( args ):visibility:modifier:
+-- 'property':classname:name:type:visibility:modifier:
+
+
+extend = ''
+composition = ''
+dependent = ''
+
+parse arg filenames
+say '@startuml'
+say 'set separator none'
+w = filenames.words()
+--linecount = 0
+do i = 1 to w
+  filename = filenames.word(i)
+  inclass = 0
+  do while lines(filename) > 0
+    line = linein(filename)
+
+    parse line w':'classname':'name':'w1':'w2':'w3':'w4':'
+
+    select
+      when w = 'class' then do
+        if inclass = 1 then say '}'
+        inclass = 1
+        mod = w2
+        select
+          when mod = 'interface' then say 'interface 'classname' {'
+          when mod = 'abstract' then say 'abstract class 'classname' {'
+          otherwise say 'class 'classname' {'
+        end
+        extends = w3
+        if extends \= '' then do
+
+           extend[classname] = extends
+--           say classname'<|--'extends
+        end
+        implements = w4
+        if implements \= '' then do
+          ii = 1
+          loop while ii <= implements.words()
+            imp = implements.word(ii)
+            composition[classname] = imp
+            ii = ii + 1
+          end
+--          composition[classname] = implements
+        end
+        if classname.pos('.') \= 0 then do
+          dependent[classname] = classname.substr(1, classname.pos('.')-1)
+        end
+      end
+      when w = 'property' then do
+        type = w1
+        vis = w2
+        select
+          when vis = 'public' then c = '+'
+          when vis = 'private' then c = '-'
+          when vis = 'shared'  then c = '~'
+          otherwise c = ''
+        end
+        say ' 'c''name' : 'type
+      end
+      when w = 'method' then do
+        vis = w1
+        select
+          when vis = 'public' then c = '+'
+          when vis = 'private' then c = '-'
+          when vis = 'shared'  then c = '~'
+          otherwise c = ''
+        end
+
+        say ' 'c''name
+      end
+      otherwise nop
+    end
+  end
+  say '}'
+  lineout(filename)
+end
+loop e over extend
+  say extend[e]' <|-- 'e
+end
+
+loop e over composition
+  say composition[e]' *-- 'e
+end
+loop e over dependent
+  say dependent[e]' --x 'e
+end
+
+
+say '@enduml'
