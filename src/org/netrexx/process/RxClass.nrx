@@ -1277,7 +1277,11 @@ class RxClass implements RxClauseParser
     -- Now write the cross-reference file
     -- [not if any errors, as it may be incomplete or misleading]
     if rxt.program.flag.crossref then
-     if rxt.program.errorcount=0 then pooler.showxref(pcursor)
+     if rxt.program.errorcount=0 then do
+       pooler.showxref(pcursor)
+       this.showxref2(pcursor)
+       pooler.showxref2(pcursor)
+     end
     end pass2check
   parser.lastclass=parser.cursor.curclass    -- save for follower
   pcursor.curclass=null                      -- no valid class anymore
@@ -1346,3 +1350,77 @@ class RxClass implements RxClauseParser
  /** Interpretation */
  method interpret(cursor=RxCursor null)
   signal RxQuit(rxt, tokens[0], 'internal.error', 'RxClass: interpret')
+
+ method showxref2(cursor=RxCursor)
+   program = cursor.curprogram
+   fullname=cursor.curclass.classinfo.fullname
+
+-- xref2 format
+-- 'class':classname:fullname:visibility:modifier:extends:implements:
+   line='class:'fullname':'classinfo.type':'
+   vis = ''
+   select
+     when classinfo.ispublic then vis = 'public'
+     otherwise nop
+   end
+   line = line''vis':'
+   mod = ''
+   select
+     when classinfo.isinterface then mod = 'interface'
+     when classinfo.isabstract then mod = 'abstract'
+     when classinfo.isadapter then mod = 'adapter'
+     when classinfo.isfinal then mod = 'final'
+     otherwise nop
+   end
+   line = line''mod':'
+
+   if extend \= null then line = line''extend':'
+   else line = line':'
+
+   imp =  Rexx ''
+   loop im over implist
+     ii = Rexx im
+     imp = imp' 'ii
+   end
+   if imp \== '' then imp = imp.substr(2)
+   line = line''imp':'
+   program.streamer.crossref(line)
+
+   if classmethods = null then nop
+   else do
+-- xref2 format
+-- 'method':classname:name ( args ):visibility:modifier
+
+     num = classmethods.size()
+     list = NrMethod[num]
+     classmethods.copyInto(list)
+
+     loop i=0 to num-1
+       mi=list[i]
+       loop j=i+1 to num-1
+         mj=list[j]
+         if mi.methodname.OpLt(null, mj.methodname) then iterate
+         /* time for a swap */
+         list[j]=mi; list[i]=mj
+         mi=mj
+       end j
+
+       numargs = mi.methodargvars.length
+       line = 'method:'fullname':'mi.methodname' ('
+       do k = 0 to mi.methodargvars.length - 1
+         arg = mi.methodargvars[k]
+         sig = arg.vartype.toSig()
+         dotpos = sig.lastpos('.').toint()
+         if dotpos == 0 then nop
+         else do
+           sig = sig.substr(dotpos+1)
+         end
+         if k > 0 then line = line', '
+         line = line''sig
+       end
+       line = line'):'
+       line = line''mi.getVisibMod()
+       program.streamer.crossref(line)
+     end
+   end
+

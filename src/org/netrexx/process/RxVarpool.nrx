@@ -603,3 +603,77 @@ class RxVarpool uses RxVariable
     end
   return
 
+  method showxref2(cursor=RxCursor)
+   /* Make an array of references to the variables */
+    num=cursor.curclass.varlist.size()           -- number of variables
+    list=RxVariable[num]
+    cursor.curclass.varlist.copyInto(list)
+
+    /* Spin through, reducing signatures to short forms (if unambiguous),
+       and measuring the longest of name and signature for later
+       formatting.
+       */
+    maxname=0; maxctype=0
+    loop i=0 for num
+      var=list[i]
+      if var.varname.length().toint()>maxname then
+        maxname=var.varname.length()             -- longest so far
+      /* use the short signature, if not ambiguous */
+      var.varctype=program.babel.typeConcise(var.vartype)
+      if var.varctype.length().toint()>maxctype then
+        maxctype=var.varctype.length()           -- longest so far
+      end i
+
+    /* Now sort and display.
+       Simple bubble sort is OK, as classes should not be huge.
+       [1997.12.20 sanity check: Rexx class, 450 variables, -nocrossref
+       saves 2%, so sorting is less than this.]
+
+       We sort by name then line, as bubble sort isn't stable (if it were
+       we could just sort on names, as entries are originally sorted by
+       line). */
+
+    thisclassname=cursor.curclass.classinfo.fullname
+    thisclassnum=cursor.curclass.classnum
+
+    loop i=0 to num-1
+      vi=list[i]
+      loop j=i+1 to num-1
+        vj=list[j]
+        if vi.varname.OpLt(null, vj.varname) then iterate
+        if vi.varname==vj.varname then
+          if vi.vartoken.line<=vj.vartoken.line then iterate
+        /* time for a swap */
+        list[j]=vi; list[i]=vj
+        vi=vj
+      end j
+-- xref2 format
+-- 'property':classname:name:type:visibility:modifier:
+
+      line = 'property:'thisclassname':'
+      /* Now layout variables that we want */
+      varatts=vi.varatts
+      vis = ''
+      mod = ''
+      select
+        when (varatts & VAR_LOCAL)\=0 then iterate  -- local variable
+        when (varatts & VAR_ARG)\=0 then iterate
+        otherwise do
+          if (varatts & VAR_CONSTANT)\=0  then mod='constant'     -- a constant
+          if (varatts & VAR_STATIC)\=0    then mod='static'     -- a static
+          if (varatts & VAR_TRANSIENT)\=0 then mod='transient'
+          if (varatts & VAR_VOLATILE)\=0  then mod='volatile'
+
+          if (varatts & VAR_SHARED)\=0   then vis='shared'
+          if (varatts & VAR_PUBLIC)\=0   then vis='public'
+          if (varatts & VAR_PRIVATE)\=0  then vis='private'
+          if (varatts & VAR_INHERIT)\=0  then vis='inheritable'
+          if (varatts & VAR_INDIRECT)\=0 then vis='indirect'
+        end
+      end
+      line = line''vi.varname':'vi.varctype':'vis':'mod
+      program.streamer.crossref(line)
+    end i
+    return
+
+
