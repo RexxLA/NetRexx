@@ -41,6 +41,7 @@
 /* 2022.04.06 Add istok, compares SYM tokens, fix address with --MRE  */
 /* 2022.06.16 Optional interactive trace clauser on constructor --MRE */
 /* 2023.08.22 Fix ISSUE #56 on ADDRESS abbutal concatenation --MRE    */
+/* 2024.09.29 support for INTERPRET instruction --MRE                 */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -820,6 +821,10 @@ class RxParser uses RxCode
 -- say '#MRE ADDRESS'        
           tracer.traceclause(cursor.curclause)
           item=NrAddress(rxt); end
+        when iskey(tok.value,'INTERPRET')    then do
+-- say '#MRE INTERPRET'
+          tracer.traceclause(cursor.curclause)
+          item=NrInterpret(rxt); end
         when iskey(tok.value,'TRACE')      then do
           tracer.traceclause(cursor.curclause)
 	        item=cursor.curclause.lookaside          --it was constructed in the past
@@ -875,6 +880,11 @@ class RxParser uses RxCode
     catch RxError
       -- simply move to next clause if a recoverable error seen
       if rxt.program.flag.diag then say '# RxError caught in methodbody'
+
+      if rxt.interpreting then do                         --MRE not recoverable if interpreting
+        signal RxError(rxt, null, 'unexpected.clause.end')
+      end
+
     end errorhandle
     end mainloop
   /* UnR */
@@ -1093,6 +1103,9 @@ class RxParser uses RxCode
 	end ifnest
 	
 	if thislevel.key=='SELECT' then do
+
+	  if rxt.interpreting then tok = null              --MRE avoid wrong token shown
+
 	  select
 	    when thislevel.selstate=NrLevel.SEL_WHENEXP then
 	      if \iskey(kw, 'WHEN') then signal RxQuit(rxt, tok, 'select.expects.when')

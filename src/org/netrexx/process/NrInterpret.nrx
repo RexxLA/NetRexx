@@ -1,0 +1,408 @@
+/* NrInterpret                                                        */
+/*                                                                    */
+/*   An object that represents a parsed INTERPRET clause              */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2023.03.27 Initial                                                 */
+/* 2024.09.28 Released                                                */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary nodecimal strictcase strictargs
+
+/**   An object that represents a parsed Say clause                    */
+class NrInterpret implements RxClauseParser uses RxCode, RxExpr
+ properties private
+  rxt    =RxTranslator   -- root
+  oparser =RxParser      -- incoming parser
+  otracer = RxTracer     -- incoming tracer
+  olevel  =int
+  othislevel = NrLevel
+  tokens =RxToken[]      -- local reference
+  interpret = String
+  expr     = RxExpr         -- expression [null if none]
+
+
+ /** Construct an object from the current clause */
+ method NrInterpret(newrxt=RxTranslator)
+  rxt        = newrxt                                  -- the boss
+  oparser    = rxt.program.parser
+  olevel     = rxt.program.parser.level
+  othislevel = rxt.program.parser.thislevel
+  otracer    = rxt.program.tracer
+  tokens     = rxt.program.parser.cursor.curclause.tokens
+
+
+ /** Pass processing */
+ method scan(pass=int)
+  if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrSay', pass)
+
+  if rxt.wontexec then RxError(rxt, tokens[0], 'interpret.needs.exec')
+
+  if tokens[1].type=RxToken.END then do
+    interpret = ''
+    return
+  end
+
+  /* have expression */
+  if tokens[1].type=RxToken.SP then begin=2; else begin=1
+
+  code=rxt.eparser.parseexpr(oparser.cursor, 0, begin, null, null)
+  expr=RxExpr(rxt, oparser.cursor, SAY_EXPR, code)
+  expr.type=code.type
+  expr.conv=null
+  if code.group=S_LIT then
+   if code.type=RxType.FLOAT_TYPE-
+    | code.type=RxType.DOUBLE_TYPE then do
+      conv=rxt.converter.assigncost(oparser.cursor, RxType.REXX_TYPE, code.type)
+    -- rxt.converter.convertcode(parser.cursor, RxType.REXX_TYPE, conv.proc, code)
+      rxt.converter.torexx(oparser.cursor, code, 1)  -- allow constant
+      expr.type=RxType.REXX_TYPE
+      expr.conv=conv
+    end
+
+  -- Suppose we'd better special-case "say null", too, for javac...
+  if code.type=RxType.NULL_TYPE then do
+    code.javacode='""'
+    code.constant=1
+    code.type=RxType.STRING_TYPE
+    expr.type=RxType.STRING_TYPE
+  end
+
+  interpret = rxt.interpreter.stringvalue(code)
+  return
+
+ /** Trace names list */
+ method getAssigns returns String[]
+  return null
+
+ /** code generation [only] */
+ method generate
+   signal RxQuit(rxt, tokens[0], 'internal.error', 'NrInterpret generating java')
+/*
+  if expr=null then jcode='""'
+               else jcode=expr.code.javacode
+  rxt.program.streamer.out(RxType.REXXIO_CLASS'.Say('jcode');')
+*/
+ /** Interpretation */
+ method interpret(ocursor=RxCursor null)
+
+  code      = expr.evaluate(ocursor)
+  interpret = rxt.interpreter.stringvalue(code)
+
+  cursor = RxCursor(ocursor.curprogram, ocursor.curclass, ocursor.curmethod, ocursor.curclause)
+
+  cursor.curlevel = ocursor.curlevel
+  cursor.curthis    =  ocursor.curthis
+  cursor.curparent  =ocursor.curparent
+  cursor.curpropatts=ocursor.curpropatts
+  cursor.curlpool   =ocursor.curlpool
+
+  cursor.curtrace   =ocursor.curtrace
+  cursor.curnumer   =ocursor.curnumer
+
+  cursor.curbinary  =ocursor.curbinary
+  cursor.curstatic  =ocursor.curstatic
+  cursor.curexec    =ocursor.curexec
+
+  cursor.curnewprot =ocursor.curnewprot
+  cursor.curendprot =ocursor.curendprot
+
+  cursor.curact     =ocursor.curact
+  cursor.curacttype =ocursor.curacttype
+  cursor.curactblock=ocursor.curactblock
+
+  cursor.curprecall =ocursor.curprecall
+  cursor.curskipone =ocursor.curskipone
+  cursor.curskiptrace=ocursor.curskiptrace
+
+  cursor.curreturn  =ocursor.curreturn
+  cursor.curjump    =ocursor.curjump
+
+--trace results
+  if rxt.program.flag.diag then say '## Interpreting "'interpret'"'
+
+  src = RxFileReader(rxt)
+  src.openfile('interpret', String interpret';NOP')   -- add a NOP instruction to level up
+
+  clauser=RxClauser(rxt, src)                         -- create clauser from trace input
+
+  rxt.program.tracer = RxTracer(rxt)                  -- create our own
+  rxt.program.parser = RxParser(rxt, clauser)
+
+  rxt.program.parser.level     = 2                    -- 'in a method', our method
+  rxt.program.parser.thislevel = othislevel
+  rxt.program.parser.cursor    = cursor
+
+  cursor.curlevel = othislevel
+
+  rxt.pass =0;
+  rxt.pass0=1           -- now pass 0
+  rxt.pass1=0
+  rxt.pass2=0
+
+--trace results
+  do label execute forever
+    clausenum=0
+    pclause = RxClause null
+    hadexception = 1
+    loop label pass0 forever                       -- do pass 0 first, create array
+      clausenum=clausenum+1
+      do
+        clause=clauser.clause(clausenum)
+        hadexception = 0
+      catch e=RuntimeException
+        nop
+      finally
+        if hadexception then do                                      -- catch any exception
+          say ' --- Cannot parse this "'interpret'"'
+          leave execute
+        end
+      end
+      if clause=null then leave
+      if pclause \= null then clause.next = pclause
+      pclause = clause
+    end pass0
+    pclause.next = null
+
+    -- here clauses to interpret are read correctly
+
+    rxt.pass =2;
+    rxt.pass0=0
+    rxt.pass1=0
+    rxt.pass2=1
+
+    numclauses = clauser.clauses()
+    if numclauses < 3 then it = 'clause'
+    else                   it = 'clauses'
+
+    rxt.interpreting = 1
+    hadexception = 1
+    do
+      rxt.program.parser.parsemethodbody(0)
+      hadexception = 0
+    catch e=RuntimeException
+      nop
+    finally
+      if hadexception then do                                      -- catch any exception
+        say ' --- Cannot parse 'it' :' interpret
+        leave execute
+      end
+    end
+    rxt.interpreting = 0
+
+    if rxt.program.parser.level \= 2 then do                  -- don't mess up the do/end stack
+      say ' --- Block "'interpret'" not properly ended'
+      leave execute
+    end
+                                                              -- extra
+    if rxt.program.parser.thislevel \= othislevel then do     -- don't mess up the do/end stack
+      say ' --- Block "'interpret'" not properly ended'
+      leave execute
+    end
+
+    -- here clauses are parsed correctly as in a method
+/*
+   if rxt.program.flag.diag then do
+    say '### All Clauses ###'
+
+    loop while cursor.curclause \= null
+      clause = cursor.curclause
+
+      say ' >>  clause "'clause'" tokens 'clause.showtokens()
+      cursor.curclause=clause.next
+    end
+    say '###################'
+*/
+    nojump=RxClause()                           -- used to indicate 'no jump needed'
+
+    cursor.curclause = clauser.clause(1)        -- start with first clause
+    cursor.curjump =  nojump
+
+    loop label interpret while cursor.curclause \= null
+
+      clause = cursor.curclause
+      if rxt.program.flag.diag then do
+        say '### clause "'clause'" tokens 'clause.showtokens()
+      end
+
+      if clause.lookaside = null then do
+        say ' --- Invalid 'it' :' interpret
+        leave execute
+      end
+      else do label realclause
+        if rxt.program.flag.diag then do
+          say '## lookaside 'clause.lookaside
+        end
+        hadexception=1
+        do
+--
+          if cursor.curskipone then do
+            cursor.curskipone=0
+            cursor.curskiptrace=0            -- turn this off now, too
+          end
+          else
+--
+            clause.lookaside.interpret(cursor)                 -- do it
+
+          hadexception = 0
+        catch e=RuntimeException
+          nop
+        finally
+          if hadexception then do                             -- catch any exception
+            say ' --- Cannot interpret 'it' :' interpret '('e.toString()')'
+--
+            cursor.curact=1                      -- alert
+            cursor.curacttype=RxCursor.CUR_EXCEP          -- it's an Exception
+--
+          end
+        end
+
+-- Borrowed from RxInterpreter
+        /* Now special actions */
+        loop label popones while cursor.curlevel.thisone -- we just executed the One
+          topcp=cursor.curlevel.clause.lookaside
+          if topcp<=NrIf then do
+            -- next clause will be the one after the IF
+            cursor.curjump=(NrIf topcp).nextclause
+            rxt.interpreter.poplevel(cursor)
+          end
+          else do -- must have been a THEN following WHEN in SELECT
+            -- turn off the flag, then go and finish the block
+            cursor.curlevel.thisone=0
+            endblock(cursor)
+          end
+        end popones
+
+        select label alerts
+          when cursor.curlevel.nextone then do      -- just had THEN or ELSE
+            cursor.curlevel.thisone=1               -- bump the trigger
+            cursor.curlevel.nextone=0               -- be clean
+          end
+          when cursor.curacttype\=RxCursor.CUR_NOACT then do -- have a pending action
+            -- we need to take action if we just had the event (that is,
+            -- curact is set) or if curact is not set and we reach END
+            -- in a block we're finalizing.
+            if cursor.curact, cursor.curclause.lookaside<=NrEnd then do
+              unwind(cursor)
+              end
+            -- If we're at the top we must be RETURN or EXCEP, and we're done
+            if cursor.curlevel.prev=null then leave execute
+          end
+          otherwise nop
+        end alerts
+
+      end realclause
+
+      if cursor.curact then do
+        if cursor.curacttype == RxCursor.CUR_RETURN then do  --MRE On RETURN we update old cursor to return
+          ocursor.curact=1                       -- alert
+          ocursor.curacttype = RxCursor.CUR_RETURN
+          ocursor.curreturn  = cursor.curreturn
+          leave execute
+        end
+      end
+      if cursor.curjump\==nojump then do       -- any jump request?
+        cursor.curclause=cursor.curjump        -- [this could now be null]
+        cursor.curjump=nojump                  -- clear
+      end
+      else do                                  -- normal bump
+        cursor.curclause=clause.next
+        cursor.curjump = nojump
+      end
+    end interpret
+    leave execute
+  end execute
+
+  rxt.interpreting = 0
+  rxt.pass  = 3;                    -- continue 'old style' interpretation
+  rxt.pass0 = 0
+  rxt.pass1 = 0
+  rxt.pass2 = 0
+  rxt.program.tracer = otracer
+  rxt.program.parser = oparser
+
+  return
+
+-- MRE Private in RxInterpreter
+-- Modified to end on our interpreter method
+ /** ENDBLOCK -- skip to end of block (FINALLY or END)
+    Arg1 is the cursor
+    Always sets curjump.
+    */
+ method endblock(cursor=RxCursor) private
+
+  if cursor.curlevel.clause.lookaside <= NrMethod then return   -- top level
+
+  topblock=NrBlock cursor.curlevel.clause.lookaside
+  select
+    when cursor.curlevel.trystate=NrLevel.TRY_FINAL then
+      cursor.curjump=topblock.endclause      -- already in FINALLY
+    when topblock.finclause\=null then
+      cursor.curjump=topblock.finclause      -- have a FINALLY, use it
+    otherwise
+      cursor.curjump=topblock.endclause      -- just END
+    end
+  cursor.curlevel.trystate=NrLevel.TRY_FINAL         -- can now run FINALLY/END
+  return
+
+-- MRE copy of RxInterpreter private method
+ /** UNWIND -- unwind levels after RETURN, LEAVE, ITERate or EXCEPtion
+    Arg1 is the cursor
+    Has no effect if nothing to unwind. */
+ method unwind(cursor=RxCursor) private
+  -- here, we throw away IF constructs and return to execute the FINALLY
+  -- or END of and block (if we're in one)
+
+  if cursor.curlevel.prev=null then return -- already at top
+  topaside=cursor.curlevel.clause.lookaside
+  loop while topaside<=NrIf
+    rxt.interpreter.poplevel(cursor)
+    if cursor.curlevel.prev=null then return -- reached the top
+    topaside=cursor.curlevel.clause.lookaside
+    end
+  -- here when we've cleared out any IFs and find we're still in a block
+
+  -- now the action taken depends on its curacttype
+  select label acttype
+    -- check for a CATCH, if an exception is in progress and we are not
+    -- already in a finally or catch for this block
+    when cursor.curacttype=RxCursor.CUR_EXCEP then do
+      if cursor.curlevel.trystate=NrLevel.TRY_INIT then do label trycatch
+        catches=(NrBlock topaside).catches
+        if catches\=null then do
+          sig=RxSignal cursor.curreturn
+          loop i=0 for catches.size()
+            catchclause=RxClause catches.elementAt(i)
+            if (NrCatch catchclause.lookaside).canCatch(cursor, sig) then do
+              -- exception caught...
+              cursor.curjump=catchclause
+              -- say ':catch ->' catchclause.toString
+              leave acttype
+              end
+            end i
+          end
+        end trycatch
+      endblock(cursor)
+      end
+    when cursor.curacttype=RxCursor.CUR_LEAVE then do
+      -- if we're a LEAVE and we're at the right level, cancel the action so
+      -- we don't unwind any more
+      if (NrBlock topaside)==cursor.curactblock then
+        cursor.curacttype=RxCursor.CUR_NOACT
+      endblock(cursor)
+      end
+    when cursor.curacttype=RxCursor.CUR_ITER then do
+      -- if we're an INTERATE and we're at the right level, cancel the
+      -- action and end body instead of end block
+      -- we don't unwind any more
+      if (NrBlock topaside)==cursor.curactblock then
+        cursor.curacttype=RxCursor.CUR_NOACT
+      rxt.interpreter.endBody(cursor)    -- always LOOP, so will iterate
+      end
+    when cursor.curacttype=RxCursor.CUR_RETURN then do
+      -- if we're a RETURN, end the block and continue unwinding
+      endblock(cursor)
+      end
+    end acttype
+  return
+

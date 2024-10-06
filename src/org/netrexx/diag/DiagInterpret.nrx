@@ -1,0 +1,143 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagInterpret                                                      */
+/*                                                                    */
+/*   An object that tests the INTERPRET instruction.                  */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2024.10.05 Initial  --MRE                                          */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.diag
+
+options nobinary decimal
+
+class DiagInterpret
+  properties private static
+    j = 1
+
+  method DiagInterpret
+    i = 0
+
+-- access variables and check assignment
+    it = 'i = i + 1'
+    say  '  >> 'it
+    interpret it
+
+    it ='say ''i = ''i'
+    say  '  >> 'it
+    interpret it
+
+    if i \= 1 then signal DiagX('Failed i+1')
+
+-- call method and check do; end
+    it = 'i = callmethod(i)'
+    say  '  >> 'it
+    interpret it
+
+    it = 'do;say ''i = ''i;end'
+    say  '  >> 'it
+    interpret it
+
+    if i \= 2 then signal DiagX('Failed inmethod(i)')
+
+-- access properties
+    it = 'j = callmethod(j)'
+    say  '  >> 'it
+    interpret it
+
+    it = 'say ''j = ''j'
+    say  '  >> 'it
+    interpret it
+
+    if j \= 2 then signal DiagX('Failed inmethod(j)')
+
+-- define new variables
+    it = 'k = j'
+    say  '  >> 'it
+    interpret it
+
+    it = 'say ''k = ''k'
+    say  '  >> 'it
+    interpret it
+    it = "if k \\= 2 then signal DiagX('Failed create new var')"
+    say  '  >> 'it
+    interpret it
+
+-- invalid clauses, should be detected
+    it = 'Some faulty clauses to test'
+    interpret 'say it'
+
+    interpret 'r = substr('
+    interpret 'parse v v'
+    interpret 'i = 1/0'
+    interpret 'i =  i +'
+    interpret 'leave'
+    interpret 'do; i = 0'
+    interpret 'end'
+    interpret 'end;end'
+    interpret 'end: end;'
+
+--    interpret 'RETURN'             -- special
+
+    it = 'loop forever; leave; end;'
+    say  '  >> 'it
+    interpret it
+
+    it = 'if 1 then j = 3; else j = 2;'
+    say  '  >> 'it
+    interpret it
+    if j \= 3 then signal DiagX('Failed then')
+
+    it = 'if 0; then j = 3; else j = 2'
+    say  '  >> 'it
+    interpret it
+    if j \= 2 then signal DiagX('Failed else')
+
+    it = 'select; when i = 1 then j = 3; when j = 3 then j = 4; otherwise; j = 1; finally; do;say ''i = ''i; say ''j = ''j; end;end'
+    say  '  >> 'it
+    interpret it
+    if j \= 1 then signal DiagX('Failed select')
+
+    it = 'interpret "interpret ''j = 0; say j''"'
+    say  '  >> 'it
+    interpret it
+    if j \= 0 then signal DiagX('Failed interpret')
+
+    it = 'j = interpretreturn(j)'
+    say  '  >> 'it
+    interpret it
+    if j \= 1 then signal DiagX('Failed return')
+
+    say 'DiagInterpret: OK! '
+
+
+  method callmethod(in)
+    return in + 1
+
+  method interpretreturn(in) returns Rexx
+    it = 'return 'in + 1
+    say  '>>   'it
+    interpret it
+
+-- not reached
+    return 0
+
+
+  method main(s=String[]) static
+    do
+       DiagInterpret()
+       exit 0
+    catch dx=DiagX
+      say 'DiagInterpret: "'dx.getMessage'"'
+      exit 1
+    end
+

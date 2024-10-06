@@ -23,6 +23,7 @@
 /* 1996.07.12 Reorganized for RxClauseParser                          */
 /* 1999.08.07 Optimize int=int+1 and int=int-1                        */
 /* 2000.02.24 Implement interpret complete                            */
+/* 2024.09.29 INTERPRET support, handle rxt.interpreting flag --MRE   */
 /* ------------------------------------------------------------------ */
 -- Could use RxExpr for the RHS, later
 package org.netrexx.process
@@ -309,10 +310,11 @@ class NrAssign implements RxClauseParser uses RxCode, RxVariable
 
   /* If ours, update value using the converted value, iff types match */
   -- [probably useless/redundant now]
+if \rxt.interpreting then do      -- MRE don't update oldvar when interpreting
   if lhsgroup=S_VAR then
    if oldvar.vartype=rhs.type then
     oldvar.varvalue=rhs.value
-
+end
 -- +++ next few should be moved down to generate
 
   if rxt.program.flag.diag & lhs.type\=rhs.type then add=' /*'lhs.type.toSig()'<='rhs.type.toSig()'*/'
@@ -351,7 +353,7 @@ class NrAssign implements RxClauseParser uses RxCode, RxVariable
  method interpret(cursor=RxCursor null)
   -- for prologue (property) assignments, we only get here if we have
   -- the right staticality
-  
+
   if cursor.curprogram.flag.diag then
     say '#=' lhs.group lhs.type.toSig() ':' cursor.curclause.toString()
 
