@@ -5,6 +5,7 @@
 /* ------------------------------------------------------------------ */
 /* 2023.03.27 Initial                                                 */
 /* 2024.09.28 Released                                                */
+/* 2024.10.09 Fix LOOP logic                                          */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -307,8 +308,24 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
       end
       else do                                  -- normal bump
         cursor.curclause=clause.next
-        cursor.curjump = nojump
       end
+      -- Always do request immediately after action request
+      if cursor.curact then cursor.curact=0    -- done with initial request
+      else do
+        -- if about to drop into CATCH/FINALLY/END, skip to finalize
+        -- (unless we're in that state)
+        if cursor.curclause\=null then do
+          if cursor.curclause.skipend then do       -- would normally skip
+            if cursor.curlevel.trystate\=NrLevel.TRY_FINAL then do    -- not already finalizing
+              -- setup jump to FINALLY/END, or go back up to LOOP
+              rxt.interpreter.endBody(cursor)
+              cursor.curclause=cursor.curjump
+              cursor.curjump=nojump                -- clear
+            end
+          end
+        end
+      end
+
     end interpret
     leave execute
   end execute
