@@ -1,11 +1,23 @@
 # NetRexx 4.07-Alpha []
 
+## Language
+- New INTERPRET instruction
+- -crossref option now lists classes, methods and properties
+
 ## Fixes
 - NetRexx-21 superfluous warning on crossref option ("overrides program default")
 - NetRexx-57 Spurious E output removed in SPECS stage with FS specified (Marc Remes)
 - NetRexx-59 Java 9 and later disallow _ (underscore) as variable name, Java compiler fails (Marc Remes)
   (_ allowed again but Java sees $_)
 - NetRexx-60 Javafx jar download location changed in readme. EnzoLCD example fixed.
+- NetRexx-62 emoji escape code is incorrect
+- NetRexx-63 parsing special words and variables
+- NetRexx-66 pipc does not honour file name extension and possibly removes existing .nrx files
+- NetRexx-67 exit code is not propagated when interpreting
+ 
+## Examples
+- xref2uml.nrx, generate PlantUML inputfiles from crossref files
+
 
 # NetRexx 4.06 GA [2 Mar 2024]
 
