@@ -1,0 +1,207 @@
+#!/usr/bin/env nr
+/*----------------------------------------------------------------------------*/
+/*                                                                            */
+/* Copyright (c) 2024 Rexx Language Association. All rights reserved.         */
+/*                                                                            */
+/* This program and the accompanying materials are made available under       */
+/* the terms of the Common Public License v1.0 which accompanies this         */
+/* distribution. A copy is also available at the following address:           */
+/* https://www.oorexx.org/license.html                                        */
+/*                                                                            */
+/* Redistribution and use in source and binary forms, with or                 */
+/* without modification, are permitted provided that the following            */
+/* conditions are met:                                                        */
+/*                                                                            */
+/* Redistributions of source code must retain the above copyright             */
+/* notice, this list of conditions and the following disclaimer.              */
+/* Redistributions in binary form must reproduce the above copyright          */
+/* notice, this list of conditions and the following disclaimer in            */
+/* the documentation and/or other materials provided with the distribution.   */
+/*                                                                            */
+/* Neither the name of Rexx Language Association nor the names                */
+/* of its contributors may be used to endorse or promote products             */
+/* derived from this software without specific prior written permission.      */
+/*                                                                            */
+/* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS        */
+/* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT          */
+/* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS          */
+/* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT   */
+/* OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,      */
+/* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED   */
+/* TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,        */
+/* OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY     */
+/* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING    */
+/* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS         */
+/* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.               */
+/*                                                                            */
+/*----------------------------------------------------------------------------*/
+/****************************************************************************/
+/* Name: rexxtry.nrx                                                        */
+/* Type: NetRexx Script                                                     */
+/*                                                                          */
+/*  Loosely derived from an ancient formulation of Mike Cowlishaw.          */
+/****************************************************************************/
+
+class rexxtry
+
+properties static
+  sysrx     =''
+  remindrx  =''
+  helprx    =''
+  promptrx  =''
+  procrx    =''
+  argrx     =''
+  inputrx   =''
+  save      =''
+  bordrx    =''
+  prev      =''
+  current   =''
+  rc        ='X'
+
+method main(s=String[]) static
+  argrx = ''
+  loop i=0 to s.length-1
+    argrx = argrx' 's[i]
+  end
+
+  house()                                     /* Go do some housekeeping.  */
+
+  select                                       /* 3 modes of operation...   */
+    when argrx = '?' then                      /*   1.  Tell user how.      */
+      tell()
+    when argrx = ''  then do                   /*   2.  Interactive mode.   */
+      intro()
+      main()
+    end
+    otherwise                                  /*   3.  One-liner and exit. */
+      main()
+  end
+
+method done static
+  exit                                         /* The only exit.             */
+
+method house static                             /* Housekeeping.             */
+  parse source source
+  sysrx = word(source, 1)                      /* Get system name.          */
+  remindrx = "Enter 'exit' to end."            /* How to escape rexxtry.    */
+  helprx = '   ' -                             /* add extra help info       */
+    "  Or '?' for online REXX help."
+  promptrx = ''                                /* Null if not one-liner.    */
+  procrx = 'rexxtry'
+  promptrx = procrx' '                         /*   Name part of user line. */
+  procrx = 'rexxtry'                           /* Pick up the proc name.    */
+  temprx = ' 'procrx' on 'sysrx                /* Make border...            */
+  posrx = 69-length(temprx)                    /*   where to overlay name,  */
+  bordrx = copies('.', 68)                     /*   background of periods,  */
+  bordrx = overlay(temprx, bordrx, posrx)      /*   name right-adjusted.    */
+  save = ''                                    /* Don't save user input.    */
+  trace  Off                                   /* Init user trace variable. */
+  if argrx <> '' then say argrx
+  return
+
+method tell static
+  clear()
+
+  say ' This procedure lets you interactively try NetRexx statements.'
+  say ' If you run it with no parameter, or with a question mark'
+  say ' as a parameter, it will briefly describe itself.'
+  say ' You may also enter a NetRexx statement directly on the command line'
+  say ' for immediate execution and exit.'
+  say ' Example:  nrc -exec rexxtry -arg ''show'''
+  say ' Enter ''show()'' to see user variables provided by rexxtry.'
+  say ' Enter ''='' to repeat your previous statement.'
+  say ' Enter ''?'' to show online help for NetRexx.'
+  say ' Enter ''exit'' or ''done'' to exit the program'
+  say ' The subroutine named ''sub'' can be invoked as ''sub()'', ''sub'' or ''x=sub()''.'
+
+  return
+
+method clear static
+  os = System.getProperty('os.name')
+  say os
+  select
+  when os.startsWith('Win') then
+    'CLS'                                    /* system to clear screen    */
+  when os = 'Linux' then
+    'clear'                                  /* system to clear screen    */
+  otherwise
+   'clear'
+  end;say
+  return
+
+method intro static                            /* Display brief             */
+  say version                                  /*   introductory            */
+  say '  'procrx' lets you' -                  /*   about rexxtry and       */
+    'interactively try NetRexx' -              /*   remarks for             */
+    'statements.'                              /*   interactive mode.       */
+  say '    Each string is executed when you hit Enter.'
+  say "    Enter 'tell' for" -                /* How to see description.   */
+    "a description of the features."
+  say '  Go on - try a few...            'remindrx
+  return
+
+method sub static
+  say '  ...test subroutine' -                  /* User can CALL this        */
+  "'sub'  ...returning 1234..."                 /*   subroutine or           */
+  return 1234                                   /*   invoke with 'sub()'.    */
+
+method main static
+  do forever                                   /* Loop forever.             */
+    prev = inputrx                             /* User can repeat previous. */
+    if argrx <> '' then inputrx = argrx
+    else inputrx = ask                         /* Input keyboard or queue.  */
+    current = inputrx                          /* Current line for 'show'.  */
+    if save <> '' then save()                  /* Save before interpreting. */
+    if inputrx = '=' then inputrx=prev         /* '=' means repeat previous */
+    select
+      when inputrx = '' then say ' ' -         /* If null line, remind      */
+        procrx':  'remindrx helprx             /*   user how to escape.     */
+      when inputrx='?' then help()             /* Request for online help.  */
+      otherwise
+        rc = 'X'                               /* Make rc change visible.   */
+--        set2(); -- trace (trace)             /* Need these on same line.  */
+        interpret inputrx                      /* Try the user's input.     */
+        trace Off                              /* Don't trace rexxtry.      */
+        border()                               /* Go write the border.      */
+    end
+    if argrx <> ''                             /* For one-liner, leave loop */
+      then leave
+  end
+  return                                       /* Preserve result contents. */
+
+method help  static                            /* Request for online help.  */
+  say 'Online help is available in the documents folder'
+  border()
+  return
+
+method border static
+  if rc = 'X' then                              /* Display border.           */
+    say '  'bordrx
+  else say ' ' -                                /* Show return code if it    */
+    overlay('rc = 'rc' ', bordrx)               /*   has changed.            */
+  return
+
+method save static
+  do
+    lineout(save, inputrx)
+  catch RuntimeException
+    say "  Error on save="save
+    save = ''
+  end
+
+method show static
+  clear()                                       /* Display user variables    */
+  say '  'procrx' provides' -                   /*   provided by rexxtry.    */
+    'these user variables.'
+  say '  The current values are...'             /* Show current values.      */
+  say
+  say "    'version'   = '"version"'"           /* What level of REXX.       */
+  say "    'source'    = '"source"'"            /* What oper system etc.     */
+  say
+  say '     Previous line entered by user.  Initial value=INPUTRX.'
+  say "    'prev'      = '"prev"'"             /* Previous user statement.  */
+  say "    'current'   = '"current"'"          /* Compare curr with prev.   */
+  say
+  say "     Save your input with save=filespec. Stop saving with save=''."
+  say "    'save'      = '"save"'"             /* Filespec for input keep.  */
+  return
