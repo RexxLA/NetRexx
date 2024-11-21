@@ -64,6 +64,7 @@
 /* 2022.10.11 When interpreting, always wait for all threads -- MRE   */
 /* 2022.11.03 store NetRexxC -implicituses flag -- MRE                */
 /* 2024.09.29 add interpreting flag -- MRE                            */
+/* 2024.10.19 compile to specific target class version if given -- MRE*/
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -142,7 +143,7 @@ class RxTranslator
   -- thread at present.  Will move somewhere more clever later.
   exiting     =boolean 0      -- leaving interpretation
   interpreting=boolean 0      -- MRE set to 1 when interpreting 'INTERPRET' instruction
-
+  targetvm    =int 0          -- MRE if not zero, specifies -target and -source class version
 
   /* Standard import packages */
   -- [entry[0] is language-specific, no longer set by RxBabel]
@@ -207,14 +208,19 @@ class RxTranslator
     javac=javac1
     ecj=ecj1
 
+
   method setaddress(address1)
     address=address1
- 
+
   method setimplicituses(implicituses1)
     program.flag.implicituses = implicituses1
 
   method setdeps(deps1)
     deps=deps1
+
+  method settargetvm(targetvm1=int)
+    targetvm=targetvm1
+
 
   /** -------------------------------------------------------------- */
     /* SETLANGUAGES -- set language-specific constants                */
@@ -698,8 +704,20 @@ class RxTranslator
       jfoarray=JavaFileObject[programs]	  -- Java compiler API	-- KK -- 2015.05.02
 
       optstring='-nowarn -classpath classpath' javaoptions
-      optarray=optstring.toString().trim().split(" ")
-      optarray[2]=classpath
+
+-- MRE add targetvm if given
+      if targetvm \= 0 then do
+        optstring='-target target -source source -nowarn -classpath classpath' javaoptions
+        optarray=optstring.toString().trim().split(" ")
+        optarray[1]=targetvm
+        optarray[3]=targetvm
+        optarray[6]=classpath
+        end
+      else do
+        optstring='-nowarn -classpath classpath' javaoptions
+        optarray=optstring.toString().trim().split(" ")
+        optarray[2]=classpath
+      end
 
       offset=args.length-programs
       loop f=0 for programs

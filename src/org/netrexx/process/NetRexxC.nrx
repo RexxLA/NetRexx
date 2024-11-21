@@ -64,6 +64,7 @@
 /* 2019.08.05 add clgMain to compile, load and go for main method rvj */
 /* 2021.01.15 add option to allow ADDRESS instructions -- MRE         */
 /* 2022.11.03 add option for implicit uses -- MRE                     */
+/* 2024.11.19 add option to specify targetvm class version -- MRE     */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -107,6 +108,7 @@ class NetRexxC
                                              -- 0 after prompting
   
   classpath	   = String                  --	allows classpath to be passed as an argument
+  targetvm     = int 0                   -- allows target vm class version to be passed as argument
   
   properties private static
   programstrings = String[]                  --	allows programs to be passed in memory strings
@@ -239,6 +241,7 @@ class NetRexxC
     translator.setaddress(address)
     translator.setimplicituses(implicituses)
     translator.setdeps(deps)
+    translator.settargetvm(targetvm)
     
     -- need to set java.class.path property and restore it later
     currentClassPath = System.getProperty("java.class.path")
@@ -573,11 +576,24 @@ class NetRexxC
 	when arglow=='implicituses' then do; implicituses=1; end  
 	when arglow=='nodeps' then do; deps=0; end  -- no deps listing RVJ
 	when arglow=='deps' then do; deps=1; end  
-	  
+
+-- MRE add -targetvm <n> option
+	when arglow=='targetvm' then do
+   	  a=a+1
+   	  if a<arg.length then do
+   	    do
+   	      targetvm=Integer.parseInt(arg[a])
+   	    catch e=java.lang.NumberFormatException
+   	    	 say '+++ Warning: targetvm must be a positive integer, option targetvm 'arg[a]' ignored'
+        end
+   	  end
+
+   	end
+
 	when arglow=='classpath' | arglow=='cp' then do
    	  a=a+1
    	  if a<arg.length then do
-   	    classpath=arg[a]
+   	        classpath=arg[a]
    	  end
    	end   		
         when arglow=='noarg' then do
@@ -644,6 +660,7 @@ return
       say '  -prompt        -- prompt for new request after processing'
       say '  -savelog       -- save messages in NetRexxC.log'
       say '  -time          -- display timings'
+      say '  -targetvm      -- specify target class version'
       say '  -address       -- allow ADDRESS instruction'
       say '  -warnexit0     -- exit with a zero returncode on warnings\n'
       say "Any NetRexx options may also be added; these are:\n"
