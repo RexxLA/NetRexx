@@ -12,6 +12,7 @@ package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
 /*
+   2024-12-02 add alias var to var_stage. Jeff Hennick
    2024-07-31 avoid overwriting existing .nrx files. Issue netrexx-#66, rvj and mre
    2020-10-14 removed debugging "say". Jeff Hennick
    2020-10-14 spell 64encode & 64decode right. Jeff Hennick
@@ -220,6 +221,8 @@ class compiler extends Object public
           say 'pipc005e: Error - pipe statement within a pipe specification'
 	  exit
 	end
+
+--  Convert alias stage names to real class names
 	select
 	  when stg.word(1) = '--' then stg=stg.changestr('--',' comment ')
 	  when stg.word(1) ='>>'  then stg=stg.changestr('>>',' diska ')
@@ -228,7 +231,8 @@ class compiler extends Object public
 	  when stg.word(1)='64decode' then stg=stg.changestr('64decode',' decode64 ')
 	  when stg.word(1)='64encode' then stg=stg.changestr('64encode',' encode64 ')
 	  when stg.word(1)='random' then stg=stg.changestr('random',' random_stage ')
-	  
+	  when stg.word(1)='var' then stg=stg.changestr('var',' var_stage ')
+	
 --	  when stg.word(1)='q'    then stg=stg.changestr('q',' query ') -- now a stage
 
 	  otherwise
@@ -944,7 +948,7 @@ class compiler extends Object public
    * - it should compile a pipe specification in another file with explicit extension
    * - it should protect an .nrx file when that already exists
    *
-   * - also, it is called from the pipes runner which gives it a synthesized name  
+   * - also, it is called from the pipes runner which gives it a synthesized name
    */
   method compiler(a = rexx,squelch=0,pipeClassName=Rexx(''),shouldExit=1 )
     keep   = boolean 0             -- assume nokeep
@@ -961,7 +965,7 @@ class compiler extends Object public
     -- of pipes in nrws and the pipe runner
     -- when it is 1, there is no need to check for precious .nrx,
     -- because the name is a random one
-    
+
     parse a . '(' name compopts ')' text
 
     /* protect potentially precious .nrx source here */
@@ -1032,7 +1036,7 @@ class compiler extends Object public
       nrx = java.io.file(String w'.nrx')
       grp = java.io.file(String w'.grp')
       oth = java.io.file(String w'.'ext)
-      
+
       select
         when w = '-gen' then             -- options for pipes
           keep = 1
