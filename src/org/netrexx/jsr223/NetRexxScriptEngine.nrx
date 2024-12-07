@@ -5,7 +5,11 @@
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
-  
+
+Version 0.2.2 (December 7, 2024)
+
+  * add logic to retrieve binding key values  -- MRE
+
 Version 0.2.1 (May 20, 2015)
 
 	* fix loop in comment detector reported by Rony
@@ -105,14 +109,15 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
     put("nrxscriptengine", instance)
     mybindings=SimpleBindings()
-    mybindings.putAll(getBindings(ScriptContext.ENGINE_SCOPE))		--	save bindings copy	
+    mybindings.putAll(getBindings(ScriptContext.ENGINE_SCOPE))		--	save bindings copy
     
     -----------------------------------------------  Engine interface methods   ------------------------------        
     
   method eval(script=String , scriptcontext=ScriptContext ) signals ScriptException returns Object
     hisbindings=scriptcontext.getBindings(ScriptContext.ENGINE_SCOPE)
-    hisbindings.putAll(mybindings)				--		pass my environment settings 		
-    
+    hisbindings.putAll(mybindings)				--		pass my environment settings
+    put("__MRE__BINDINGS", hisbindings)    -- make it 'somewhat' unique
+
     scp=System.getProperty("java.class.path")		--		get the global classpath
     if scp\=saveclasspath then do						--		if it has changed we need a new interpreter
       interpreter=null
@@ -149,7 +154,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     scriptname=getname(script)		                   --		get a name for the script
     
     script=prefixed(script)	                           --	add all engine scope variables to the script
-    
+    script=suffixed(script)                            -- retrieve engine scope variable values
     if foundprogramname\=null then scriptname=foundprogramname		--	the prefix scan found a class instruction with a name
     
     scriptargs=getargs()		                  --		get any arguments to pass to the script
@@ -186,7 +191,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
 	 if get("result")\=null then return get("result")
 	 else -
 	   return get("returnobject")
-       
+
   method eval(reader=Reader , scriptcontext=ScriptContext ) signals ScriptException returns Object
     return eval(getScriptFromReader(reader), scriptcontext)	--	change reader call to string call
     
@@ -298,7 +303,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     rexxname=Rexx(tscriptname)
     if rexxname.pos(fs)>0 then rexxname=rexxname.substr(rexxname.lastpos(fs)+1)
     if rexxname.pos(".")>0 then rexxname=rexxname.substr(1,rexxname.lastpos('.')-1)
-    if rexxname.verify('_$€'||'a'.sequence('z')||'A'.sequence('Z')||'0'.sequence('9'))>0 then tscriptname=scriptname
+    if rexxname.verify('_$'||'a'.sequence('z')||'A'.sequence('Z')||'0'.sequence('9'))>0 then tscriptname=scriptname
     else scriptname=rexxname
     --			else scriptname=rexxname'.nrx'
     
@@ -379,7 +384,35 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     end
     
     return prefix';'sufix
-    
+
+  method suffixed(script = String)
+    nsi=instance
+    bind=SimpleBindings nsi.getBindings(ScriptContext.ENGINE_SCOPE)
+    ks=bind.keySet()
+    it=ks.iterator()
+    loop while it.hasNext()
+      item=it.next()
+--        titem=Rexx(item.toString()).changestr('.','_')
+--        say 'ITEM ' item
+      if item = "arg" | -
+         item = "javax.script.engine" | -
+         item = "javax.script.engine_version" | -
+         item = "javax.script.language" | -
+         item = "javax.script.language_version" | -
+         item = "javax.script.name" then
+        iterate                -- don"t add
+
+      val=nsi.get(String item)
+      if val == null then
+         add = '__MRE__BINDINGS.put("'item'", java.lang.Object null)'
+      else do
+         add = '__MRE__BINDINGS.put("'item'", java.lang.Object 'item.toString()')'
+      end
+      script = script';'add
+    end
+    return script
+
+
   method gettype(ct)
     dim=ct.countstr('[')
     ct=ct.right(ct.length()-dim)
