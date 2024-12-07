@@ -4,6 +4,7 @@
 - New INTERPRET instruction
 - -crossref option now lists classes, methods and properties
 - new -targetvm option to compile to a lower java version than the current JDK
+- retrieve JSR223 bindings key values
 
 ## Fixes
 - NetRexx-21 superfluous warning on crossref option ("overrides program default")
@@ -20,6 +21,7 @@
 - xref2uml.nrx, generate PlantUML inputfiles from crossref files
 - rexxtry.nrx, every rexx needs its rexxtry
 - rexxcps.nrx, corrected calculating clauses per second
+- jsrbindinds.nrx, retrieve bindings key values
 
 
 # NetRexx 4.06 GA [2 Mar 2024]
