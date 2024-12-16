@@ -90,8 +90,8 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
   commentlevel
   
   mybindings=SimpleBindings
-  
-  -----------------------------------------------   Constructors   ---------------------------------------		
+
+  -----------------------------------------------   Constructors   ---------------------------------------
   
   method NetRexxScriptEngine()
     this(SimpleBindings())
@@ -106,17 +106,16 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
     put("THREADING", null)
     instance=this
-    
     put("nrxscriptengine", instance)
+
     mybindings=SimpleBindings()
     mybindings.putAll(getBindings(ScriptContext.ENGINE_SCOPE))		--	save bindings copy
     
     -----------------------------------------------  Engine interface methods   ------------------------------        
     
-  method eval(script=String , scriptcontext=ScriptContext ) signals ScriptException returns Object
+  method eval(script=String , scriptcontext=ScriptContext) signals ScriptException returns Object
     hisbindings=scriptcontext.getBindings(ScriptContext.ENGINE_SCOPE)
     hisbindings.putAll(mybindings)				--		pass my environment settings
-    put("__MRE__BINDINGS", hisbindings)    -- make it 'somewhat' unique
 
     scp=System.getProperty("java.class.path")		--		get the global classpath
     if scp\=saveclasspath then do						--		if it has changed we need a new interpreter
@@ -160,18 +159,21 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     scriptargs=getargs()		                  --		get any arguments to pass to the script
     
     if interpreter=null then interpreter=NetRexxA()
-    
+
     ro=Object null
     rc=Boolean null
+
+--     say '+ + + '(Rexx script).translate('\n', ';')
+
     if foundmethodname\=null then do
-      ro=interpreter.eval(scriptname, script, foundmethodname, scriptargs, scriptflags)		--	parse and execute the script with parameters
+       ro=interpreter.eval(scriptname, script, foundmethodname, scriptargs, scriptflags)		--	parse and execute the script with parameters
     catch e=Exception
       say e
       e.printStackTrace()
       interpreter=null
     end    				
     else rc=Boolean( interpreter.interpret(scriptname, script, scriptargs, scriptflags) )	--	parse and execute the script with parameters
-    
+
     do
       exitingmethod=interpreter.getClass().getMethod('exiting',null)
       exiting=Boolean exitingmethod.invoke(interpreter,null)
@@ -183,26 +185,28 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
     System.setProperty("java.class.path",scp) 		--		restore the classpath we modified
     
-    if rc\=null then -	
-       if rc.booleanValue()\=TRUE then signal ScriptException("Script parse failed") 
+    if rc\=null then
+      if rc.booleanValue()\=TRUE then
+        signal ScriptException("Script parse failed")
     
-       if ro\=null then return ro
-       else -
-	 if get("result")\=null then return get("result")
-	 else -
-	   return get("returnobject")
+    if ro\=null then
+      return ro
+    else
+	    if get("result")\=null then
+	      return get("result")
+	    else
+	      return get("returnobject")
 
   method eval(reader=Reader , scriptcontext=ScriptContext ) signals ScriptException returns Object
     return eval(getScriptFromReader(reader), scriptcontext)	--	change reader call to string call
-    
-  method createBindings() returns Bindings 
+
+  method createBindings() returns Bindings
     return getBindings(ScriptContext.ENGINE_SCOPE)
     
   method getFactory() returns ScriptEngineFactory 
     return myFactory
     
     ---------------------------------		methods not part of interface definition:      --------------------------------  
-    
   method getObject(name=String) static returns Object
     return instance.get(name)
     
@@ -368,18 +372,18 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       val=nsi.get(String item)
       titem=Rexx(item.toString()).changestr('.','_')
       if val = null then do
-	if verbose="verbose4",verbose="verbose5" then
-	  say item.toString()"= Object null"
-      prefix=prefix';'titem"= Object null"
-      sufix=sufix';nowarn$'titem"="titem
+	      if verbose="verbose4",verbose="verbose5" then
+	        say item.toString()"= Object null"
+        prefix=prefix';'titem"= Object null"
+        sufix=sufix';nowarn$'titem"="titem
       end
       else do
-	type=Rexx(val.getClass().getName())
-	if type.left(1)="[" then type=gettype(type)
-	if verbose="verbose4",verbose="verbose5" then
-	  say titem"="type val
-	prefix=prefix';'titem"="type 'NetRexxScriptEngine.instance.get("'item.toString()'")'
-	sufix=sufix';nowarn$'titem"="titem
+	      type=Rexx(val.getClass().getName())
+	      if type.left(1)="[" then type=gettype(type)
+	      if verbose="verbose4",verbose="verbose5" then
+	        say titem"="type val
+        prefix=prefix';'titem"="type 'NetRexxScriptEngine.instance.get("'item.toString()'")'
+	      sufix=sufix';nowarn$'titem"="titem
       end
     end
     
@@ -392,26 +396,25 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     it=ks.iterator()
     loop while it.hasNext()
       item=it.next()
---        titem=Rexx(item.toString()).changestr('.','_')
---        say 'ITEM ' item
       if item = "arg" | -
          item = "javax.script.engine" | -
          item = "javax.script.engine_version" | -
          item = "javax.script.language" | -
          item = "javax.script.language_version" | -
-         item = "javax.script.name" then
-        iterate                -- don"t add
+         item = "javax.script.name" | -
+         item = "THREADING" | -
+         item = "nrxscriptengine" then
+        iterate                -- no need to update
 
-      val=nsi.get(String item)
+      val=nsi.get(String item) -- get value and update bindings
       if val == null then
-         add = '__MRE__BINDINGS.put("'item'", java.lang.Object null)'
+         add = '(nrxscriptengine.getBindings(ScriptContext.ENGINE_SCOPE)).put("'item'", java.lang.Object null)'
       else do
-         add = '__MRE__BINDINGS.put("'item'", java.lang.Object 'item.toString()')'
+         add = '(nrxscriptengine.getBindings(ScriptContext.ENGINE_SCOPE)).put("'item'", java.lang.Object 'item.toString()')'
       end
       script = script';'add
     end
     return script
-
 
   method gettype(ct)
     dim=ct.countstr('[')
@@ -511,20 +514,18 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
     linesadded=0
     
-    line=";		import javax.script."
-    ofq.write(String line,0,line.length())			--		write an import statement for JSR223
+    line=";		import javax.script.Bindings"
+    ofq.write(String line,0,line.length())			--		write an import statement for JSR223, we only need Bindings
     linesadded=linesadded+1
-    
+
+    line=";		import javax.script.ScriptContext"
+    ofq.write(String line,0,line.length())			--		and ScriptContext
+    linesadded=linesadded+1
+
     line=";		import org.netrexx.jsr223.NetRexxScriptEngine"
-    
-    ofq.write(String line,0,line.length())			--		write an import statement for this JSR223 ScriptEngine
+    ofq.write(String line,0,line.length())			--		and our JSR223 ScriptEngine
     linesadded=linesadded+1
-    
-    line=";		import javax.swing."
-    
-    ofq.write(String line,0,line.length())			--		write an import statement for Swing
-    linesadded=linesadded+1
-    
+
     if sn.lastpos('.')>0 then cn=sn.left(sn.lastpos('.')-1)
     else cn=sn
     line="; class" cn ';'
@@ -609,5 +610,5 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       ofq.write(String line,0,line.length())
     end	
     return linecount
-    
-    
+
+
