@@ -1,12 +1,13 @@
 /* select stage */
 /*
- *  Copyright (C) 2023  Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
+ *  Copyright (C) 2023 - 2024 Jeffrey Hennick, Jeff (at) Jeff (dash) H (dot) com
  *Distributed under the ICU 1.8.1 License with NO WARRANTIES of ANY kind.
  *  See LICENSE for the license and information on using, copying, modifying,
  *  and distributing this program.
  */
 
 /*
+ 24/12/16 Add MULTI, NOT, TRUEFALSE, & TF. Add PROPERTIES. Jeff Hennick
  23/ 5/31 New. From parse.  Jeff Hennick
 */
 
@@ -58,18 +59,45 @@ method stageExit(pInfo=Rexx,code=Rexx) returns boolean
   name = pInfo[3]
   ucode = Rexx ''
   uf = Rexx ''
+  tfopt = 1
 
   if pInfo[8] then
     signal StageError(13,'Error (parse) - 'pInfo' - not valid at 'pInfo[3]' 'pInfo[4])
 
   optstr = pInfo[4]
+  optstrorg = pInfo[4]
 
+    /* Any processing option? */
+
+  parse optstr fw optstr
+
+  select
+    when fw = 'TF' then nop
+    when 'TRUEFALSE'.abbrev(fw.upper(), 4) then nop
+    when fw = 'NOT' then tfopt = 0
+    when 'MULTIPLE'.abbrev(fw.upper(), 5) then tfopt = 0
+    otherwise
+      optstr = optstrorg
+  end
+
+     /* Any PROPERTIES? */
+  uprop = ''
+
+  parse optstr fw rest
+
+  if fw = 'properties' then do
+   ptemp0 = Dstring(rest)
+   uprop = ptemp0.String()
+   optstr = ptemp0.Residue()
+  end
+
+    /* Get the NetRexx code */
   ptempl = DString(optstr)
   pt = ptempl.String()
 
   if pt = '' then do
-    -- Emsg(11, 'Select -- no NetRexx found in' optstr)
-    say 'Select -- no NetRexx found in' optstr 'RC = 11'
+    -- Emsg(11, 'Select -- unknown option or no NetRexx found in' optstr)
+    say 'Select -- unknown option or no NetRexx found in' optstr 'RC = 11'
     exit 11
   end
 
@@ -85,9 +113,8 @@ method stageExit(pInfo=Rexx,code=Rexx) returns boolean
     exit 11
   end
 
-    uf[0] = 'method user(rec, prev);-- trace results'
-    uf[1] = ' 'ucode
-
+  uf[0] = 'method user(rec, prev); -- trace results'
+  uf[1] = ' 'ucode
 
   if optstr <> '' then do
     -- Emsg(11, 'Select-- Unknown extra:' optstr)
@@ -100,7 +127,15 @@ method stageExit(pInfo=Rexx,code=Rexx) returns boolean
   cname = stageName(name,pid,pInfo[1])
 
   s('class 'cname' extends stage private')
-  s('s = Rexx 1')
+  s('properties public')
+  s('  s = Rexx 1')
+  s('  tf =' tfopt) /* swap primary & secondary outputs */
+
+  /* insert any properties */
+  loop while uprop <> ""
+    parse uprop fphrase ';' uprop
+    s(' ' fphrase)
+  end
 
   s('')
   s('method run()')
@@ -114,9 +149,9 @@ method stageExit(pInfo=Rexx,code=Rexx) returns boolean
   s('  ol = user(rec, prev)')
        /* Try putting it out on the proper output stream */
   s('  select')
-  s('    when ol = 1  then')
+  s('    when tf & (ol = 1)  then')
   s('      out(0, rec)')
-  s('    when ol = 0  then')
+  s('    when tf & (ol = 0)  then')
   s('      out(1, rec)')
   s('    otherwise')
   s('      out(ol, rec)')
@@ -145,8 +180,9 @@ method stageExit(pInfo=Rexx,code=Rexx) returns boolean
 
   s(uf[0]) /* User's function from dstring */
   s(uf[1])
-         /* convert from property to argument */
   ss[0] = sline
+         /* convert from property to argument */
+  trace off
   loop i = 0 to sline
     code[i] = ss[i]
   end
@@ -161,6 +197,7 @@ return 1  /* stageExit */
 
 
 method show_generated(numbers = 0)
+  trace off
   say '*************************************************************'
   loop n = 1 for sline
     if numbers then l = n.right(3)' '
@@ -179,23 +216,33 @@ method givehelp() static
 return -
 "/** select -- Select Records using user logic\n" -
 "\n" -
-">>--SELECT--+--T/F_NetRexx_Dstring----+-->\n" -
-"            +--Digit_NetRexx_Dstring--+\n" -
+"            +--+--TRUEfalse--+--+\n" -
+"            |  +--TF---------+  |\n" -
+"            |                   |\n" -
+">>--SELECT--+-------------------+--+----------------------------------+--+--T/F_NetRexx_Dstring----+-->\n" -
+"            |                   |  +--PROPERTIES--Properties_Dstring--+  +--Digit_NetRexx_Dstring--+\n" -
+"            +--+--MULTIple--+---+\n" -
+"               +--NOT-------+\n" -
 "\n" -
-" Records are selected by evaluating the NetRexx T/F_Delimited_string.\n" -
-" The Dstring is placed in a method that supplies the \n" -
-" record in the variable rec.  The previous record is in prev.\n" -
-" The method returns 1 to select the record to the primary output stream,.\n" -
+" Using the default TRUEfalse, or TF, option, records are selected by evaluating\n" -
+" the NetRexx T/F_Delimited_string. The Dstring is placed in a method\n" -
+" that supplies the record in the variable rec. The previous record is in prev.\n" -
+" The method returns 1 to select the record to the primary output stream,\n" -
 " or 0 to send it to the secondary stream.\n" -
 "\n" -
-" Alternatively with a Digit_NetRexx_Dstring, which evaluates to a 0 to 9 digit,\n" -
-" the method can return the number of any output stream,.\n" -
-" but NOTE: the primary and secondary numbers, 0 & 1 are reversed per\n" -
-" the above logic. Other streams have their corresponding number.\n" -
+" Alternatively, using the MULTIple or NOT option, with a Digit_NetRexx_Dstring,\n" -
+" which evaluates to a 0 to 9 digit, the method can return the number of any\n" -
+" output stream. Again, the record is in the variable rec, previous record is in prev.\n" -
 "\n" -
-" Any other return value results in the record being discarded.\n" -
+" Any other return value, or to an unconnected output stream, results in\n" -
+" the record being discarded.\n" -
 "\n" -
-" Any record sent to a disconnected stream is discarded.\n" -
+" The PROPERTIES option is needed only if persistant variable(s) are needed to be\n" -
+" available from record to record; for example to count records. All other\n" -
+" variables are local to each record.\n" -
+"\n" -
+" The Properties_Dstring then consists of one or more semicolon separated\n" -
+" property variable assignments.\n" -
 "\n" -
 " Caution: Since any NetRexx statement can be used, this is powerful and could\n" -
 " cause problems.  Also, due to the late compiling, at stage run time, debugging\n" -
@@ -205,5 +252,11 @@ return -
 "   select /return rec.pos('2') > 0/\n" -
 "\n" -
 "   select /parse rec 2 r +1;parse prev 2 p +1; return r <> p/\n" -
+"\n" -
+"   select multi /parse rec 2 r +1; return r/\n" -
+"\n" -
+"\n" -
+"\n This selects only the 3rd record.  The variable c must be made persistant: " -
+"\n select properties /c=0/ /c=c+1; r=0; if c=3 then r=1; return r/ " -
 "\n" -
 "*/\n"
