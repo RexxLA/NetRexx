@@ -4,7 +4,7 @@
 - New INTERPRET instruction
 - -crossref option now lists classes, methods and properties
 - new -targetvm option to compile to a lower java version than the current JDK
-- retrieve JSR223 bindings key values
+- more complete JRS223 framework
 
 ## Fixes
 - NetRexx-21 superfluous warning on crossref option ("overrides program default")
