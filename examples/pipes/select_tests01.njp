@@ -1,6 +1,7 @@
 /* select -- choose Records using Rexx Parse  */
 
 /*
+  24/12/14 Split off multi tests to select_tests02.  Jeff Hennick
   23/ 5/29 New.  Jeff Hennick
 */
 
@@ -43,78 +44,53 @@ pipe (select_tests01)
    split ; |
    c3: ?
 
--- select dstring (tertiary) ?
+-- select tf dstring ?
    literal aza;e2g;hij |
    split ; |
-   p4: select /return 2/ |
-   hole ?
-   p4: |
-   hole ?
-   p4: |
-   c4: compare any ~2# 4 select dstring (tertiary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   select tf /return rec.pos('2') > 0/ |
+   c4: compare any ~2# 4 SELECT tf dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal aza;e2g;hij |
+   literal e2g |
    split ; |
    c4: ?
 
-
--- select dstring (multiple) ?
-   literal 1a2;3b4;5c6;zzz;7c8;9b0;aab |
+-- select true dstring ?
+   literal aza;e2g;hij |
    split ; |
-   p5: select ,
-    /parse rec 2 k +1; ,
-    select case k; ,
-     when 'a' then o = 0; ,
-     when 'b' then o = 2; ,
-     when 'c' then o = 3; ,
-     otherwise o = 1; ,
-    end; ,
-    return o/ |
-   c5z: compare any ~2# 5z select dstring (multiple primary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   select true /return rec.pos('2') > 0/ |
+   c5: compare any ~2# 5 SELECT true dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal zzz |
+   literal e2g |
    split ; |
-   c5z:  ?
-   p5: |
-   c5a: compare any ~2# 5a select dstring (multiple secondary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   c5: ?
+
+-- select truefalse dstring ?
+   literal aza;e2g;hij |
+   split ; |
+   select truefalse /return rec.pos('2') > 0/ |
+   c6: compare any ~2# 6 SELECT truefalse dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal 1a2;aab |
+   literal e2g |
    split ; |
-   c5a: ?
-   p5: |
-   c5b: compare any ~2# 5b select dstring (multiple tertiary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   c6: ?
+
+-- select not dstring ?
+   literal aza;e2g;hij |
+   split ; |
+   select not /return rec.pos('2') > 0/ |
+   c7: compare any ~2# 7 SELECT not dstring ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal 3b4;9b0 |
+   literal aza;hij |
    split ; |
-   c5b: ?
-   p5: |
-   c5c: compare any ~2# 5c select dstring (multiple quaternary) ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   c7: ?
+
+-- select dstring -- variable ?
+   literal aza;e2g;hij |
+   split ; |
+   select  /if c = '' then c = 0; c = c + 1; if c = 3 then r = 1 else r = 0; return r/ |
+   c8: compare any ~2# 8 SELECT dstring -- variable ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
    o: ?
-   literal 5c6;7c8 |
+   literal hij |
    split ; |
-   c5c:
+   c8: ?
 
-
-/** select -- Select Records using user logic
-
->>--SELECT--NetRexx_Dstring-->
-
- Records are selected by the NetRexx Delimited_string.
- The Dstring is placed in a method that supplies the
- record in the variable rec.  The previous record is in prev.
- The method returns 1 to select the record to the primary output stream,.
- or 0 to send it to the secondary stream.  A record sent to a disconnected
- stream is discarded.
-
- Alternatively, the method can return the number of any output stream,.
- but NOTE: the primary and secondary numbers, 0 & 1 are reversed per
- the above logic. Other streams have their corresponding number.
-
- An other return value results in the record being discarded.
-
- Examples:
-   select /return rec.pos('2') > 0/
-
-   select /parse rec 2 r +1;parse prev 2 p +1; return r \= p/
-
-*/
