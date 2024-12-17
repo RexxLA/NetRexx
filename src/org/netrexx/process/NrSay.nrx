@@ -17,6 +17,7 @@
 /* 1996.06.06 Landmark .. the first 'Hello World' using this, in full */
 /* 1996.07.12 First RxClauseParser object                             */
 /* 1999.10.04 Implement interpret [experimental version]              */
+/* 2024.12.16 Send output to jsr223 engine, when set            --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -88,6 +89,14 @@ class NrSay implements RxClauseParser uses RxCode, RxExpr
 
  /** Interpretation */
  method interpret(cursor=RxCursor null)
+  if rxt.jsr223Engine \= null then do     -- running as a JSR223 script
+    if expr=null then rxt.nrxApi.eSay('')
+    else do
+      code=expr.evaluate(cursor)          -- re-evaluate as needed
+      rxt.nrxApi.eSay(rxt.interpreter.stringvalue(code))
+    end
+    return
+  end
   if expr=null then say;
    else do
     code=expr.evaluate(cursor)          -- re-evaluate as needed

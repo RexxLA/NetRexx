@@ -59,6 +59,7 @@
 /* 2012.12.23 if indexed access to Rexx subtype, cast return type to subclass --	KK  ---- issue #31 */
 /* 2016.01.01 support for NETREXX-122 (annotations)                   */
 /* 2024.01.10 detect \\ disguised as \U005C      -- MRE fix issue #55 */
+/* 2024.12.16 Read ASK input from jsr223 engine, when set       --MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -2001,12 +2002,22 @@ end sqstub
     when name=='ask'     then do
       code.javacode=RxType.REXXIO_CLASS'.Ask()'
       code.type=RxType.REXX_TYPE
-      if exec then code.value=RexxIO.Ask()
+      if exec then do
+        if rxt.jsr223Engine \= null then do               -- running as a JSR223 script
+          code.value=rxt.nrxApi.eAsk()                    -- MRE read from jrs223 context Reader
+        end
+        else code.value=RexxIO.Ask()
+      end
     end
     when name=='asknoecho'     then do
       code.javacode=RxType.REXXIO_CLASS'.AskDark()'
       code.type=RxType.REXX_TYPE
-      if exec then code.value=RexxIO.AskDark()
+      if exec then do
+        if rxt.jsr223Engine \= null then do               -- running as a JSR223 script
+          code.value=rxt.nrxApi.eAskDark()                -- MRE read from jrs223 context Reader
+        end
+      end
+      else code.value=RexxIO.AskDark()
     end
 
     when name=='this'    then do

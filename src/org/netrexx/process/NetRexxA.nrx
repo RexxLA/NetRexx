@@ -20,9 +20,12 @@
 /* 2011.08.19 add new apis for interpret,eval (Kermit Kiser)          */
 /* 2012.09.21 add new method "exiting" to check if interpreter has    */
 /* been shutdown by an Exit statement - issue #89 -KK- (Kermit Kiser) */
+/* 2024.12.16 Set rxt.engine, nrxApi, handle redirected SAY, ASK --MRE*/
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
+
+import org.netrexx.jsr223.NetRexxScriptEngine
 
 /**  NetRexx API external interface.                                   */
 class NetRexxA
@@ -39,7 +42,12 @@ class NetRexxA
     translator=RxTranslator()        -- construct translator
     langs=[Rexx 'Nr']                -- languages supported
     translator.setlanguages(langs)   -- should always work
-    
+    translator.nrxApi = this         -- share our instance
+
+                                     -- if translator is a jsr223Engine, ASK and SAY are ours
+  method setEngine(engine=NetRexxScriptEngine) public
+    translator.jsr223Engine = engine
+
   /** exiting: return the translator exit flag to allow checking for execution of the "Exit" statement  */ -- issue #89 -KK- 
   method exiting public returns boolean	
     return translator.exiting		
@@ -153,7 +161,7 @@ class NetRexxA
      returns an object if no error, default flag is -verbose0
    */
   method eval(programname=String, programstring=String, methodname=String, argstring=String "", flagstring=String "", logfile=PrintWriter null, outfile=PrintStream System.out) returns Object  SIGNALS NoSuchMethodException,IllegalAccessException,InvocationTargetException
-    
+
     if savedprogram\=programstring then do
       savedprogram=programstring
       rexxflags=Rexx(flagstring)
@@ -195,4 +203,67 @@ class NetRexxA
     type=RxType(rpack, rname, dim)
     
     return type.getClassObject(translator.loader)
+
+
+-- redirected  SAY (NrSay.nrx) and ASK methods (RxTermParser.nrx)
+--MRE a copy of RexxIO Say, adapted to write to ScriptContext Writer
+  method eSay(obj=Object) returns boolean
+    if obj=null then return eSay(char[] null)
+    return eSay(obj.toString().toCharArray())
+
+  method eSay(str=String) returns boolean
+    if str=null then return eSay(char[] null)
+    return eSay(str.toCharArray())
+
+  method eSay(line=Rexx) returns boolean
+    --if line='' then Exception().printStackTrace()
+    return eSay(Rexx.tochararray(line))       -- null passes through
+
+  method Say(c=char) returns boolean
+    ca=char[1]; ca[0]=c
+    return eSay(ca)
+
+    -- numeric primitives
+  method eSay(n=long) returns boolean  -- handles byte, short, int
+    return eSay(Long.toString(n).toCharArray())
+  method eSay(f=float)   returns boolean; return eSay(Rexx(f))
+  method eSay(d=double)  returns boolean; return eSay(Rexx(d))
+  method eSay(b=boolean) returns boolean; return eSay(Rexx(b))
+
+  method eSay(aline=char[]) returns boolean
+    if translator.jsr223Engine == null then do   -- should not happen..
+      say aline
+      return 0
+    end
+    do                                           -- get the writer
+      out = ((translator.jsr223Engine).getContext()).getWriter()
+      if aline=null then out.write('\n')      -- just new line
+      else do                                 -- have some data
+        select
+          when aline.length=0 then out.write('\n')
+          when aline[aline.length-1]\=='\-' then out.write(aline'\n')
+          otherwise                            -- rarer continuation case
+            bline=char[aline.length-1]
+            System.arraycopy(aline, 0, bline, 0, bline.length)
+            out.write(bline)
+        end
+      end
+      out.flush()  -- could be a real user out there
+    catch IOException
+      say '--- IOException writing to Writer'
+    end
+
+    return 0
+
+  method eAsk() returns Rexx
+    do
+      in = ((translator.jsr223Engine).getContext()).getReader()
+      line = (BufferedReader(in)).readLine()
+    catch IOException
+      say '--- IOException reading from Reader'
+    end
+    return Rexx(line)
+
+  method eAskDark() returns Rexx
+    return eAsk()                    -- bnot shown anyway
 

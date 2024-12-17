@@ -42,6 +42,7 @@
 /*                                              undo issue #80 fix    */
 /* 2024.01.03 fix issue #49 with protected blocks --MRE               */
 /* 2024.09.29 Handle rxt.interpreting flag --MRE                      */
+/* 2024.12.16 Connect trace output to jsr223 engine, when set   --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -760,6 +761,10 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
       -- Note trace2 is probably the *wrong* default for interpretation
       if cursor.curprogram.flag.trace=1 then outstream=System.out
                                         else outstream=System.err
+--MRE make our own PrintStream from jsr223 Engine ErrorWriter
+      if rxt.jsr223Engine \= null then do
+        outstream = PrintStream(WriterOutputStream((rxt.jsr223Engine).getContext().getErrorWriter()))
+      end
       cursor.curtrace=RexxTrace(cursor.curprogram.source.getLineCount(),-
                                 outstream, cursor.curprogram.source.getName())
       end
@@ -1329,3 +1334,45 @@ end interactive
     */
  method poplevel(cursor=RxCursor)
   cursor.curlevel=cursor.curlevel.prev
+
+
+class WriterOutputStream extends OutputStream
+  properties private
+    w = Writer;
+
+  method WriterOutputStream(writer = Writer)
+    this.w = writer;
+
+  method write(b = int)
+    -- Write a single byte as a character to the Writer
+    do
+      w.write(b)
+      flush()
+    catch IOException
+      say 'Cannot write to stderr : 'b
+    end
+
+  method write(b =byte[], off = int, len = int)
+    -- Write a portion of the byte array as characters to the Writer
+    do
+      w.write(String(b, off, len))
+      flush()
+    catch IOException
+      say 'Cannot write to stderr : 'String(b, off, len)
+    end
+
+  method flush()
+    do
+      w.flush()
+    catch IOException
+      say 'Cannot flush'
+    end
+
+  method close()
+    do
+      w.close()
+    catch IOException
+      say 'Cannot close'
+    end
+
+

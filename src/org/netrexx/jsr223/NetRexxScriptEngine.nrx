@@ -9,6 +9,7 @@
 Version 0.2.2 (December 7, 2024)
 
   * add logic to retrieve binding key values  -- MRE
+  * share engine --MRE
 
 Version 0.2.1 (May 20, 2015)
 
@@ -124,7 +125,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     end
     
     tcl=ClassLoader Thread.currentThread().getContextClassLoader()			--		find the thread context classloader
-    
+
     if tcl<=java.net.URLClassLoader then do
       tclurl=java.net.URLClassLoader tcl
       addpath=""
@@ -135,7 +136,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       addpath=addpath.strip('b',ps)
       System.setProperty("java.class.path",scp||ps"NetRexxC.jar"ps||addpath) 
     end
-    
+
     antpack="org.apache.tools.ant"
     loaderpack=Rexx(tcl.getClass().getName())
     if antpack=loaderpack.left(antpack.length()) then do   -- is this an Ant classloader? if yes, we need to add his local classpath for NetRexxA to use
@@ -157,13 +158,16 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     if foundprogramname\=null then scriptname=foundprogramname		--	the prefix scan found a class instruction with a name
     
     scriptargs=getargs()		                  --		get any arguments to pass to the script
-    
+
+    if verbose="verbose4",verbose="verbose5" then do
+      say '+ + + 'script
+    end
+
     if interpreter=null then interpreter=NetRexxA()
+    interpreter.setEngine(this)
 
     ro=Object null
     rc=Boolean null
-
---     say '+ + + '(Rexx script).translate('\n', ';')
 
     if foundmethodname\=null then do
        ro=interpreter.eval(scriptname, script, foundmethodname, scriptargs, scriptflags)		--	parse and execute the script with parameters
@@ -182,7 +186,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       --    		say e
       interpreter=null
     end
-    
+
     System.setProperty("java.class.path",scp) 		--		restore the classpath we modified
     
     if rc\=null then
@@ -205,8 +209,9 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
   method getFactory() returns ScriptEngineFactory 
     return myFactory
-    
-    ---------------------------------		methods not part of interface definition:      --------------------------------  
+
+    ---------------------------------		methods not part of interface definition:      --------------------------------
+
   method getObject(name=String) static returns Object
     return instance.get(name)
     
@@ -375,19 +380,19 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
 	      if verbose="verbose4",verbose="verbose5" then
 	        say item.toString()"= Object null"
         prefix=prefix';'titem"= Object null"
-        sufix=sufix';nowarn$'titem"="titem
+        sufix=sufix'\nnowarn$'titem"="titem
       end
       else do
 	      type=Rexx(val.getClass().getName())
 	      if type.left(1)="[" then type=gettype(type)
 	      if verbose="verbose4",verbose="verbose5" then
 	        say titem"="type val
-        prefix=prefix';'titem"="type 'NetRexxScriptEngine.instance.get("'item.toString()'")'
-	      sufix=sufix';nowarn$'titem"="titem
+        prefix=prefix'\n'titem"="type 'NetRexxScriptEngine.instance.get("'item.toString()'")'
+	      sufix=sufix'\nnowarn$'titem"="titem
       end
     end
     
-    return prefix';'sufix
+    return prefix'\n'sufix'\n'
 
   method suffixed(script = String)
     nsi=instance
@@ -412,7 +417,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       else do
          add = '(nrxscriptengine.getBindings(ScriptContext.ENGINE_SCOPE)).put("'item'", java.lang.Object 'item.toString()')'
       end
-      script = script';'add
+      script = script'\n'add
     end
     return script
 
@@ -514,15 +519,15 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
     
     linesadded=0
     
-    line=";		import javax.script.Bindings"
+    line="\nimport javax.script.Bindings"
     ofq.write(String line,0,line.length())			--		write an import statement for JSR223, we only need Bindings
     linesadded=linesadded+1
 
-    line=";		import javax.script.ScriptContext"
+    line="\nimport javax.script.ScriptContext"
     ofq.write(String line,0,line.length())			--		and ScriptContext
     linesadded=linesadded+1
 
-    line=";		import org.netrexx.jsr223.NetRexxScriptEngine"
+    line="\nimport org.netrexx.jsr223.NetRexxScriptEngine"
     ofq.write(String line,0,line.length())			--		and our JSR223 ScriptEngine
     linesadded=linesadded+1
 
@@ -542,7 +547,7 @@ class NetRexxScriptEngine extends AbstractScriptEngine implements ScriptEngine u
       return linesadded
     end
     
-    line=';    method main($007=String[]) static;arg=Rexx($007);arg=arg;'
+    line='\nmethod main($007=String[]) static\narg=Rexx($007)\narg=arg\n'
     
     ofq.write(String line,0,line.length())			--		write a method statement
     linesadded=linesadded+1
