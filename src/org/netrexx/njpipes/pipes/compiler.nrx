@@ -12,6 +12,10 @@ package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
 /*
+   2024-12-22 rewrite alias processing to avoid secondary changes;
+              add blank stage to comment stage processing;
+              add --[no space]comment processing;
+              remove two unused variables, (139) config, (958) nc. Jeff Hennick
    2024-12-02 add alias var to var_stage. Jeff Hennick
    2024-07-31 avoid overwriting existing .nrx files. Issue netrexx-#66, rvj and mre
    2020-10-14 removed debugging "say". Jeff Hennick
@@ -132,7 +136,7 @@ class compiler extends Object public
     -- process config statement
     i	     = opts.wordpos('config')
     if i>0 then do
-      config = opts.subword(i,2)
+--      config = opts.subword(i,2)
       n	     = n+1
       opts   = opts.delword(i,2)
     end
@@ -224,6 +228,22 @@ class compiler extends Object public
 
 --  Convert alias stage names to real class names
 	select
+	  when stg='' then stg = ' comment ' /* 24/12/22 */
+	  when stg.word(1) = '--' then stg='comment' stg.subword(2)
+	  when stg.word(1) ='>>'  then stg='diska' stg.subword(2)
+	  when stg.word(1) ='<'   then stg='diskr' stg.subword(2)
+	  when stg.word(1) ='>'   then stg='diskw' stg.subword(2)
+	  when stg.word(1)='64decode' then stg='decode64' stg.subword(2)
+	  when stg.word(1)='64encode' then stg='encode64' stg.subword(2)
+	  when stg.word(1)='random' then stg='random_stage' stg.subword(2)
+	  when stg.word(1)='var' then stg='var_stage' stg.subword(2)
+	  when stg.word(1).left(2)='--' then stg='comment' stg.subword(2)  /* 24/12/22 */
+	
+	  otherwise
+	    nop
+	end
+/* rewrtten above  24/12/22
+	select
 	  when stg.word(1) = '--' then stg=stg.changestr('--',' comment ')
 	  when stg.word(1) ='>>'  then stg=stg.changestr('>>',' diska ')
 	  when stg.word(1) ='<'   then stg=stg.changestr('<',' diskr ')
@@ -238,6 +258,7 @@ class compiler extends Object public
 	  otherwise
 	    nop
 	end
+*/
 
 	-- call the compilerExit if it's a regular stage
         if stg.word(1).right(1)	= ':' then
@@ -934,7 +955,7 @@ class compiler extends Object public
 	end
 
 	--clsList=ArrayList()
-	nc=NetRexxC.clgMain(pipeClassName,nrxsrc)
+-- 	nc=NetRexxC.clgMain(pipeClassName,nrxsrc)
 	if shouldExit then exit
       end
 
