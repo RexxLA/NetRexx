@@ -6,7 +6,7 @@ are:
 \item A Git client
 \end{enumerate}
 
-\nr{} can be built on all platforms that it runs on. NetRexx has been
+\nr{} can be built on all platforms it runs on. NetRexx has been
 bootstrapped since 1996 and subsequently has been used to compile
 itself. Every checkout of the source code contains the 'bootstrap'
 compiler, which is normally the previous release version. Only the official
@@ -23,7 +23,7 @@ graphical user interfaces, but what is shown here, is the command line
 version. Choose a suitable place as working directory - you can later
 move it around as you please.
 \begin{alltt}
-git clone git://git.code.sf.net/p/netrexx/code netrexx-code
+git clone https://git.code.sf.net/p/netrexx/code netrexx-code
 \end{alltt}
 
 \begin{shaded}\noindent
@@ -40,38 +40,161 @@ code, including the documentation, examples and test cases.
 % tree ../..
 % \END
 \section{The buildfile}
-The official buildfile is called \keyword{build.xml} and the
+The official buildfile is called \keyword{build.xml} and the "Another Neat Tool"
 \keyword{ant} utility is used for building \nr{} from source. This
-file contains a number of tasks. To build
-the translator, make sure that the top level directory that is cloned from git is the
+\keyword{build.xml} contains tasks to build a number of targets, as listed below:
+\begin{alltt}
+ant -p
+    Buildfile: ./netrexx-code/build.xml
+
+    Main targets:
+
+    apidocs           create API documentation
+    clean             delete all built files
+    clean.jar         delete built jars
+    clean.javadocs    delete built javadocs
+    clean.process     delete built translator files
+    clean.runtime     delete built runtime files
+    clean.tests       delete test files
+    compile           compile all (except tests)
+    compile.process   compile translator
+    compile.runtime   compile runtime
+    compile.tests     compile tests
+    default           build and test distribution
+    init              Set build number and document version level
+    jars              create jars
+    package           build distribution package
+    post.jar.prepare  post jar build - define new NetRexx compiler
+    setecj            set compiler to ecj
+    setjavac          set compiler to javac
+    showprops         Displays default property settings
+    tests             compile and run tests
+    withecj           build and test distribution with ecj
+    withjavac         build and test distribution with javac
+    withjavadocs      build distribution and javadocs with test
+    Default target: default
+\end{alltt}
+To build the translator, make sure that the top level directory that is cloned from git is the
 current directory, and issue the command:
 \begin{alltt}
-java -jar ant/ant-launcher.jar compile
+    ant
 \end{alltt}
-followed by
+If the short-hand ant script is not available in your build environment, use the \nr{} supplied
+ant-launcher.jar located in the  \keyword{./ant} directory
 \begin{alltt}
-java -jar ant/ant-launcher.jar jars
+    java -jar ant/ant-launcher.jar
 \end{alltt}
-This will build the compiler from source and create a \keyword{build}
-directory in the current directory. In \keyword{build/lib} the
-NetRexxC and NetRexxR jars are put by the archiving process that is
-started by the \keyword{jar} task. These new jars can be used
-immediately, by having them (NetRexxC will suffice) on the classpath.
+
+This will build the \keyword{default} target, which runs the following tasks in sequence :
+setecj, prepare, compile.runtime, compile.process, compile, init, jars, post.jar.prepare,
+compile.tests, -checkRunTestsRequired, run.tests, tests and withecj.
+
+The compiler/translator is built from source and creates a \keyword{./build}
+directory in the current directory. The NetRexxC.jar, NetRexxF.jar and NetRexxR.jar file are created
+in the \keyword{./build/lib} directory by the archiving process which is started by the \keyword{jars}
+ant-task. These new jar files can be used immediately, by having them (NetRexxC.jar will suffice) on the classpath.
+
+The \nr{} source files are located in the src directory.
+
+The \keyword{./src/netrexx/lang} directory contains the core of \nr{}, \keyword{./src/org/netrexx/process} contains
+the translator, compiler and interpreter. The \keyword{./src/org/netrexx/jsr223} directory contains the framework which
+provides \nr{} as a JSR223 scripting language, and \keyword{./src/org/netrexx/njppipes} holds the sourcecode for the
+\nr{} Pipelines compiler and stages.
+
+The \keyword{default} build process produces the following jar files:
+
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+\toprule
+NetRexxC.jar & This jar includes the core \nr{} classes and the \nr{} translator, compiler and interpreter.
+Include this jar in your classpath if you have a Java Development Kit (JDK) installed in your build system and you
+want to compile (or interpret) \nr{} programs.
+
+The jar also contains the \nr{} implementation of CMS Pipelines, nrws, the \nr{} workspace, and the
+NetRexx JSR223 Scripting Engine.
+\\\midrule
+NetRexxF.jar & This jar file contains the same as NetRexxC.jar with addition to a slightly modified Eclipse
+Java compiler. Use this jar file if you only have a Java runtime (i.e. no javac).
+\\\midrule
+NetRexxR.jar & This jar file contains the core of \nr{}. Ship this jar file with any compiled \nr{} program where
+you expect NetRexxC.jar or NetRexxF.jar to be absent.
+\\\bottomrule
+\end{tabularx}
+
+For a virgin start, issue
+\begin{alltt}
+    ant clean
+\end{alltt}
+to remove all previously built files.
+
+There is no target defined to build the documentation, which is built manually using the TextTools/build.rexx
+program (see https://github.com/RexxLA/TextTools).
+
+The documentation is however handled by the package target, where all generated pdfs from
+\keyword{documentation/nrl, documentation/pg, documentation/ug, documentation/njpipes} are archived in the \nr{}
+distribution zip file.
+
 \section{Testing}
-Currently, there are two locations that contain the tests. The first
-is the \keyword{org.netrexx.process.diag} package, which currently is
-being integrated into the \keyword{trunk/test} directory. This
-directory contains, in addition to the traditional ``diag'' tests that
-have been modified to run under jUnit, some of the tests for the newer
-functionality. These tests are accessible using a \keyword{make}
-process that uses \keyword{makefile} as its build build file. The
-command
-\begin{alltt}
-make test
-\end{alltt}
-will compile and run the tests; jUnit will report on progress and
-results.
-% \bash[stdout]
+Testing is included in a normal build. When testing, the newly built NetRexxC.jar file is used in the classpath.
+
+All \nr{} files located in directories \keyword{src/org/netrexx/diag} and \keyword{test} are run to test all instructions and features.
+Any obvious, and non-obvious, possible code error in the \nr{} core and translator source is very likely to be detected by the tests.
+
+\section{Preparing a new release}
+When preparing to release a new version, whether major or minor, update file \keyword{org/netrexx/process/NrVersion.nrx}.
+
+Its private properties \keyword{version, mod and procdate} are referenced during the generation of documentation and
+other target files.
+
+The following
+\begin{lstlisting}
+class NrVersion
+  properties private
+    version   = '4.06'
+    procdate  = '03 Mar 2024'
+    copyright = 'Copyright (c) RexxLA, 2011,2024.   All rights reserved.\nParts Copyright (c) IBM Corporation, 1995,2008.'
+    mod       = 'GA'
+\end{lstlisting}
+
+builds NetRexx-4.06-GA.
+\section{Package a new release}
+As a final verification, copy the newly built NetRexxC.jar and NetRexxF.jar from the \keyword{./build/lib} directory
+to the \keyword{./lib} directory, and build the \nr{} translator using the new jar files by issuing
+\keyword{ant clean default}.
+
+Next, build the documentation from the \keyword{./documentation} directories.
+
+Finally, create the release package by issuing \keyword{ant package}.
+
+The \nr{} release package is delivered as a zip file, containing the following:
+\begin{enumerate}
+    \item The NetRexxC.jar, NetRexxF.jar and NetRexxR.jar files
+    \item The documentation pdfs from \keyword{./documentation/nrl, ./documentation/pg, ./documentation/ug,
+        ./documentation/njpipes}.
+    \item The \keyword{tools} directory with a number of utilities
+    \item A large number of examples in the \keyword{examples} directory
+    \item The keyword{bin} directory with scripts to launch the translator
+    \item The readme file and release notes
+\end{enumerate}
+
+
+Normally only beta and General Available (GA) builds are published on \url{https://netrexx.org}.
+
+
+
+
+%package, which currently is
+%being integrated into the \keyword{test} directory. This
+%directory contains, in addition to the traditional ``diag'' tests that
+%have been modified to run under jUnit, some of the tests for the newer
+%functionality. These tests are accessible using a \keyword{make}
+%process that uses \keyword{makefile} as its build build file. The
+%command
+%\begin{alltt}
+%make test
+%%\end{alltt}
+%will compile and run the tests; jUnit will report on progress and
+%results.
+%% \bash[stdout]
 % cd ..\..\test
 % make test
 % \END

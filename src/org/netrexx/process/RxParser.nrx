@@ -42,6 +42,7 @@
 /* 2022.06.16 Optional interactive trace clauser on constructor --MRE */
 /* 2023.08.22 Fix ISSUE #56 on ADDRESS abbutal concatenation --MRE    */
 /* 2024.09.29 support for INTERPRET instruction --MRE                 */
+/* 2024.12.28 Fix issue #69 INTERPRET updating methodclauses          */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -482,11 +483,11 @@ class RxParser uses RxCode
   lastclause=RxClause null
   loop label mainloop forever
     do label errorhandle
-    if reparse then reparse=0
-     else do
-      clausenum=clausenum+1
-      cursor.curclause=clauser.clause(clausenum)
-      if cursor.curclause=null then return 0 -- EOS: end of stream
+      if reparse then reparse=0
+      else do
+        clausenum=clausenum+1
+        cursor.curclause=clauser.clause(clausenum)
+        if cursor.curclause=null then return 0 -- EOS: end of stream
       end
 
     indention=level                          -- for formatter
@@ -584,11 +585,15 @@ class RxParser uses RxCode
         return 1                   -- [indicating not an executable clause]
         end
       end endercheck
-
     /* Clause is part of the current method */
     if willexec then do                      -- if interpretation likely
-      if lastclause=null then cursor.curmethod.methodclauses=cursor.curclause
-                         else lastclause.next=cursor.curclause
+                       --MRE fix issue #69
+                       -- when we're parsing INTERPRET, don't update curmethod.methodclauses
+                       -- it's already set correctly during 'normal' parsing
+      if lastclause=null then do
+        if \rxt.interpreting then cursor.curmethod.methodclauses=cursor.curclause
+      end
+      else lastclause.next=cursor.curclause
       cursor.curclause.last=lastclause
       lastclause=cursor.curclause
       end
@@ -950,7 +955,6 @@ class RxParser uses RxCode
   newlevel=NrLevel(key, cursor.curclause) -- initialise new level
   newlevel.prev=thislevel               -- chain it in to stack
   thislevel=newlevel                    -- and make it the new level
-
  /* SCRAPLEVEL -- drop a level, without checking
     thislevel and level are updated
     This simply undoes a PUSHLEVEL for a retry (DO -> LOOP)
