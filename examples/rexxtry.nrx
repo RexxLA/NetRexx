@@ -1,7 +1,8 @@
 #!/usr/bin/env nr
+/* rexxtry.nrx */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Copyright (c) 2024 Rexx Language Association. All rights reserved.         */
+/* Copyright (c) 2024, 2025 Rexx Language Association. All rights reserved.   */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -35,12 +36,20 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.               */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
+
 /****************************************************************************/
 /* Name: rexxtry.nrx                                                        */
 /* Type: NetRexx Script                                                     */
 /*                                                                          */
 /*  Loosely derived from an ancient formulation of Mike Cowlishaw.          */
+/*                                                                          */
+/*  Multiline loosely derived from the Radio Shack TRS-80 Model I BASIC     */
 /****************************************************************************/
+
+/****************************************************************************
+ 24/11     New, from other Rexxes.  Marc Remes
+ 25/ 1/ 3  Add multiline handling.  Jeff Hennick
+ ****************************************************************************/
 
 class rexxtry
 
@@ -57,6 +66,10 @@ properties static
   prev      =''
   current   =''
   rc        ='X'
+  lines     =''
+  work      =''
+  ready     ='Ready\n>- \0'
+  single    =0
 
 method main(s=String[]) static
   argrx = ''
@@ -87,13 +100,13 @@ method house static                             /* Housekeeping.             */
   helprx = '   ' -                             /* add extra help info       */
     "  Or '?' for online REXX help."
   promptrx = ''                                /* Null if not one-liner.    */
-  procrx = 'rexxtry'
-  promptrx = procrx' '                         /*   Name part of user line. */
   procrx = 'rexxtry'                           /* Pick up the proc name.    */
+  promptrx = procrx' '                         /*   Name part of user line. */
   temprx = ' 'procrx' on 'sysrx                /* Make border...            */
   posrx = 69-length(temprx)                    /*   where to overlay name,  */
   bordrx = copies('.', 68)                     /*   background of periods,  */
   bordrx = overlay(temprx, bordrx, posrx)      /*   name right-adjusted.    */
+  bordrx = bordrx "\n>- \0"                    /*   next line prompt        */
   save = ''                                    /* Don't save user input.    */
   trace  Off                                   /* Init user trace variable. */
   if argrx <> '' then say argrx
@@ -102,6 +115,8 @@ method house static                             /* Housekeeping.             */
 method tell static
   clear()
 
+  say '   ' procrx 'on' sysrx
+  say
   say ' This procedure lets you interactively try NetRexx statements.'
   say ' If you run it with no parameter, or with a question mark'
   say ' as a parameter, it will briefly describe itself.'
@@ -111,8 +126,25 @@ method tell static
   say ' Enter ''show()'' to see user variables provided by rexxtry.'
   say ' Enter ''='' to repeat your previous statement.'
   say ' Enter ''?'' to show online help for NetRexx.'
-  say ' Enter ''exit'' or ''done'' to exit the program'
+  say ' Enter ''exit'', ''quit'', or ''done'' to exit the program'
   say ' The subroutine named ''sub'' can be invoked as ''sub()'', ''sub'' or ''x=sub()''.'
+  say
+  say " Lines beginning with a number are not executed immediately."
+  say " They are held as a 'program' until a 'run' command when they are run"
+  say " in numeric order."
+  say
+  say " - 'Run ?' single steps the lines."
+  say "    -- Any NetRexx statement can then be executed."
+  say "    -- 'ENTER' alone moves on to the next line."
+  say "    -- '= ENTER' repeats the previous line."
+  say "    -- '+ ENTER' shows the next line."
+  say
+  say " - 'Run r' or 'run ?r' shows the intermediate results."
+  say " - 'List' lists the program."
+  say " - 'Save filespec' will save the file."
+  say " - 'Load filespec' brings in a program, whether saved here or by another editor."
+  say " - 'New' clears the program."
+  say " - 'Renumber [[start | 10] [increment | 10]]' renumbers the lines."
 
   return
 
@@ -130,22 +162,23 @@ method clear static
   return
 
 method intro static                            /* Display brief             */
-  say version                                  /*   introductory            */
+  say '  'version                              /*   introductory            */
   say '  'procrx' lets you' -                  /*   about rexxtry and       */
     'interactively try NetRexx' -              /*   remarks for             */
     'statements.'                              /*   interactive mode.       */
   say '    Each string is executed when you hit Enter.'
-  say "    Enter 'tell' for" -                /* How to see description.   */
+  say "    Enter 'tell' for" -                 /* How to see description.   */
     "a description of the features."
   say '  Go on - try a few...            'remindrx
   return
 
 method sub static
-  say '  ...test subroutine' -                  /* User can CALL this        */
-  "'sub'  ...returning 1234..."                 /*   subroutine or           */
-  return 1234                                   /*   invoke with 'sub()'.    */
+  say '  ...test subroutine' -                 /* User can CALL this        */
+  "'sub'  ...returning 1234..."                /*   subroutine or           */
+  return 1234                                  /*   invoke with 'sub()'.    */
 
 method main static
+  say ready
   do forever                                   /* Loop forever.             */
     prev = inputrx                             /* User can repeat previous. */
     if argrx <> '' then inputrx = argrx
@@ -153,10 +186,60 @@ method main static
     current = inputrx                          /* Current line for 'show'.  */
     if save <> '' then save()                  /* Save before interpreting. */
     if inputrx = '=' then inputrx=prev         /* '=' means repeat previous */
+    parse inputrx num statement
+    if \num.datatype('N') & -
+       (num.left(1) = '-' | num.left(1).datatype('N')) then
+      loop n = 2 to num.length
+        if \num.substr(1,n).datatype('N') then do
+          parse inputrx num =(n) statement
+          leave
+       end
+    end
     select
+      when inputrx = '' & single then run(1)
       when inputrx = '' then say ' ' -         /* If null line, remind      */
         procrx':  'remindrx helprx             /*   user how to escape.     */
       when inputrx='?' then help()             /* Request for online help.  */
+      when num.datatype('N') then do           /* Line numbered: Keep it    */
+        lines[num] = statement
+        say ready
+      end
+      when inputrx.word(1) = 'DEL' then do     /* Delete/Erase a file       */
+        delete(inputrx.word(2))
+        say ready
+      end
+      when inputrx = 'LIST' then do            /* Show the current program  */
+        list()
+        say ready
+      end                                      /* Load a program            */
+      when inputrx.word(1) = 'LOAD' then do
+        if inputrx.subword(2) = '' then do     /* No file specified         */
+          say "No filename for LOAD.  Usage: LOAD fileid"
+          say ready
+          iterate
+        end
+        load(inputrx.subword(2))               /* Go get it                 */
+        say ''
+        list()                                 /* Show it                   */
+        say ready
+      end
+      when inputrx = 'NEW' then do             /* Clean the decks           */
+        newprog()
+      end
+      when inputrx.word(1) = 'RUN' then do     /* Run the program maybe     */
+        run(inputrx.subword(2))                /* with TRACE or SINGLE STEP */
+        say ready
+      end
+      when inputrx.word(1) = 'RENUMBER' then do /* rationalise the line     */
+        renumber(inputrx.word(2), inputrx.word(3)) /* numbers               */
+        say ready
+      end
+      when inputrx.word(1) = 'SAVE' then do    /* Write the file out        */
+        save= inputrx.word(2)
+        save()
+--        say ready
+      end
+      when inputrx = 'QUIT' then done()        /* End it all                */
       otherwise
         rc = 'X'                               /* Make rc change visible.   */
 --        set2(); -- trace (trace)             /* Need these on same line.  */
@@ -168,6 +251,116 @@ method main static
       then leave
   end
   return                                       /* Preserve result contents. */
+
+method clone(in) static                        /* Make a working array copy */
+  return ''.copyIndexed(in)
+
+method least(nodel=0) static                   /* Get the lowest numbered   */
+  low = ''                                     /* Line, and optionally      */
+  loop n over work                             /* remove it from the array  */
+   if low = '' | n < low then low = n
+  end
+  n=n
+  data = work[low]
+  if \nodel then work[low] = null
+  return low data                              /* line number and line      */
+
+method list() static                           /* Show the current program  */
+  work = clone(lines)                          /* Get working array of lines*/
+  maxw = 0                                     /* Find the widest number    */
+  loop n over work
+   parse least() num d                         /* (This also removes the    */
+   maxw = num.length().max(maxw)               /*  line form the array.)    */
+  end n
+  lead = ' '.copies(maxw)                      /* Format the number of blanks*/
+  work = clone(lines)                          /* Get working array of lines*/
+  loop n over work
+   parse least() num d
+   say lead.overlay(num, maxw - num.length() + 1) d
+  end n
+  n=n                                          /* Since it is not used      */
+
+method load(fn) static                         /* Read a file into array    */
+  if stream(fn,'c','QUERY EXISTS') <> '' then do
+    newprog()                                  /* Erase any existing        */
+    loop ln = 10 by 10  while lines(fn)
+      lines[ln] = linein(fn)                   /* Read from file to array   */
+    catch RuntimeException
+      say "  Error on read="
+    end
+    stream(fn,'c','CLOSE')                     /* Finish with file          */
+  end
+  else say fn 'not found.'                     /* Oops                      */
+
+method newprog() static                        /* Erase any existing array  */
+  loop n over lines
+   lines[n] = null                             /* Clean                     */
+  end
+  clear()                                      /* Erase the screen          */
+  say ready
+
+method run(tr) static                          /* Run multiline program     */
+  if tr.left(1) = '?' then do                  /* Should it be single step? */
+    single = 1
+    tr = tr.substr(2)
+  end
+  else single = 0
+  work = clone(lines)                          /* Make a working array      */
+  count = 0                                    /* How many lines do we have?*/
+  loop n over work
+    count = count + 1
+  end
+  parse least() ln nxt                         /* Get the first line        */
+  loop n = 1 to count                          /* Go through one at a time  */
+    inputrx = nxt                              /* Working line              */
+    prevln = ln                                /* Remember line number      */
+    parse least() ln nxt                       /* Get the next # and line   */
+    revw = inputrx                             /* Remember this line        */
+    if tr <> '' then say " "prevln "******"    /* Show linenumber for trace */
+    if tr = 'R' then trace results             /* Tracing requested?        */
+    else if tr = 'A' then trace all
+    interpret inputrx                          /* DO THE WORK!              */
+    trace off                                  /* reset some stuff          */
+    normal = 1                                 /* Accept inter-line input   */
+    if single then loop                        /* Single Step processing    */
+      if normal then inputrx = ask             /* Get inter-line input      */
+      select
+        when inputrx = '' then leave           /* Blank gets out            */
+        when inputrx = '=' then do             /* = repeats the last line   */
+          inputrx = revw
+          normal = 0
+          trace off
+        end
+        when inputrx = '+' then do             /* + shows the next line     */
+          say nxt
+        end
+        otherwise
+          normal = 1                           /* Accept inter-line input   */
+          if tr <> '' then                     /* Tracing?                  */
+            say " "prevln "******"             /* Show user's line number   */
+          if tr = 'R' then trace results       /* Trace Results             */
+          else if tr = 'A' then trace all      /* Trace All                 */
+          interpret inputrx                    /* DO THE inter-line WORK!   */
+          trace off
+      end
+    end
+  end n
+  n=n                                          /* Since it is not used      */
+
+method renumber(start, inc) static             /* Change user line numbers  */
+  if start = '' then start = 10                /* Starting line number      */
+  if inc = '' then inc = 10                    /* Increment between numbers */
+  work = clone(lines)                          /* Make a working array      */
+  loop n over lines                            /* Erase the array           */
+   lines[n] = null
+  end
+  nnum = start                                 /* New line number           */
+  loop n over work
+   parse least() . user_line                   /* Get next line in order    */
+   lines[nnum] = user_line                     /* Save the line w/new numb. */
+   nnum = nnum + inc                           /* Make the next number      */
+  end
+  list()                                       /* Show the results          */
 
 method help  static                            /* Request for online help.  */
   say 'Online help is available in the documents folder'
@@ -181,12 +374,52 @@ method border static
     overlay('rc = 'rc' ', bordrx)               /*   has changed.            */
   return
 
-method save static
-  do
-    lineout(save, inputrx)
-  catch RuntimeException
-    say "  Error on save="save
+method save static                              /* Write to file             */
+  work = clone(lines)                           /* Make a working array      */
+  if least(1) <> '' then do /* multiline */     /* It is not empty           */
+
+    if stream(save,'c','QUERY EXISTS') <> '' then do /* Already there?       */
+      say save 'already exists. "R"eplace, "A"dd to it, or "C"ancel? \0' /*Prompt*/
+      resp = ask                                /* Get the response          */
+      select
+        when resp = 'C' then do                 /* Cancel: Nop. Get out      */
+          save = ''
+          say ready                             /* "Next!"                   */
+          return
+        end
+        when resp = 'A' then nop                /* Add: No need to erase     */
+        otherwise
+          delete(save)                          /* Replace: Erase existing   */
+      end   /* select */
+    end   /* Exists */
+    loop n over work                            /* Look at each line         */
+      parse least() . user_line                 /* Get the line, no number   */
+      lineout(save, user_line)                  /* Write it to the file      */
+    catch RuntimeException                      /* Oops?                     */
+      say "  Error on save="save                /* Tell 'em the bad news     */
+      save = ''
+    end n
+    stream(save,'c','CLOSE')                    /* Cleanup time              */
+    n=n                                         /* Since it is not used      */
+  end  /* multiline */
+  else do  /* single line */
+    lineout(save, inputrx)                      /* Write it to the file      */
+    stream(save,'c','CLOSE')                    /* Cleanup time              */
+  catch RuntimeException                        /* Oops?                     */
+    say "  Error on save="save                  /* Tell 'em the bad news     */
     save = ''
+  end  /* single line */
+  stream(save,'c','CLOSE')                      /* (maybe redundant)         */
+  save = ''                                     /* (maybe redundant)         */
+  say ready                                     /* "Next!"                   */
+
+method delete(fid) static                       /* Erase a file              */
+  if stream(fid,'c','QUERY EXISTS') <> '' then do /* Only if it exists       */
+    myObj = File(fid);
+    if (myObj.delete()) then
+      nop
+    else
+      say "Failed to delete" fid"."
   end
 
 method show static
@@ -204,4 +437,5 @@ method show static
   say
   say "     Save your input with save=filespec. Stop saving with save=''."
   say "    'save'      = '"save"'"             /* Filespec for input keep.  */
+
   return
