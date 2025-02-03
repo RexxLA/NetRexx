@@ -100,12 +100,16 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
 
   cursor = RxCursor(ocursor.curprogram, ocursor.curclass, ocursor.curmethod, ocursor.curclause)
 
-  cursor.curlevel = ocursor.curlevel
-  cursor.curthis    =  ocursor.curthis
+  thislevel = NrLevel('INTERPRET', null)
+  thislevel.trystate=NrLevel.TRY_INIT
+  thislevel.signals = null
+
+  cursor.curlevel   =othislevel
+
+  cursor.curthis    =ocursor.curthis
   cursor.curparent  =ocursor.curparent
   cursor.curpropatts=ocursor.curpropatts
   cursor.curlpool   =ocursor.curlpool
-
   cursor.curtrace   =ocursor.curtrace
   cursor.curnumer   =ocursor.curnumer
 
@@ -127,7 +131,9 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
   cursor.curreturn  =ocursor.curreturn
   cursor.curjump    =ocursor.curjump
 
---trace results
+  cursor.curprogram.translator = rxt
+
+
   if rxt.program.flag.diag then say '## Interpreting "'interpret'"'
 
   src = RxFileReader(rxt)
@@ -138,18 +144,18 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
   rxt.program.tracer = RxTracer(rxt)                  -- create our own
   rxt.program.parser = RxParser(rxt, clauser)
 
-  rxt.program.parser.level     = 2                    -- 'in a method', our method
-  rxt.program.parser.thislevel = othislevel
+  rxt.program.parser.level     = olevel               -- we're 'in a method'
+  rxt.program.parser.thislevel = thislevel
   rxt.program.parser.cursor    = cursor
-
-  cursor.curlevel = othislevel
 
   rxt.pass =0;
   rxt.pass0=1           -- now pass 0
   rxt.pass1=0
   rxt.pass2=0
 
---trace results
+  hadexception = 0
+  signalmsg    = ''
+
   do label execute forever
     clausenum=0
     pclause = RxClause null
@@ -163,7 +169,7 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
         nop
       finally
         if hadexception then do                                      -- catch any exception
-          say ' --- Cannot parse this "'interpret'"'
+          signalmsg = 'Cannot parse : 'interpret
           leave execute
         end
       end
@@ -194,20 +200,22 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
       nop
     finally
       if hadexception then do                                      -- catch any exception
-        say ' --- Cannot parse 'it' :' interpret
+        signalmsg = 'Cannot parse 'it' :' interpret
         leave execute
       end
     end
     rxt.interpreting = 0
     cursor.curexec = 1
 
-    if rxt.program.parser.level \= 2 then do                  -- don't mess up the do/end stack
-      say ' --- Block "'interpret'" not properly ended'
+    if rxt.program.parser.level \= olevel then do                  -- don't mess up the do/end stack
+      signalmsg = 'Block "'interpret'" not properly ended'
+      hadexception = 1
       leave execute
     end
-                                                              -- extra
-    if rxt.program.parser.thislevel \= othislevel then do     -- don't mess up the do/end stack
-      say ' --- Block "'interpret'" not properly ended'
+                                                                   -- extra
+    if rxt.program.parser.thislevel \= thislevel then do           -- don't mess up the do/end stack
+      signalmsg = 'Block "'interpret'" not properly ended'
+      hadexception = 1
       leave execute
     end
 
@@ -237,7 +245,8 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
       end
 
       if clause.lookaside = null then do
-        say ' --- Invalid 'it' :' interpret
+        hadexception = 1
+        signalmsg = 'Invalid 'it' :' interpret
         leave execute
       end
       else do label realclause
@@ -246,13 +255,11 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
         end
         hadexception=1
         do
---
           if cursor.curskipone then do
             cursor.curskipone=0
             cursor.curskiptrace=0            -- turn this off now, too
           end
           else
---
             clause.lookaside.interpret(cursor)                 -- do it
 
           hadexception = 0
@@ -260,7 +267,8 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
           nop
         finally
           if hadexception then do                             -- catch any exception
-            say ' --- Cannot interpret 'it' :' interpret '('e.toString()')'
+            signalmsg = 'Cannot interpret 'it' :' interpret '('e.toString()')'
+            leave execute
           end
         end
 
@@ -343,6 +351,25 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
   rxt.pass2 = 0
   rxt.program.tracer = otracer
   rxt.program.parser = oparser
+  rxt.program.parser.cursor = ocursor               -- switch to original parser
+
+  if hadexception then do
+    -- add an exception to the original cursor and signal RxQuit if something went wrong
+    othislevel.trystate=NrLevel.TRY_INIT
+ --   rxt.program.parser.cursor = ocursor             -- now original cusros
+    rxt.program.parser.thislevel = thislevel        --correct level if not properly ended
+
+    rxt.program.parser.addexceptions(1, 'org.netrexx.process.RxQuit', ocursor.curclause.tokens[0])
+
+    code = RxCode()
+    code.begclause=ocursor.curclause
+    code.endclause=ocursor.curclause
+    code.group = RxCode.S_CONSTR
+    code.type  = RxType('org.netrexx.process.RxQuit', 0)
+    code.value = org.netrexx.process.RxQuit(rxt, null, 'interpret.error', signalmsg)
+
+    signal RxSignal(cursor, code.value, ocursor.curclause.tokens[0])  -- wrap 'n raise
+  end
 
   return
 
