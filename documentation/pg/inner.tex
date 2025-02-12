@@ -1,0 +1,277 @@
+
+\chapter{Translator inner workings}
+
+The translator source is part of the package
+\keyword{org.netrexx.process}, located in the \keyword{./src/org/netrexx/process} directory of the git repository.\\
+The runtime support, including the \keyword{Rexx} type, is in the package \keyword{netrexx.lang} in \keyword{./src/netrexx/lang}.
+
+This chapter documents the inner workings of the
+translator. Its purpose is to assist with debugging
+serious problems or ease the introduction to the toolset for
+programmers who want to help the open source effort forwards.
+
+To delve deeper into the inner workings of the translator, you are encouraged to read the \nr{} source files,
+a great resource to discover the language's potential.\\ Also take a look at Kermit Kiser's
+\keyword{./documentation/pg/NetRexxCLogic.odg}
+Open Document Graphics file, and the \nr{} UML diagrams at \keyword{./examples/uml}.
+Finally, running the translator with -diag and -verbose5 arguments is very informative.
+
+
+\section{Translating, compiling and interpreting}
+The translator (see \keyword{RxTranslator.nrx}) passes four times through the \nr{} source files.
+\begin{itemize}
+    \item pass 0 : tokenises the source and parses prolog (options, package and import statements) and
+ class instructions
+    \item pass 1 : processes resolution of properties and methods
+    \item pass 2 : parses method bodies and generates Java code
+    \item pass 3 : code interpretation
+    \item pass 4 : code compilation
+\end{itemize}
+Pass 3 and 4 are mutually exclusive, the presence of the \keyword{-exec} argument triggers interpretation
+as pass 3 (see \keyword{RxInterpreter.nrx}),
+otherwise the generated Java source code is compiled into Java class file(s) as pass 4.
+
+
+Generally, the translator source files can be categorised in two sections.
+\keyword{Nr*.nrx} files are implementations
+of the \keyword{RxClauseParser} interface, which all define the following methods
+\begin{enumerate}
+    \item scan(), called three times (pass 0, 1 and 2), lexical syntax scan of the \nr{} clause
+    \item getAssigns(), returns names of variables which received new values, mostly null
+    \item generate(), generates Java source code from the \nr{} clause during pass 4
+    \item interpret(), interprets the \nr{} clause, called by \keyword{RxInterpreter.nrx} on pass 3
+\end{enumerate}
+
+The remaining \keyword{Rx*.nrx} files are supporting input/output streaming, parsing and other translator functionality.
+
+
+The following tables list all translator source files with their main function.
+
+\begin{table}\caption{Clause parser source files}
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+    \toprule
+    RxClauseParser.nrx  &The interface used to group classes that parse and process individual clauses
+    \\\midrule
+    NrAddress.nrx   &An object that represents a parsed Address clause
+    \\\midrule
+    NrAnnotate.nrx  &An object that represents a parsed Annotation clause
+    \\\midrule
+    NrAssign.nrx    &An object that represents a parsed assignment instruction
+    \\\midrule
+    NrBlock.nrx     &An object that represents a generalised block start clause, extended by NrDo, NrLoop, and NrSelect
+    \\\midrule
+    NrCatch.nrx     &An object that represents a parsed Catch clause
+    \\\midrule
+    RxClass.nrx     &An object that represents a parsed Class clause
+    \\\midrule
+    NrDo.nrx        &An object that represents a parsed Do clause
+    \\\midrule
+    NrElse.nrx      &An object that represents a parsed Else clause
+    \\\midrule
+    NrEnd.nrx       &An object that represents a parsed End clause
+    \\\midrule
+    NrExit.nrx      &An object that represents a parsed Exit clause
+    \\\midrule
+    NrFinally.nrx   &An object that represents a parsed Finally clause
+    \\\midrule
+    NrIf.nrx        &An object that represents a parsed If clause
+    \\\midrule
+    NrImport.nrx    &An object that represents a parsed Import instruction
+    \\\midrule
+    NrInterpret.nrx &An object that represents a parsed Interpret clause
+    \\\midrule
+    NrIterate.nrx   &An object that represents a parsed Iterate clause
+    \\\midrule
+    NrLeave.nrx     &An object that represents a parsed Leave clause
+    \\\midrule
+    NrLoop.nrx      &An object that represents a parsed Loop instruction
+    \\\midrule
+    NrMethodcall.nrx    &An object that represents a method call instruction
+    \\\midrule
+    RxMethod.nrx    &An object that represents a Method instruction, extended by NrMethod
+    \\\midrule
+    NrMethod.nrx    &An object that represents a Method instruction
+    \\\midrule
+    NrNop.nrx       &An object that represents a parsed Nop clause
+    \\\midrule
+    NrNumeric.nrx   &An object that represents a parsed Numeric instruction
+    \\\midrule
+    NrOptions.nrx   &An object that represents a parsed Options instruction
+    \\\midrule
+    NrOtherwise.nrx &An object that represents a parsed Otherwise clause
+    \\\midrule
+    NrPackage.nrx   &An object that represents a parsed package instruction
+    \\\midrule
+    NrParse.nrx     &An object that represents a parsed Parse instruction
+    \\\midrule
+    NrProperties.nrx    &An object that represents a parsed properties instruction
+    \\\midrule
+    NrReturn.nrx    &An object that represents a parsed Return instruction
+    \\\midrule
+    NrSay.nrx       &An object that represents a parsed Say clause
+    \\\midrule
+    NrSelect.nrx    &An object that represents a parsed Select clause
+    \\\midrule
+    NrSignal.nrx    &An object that represents a parsed Signal instruction
+    \\\midrule
+    NrThen.nrx      &An object that represents a parsed Then instruction
+    \\\midrule
+    NrTrace.nrx     &An object that represents a parsed Trace instruction
+    \\\midrule
+    NrWhen.nrx      &An object that represents a parsed When clause
+    \\\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\begin{table}\caption{Class related translator source files}
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+    \toprule
+    RxClasser.nrx       &The generalised class processor. The RxClasser object handles
+    everything to do with classes: finding them, testing for them, and so on.
+    \\\midrule
+    RxClassImage.nrx    &An object that processes class files (or file images)
+    \\\midrule
+    RxClassInfo.nrx     &An object that describes what we know about a class
+    \\\midrule
+    RxClassPool.nrx     &The pool of RxClassInfo objects
+    \\\midrule
+    RxPersistClass.nrx  &An object that persists class files
+    \\\midrule
+    RxMapClassLoader.nrx &A class loader that loads classes from a map
+    \\\midrule
+    RxByteArrayJavaClass.nrx &Represents a Java class as a byte array
+    \\\midrule
+    RxType.nrx          &Describes the class and dimensions of an item (object or primitive).
+    \\\midrule
+    RxField.nrx         &An object that represents a known field, this can refer to a property or a method
+    \\\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\begin{table}\caption{Translation and parsing source files}
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+    \toprule
+    NetRexxC.nrx        &A command shell to translate and compile or interpret one or more \nr{} programs
+    \\\midrule
+    RxTranslator.nrx    &An instance of a Venta translator, the 'boss'. Compilation occurs here unless -exec
+    \\\midrule
+    RxFlag.nrx          &An object that describes the per-program or per-compile flags
+    \\\midrule
+    RxParser.nrx        &The program parser for \nr{}, called three times, once for each pass. Its provider
+    is RxClauser, which supplies tokenised clauses on demand
+    \\\midrule
+    RxClauser.nrx       &The lexical processor for \nr{} syntax. Given a streamer object which supplies lines of source code,
+    the clauser object will parse the input lines and supply logical \nr{} clauses,
+    expressed as a RxClause object (primarily an array of RxTokens)
+    \\\midrule
+    RxClause.nrx        &An object that represents a tokenised clause
+    \\\midrule
+    RxToken.nrx         &An object that represents a token in the input source file
+    \\\midrule
+    RxExprParser.nrx    &Parses an expression and constructs the corresponding RxCode object
+    \\\midrule
+    RxTermParser.nrx    &Parses a term and constructs the corresponding RxCode object
+    \\\midrule
+    RxCursor.nrx        &An object that represents the current context of execution or parsing. This may be
+    either during initial parsing or per-thread while executing.
+    \\\midrule
+    RxCode.nrx          &An object that represents a sequence of code. Depending on the kind of the code,
+    this may correspond to program, class, or method-level data, for example Java sourcecode, bytecodes,
+    constants, etc.
+    \\\midrule
+    RxExpr.nrx          &An object that represents a parsed expression
+    \\\midrule
+    RxArray.nrx         &An object that represents a parsed array reference
+    \\\midrule
+    RxTracer.nrx        &Manages code generation for tracing
+    \\\midrule
+    RxModel.nrx         &Generates a model of a \nr{} program from RxClauser clauses, cleans code written
+    in different styles, and indents for good code folding in your favorite editor
+    \\\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\begin{table}\caption{Interpretation related source files}
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+    \toprule
+    NetRexxA.nrx        &\nr{} API external interface to translate and interpret one or more \nr{} programs
+    \\\midrule
+    NetRexxInterpreter.nrx &An early version of NetRexxA.nrx
+    \\\midrule
+    RxInterpreter.nrx   &The interpreter object, it takes requests (equivalent to execution requests in java.lang.reflect) and executes them, either using the reflection API or using direct interpretation for local classes
+    \\\midrule
+    RxInterpreterHelper.nrx   &The interpreter helper object, allows RxInterpreter to run as nodecimal
+    \\\midrule
+    RxSignal.nrx        &An object that represents an active Exception during execution
+    \\\midrule
+    RxSignalPend.nrx    &An object that wraps an invocation target Exception so we can tunnel it
+    upwards without checking
+    \\\midrule
+    RxProxy.nrx         &The Proxy object, provides a proxy class as a byte array
+    \\\midrule
+    RxProxyLoader.nrx   &The ProxyLoader factory, used for loading proxies of local classes
+    \\\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\begin{table}\caption{Other miscelaneous source files}
+\begin{tabularx}{\textwidth}{>{\bfseries}lX}
+    \toprule
+    NrVersion.nrx       &Implements all metadata associated with a  \nr{} translator version
+    \\\midrule
+    RxProcessor.nrx     &Processor-level constants and repository of the master change list
+    \\\midrule
+    RuntimeConstants.nrx    &The Java RuntimeConstants
+    \\\midrule
+    NetRexxC.properties &The NetRexxC messages master file, each line is a single message, indexed by key
+    \\\midrule
+    NrAnsi.nrx          &Implements support for ANSI control sequences
+    \\\midrule
+    RxMessage.nrx       &Displays an error or warning message, identified by a key in NetRexxC.properties
+    \\\midrule
+    RxError.nrx         &Processes a compile-time error, constructs an RxMessage
+    \\\midrule
+    RxWarn.nrx          &Display an warning message during parsing
+    \\\midrule
+    RxQuit.nrx          &Processes a Quit (terminal error)
+    \\\midrule
+    RxBabel.nrx         &The interface that defines the methods that implement language-specific utility routines
+    \\\midrule
+    NrBabel.nrx         &Implements language-specific utility routines
+    \\\midrule
+    RxSource.nrx        &The interface that defines a valid program source
+    \\\midrule
+    RxFileReader.nrx    &Makes a file into an RxSource
+    \\\midrule
+    RxStreamer.nrx      &Manages the output streams for a program
+    \\\midrule
+    RxChunk.nrx         &An object that represents an output (Java) code chunk
+    \\\midrule
+    RxException.nrx     &An object that represents an exception reference
+    \\\midrule
+    RxProgram.nrx       &An object that describes per-program data
+    \\\midrule
+    RxMessageOutput.nrx &The interface to RxProgram
+    \\\midrule
+    RxForwardingJavaFileManager.nrx &Forwards calls to Java FileManager
+    \\\midrule
+    RxInMemoryJavaFileObject.nrx    &Provides Java source code as a CharSequence
+    \\\midrule
+    RxConverter.nrx     &A maker object that costs and effects conversions
+    \\\midrule
+    RxConvert.nrx       &An object that describes the cost of a conversion and the procedure
+    to be used to effect the conversion.
+    \\\midrule
+    RxVariable.nrx      &An object that represents a variable local to a class, can be an
+    argument to a method, a class property or local variable
+    \\\midrule
+    RxVarpool.nrx       &An object that manages and maintains RxVariables, exists on
+    the class and method level
+    \\\bottomrule
+\end{tabularx}
+\end{table}
+
