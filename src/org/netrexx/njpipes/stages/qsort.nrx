@@ -1,6 +1,7 @@
--- qsort.nrx Pipeline stage
+-- qsort.nrx Pipeline helper class
 /*
  *  Copyright (C) 1997-2011 Ed Tomlinson
+ *  Copyright (C) 2020-2025 RexxLA
  *
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
@@ -9,6 +10,7 @@
  */
 
 /*
+ 25/ 1/21 Added tolerant mode. Altered documentation away from "stage". Jeff Hennick
  23/02/22 Documentation; givehelp(). Jeff Hennick
  98/ 7/23 factored out of sort so the algorthym can be selected.  ejt
  98/ 7/20 exploit IRange.  ejt
@@ -68,109 +70,124 @@ t = [[int 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 properties private
 
-K = sortClass[]
+ K = sortClass[]
 
 method qsort(KK=sortClass[])
-K = KK
+ K = KK
 
-method quicksort(m=int, n=int)
+method quicksort(m=int, n=int, tolerant=rexx 0)
 
-i = int
-j = int
-w = int
+ i = int
+ j = int
+ w = int
 
-loop while m < n
+ loop while m < n
    a = n-m
    if a<c[0] then                  /* use bose/norman sort */
-      do
-         bn(m,a)
-         return
-      end
+     do
+       bn(m,a,tolerant)
+       return
+     end
    else                            /* use quicksort to do sort */
-      do
-         i = m
-         j = n
-         w = (m+n)%2
-         median(w,m,n)
-         temp = K[m]
+     do
+       i = m
+       j = n
+       w = (m+n)%2
+       median(w,m,n)
+       temp = K[m]
+       if tolerant then
          loop while i < j
-            loop while temp.compGT(K[j])
-               j = j-1
-            end
-            K[i] = K[j]
-            loop while (i < j) & temp.compLE(K[i])
-               i = i+1
-            end
-            K[j] = K[i]
+           loop while temp.compGTR(K[j])
+             j = j-1
+           end
+           K[i] = K[j]
+           loop while (i < j) & temp.compLER(K[i])
+             i = i+1
+           end
+           K[j] = K[i]
          end
-         K[i] = temp
-         quicksort(m,i-1)
-         m = i+1
-      end
-end
-return
-
+       else
+         loop while i < j
+           loop while temp.compGT(K[j])
+             j = j-1
+           end
+           K[i] = K[j]
+           loop while (i < j) & temp.compLE(K[i])
+             i = i+1
+           end
+           K[j] = K[i]
+         end
+       K[i] = temp
+       quicksort(m,i-1)
+       m = i+1
+     end
+ end
+ return
 
 method median(x=int, y=int, z=int)        /* bose norman/sort, three items */
 
-if K[y].compLT(K[z]) then      /* 1 2 */
+ if K[y].compLT(K[z]) then      /* 1 2 */
    do
-      temp = K[y]
-      K[y] = K[z]
-      K[z] = temp
+     temp = K[y]
+     K[y] = K[z]
+     K[z] = temp
    end
-if K[x].compLT(K[z]) then      /* 0 2 */
+ if K[x].compLT(K[z]) then      /* 0 2 */
    do
-      temp = K[x]
-      K[x] = K[z]
-      K[z] = temp
+     temp = K[x]
+     K[x] = K[z]
+     K[z] = temp
    end
-if K[x].compLT(K[y]) then      /* 0 1 */
+ if K[x].compLT(K[y]) then      /* 0 1 */
    do
-      temp = K[x]
-      K[x] = K[y]
-      K[y] = temp
+     temp = K[x]
+     K[x] = K[y]
+     K[y] = temp
    end
 
 -- say 'median' K[x].k K[y].k K[z]
 
 return
 
+method bn(b=int, o=int, tolerant=rexx)           /* bose/norman sort */
+ i    = int
+ ff   = int
+ tt   = int
 
-method bn(b=int, o=int)           /* bose/norman sort */
-
-i    = int
-ff   = int
-tt   = int
-
--- say 'bn' b o c[o]
-
-loop i = 0 to c[o]
-   ff = b+f[o,i]
-   tt = b+t[o,i]
-   if K[ff].compLT(K[tt]) then do
-      temp  = K[ff]
-      K[ff] = K[tt]
-      K[tt] = temp
-   end
-end i
-
-return
-
+ if tolerant then
+   loop i = 0 to c[o]
+     ff = b+f[o,i]
+     tt = b+t[o,i]
+     if K[ff].compLTR(K[tt]) then do
+       temp  = K[ff]
+       K[ff] = K[tt]
+       K[tt] = temp
+     end
+   end i
+ else
+   loop i = 0 to c[o]
+     ff = b+f[o,i]
+     tt = b+t[o,i]
+     if K[ff].compLT(K[tt]) then do
+       temp  = K[ff]
+       K[ff] = K[tt]
+       K[tt] = temp
+     end
+   end i
+ return
 
 method givehelp() static
-return -
-"/** qsort -- Quick Order Records on Whole Length\n" -
-"\n" -
-">>--QSORT--><\n" -
-"\n" -
-"This sort routine is very basic.  It uses sortRexx class, which implements\n" -
-"the sortClass interface.  To sort objects of classes other than Rexx requires\n" -
-"that you implement another sortClass with a name begining with 'sort'.\n" -
-"\n" -
-"I implemented this class using an Java array for the objects to be sorted as\n" -
-"opposed to a Rexx stem.  Using an array is about 50% faster.  I choose a quick/\n" -
-"Bose Norman sort since I had the code, in Rexx, for it from a time before I\n" -
-"had pipes on CMS!\n" -
-"\n" -
-"*/\n"
+ return -
+   "/** qsort -- Helper class. Quick Order Records on Whole Length\n" -
+   "\n" -
+   "\n" -
+   "This sort routine is very basic.  It uses sortRexx class, which implements\n" -
+   "the sortClass interface.  To sort objects of classes other than Rexx requires\n" -
+   "that you implement another sortClass with a name begining with 'sort'.\n" -
+   "\n" -
+   "I implemented this class using an Java array for the objects to be sorted as\n" -
+   "opposed to a Rexx stem.  Using an array is about 50% faster.  I choose a quick/\n" -
+   "Bose Norman sort since I had the code, in Rexx, for it from a time before I\n" -
+   "had pipes on CMS!\n" -
+   "\n" -
+   "*/\n"

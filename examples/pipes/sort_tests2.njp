@@ -1,0 +1,78 @@
+/** sort_test2.njp
+
+  sort
+  njPipes
+                                                       +-Ascending-(1)-+
+ >>--SORT--+-----------------------------+--+-------+--+---------------+-->
+           |   +-REXX-----+  +-10000-+   |  +-range-+  +-Descending-(1)+
+           +-(-+----------+--+-------+-)-+
+               +-class-(2)+  +-size--+
+
+                              +-STRICT---+
+          >--+-------------+--+----------+--><
+             +-SINGLEOK-(3)+  +-TOLERANT-+
+    Note:
+     (1) May come before range, for backwards compatability.
+     (2) requires that you implement another sortClass with a name begining with 'sort'
+     (3) Suppresses error message if only one record to sort for Rexx objects.
+*/
+
+/*
+ 25/ 2/12 Jeff Hennick
+*/
+
+pipe (sort_tests2)
+
+ o: faninany |
+    sort |
+    specs 2-* 1 |
+    cons ?
+
+    literal 4836;   4892;3908;3495;3627;1839;4895 |
+    split ; |
+    d: fanout ?
+
+
+-- sort (one)?
+   literal 4836 |
+   sort |
+   c1: compare any ~2# 1 sort (one)~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 4836 |
+   c1: ?
+
+-- sort (one) singleok ?
+   literal 4836 |
+   sort singleok |
+   c2: compare any ~2# 2 sort (one) singleok~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 4836 |
+   c2: ?
+
+-- sort leading spaces ?
+   d: |
+   sort |
+   c3: compare any ~2# 3 sort leading spaces ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal     4892;1839;3495;3627;3908;4836;4895 |
+   split ; |
+   c3: ?
+
+-- sort leading spaces TOLERANT?
+   d: |
+   sort tolerant |
+   c4: compare any ~2# 4 sort leading spaces TOLERANT ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal 1839;3495;3627;3908;4836;4892;4895 |
+   split ; |
+   c4: ?
+
+-- sort leading spaces STRICT ?
+   d: |
+   sort strict |
+   c5: compare any ~2# 5 sort leading spaces STRICT ~ equal ~*OK*~ notequal ~**FAIL**  at rec \\c col \\b.~ less /Less:\nActual:\n\\p\nExpected:\n\\s\n/ more /More:\nActual:\n\\p\nExpected:\n\\s\n/ |
+   o: ?
+   literal     4892;1839;3495;3627;3908;4836;4895 |
+   split ; |
+   c5: ?
+
