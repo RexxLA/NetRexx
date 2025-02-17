@@ -65,6 +65,7 @@
 /* 2021.01.15 add option to allow ADDRESS instructions -- MRE         */
 /* 2022.11.03 add option for implicit uses -- MRE                     */
 /* 2024.11.19 add option to specify targetvm class version -- MRE     */
+/* 2025.02.17 targetvm default and minimum class version 52 -- MRE    */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -74,6 +75,7 @@ class NetRexxC
   
   properties private constant
   logfilename='NetRexxC.log'
+  minversion = '1.8'                   -- minimun class version
   
   properties public
   -- variables corresponding to our flags
@@ -108,8 +110,9 @@ class NetRexxC
                                              -- 0 after prompting
   
   classpath	   = String                  --	allows classpath to be passed as an argument
-  targetvm     = int 0                   -- allows target vm class version to be passed as argument
-  
+  targetvm     = Rexx minversion         -- allows target vm class version to be passed as argument
+                                         -- minversion and default is 1.8
+
   properties private static
   programstrings = String[]                  --	allows programs to be passed in memory strings
   classlist=java.util.List		     -- allow return of class files to caller in memory
@@ -241,6 +244,23 @@ class NetRexxC
     translator.setaddress(address)
     translator.setimplicituses(implicituses)
     translator.setdeps(deps)
+
+    if ecj then
+      maxversion = '15'                                            -- ecj version
+    else
+      maxversion = System.getProperty("java.specification.version")   -- run-time version
+
+    if targetvm.datatype('N') then do
+      if targetvm << minversion | targetvm >> maxversion then do
+        say '+++ Warning: targetvm must be between 'minversion' and 'maxversion', option targetvm 'targetvm' ignored'
+        targetvm = minversion
+      end
+    end
+    else do
+      say '+++ Warning: targetvm must be between 'minversion' and 'maxversion', option targetvm 'targetvm' ignored'
+      targetvm = minversion
+    end
+
     translator.settargetvm(targetvm)
     
     -- need to set java.class.path property and restore it later
@@ -579,16 +599,11 @@ class NetRexxC
 
 -- MRE add -targetvm <n> option
 	when arglow=='targetvm' then do
-   	  a=a+1
-   	  if a<arg.length then do
-   	    do
-   	      targetvm=Integer.parseInt(arg[a])
-   	    catch e=java.lang.NumberFormatException
-   	    	 say '+++ Warning: targetvm must be a positive integer, option targetvm 'arg[a]' ignored'
-        end
-   	  end
-
+    a=a+1
+    if a<arg.length then do
+      targetvm = arg[a]
    	end
+  end
 
 	when arglow=='classpath' | arglow=='cp' then do
    	  a=a+1

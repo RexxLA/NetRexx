@@ -66,6 +66,7 @@
 /* 2024.09.29 add interpreting flag -- MRE                            */
 /* 2024.10.19 compile to specific target class version if given -- MRE*/
 /* 2024.12.16 share jsr223 properties                           --MRE */
+/* 2025.10.11 always specify -target and -source, default 1.8   --MRE */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -149,7 +150,7 @@ class RxTranslator
   nrxApi      =NetRexxA       -- JSR223 NetRexxScriptEngine evaluator, handling redirected say and ask, among others
   jsr223Engine=NetRexxScriptEngine null  -- if not null, translator is running as a javax.script.ScriptEngine
 --
-  targetvm    =int 0          -- MRE if not zero, specifies -target and -source class version
+  targetvm    =Rexx '1.8'     -- -target and -source class version, minimum 1.8
 
   /* Standard import packages */
   -- [entry[0] is language-specific, no longer set by RxBabel]
@@ -223,7 +224,7 @@ class RxTranslator
   method setdeps(deps1)
     deps=deps1
 
-  method settargetvm(targetvm1=int)
+  method settargetvm(targetvm1)
     targetvm=targetvm1
 
 
@@ -710,18 +711,12 @@ class RxTranslator
 
       optstring='-nowarn -classpath classpath' javaoptions
 
--- MRE add targetvm if given
-      if targetvm \= 0 then do
-        optstring='-target target -source source 'optstring   -- add target and source javac options
-        optarray=optstring.toString().trim().split(" ")
-        optarray[1]=targetvm
-        optarray[3]=targetvm
-        optarray[6]=classpath
-        end
-      else do
-        optarray=optstring.toString().trim().split(" ")
-        optarray[2]=classpath
-      end
+-- MRE always add -target -source according targetvm
+      optstring='-target target -source source 'optstring   -- add target and source javac options
+      optarray=optstring.toString().trim().split(" ")
+      optarray[1]=targetvm
+      optarray[3]=targetvm
+      optarray[6]=classpath
 
       offset=args.length-programs
       loop f=0 for programs
