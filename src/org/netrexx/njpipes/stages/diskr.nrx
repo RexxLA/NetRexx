@@ -15,6 +15,7 @@
  20/12/ 2 Make filename a clean relative path.  Jeff Hennick
  99/05/29 use byte[] directly.  ejt
  98/09/06 add an stream option
+ 25/02/19 fix issue #72 absolute path is relative
 */
 
 options nostrictcase nostrictargs nostrictsignal
@@ -31,10 +32,12 @@ method run() public
        do
          if file.pos('.\\') > 0 | file.left(1) = '\\' | file.substr(2,2) = ':\\' then
             file = file.changestr("\\","/")       -- fix any Windows spec
-         if file.pos('/') > 0 then do             -- we are working with a relative filepath out of the working dir
+         if file.left(1) = '/' | file.substr(2,2) = ':/' then  -- absolute path already
+            nop
+         else do
             workDir = File("").getAbsolutePath()  -- find out where the working directory is
             file = workDir || '/' || file         -- make a messy absolute path for our file, maybe with relative parts
-          end
+         end
 
           inFile = Filereader(file)
           in = BufferedReader(inFile)
