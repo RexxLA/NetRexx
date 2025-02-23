@@ -18,6 +18,7 @@
 /* 1996.07.12 First RxClauseParser object                             */
 /* 1999.10.04 Implement interpret [experimental version]              */
 /* 2024.12.16 Send output to jsr223 engine, when set            --MRE */
+/* 2025.02.23 Normal say when INTERPRET                         --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -90,16 +91,23 @@ class NrSay implements RxClauseParser uses RxCode, RxExpr
  /** Interpretation */
  method interpret(cursor=RxCursor null)
   if rxt.jsr223Engine \= null then do     -- running as a JSR223 script
-    if expr=null then rxt.nrxApi.eSay('')
+    if expr=null then
+      if rxt.nrxApi \= null then          -- only when NetRexxA, real JSR223
+        rxt.nrxApi.eSay('')
+      else
+        say                               -- we're running INTERPRET instruction
     else do
       code=expr.evaluate(cursor)          -- re-evaluate as needed
-      rxt.nrxApi.eSay(rxt.interpreter.stringvalue(code))
+      if rxt.nrxApi \= null then          -- JSR223 script
+        rxt.nrxApi.eSay(rxt.interpreter.stringvalue(code))
+      else
+        say rxt.interpreter.stringvalue(code)  --INTERPRET instruction
     end
     return
   end
-  if expr=null then say;
+  if expr=null then say;                     -- non-jsr223
    else do
-    code=expr.evaluate(cursor)          -- re-evaluate as needed
+    code=expr.evaluate(cursor)               -- re-evaluate as needed
     say rxt.interpreter.stringvalue(code)
     end
   return

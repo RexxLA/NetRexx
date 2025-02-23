@@ -1,0 +1,80 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence)                                */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) IBM Corporation 2000.        All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* NetRexxI                                                           */
+/*                                                                    */
+/* The NetRexx interpreter processing compiled INTERPRET instruction  */
+/*                                                                    */
+/* Parse and run one or more NetRexx programs.                        */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2025.02.10 Initial [from NetRexxA]                                 */
+/* ------------------------------------------------------------------ */
+package org.netrexx.process
+options binary decimal strictcase strictargs
+
+import javax.script.
+
+import org.netrexx.process.RxScriptEngine
+
+/**  NetRexx API external interface.                                   */
+class NetRexxI
+  
+  properties shared
+   rxt=RxTranslator         -- It.
+
+  properties private
+   started=boolean 0               -- 1 if exec state begun
+
+  /** Constructor: build a translator object */
+  
+ method NetRexxI public
+    
+   rxt=RxTranslator()        -- construct translator
+   langs=[Rexx 'Nr']                -- languages supported
+   rxt.setlanguages(langs)   -- should always work
+
+ method setEngine(engine=RxScriptEngine) public
+   rxt.jsr223Engine = AbstractScriptEngine engine
+
+   /** parse -- parse a set of files, under specified flags,
+     Arg1 is list of program names,
+     Arg2 is list of program strings, 
+     Arg3 is list of flags,
+     Arg4 is a PrintWriter for parse output messages (optional),
+     Arg5 is a PrintStream for console output messages (optional),
+     returns 1 if no error
+   */
+
+  method parse(filestrings=String[], programstrings=String[], flagstrings=String[], logfile=PrintWriter null, outfile=PrintStream System.out) returns boolean
+    
+    if started then do
+      started=0
+      rxt.endexec()
+    end
+    
+    --  outfile=System.out
+    --  logfile=PrintWriter null
+    exec=boolean 1
+
+    -- copy the arrays
+    flags=Rexx[flagstrings.length+1]
+    loop i=0 for flagstrings.length
+      flags[i]=Rexx(flagstrings[i])
+    end i
+    flags[flags.length-1]='nojava'   -- force
+    
+    filesources=RxFileReader[filestrings.length]
+    loop i=0 for filestrings.length
+      tf=RxFileReader(rxt)
+      if i>=programstrings.length then tf.openfile(Rexx(filestrings[i]))
+      else tf.openfile(Rexx(filestrings[i]),programstrings[i])
+      filesources[i]=tf  	  
+    end i
+    return rxt.translate(flags, filesources, outfile, logfile, \exec)

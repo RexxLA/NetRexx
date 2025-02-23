@@ -19,6 +19,7 @@
 /* 2000.04.08 We now load all classes for which we have RxClassInfo   */
 /* 2012.09.09 set parent to thread context loader rather than translator loader if NetRexx is installed in Java lib\ext directory   */
 /* 2012.12.06 set parent to thread context loader rather than translator loader if available - interpreter works better in custom classloader environments this way  */
+/* 2025.02.23 Use parentClassLoader for class properties if jsr223 MRE*/
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -67,7 +68,19 @@ class RxProxyLoader extends ClassLoader
   if rxt.superflag.diag then
     say '# loadClass:' name '[String]'
 
+--say '## MRE Loading ' name '[string]'
   info=rxt.classer.findknownclass(name)
+
+  if rxt.jsr223Engine \== null  & (info \== null) then do     -- MRE INTERPRET, don't proxy, load from super
+    if info.importer \== null then do                         -- any property during jsr223Engine with a named importer
+                                                              -- use parent classloader
+                                                              -- to access the real objects through bindings
+--      say '## MRE Super loading 'name
+      lc=super.loadClass(name, link)
+      if lc=null then if rxt.superflag.diag then say '# super.loadClass:' name 'failed'
+      return lc
+    end
+  end
 
   select
     when info=null then nop   -- need default classloader to do it
@@ -81,6 +94,7 @@ class RxProxyLoader extends ClassLoader
       -- drop through for default classloader to do it
     end
 
+--say '##MRE loadClass delegate:' name '[String]'
   --  delegate
   lc=super.loadClass(name, link)
   if lc=null then if rxt.superflag.diag then say '# loadClass:' name 'failed'

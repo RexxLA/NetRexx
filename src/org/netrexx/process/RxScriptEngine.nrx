@@ -1,0 +1,280 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* RxScriptEngine                                                     */
+/*                                                                    */
+/*   An object that represents an jsr223 implementation to            */
+/*   interpret INTERPRET instruction in compile NetRexx               */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2025.02.23 Initial  --MRE                                          */
+/* ------------------------------------------------------------------ */
+
+/* MRE
+ Loosely based on KK's jsr223 implementation
+
+ Somewhat different behavior interpreted vs compiled
+
+ Interpreted you can create new variables to the variable pool
+ Compiled, new variables cannot be created (Java does not allow),
+ also interpreted EXIT or RETURN instruction are failing
+
+ Catch org.netrexx.process.RxQuit for failures
+*/
+
+
+package org.netrexx.process
+import javax.script.
+import org.netrexx.process.NetRexxI
+import org.netrexx.process.NrVersion
+
+options strictcase nobinary
+
+class RxScriptEngine extends AbstractScriptEngine implements ScriptEngine uses javax.script.ScriptEngine
+
+  properties static
+    MY_ENGINE_VERSION   = String "V1.0.1"
+    MY_NAME             = String "NetRexx Interpretation Engine"
+    MY_SHORT_NAME       = String "NetRexxI"
+    MY_LANGUAGE         = String "NetRexx"
+    MY_LANGUAGE_VERSION = NrVersion().getVersion().toString()
+  
+    myFactory = ScriptEngineFactory RxScriptEngineFactory()
+  
+  properties public static
+    instance=RxScriptEngine
+    scriptname=String
+    scriptargs=String
+    scriptflags=String
+    verbose=String
+    classloader = ClassLoader
+
+  properties private
+    interpreter=NetRexxI
+
+
+  method RxScriptEngine()
+    this(SimpleBindings())
+    
+  method RxScriptEngine(bs=Bindings)
+    super(bs)
+    put(LANGUAGE_VERSION, MY_LANGUAGE_VERSION)
+    put(LANGUAGE, MY_LANGUAGE)
+    put(ENGINE, MY_NAME)
+    put(ENGINE_VERSION, MY_ENGINE_VERSION)
+    put(NAME, MY_SHORT_NAME)
+    instance=this
+    put(" nrxscriptengine", instance)            -- advertise self, static
+
+
+
+    -----------------------------------------------  Engine interface methods   ------------------------------        
+    
+  method eval(script=String , scriptcontext=ScriptContext) signals ScriptException returns Object
+
+    scriptcontext = scriptcontext
+    scriptname = 'interpret'
+    scriptargs=''              		                  --		no arguments
+    scriptflags='verbose0'                          --		get any parse flags passed for interpreter
+
+    script = makeProgram(script)
+
+    -- say script
+
+--    control file, growing
+    'echo "------------------" >>./interpret.xxx'
+    'echo $'''script''' >>./interpret.xxx'
+    'echo "------------------" >>./interpret.xxx'
+
+
+    if interpreter=null then interpreter=NetRexxI()
+    interpreter.setEngine(this)
+
+    progname   = String[1]
+    progscript = String[1]
+    progflags  = String[1]
+
+    progname[0]   = scriptname
+    progscript[0] = script
+    progflags[0]  = scriptflags
+--    progflags[1]  = 'diag'
+
+                                                                        -- parse the program
+    rc = Boolean(interpreter.parse(progname, progscript, progflags, null, null))
+
+    if rc.booleanValue() = 1 then do                             -- parsed OK
+      if interpreter.rxt.program.classes.size() \= 1 then do     -- we only should have interpret class
+        signal ScriptException("INTERPRET cannot define class")
+      end
+      interpretClass = RxClass interpreter.rxt.program.classes.elementAt(0)
+      if interpretClass.methods \= 2 then do                     -- we only should have main and runScript methods
+        signal ScriptException("INTERPRET cannot define method")
+      end
+
+      interpreter.rxt.exec()                                     -- interpret (exec) it
+    end
+    else do
+      signal ScriptException("Cannot parse")
+    end
+
+--    do
+--      exitingmethod=interpreter.getClass().getMethod('exiting',null)
+--      exiting=Boolean exitingmethod.invoke(interpreter,null)
+--      if exiting.booleanValue() then interpreter=null
+--    catch Exception
+--      --    		say e
+--      interpreter=null
+--    end
+
+    return rc
+
+  method eval(reader=Reader , scriptcontext=ScriptContext ) signals ScriptException returns Object
+    scriptcontext = scriptcontext
+    reader = reader
+    signal ScriptException("Not expected")
+
+  method createBindings() returns Bindings
+    return getBindings(ScriptContext.ENGINE_SCOPE)
+    
+  method getFactory() returns ScriptEngineFactory 
+    return myFactory
+
+    ---------------------------------		methods not part of interface definition:      --------------------------------
+
+  method makeProgram(script)
+
+  -- NrInterpret passes static variables starting with a blank
+
+  -- build properties stem, distinguish between static and non-static
+  props = ''
+
+  bind=SimpleBindings instance.getBindings(ScriptContext.ENGINE_SCOPE)
+  ks=bind.keySet()
+  it=ks.iterator()
+
+  loop while it.hasNext()
+    item=it.next()
+    sitem = item.toString()
+    if sitem = "javax.script.engine" | -
+       sitem = "javax.script.engine_version" | -
+       sitem = "javax.script.language" | -
+       sitem = "javax.script.language_version" | -
+       sitem = "javax.script.name" then iterate                -- don't need these
+
+    val=instance.get(String item)
+    titem=Rexx(item.toString()).changestr('.','_')
+    props[titem] = titem.toString()
+    if titem.substr(1,1) == ' ' then do
+       props[titem, 'S'] = 1      -- static
+    end
+    else do
+      props[titem, 'S'] = 0
+    end
+
+    if val = null then do
+      props[titem, 'type'] = 'Object'
+    end
+    else do
+      type=Rexx(val.getClass().getName())
+      if type.left(1)="[" then
+        type=gettype(type)
+      props[titem, 'type'] = type
+      props[titem, 'val']  = item.toString()
+    end
+  end
+
+  prefix1 = ''          -- static properties
+  prefix2 = ''          -- non-static properties
+  prefix1u= ''          -- unused static properties
+  prefix2u= ''          -- unused non-static properties
+  suffix  = ''          -- to 'put' values back
+  suffix1 = ''
+  suffix2 = ''
+  loop titem over props
+    suffix = suffix-
+'\n(nrxscriptengine.getBindings(ScriptContext.ENGINE_SCOPE)).put("'titem'", java.lang.Object 'titem')'
+
+    pref = '\n'titem '= 'props[titem, 'type']' '
+    if props[titem].exists('val') then do
+      pref = pref'RxScriptEngine.instance.get("'props[titem]'")'
+    end
+    else do
+      pref = pref'null'
+    end
+
+    if props[titem, 'S'] == 1 then do
+      prefix2  = prefix2''pref
+      prefix2u = prefix2u'\nnowarn$'titem.strip('L')'='titem  -- strip nowarn$ static
+
+      suffix2 = suffix2-
+'\n(nrxscriptengine.getBindings(ScriptContext.ENGINE_SCOPE)).put("'titem'", java.lang.Object 'titem')'
+
+    end
+    else do
+      prefix1  = prefix1''pref
+      prefix1u = prefix1u'\nnowarn$'titem'='titem
+      suffix1 = suffix1-
+'\n(nrxscriptengine.getBindings(ScriptContext.ENGINE_SCOPE)).put("'titem'", java.lang.Object 'titem')'
+    end
+  end
+  if prefix1 \= '' then do
+    prefix1 = 'properties private 'prefix1
+    prefix1u= 'properties private unused 'prefix1u
+  end
+
+  if prefix2 \= '' then do
+    prefix2 = 'properties private static 'prefix2
+    prefix2u= 'properties private static unused 'prefix2u
+--    prefix2 = 'properties private 'prefix2
+--    prefix2u= 'properties private unused 'prefix2u
+  end
+
+  -- make program
+  prog = -
+'import javax.script.Bindings'-
+'\nimport javax.script.ScriptContext'-
+'\nimport org.netrexx.process.RxScriptEngine'-
+'\n'-
+'\nclass interpret public'-
+'\n'prefix1''-
+'\n'prefix2''-
+'\n'prefix1u''-
+'\n'prefix2u''-
+'\n'-
+'\nmethod main($001=String[]) static'-
+'\n'-
+'\n  $i = interpret()'-
+'\n  $i.runScript()'-
+'\n'-
+'\n 'suffix2''-
+'\n'-
+'\nmethod runScript()'-
+'\n'-
+'\n'script''-
+'\n'suffix1''-
+'\n'
+
+  return prog
+
+
+
+    method gettype(ct)
+    dim=ct.countstr('[')
+    ct=ct.right(ct.length()-dim)
+    code=ct.left(1)
+    if code="L" then ct=ct.substr(2,ct.length()-2)
+    else do
+      types="boolean byte char double float int long short"
+      tc="ZBCDFIJS"
+      if tc.pos(code)=0 then ct="Object"
+      else ct=types.word(tc.pos(code))
+    end
+    ct=ct'['||','.copies(dim-1)']'
+    return ct

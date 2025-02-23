@@ -14,21 +14,24 @@
 /* 2024.09.28 Released                                                */
 /* 2024.10.09 Fix LOOP logic                                          */
 /* 2024.10.31 Don't flag occuring exception                           */
+/* 2025.02.23 Support for compiled NetRexx                            */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
 
+import javax.script.
+
 /**   An object that represents a parsed Say clause                    */
 class NrInterpret implements RxClauseParser uses RxCode, RxExpr
  properties private
-  rxt    =RxTranslator   -- root
+  rxt     =RxTranslator  -- root
   oparser =RxParser      -- incoming parser
   otracer = RxTracer     -- incoming tracer
   olevel  =int
   othislevel = NrLevel
-  tokens =RxToken[]      -- local reference
+  tokens =RxToken[]       -- local reference
   interpret = String
-  expr     = RxExpr         -- expression [null if none]
+  expr     = RxExpr       -- expression [null if none]
 
 
  /** Construct an object from the current clause */
@@ -45,7 +48,7 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
  method scan(pass=int)
   if pass<2 then signal RxQuit(rxt, tokens[0], 'internal.error', 'NrSay', pass)
 
-  if rxt.wontexec then RxError(rxt, tokens[0], 'interpret.needs.exec')
+--  if rxt.wontexec then RxError(rxt, tokens[0], 'interpret.needs.exec')
 
   if tokens[1].type=RxToken.END then do
     interpret = ''
@@ -84,14 +87,99 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
  method getAssigns returns String[]
   return null
 
+
  /** code generation [only] */
  method generate
-   signal RxQuit(rxt, tokens[0], 'internal.error', 'NrInterpret generating java')
-/*
-  if expr=null then jcode='""'
-               else jcode=expr.code.javacode
-  rxt.program.streamer.out(RxType.REXXIO_CLASS'.Say('jcode');')
-*/
+
+
+  bindings = Vector(5)
+
+  curmethod = rxt.program.parser.cursor.curmethod
+
+  enum=curmethod.methodprotopool.elements()      -- enumerate the variables in the current method pool
+  loop while enum.hasMoreElements()
+    var=RxVariable enum.nextElement()            -- add it
+    if var.islocal() | var.isargument() then do
+      bindings.addElement(var)
+    end
+  end
+
+  curclass = rxt.program.parser.cursor.curclass
+
+  enum=curclass.curcpool.elements()              -- enumerate the variables in the current class pool
+  loop while enum.hasMoreElements()
+    var=RxVariable enum.nextElement()
+    if \ var.isstaticprop() then do              -- add non-static property only
+      if \ curmethod.methodstatic then do        -- only when in non-static method, otherwise inaccessible
+        bindings.addElement(var)                 --  add it
+      end
+    end
+    else do
+      bindings.addElement(var)                   --  add static property always
+    end
+  end
+
+
+  if expr=null then do
+    code = '""'
+    interpret='""'
+  end
+  else do
+    code=expr.code.javacode
+    interpret = code
+  end
+
+  jcode = -
+  '\n{'-
+  '\n javax.script.ScriptEngine nrEngine;'-
+  '\n nrEngine=(new javax.script.ScriptEngineManager()).getEngineByName("NetRexxI");'
+
+-- we add a space before a variable or non-static property
+-- NrEngine strips it, as it is an invalid Java name anyway, but we need to differentiate between static and non-static
+
+  loop var over bindings
+--     say '.. put ' var.varname ' 'var.varvalue
+    if var.isstaticprop() then
+      jcode = jcode'\n nrEngine.put("'var.varname'",(java.lang.Object)'var.varname');'
+    else
+      jcode = jcode'\n nrEngine.put(" 'var.varname'",(java.lang.Object)'var.varname');'
+  end
+
+  jcode = jcode -
+  '\n try {'-
+  '\n  Object $rc = nrEngine.eval('interpret'.toString());'-
+  '\n  } catch (Exception $e) { '-
+  '\n   netrexx.lang.RexxIO.Say(" --- Interpret error (\"+$e.getMessage()+\") : ''\"+'interpret'+\"''");'-
+  '\n   throw(new org.netrexx.process.RxQuit());'-
+  '\n }'
+
+  loop var over bindings
+--      say '.. get ' var.varname ' 'var.varvalue var.vartype
+    type = Rexx var.vartype
+--    if var.isarray() then type = type'[]'
+    if var.varname \== "currentclass" then do
+      if var.isstaticprop() then
+        jcode = jcode'\n 'var.varname' = ('type') nrEngine.get("'var.varname'");'
+      else
+        jcode = jcode'\n 'var.varname' = ('type') nrEngine.get(" 'var.varname'");'
+
+    end
+    if var.isstaticprop() then
+      jcode = jcode'\n (nrEngine.getBindings(javax.script.ScriptContext.ENGINE_SCOPE)).remove("'var.varname'");'
+    else
+      jcode = jcode'\n (nrEngine.getBindings(javax.script.ScriptContext.ENGINE_SCOPE)).remove(" 'var.varname'");'
+  end
+
+  jcode = jcode'\n}\n'
+
+--    say 'JavaCODE start \n'jcode'\nJavaCODE end\n'
+
+  rxt.program.streamer.out(jcode)
+
+-- before
+--    signal RxQuit(rxt, tokens[0], 'internal.error', 'NrInterpret generating java')
+
+
  /** Interpretation */
  method interpret(ocursor=RxCursor null)
 
