@@ -1,4 +1,4 @@
-# NetRexx 5.00-Alpha []
+# NetRexx 5.00-Beta []
 
 ## Language
 - New INTERPRET instruction
@@ -22,7 +22,7 @@
 - xref2uml.nrx, generate PlantUML inputfiles from crossref files
 - rexxtry.nrx, every rexx needs its rexxtry
 - rexxcps.nrx, corrected calculating clauses per second
-- jsrbindinds.nrx, retrieve bindings key values
+- jsrbindings.nrx, retrieve bindings key values
 
 
 # NetRexx 4.06 GA [2 Mar 2024]
