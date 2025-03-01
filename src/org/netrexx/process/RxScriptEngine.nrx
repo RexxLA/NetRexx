@@ -86,7 +86,7 @@ class RxScriptEngine extends AbstractScriptEngine implements ScriptEngine uses j
 
     script = makeProgram(script)
 
-    -- say script
+--     say script
 
 --    control file, growing
 --    'echo "------------------" >>./interpret.xxx'
@@ -108,7 +108,6 @@ class RxScriptEngine extends AbstractScriptEngine implements ScriptEngine uses j
 
                                                                         -- parse the program
     rc = Boolean(interpreter.parse(progname, progscript, progflags, null, null))
-
     if rc.booleanValue() = 1 then do                             -- parsed OK
       if interpreter.rxt.program.classes.size() \= 1 then do     -- we only should have interpret class
         signal ScriptException("INTERPRET cannot define class")
@@ -117,8 +116,11 @@ class RxScriptEngine extends AbstractScriptEngine implements ScriptEngine uses j
       if interpretClass.methods \= 2 then do                     -- we only should have main and runScript methods
         signal ScriptException("INTERPRET cannot define method")
       end
-
-      interpreter.rxt.exec()                                     -- interpret (exec) it
+      do
+        interpreter.rxt.exec()                                     -- interpret (exec) it
+      catch e=RuntimeException
+        signal ScriptException("Runtime error")
+      end
     end
     else do
       signal ScriptException("Cannot parse")

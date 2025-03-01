@@ -581,7 +581,7 @@ class RxTranslator
  /* -------------------------------------------------------------- */
  method exec(args=String[] null)
   startexec()
-
+--trace results
   program=programlist[0]
   if program.abandon then return
   if program.errorcount>0 then return
@@ -610,6 +610,7 @@ class RxTranslator
       interpreter.callMethod(null, field, argcodes, null)
       -- say ': done  main'
     catch s=RxSignal
+  --  trace results
       signalobj=s.signalobj
       if signalobj=null then leave finals  -- signal was Exit request
       realexcep=Throwable signalobj
@@ -617,7 +618,11 @@ class RxTranslator
            realexcep.toString() '=====')
       if program.flag.test then realexcep.printStackTrace()
       s.showFrames(this)
+      if jsr223Engine \==  null then do
+         endexec()
+         signal s
       end
+    end
     catch RxError
       -- don't set program.abandon .. compile may still be wanted,
       -- and/or .java file need renaming
