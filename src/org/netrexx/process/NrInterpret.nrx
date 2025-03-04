@@ -154,20 +154,18 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
   '\n }'
 
   loop var over bindings
---      say '.. get ' var.varname ' 'var.varvalue var.vartype
+--    say '.. get ' var.varname ' 'var.varvalue var.vartype
     type = Rexx var.vartype
 --    if var.isarray() then type = type'[]'
-    if var.varname \== "currentclass" then do
-      if var.isstaticprop() then
-        jcode = jcode'\n 'var.varname' = ('type') nrEngine.get("'var.varname'");'
-      else
-        jcode = jcode'\n 'var.varname' = ('type') nrEngine.get(" 'var.varname'");'
 
-    end
-    if var.isstaticprop() then
+    if var.isstaticprop() then do
+      jcode = jcode'\n 'var.varname' = ('type') nrEngine.get("'var.varname'");'
       jcode = jcode'\n (nrEngine.getBindings(javax.script.ScriptContext.ENGINE_SCOPE)).remove("'var.varname'");'
-    else
+    end
+    else do
+      jcode = jcode'\n 'var.varname' = ('type') nrEngine.get(" 'var.varname'");'
       jcode = jcode'\n (nrEngine.getBindings(javax.script.ScriptContext.ENGINE_SCOPE)).remove(" 'var.varname'");'
+    end
   end
 
   jcode = jcode'\n}\n'
