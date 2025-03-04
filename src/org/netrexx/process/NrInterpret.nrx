@@ -149,8 +149,7 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
   '\n try {'-
   '\n  Object $rc = nrEngine.eval('interpret'.toString());'-
   '\n  } catch (Exception $e) { '-
-  '\n   netrexx.lang.RexxIO.Say(" --- Interpret error (\"+$e.getMessage()+\") : ''\"+'interpret'+\"''");'-
-  '\n   throw(new org.netrexx.process.RxQuit());'-
+  '\n   throw(new netrexx.lang.InterpretException(" +++ Interpret error (\"+$e.getMessage()+\") : ''\"+'interpret'+\"''" ));'-
   '\n }'
 
   loop var over bindings
@@ -255,7 +254,7 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
         nop
       finally
         if hadexception then do                                      -- catch any exception
-          signalmsg = 'Cannot parse : 'interpret
+          signalmsg = 'Cannot parse'
           leave execute
         end
       end
@@ -286,7 +285,7 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
       nop
     finally
       if hadexception then do                                      -- catch any exception
-        signalmsg = 'Cannot parse 'it' :' interpret
+        signalmsg = 'Cannot parse 'it
         leave execute
       end
     end
@@ -294,13 +293,13 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
     cursor.curexec = 1
 
     if rxt.program.parser.level \= olevel then do                  -- don't mess up the do/end stack
-      signalmsg = 'Block "'interpret'" not properly ended'
+      signalmsg = 'Block not properly ended'
       hadexception = 1
       leave execute
     end
                                                                    -- extra
     if rxt.program.parser.thislevel \= thislevel then do           -- don't mess up the do/end stack
-      signalmsg = 'Block "'interpret'" not properly ended'
+      signalmsg = 'Block not properly ended'
       hadexception = 1
       leave execute
     end
@@ -332,7 +331,7 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
 
       if clause.lookaside = null then do
         hadexception = 1
-        signalmsg = 'Invalid 'it' :' interpret
+        signalmsg = 'Invalid 'it
         leave execute
       end
       else do label realclause
@@ -353,7 +352,7 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
           nop
         finally
           if hadexception then do                             -- catch any exception
-            signalmsg = 'Cannot interpret 'it' :' interpret '('e.toString()')'
+            signalmsg = 'Runtime error 'e.toString()
             leave execute
           end
         end
@@ -445,14 +444,14 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
  --   rxt.program.parser.cursor = ocursor             -- now original cusros
     rxt.program.parser.thislevel = thislevel        --correct level if not properly ended
 
-    rxt.program.parser.addexceptions(1, 'org.netrexx.process.RxQuit', ocursor.curclause.tokens[0])
+    rxt.program.parser.addexceptions(1, 'netrexx.lang.InterpretException', ocursor.curclause.tokens[0])
 
     code = RxCode()
     code.begclause=ocursor.curclause
     code.endclause=ocursor.curclause
     code.group = RxCode.S_CONSTR
-    code.type  = RxType('org.netrexx.process.RxQuit', 0)
-    code.value = org.netrexx.process.RxQuit(rxt, null, 'interpret.error', signalmsg)
+    code.type  = RxType('netrexx.lang.InterpretException', 0)
+    code.value = netrexx.lang.InterpretException(' +++ Interpret Error ('signalmsg') : 'interpret)
 
     signal RxSignal(cursor, code.value, ocursor.curclause.tokens[0])  -- wrap 'n raise
   end
