@@ -17,7 +17,9 @@
 - NetRexx-63 parsing special words and variables
 - NetRexx-66 pipc does not honour file name extension and possibly removes existing .nrx files
 - NetRexx-67 exit code is not propagated when interpreting
- 
+- NetRexx-68 Pipelines JVM 23 removed ThreadGroup.stop() fixed (Marc Remes) 
+- NetRexx-73 Emacs 30.1 does not colour fonts; fixed in netrexx-mode.el and still good for earlier Emacs
+
 ## Examples
 - xref2uml.nrx, generate PlantUML inputfiles from crossref files
 - rexxtry.nrx, every rexx needs its rexxtry
