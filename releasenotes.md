@@ -5,7 +5,7 @@
 - -crossref option now lists classes, methods and properties
 - NetRexx compiler now emits class file format version 52 files (jdk 1.8), both with -ecj as with -javac 
 - new -targetvm option to compile to a higher class file version, with -ecj up to jdk 15 (class version 59), with -javac not higher than run-time Java
-- more complete JRS223 framework
+- more complete JRS223 javax.scripting framework
 
 ## Fixes
 - NetRexx-21 superfluous warning on crossref option ("overrides program default")
@@ -18,6 +18,7 @@
 - NetRexx-66 pipc does not honour file name extension and possibly removes existing .nrx files
 - NetRexx-67 exit code is not propagated when interpreting
 - NetRexx-68 Pipelines JVM 23 removed ThreadGroup.stop() fixed (Marc Remes) 
+- NetRexx-72 Pipelines diskr '<' wrongly constructs absolute path filename
 - NetRexx-73 Emacs 30.1 does not colour fonts; fixed in netrexx-mode.el and still good for earlier Emacs
 
 ## Examples
