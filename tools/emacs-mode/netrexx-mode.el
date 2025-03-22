@@ -3,7 +3,7 @@
 ;; Author Arjan Bos <Arjan.Bos@icu.nl>
 ;; Keywords: netrexx
 ;; Version:
-(defconst netrexx-mode-version "2.2")
+(defconst netrexx-mode-version "2.3")
 
 ;; Since this file is the, completely rewritten, follow-up to the 
 ;; original netrexx-mode.el which was posted to gno.emacs.sources on
@@ -137,7 +137,6 @@
 ;;                              indentation code.
 
 ;; Code:
-
 (require 'skeleton)
 
 (defgroup netrexx nil
@@ -2009,7 +2008,7 @@ comment them if within 4 lines back no \"if\" statement is found.
   (setq skeleton-pair netrexx-use-skeleton-pairing)
 ;;   (make-local-variable 'skeleton-pair-alist)
 ;;   (make-local-variable 'skeleton-pair-filter)
-  (run-hooks 'netrexx-mode-hook))
+  (run-mode-hooks 'netrexx-mode-hook))
 
 (provide 'netrexx-mode)
 

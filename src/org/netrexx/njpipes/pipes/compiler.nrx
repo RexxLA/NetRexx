@@ -7,11 +7,12 @@
  *  and distributing this program.
  *
  */
-options nostrictcase nostrictargs nostrictsignal nobinary
+options strictcase nostrictargs nostrictsignal nobinary
 package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
 /*
+   2025-03-16 make strictcase because in Java 24 private java.lang.System.Out class is found --MRE
    2025-02-23 stg name to lowercase. Jeff Hennick
    2024-12-22 rewrite alias processing to avoid secondary changes;
               add blank stage to comment stage processing;
@@ -55,25 +56,25 @@ import org.netrexx.process.
 class compiler extends Object public
   rc	= int
   keep	= boolean
-  tonrc	= rexx
+  tonrc	= Rexx
   JC	= Hashtable
 
-  method compile(a = rexx, squelch=boolean 0, pipeClassName=Rexx(''),shouldExit=boolean 1) inheritable returns int
+  method compile(a = Rexx, squelch=boolean 0, pipeClassName=Rexx(''),shouldExit=boolean 1) inheritable returns int
     precomp = boolean 0
     if \squelch then do
       -- we need an exit for a precompiled pipeline
       say a
       precomp = boolean 1
     end
-    ssep   = rexx '|'
-    pend   = rexx '?'
-    pInfo  = rexx
-    code   = rexx ''
+    ssep   = Rexx '|'
+    pend   = Rexx '?'
+    pInfo  = Rexx
+    code   = Rexx ''
     tonrc  = ''
 
     stall  = int 2000
 
-    lvl	   = rexx 0
+    lvl	   = Rexx 0
 
     -- get pipe to process
 
@@ -88,14 +89,14 @@ class compiler extends Object public
 
     fn = pInfo
     fo=File null
-    fo=java.io.file(String fn'.nrx')
+    fo=java.io.File(String fn'.nrx')
     if fo.exists() then do
       say "pipc047e: A '"fn".nrx' file exists. Please move it out of the way"
       exit
     end
 
     -- standard headers
-    o	 = rexx ''
+    o	 = Rexx ''
     o[1] = '/* 'pInfo NrVersion().getPipesVersion()' */'
     n	 = 2
 
@@ -175,13 +176,13 @@ class compiler extends Object public
 
     -- extract stages
 
-    s	= rexx ''         -- the stages...
-    l	= rexx  0         -- find a labeled stage
-    c	= rexx  0         -- table used to build connections,
+    s	= Rexx ''         -- the stages...
+    l	= Rexx  0         -- find a labeled stage
+    c	= Rexx  0         -- table used to build connections,
 								      -- negative value is a link
-    r	= rexx  1         -- count of pipes, flags for stages
-    not	= rexx  0         -- true if 'not' modifier is active for stage
-    ls	= rexx  0         -- reset stream number to...
+    r	= Rexx  1         -- count of pipes, flags for stages
+    not	= Rexx  0         -- true if 'not' modifier is active for stage
+    ls	= Rexx  0         -- reset stream number to...
     i	= 0
     k	= 0
     m	= 0
@@ -332,7 +333,7 @@ class compiler extends Object public
           otherwise
 	
 	    -- find stages to call stage arg for
-            se					    = rexx ''
+            se					    = Rexx ''
             loop cs				    = 1 to 99
               do
                 stgc = Class.forName(String 'org.netrexx.njpipes.stages.'stg.word(1))
@@ -396,7 +397,7 @@ class compiler extends Object public
                     lstream			    = 1
                     label			    = label.substr(2)
                   end
-                  stg				    = pinfo[3]' 'pInfo[4]
+                  stg				    = pInfo[3]' 'pInfo[4]
                   work				    = pInfo[5]
                   if work<>'' & work.strip('T').right(1)<>pend then
                     work			    = work' 'pend
@@ -478,7 +479,7 @@ class compiler extends Object public
     n	 = n+1
 
     -- standard imports
-    d	    = rexx ''
+    d	    = Rexx ''
 
     if d[0] = '' then
       do
@@ -558,7 +559,7 @@ class compiler extends Object public
     end i
     n			  = n+1
     -- build context method header
-    x	    = rexx 1
+    x	    = Rexx 1
     context = ''
     loop i  = 1 to s[0]
       parse s[i] stg work .
@@ -591,7 +592,7 @@ class compiler extends Object public
     if context<>'' then do
       o[n+2] = 'method setContext('context') returns pipe'
       n	     = n+3
-      x	     = rexx 1
+      x	     = Rexx 1
       loop i = 1 to s[0]
         parse s[i] stg work .
         if r[stg] then do
@@ -726,7 +727,7 @@ class compiler extends Object public
 
     -- build connections and links
 
-    f  = rexx 0                                    -- reference count in stages
+    f  = Rexx 0                                    -- reference count in stages
     loop i = 1 to p
       if ls[i,1] then                              -- reset stream no
         f[c[i,1]] = -1
@@ -806,7 +807,7 @@ class compiler extends Object public
 
     -- set priorites to give the JVM hints
 
-    ok = rexx 1
+    ok = Rexx 1
     loop i = 1 to p
       j	= c[i,c[i,0]]
       if j>0 & ok[j] then do
@@ -973,7 +974,7 @@ class compiler extends Object public
    *
    * - also, it is called from the pipes runner which gives it a synthesized name
    */
-  method compiler(a = rexx,squelch=0,pipeClassName=Rexx(''),shouldExit=1 )
+  method compiler(a = Rexx,squelch=0,pipeClassName=Rexx(''),shouldExit=1 )
     keep   = boolean 0             -- assume nokeep
     nokeep = Rexx ''               -- generated .nrx files to delete
     work   = boolean 0
@@ -1005,7 +1006,7 @@ class compiler extends Object public
       select
 	when ext <> 'NRX' then do
 	  f=File null
-	  f=java.io.file(String fn'.nrx')
+	  f=java.io.File(String fn'.nrx')
 	  if f.exists() then do
 	    say "pipc047e: A '"fn".nrx' file exists. Please move it out of the way"
 	    exit
@@ -1055,10 +1056,10 @@ class compiler extends Object public
       parse a w ' ' a                    -- get stripped word
       parse w w '.' .
 
-      njp = java.io.file(String w'.njp')
-      nrx = java.io.file(String w'.nrx')
-      grp = java.io.file(String w'.grp')
-      oth = java.io.file(String w'.'ext)
+      njp = java.io.File(String w'.njp')
+      nrx = java.io.File(String w'.nrx')
+      grp = java.io.File(String w'.grp')
+      oth = java.io.File(String w'.'ext)
 
       select
         when w = '-gen' then             -- options for pipes
@@ -1077,10 +1078,10 @@ class compiler extends Object public
             savekeep   = keep
             if verb    = w then say 'pipc045i: Processing 'w'.'ext
 	
-            aa	       = rexx ''
+            aa	       = Rexx ''
             aa['fin']  = w'.'ext
             aa['xout'] = w
-            ll	       = rexx ''
+            ll	       = Rexx ''
 	    r	       = processNjp.get(aa).setContext(ll).runpipe()
             ll[1]      = ll[1].strip('L')
             if r>rc then
@@ -1105,10 +1106,10 @@ class compiler extends Object public
             savekeep   = keep
             if verb    = w then say 'pipc045i: Processing 'w'.njp'
 	
-            aa	       = rexx ''
+            aa	       = Rexx ''
             aa['fin']  = w'.njp'
             aa['xout'] = w
-            ll	       = rexx ''
+            ll	       = Rexx ''
 	    r	       = processNjp.get(aa).setContext(ll).runpipe()
             ll[1]      = ll[1].strip('L')
             if r>rc then
@@ -1236,8 +1237,8 @@ class compiler extends Object public
       	    -- this entry point has different return codes than the original undocumented entry point
       	    javacclass=javaloader.loadClass('com.sun.tools.javac.Main')
       	    compilemethod = javacclass.getMethod('compile', [Class args.getClass(), PrintWriter.class])
-      	    jok=Rexx(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString())
-      	    javacok=boolean (jok=="0")
+       	    jok=Rexx(compilemethod.invoke(null, [Object args, PrintWriter(System.out)]).toString())
+            javacok=boolean (jok=="0")
       	    javacok=javacok -- get rid of warning
       	  catch cle=Exception
       	    say cle
@@ -1261,14 +1262,14 @@ class compiler extends Object public
 
       if \squelch then do
 	loop i=1 to nokeep.words()
-	  fid = java.io.file(String nokeep.word(i))
+	  fid = java.io.File(String nokeep.word(i))
 	  if \fid.delete() then
             say 'pipc025w: Warning - could not delete 'nokeep.word(i)
 	end i
       end
     end
 
-  method compiler(t=HashTable) inheritable
+  method compiler(t=Hashtable) inheritable
     JC = t
 
   method main(a=String[]) static

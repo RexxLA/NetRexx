@@ -1,4 +1,4 @@
-;;; njp-mode.el --- highlight and indent Njp program files.
+;; njp-mode.el --- highlight and indent Njp program files.
 
 ;; Author Arjan Bos <Arjan.Bos@icu.nl>
 ;; Keywords: njp
@@ -2012,7 +2012,7 @@ comment them if within 4 lines back no \"if\" statement is found.
   (setq skeleton-pair njp-use-skeleton-pairing)
 ;;   (make-local-variable 'skeleton-pair-alist)
 ;;   (make-local-variable 'skeleton-pair-filter)
-  (run-hooks 'njp-mode-hook))
+  (run-mode-hooks 'njp-mode-hook))
 
 (provide 'njp-mode)
 
