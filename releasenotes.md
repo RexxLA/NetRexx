@@ -17,6 +17,7 @@
 - NetRexx-63 parsing special words and variables
 - NetRexx-66 pipc does not honour file name extension and possibly removes existing .nrx files
 - NetRexx-67 exit code is not propagated when interpreting
+- compile error in Pipes compiler fixed for JVM 23
  
 ## Examples
 - xref2uml.nrx, generate PlantUML inputfiles from crossref files
