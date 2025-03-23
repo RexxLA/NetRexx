@@ -3,6 +3,7 @@
 <html style='height: 100%'>
 <head>
 <!--
+   25/ 3/21 5.00 -> 5.01; ARRAY expanded with example.  Jeff Hennick
    25/ 2/12 TOLERANT/STRICT options to SORT. Jeff Hennick
    24/12/14 SELECT stage to 5.00, adding the four options. Jeff Hennick
    24/12/ 9 Version 5.00. COMMENT no longer need trailing space. Jeff Hennick
@@ -161,8 +162,8 @@ content: "4.05";
 .n406::before{
 content: "4.06";
 }
-.n500::before{
-content: "5.00";
+.n501::before{
+content: "5.01";
 color: red;
 }
 .close:hover{
@@ -310,7 +311,7 @@ color: black;
 </style>
 </head><body>
 <span style='float:right'>12/25/2024</span>
-<h1>Stages Built Into<br>NetRexx Pipelines <span class=red>5.00</span><br>&amp;<br>CMS Pipelines V7R1<br>and Their Differences</h1>
+<h1>Stages Built Into<br>NetRexx Pipelines <span class=red>5.01</span><br>&amp;<br>CMS Pipelines V7R1<br>and Their Differences</h1>
 <h2>How to Read Syntax Diagrams</h2>
 <p>Special diagrams (often called railroad tracks) are used to show the syntax of external interfaces.</p>
 <p>To read a syntax diagram, follow the path of the line. Read from left to right and top to bottom.</p>
@@ -616,7 +617,7 @@ character to the end of the collating sequence.</p>
 <label class='switch'>
   <input type='radio' name='changes' id='change500' onclick='toggleChange(500)'>
 </label>
-<b>5.00 &nbsp; &nbsp;</b>
+<b>5.01 &nbsp; &nbsp;</b>
 
 <label class='switch'>
   <input type='radio' name='changes' id='change406' onclick='toggleChange(406)'>
@@ -775,10 +776,10 @@ character to the end of the collating sequence.</p>
 <div class=p-note><ul><li>Not implemented in Netrexx Pipelines.</li></ul></div></td></tr>
 
 
-<tr class='c500 c309 njp'><td class=name><span id='--'>--</span>
+<tr class='c501 c309 njp'><td class=name><span id='--'>--</span>
 <br><span class=aliases>comment</span>
 <br><span class=n309></span>
-<br><span class=n500></span></td>
+<br><span class=n501></span></td>
 <td class=desc><p-title>Comment Stage, No Operation</p-title>
 <div><div class=p-ddiv><div class='p-diag box'><div class='p-dt'>NetRexx</div>
 &#9658;&#9658;&#9472;&#9472;&#9516;&#9472; <b>--</b> &#9472;&#9472;&#9472;&#9472;&#9516;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;&#x25C4;
@@ -1067,11 +1068,99 @@ literal NetRexx is Good,NetRexx is Great,NetRexx is Fantastic |
 
 <tr class=' njp'><td class=name><span id='array'>array</span>
 </td>
-<td class=desc><p-title>Read or Write an Array</p-title>
-</div></div>
-<div class=p-note><ul><li>Pipes for NetRexx</li></ul></div></td></tr>
+<td class=desc><p-title>Read or Erase and Write an Array</p-title>
+
+<div><div class=p-ddiv><div class='p-diag box'><div class='p-dt'></div>
+&#9658;&#9658;&#9472;&#9472;ARRAY&#9472;&#9472;<span class=var>netrexx_array_name</span>&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;&#x25C4;</div></div>
+<div class=p-note><ul>
+ <li>Pipes for NetRexx</li>
+ <li> If this is the first stage in a pipe, it reads the <span class=var>netrexx_array_name</span> from the parent NetRexx program
+      and puts the members into the pipe one record at a time.</li>
+ <li> If this is any stage but the first in a pipe, it writes the records to the <span class=var>netrexx_array_name</span>
+      in the parent NetRexx program.</li>
+  <ul>
+   <li> This ERASES the <span class=var>netrexx_array_name</span> before writing the first record.</li>
+   <li> Except for this, this stage is identical to ARRAYA.</li>
+  </ul>
+</ul>
+<div>
+<p><b>Examples:</b></p>
+<pre class=examp>
+class testpipe
+method testpipe()
+  F = Rexx 'abase'   -- Two NetRexx stem variables of objects
+  T = Rexx 1         -- with default type Rexx, we needn't specify it
+
+  F[0]=5             -- Fill the first stem variable
+  F[1]=222
+  F[2]=3333
+  F[3]=1111
+  F[4]=55
+  F[5]=444
+
+  pipe (apipe stall 1000 )
+    stem F |          -- read a NetRexx array to objects (records) |
+    sort |            -- sort column-wise  |
+    console |         -- show them sorted |
+    stem T ?
+                      -- write them to the NetRexx array
+
+  loop i=1 to T[0]
+    say 'T['i']='T[i]
+  end
+
+  exit
+
+method main(a=String[]) static
+  testpipe()
+
+====
+PS > pipc testpipe.nrx
+pipe (testpipe_apipe stall 1000 ) stem F | sort | console | stem T
+PS > java testpipe
+
+1111
+222
+3333
+444
+55
+T[1]=
+T[2]=1111
+T[3]=222
+T[4]=3333
+T[5]=444
+T[6]=55
+PS >
+</pre>
+</div>
+<div>
+</div>
+</td>
+</tr>
 
 
+<tr class=' njp'><td class=name><span id='arraya'>arraya</span>
+</td>
+<td class=desc><p-title>Read or Addto Write an Array</p-title>
+
+<div><div class=p-ddiv><div class='p-diag box'><div class='p-dt'></div>
+&#9658;&#9658;&#9472;&#9472;ARRAYA&#9472;&#9472;<span class=var>netrexx_array_name</span>&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;&#x25C4;</div></div>
+<div class=p-note><ul>
+ <li>Pipes for NetRexx</li>
+ <li> If this is the first stage in a pipe, it reads the <span class=var>netrexx_array_name</span> from the parent NetRexx program
+      and puts the members into the pipe one record at a time.</li>
+ <li> If this is any stage but the first in a pipe, it adds the records to the <span class=var>netrexx_array_name</span>
+      in the parent NetRexx program.</li>
+  <ul>
+   <li> This ADDS to the <span class=var>netrexx_array_name</span>.</li>
+   <li> Except for this, this stage is identical to ARRAY.</li>
+  </ul>
+</ul>
+<p><b>Examples:</b>  See ARRAY.</p>
+</td> </div>
+</tr>
+
+<!--
 <tr class=' njp'><td class=name><span id='arraya'>arraya</span>
 </td>
 <td class=desc><p-title>Read or Write an Array</p-title>
@@ -1091,6 +1180,7 @@ literal NetRexx is Good,NetRexx is Great,NetRexx is Fantastic |
 <td class=desc><p-title>Read or Write an Array</p-title>
 </div></div>
 <div class=p-note><ul><li>Pipes for NetRexx</li></ul></div></td></tr>
+-->
 
 
 <tr class=' cms'><td class=name><span id='asatomc'>asatomc</span>
@@ -1493,10 +1583,10 @@ literal NetRexx is Good,NetRexx is Great,NetRexx is Fantastic |
       <li> output stream 2 is stderr</li></ul></div></td></tr>
 
 
-<tr class='c500 c309 njp'><td class=name><span id='comment'>comment</span>
+<tr class='c501 c309 njp'><td class=name><span id='comment'>comment</span>
 <br><span class=aliases>--</span>
 <br><span class=n309></span>
-<br><span class=n500></span></td>
+<br><span class=n501></span></td>
 <td class=desc><p-title>Comment stage</p-title>
 <div><div class=p-ddiv><div class='p-diag box'><div class='p-dt'>NetRexx</div>
 &#9658;&#9658;&#9472;&#9472;&#9516;&#9472;&#9472;COMMENT&#9472;&#9472;&#9516;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;&#x25C4;
@@ -3869,9 +3959,9 @@ This sort routine is very basic.  It uses sortRexx class, which implements
 <div class=p-note><ul><li>Not implemented in Netrexx Pipelines.</li></ul></div></td></tr>
 
 
-<tr class='c500 c406 njp'><td class=name><span id='select'>select</span>
+<tr class='c501 c406 njp'><td class=name><span id='select'>select</span>
 <br><span class=n406>
-<br><span class=n500>
+<br><span class=n501>
 </td>
 <td class=desc><p-title>Select Records using user logic</p-title>
 <div><div class=p-ddiv><div class='p-diag box'><div class='p-dt'>NetRexx</div>
@@ -3904,7 +3994,7 @@ the method can return the number of any output stream.
 cause problems.  Also, due to the late compiling, at stage run time, debugging
 can be difficult.  The reported line numbers have nothing to do with your code.
 
-<li><span class=red>5.00</span> adds the four options.
+<li><span class=red>5.01</span> adds the four options.
 
 </ul>
 <p><b>Examples:</b></p>
