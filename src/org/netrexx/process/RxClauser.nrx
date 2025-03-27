@@ -32,6 +32,7 @@
 /* 2021.12.31 add RxModel - Jason Martin                              */
 /* 2022.06.16 Optional interactive trace RxSource on constructor --MRE*/
 /* 2023.03.03 Enhancement #45, support shebang --MRE                  */
+/* 2025.03.27 fix exception when single # on line 1  -- MRE           */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -417,17 +418,19 @@ class RxClauser
     /* determine character type */
       cchar=line[pos-1]
                                                   -- MRE add shebang support #45
-    if cchar='#' then if lineno=1 then do         -- shebang only on first line 
+                                                  -- shebang only on first line
+                                                  -- and not single #
+    if cchar='#' then if lineno=1 then if pos>linelen then do
       c2=line[pos]
-      if c2='!' then do                           
+      if c2='!' then do
         nextpos=linelen+1
         tok=RxToken(TBD, lineno, pos-1, 1, null)  -- token so far
         tok.type=RxToken.SP                       -- ignore line, create blank token
-  	    tok.value = line
-   	    if rxt.superflag.diag then say '#RxClauser ' tok.value 'found as shebang'
+	      tok.value = line
+ 	      if rxt.superflag.diag then say '#RxClauser ' tok.value 'found as shebang'
         leave collect
-      end  
-    end  
+      end
+    end
 
 
     select
