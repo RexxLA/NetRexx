@@ -33,6 +33,7 @@
 /* 2022.06.16 Optional interactive trace RxSource on constructor --MRE*/
 /* 2023.03.03 Enhancement #45, support shebang --MRE                  */
 /* 2025.03.27 fix exception when single # on line 1  -- MRE           */
+/* 2025.03.30 support for multi-line text """ strings  -- MRE         */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -416,7 +417,7 @@ class RxClauser
       leave collect; end
 
     /* determine character type */
-      cchar=line[pos-1]
+    cchar=line[pos-1]
                                                   -- MRE add shebang support #45
                                                   -- shebang only on first line
                                                   -- and not single #
@@ -446,7 +447,7 @@ class RxClauser
 
     tok=RxToken(TBD, lineno, pos, 1, null)   -- token so far
     pos=pos+1
-    
+
     if ctype='o' then do label opchar   -- operator character
       if pos>linelen then c2=BAD; else c2=line[pos-1]
       if cchar='-' then if c2='-' then /* line comment start */ do
@@ -778,6 +779,42 @@ class RxClauser
       tok.type=RxToken.RPAR; nextpos=pos; leave collect; end
     if ctype=']' then do
       tok.type=RxToken.RBRK; nextpos=pos; leave collect; end
+
+                                              -- MRE Java Text Blocks, sort of
+                                              -- starts with """
+    if ctype='"' then if pos+1=linelen then if line[pos-1]='"' then if line[pos]='"' then do
+--      say 'MRE a Text Block on line 'lineno
+
+      tok.type = RxToken.STR                  -- this is a string literal
+      tok.len = 0
+      tok.value = ''
+
+      loop label textblock forever            -- read next lines until """
+        ctype=readline()
+        if ctype=RxToken.EOS then do
+          tok.len=2
+          signal RxQuit(rxt, tok, 'textblock.start.unmatched')
+        end
+
+        l = Rexx line
+        triplepos = int l.pos('"""')
+        if triplepos >> 0 then do             -- matched """
+          l = l.substr(1,triplepos-1).strip() -- check if on start of line
+          if l == '' then do                  -- this is the end
+            nextpos = triplepos + 3           -- after the """
+            leave textblock
+          end
+        end
+                                              -- update tok
+        if tok.len = 0 then tok.value = line  -- first line
+        else tok.value = tok.value'\\n'line   -- next lines
+        tok.len = tok.len + linelen
+
+        nextpos = linelen+1
+      end textblock
+
+      leave collect
+    end
 
     if ctype='''' | ctype='"' then do        -- string start
       start=pos-1                            -- where this thing starts
