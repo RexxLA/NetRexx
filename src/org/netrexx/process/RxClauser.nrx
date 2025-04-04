@@ -782,17 +782,23 @@ class RxClauser
 
                                               -- MRE Java Text Blocks, sort of
                                               -- starts with """
-    if ctype='"' then if pos+1=linelen then if line[pos-1]='"' then if line[pos]='"' then do
+    if ctype='"' then if linelen>pos then if line[pos-1]='"' then if line[pos]='"' then do
 --      say 'MRE a Text Block on line 'lineno
 
       tok.type = RxToken.STR                  -- this is a string literal
       tok.len = 0
       tok.value = ''
 
+      l = Rexx line
+      if l.substr(pos+2).strip() \== '' then do  -- check nothing after start """
+          tok.len=3
+          signal RxQuit(rxt, tok, 'textblock.start.dirty')
+      end
+
       loop label textblock forever            -- read next lines until """
         ctype=readline()
         if ctype=RxToken.EOS then do
-          tok.len=2
+          tok.len=3
           signal RxQuit(rxt, tok, 'textblock.start.unmatched')
         end
 
@@ -805,14 +811,15 @@ class RxClauser
             leave textblock
           end
         end
-                                              -- update tok
-        if tok.len = 0 then tok.value = line  -- first line
-        else tok.value = tok.value'\\n'line   -- next lines
-        tok.len = tok.len + linelen
 
-        nextpos = linelen+1
+        tok.value = tok.value''line'\\n'      -- add value
+        tok.len = tok.len + linelen + 2
+
+        nextpos = linelen + 1
       end textblock
 
+      tok.len = tok.len - 2                   -- remove final new-line
+      tok.value = Arrays.copyOf(tok.value, tok.len)
       leave collect
     end
 
