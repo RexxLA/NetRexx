@@ -70,6 +70,7 @@
 /* 2000.04.05 Three pools simplified down to local and class pools    */
 /* 2013.07.12 removed conversion to unicode escapes due to NETREXX-102*/
 /* 2024.03.28 fix #59 underscore disallowed as varname by jdk>=9 --MRE*/
+/* 2025.04.04 track new variables during INTERPRET --MRE              */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -235,6 +236,10 @@ class RxVarpool uses RxVariable
   newvar=RxVariable(varname, varspell, lhswhere, varatts, rhtype, varabstract)
   poolput(cursor, keyname, newvar) -- .. and add to pool
   if program.flag.diag then say '# NewVar: ['varatts rhtype.toSig()':' varspell']'
+  if rxt.interpreting then do                     -- MRE, track new variable when interpreting
+--    say 'MRE    new var 'varname' during INTERPRET'
+    cursor.intvpool.put(keyname, newvar)
+  end
 
   /* If a property then register it for this class, if unregistered.
      This will take place on pass1 now [1997.04.10], as it will get a
@@ -486,6 +491,22 @@ class RxVarpool uses RxVariable
       signal RxQuit(rxt, null, 'internal.error', 'RxVarpool: prop in local pool:' var.varspell)
     end
   return
+
+/*
+method showpoolvars(cursor=RxCursor)
+   enum=cursor.curlpool.elements()      -- enumerate the variables in the pool
+   loop while enum.hasMoreElements()    -- while some left
+     var=RxVariable enum.nextElement()  -- get next
+     say 'M:'var.varname      -- var.varspell ?
+   end
+   enum=cursor.curclass.curcpool.elements()      -- enumerate the variables in the pool
+   loop while enum.hasMoreElements()    -- while some left
+     var=RxVariable enum.nextElement()  -- get next
+     say 'C:'var.varname      -- var.varspell ?
+   end
+
+   return
+*/
 
  /* poolget -- find a variable in one of the three pools
     Arg1 is cursor

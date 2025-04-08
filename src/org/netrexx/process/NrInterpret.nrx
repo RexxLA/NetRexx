@@ -15,7 +15,10 @@
 /* 2024.10.09 Fix LOOP logic                                          */
 /* 2024.10.31 Don't flag occuring exception                           */
 /* 2025.02.23 Support for compiled NetRexx                            */
+/* 2025.04.05 Remove tracked new variables and intercept RETURN       */
+/*            identical results for interpreted and compiled code     */
 /* ------------------------------------------------------------------ */
+
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
 
@@ -216,6 +219,8 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
   cursor.curreturn  =ocursor.curreturn
   cursor.curjump    =ocursor.curjump
 
+  cursor.intvpool = Hashtable(8)                   -- newly declared variables are tracked here
+
   cursor.curprogram.translator = rxt
 
 
@@ -334,6 +339,11 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
         signalmsg = 'Invalid 'it
         leave execute
       end
+      else if clause.lookaside <= NrReturn then do
+        hadexception = 1
+        signalmsg = 'Not supported'
+        leave execute
+      end
       else do label realclause
         if rxt.program.flag.diag then do
           say '## lookaside 'clause.lookaside
@@ -393,14 +403,15 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
 
       end realclause
 
-      if cursor.curact then do
-        if cursor.curacttype == RxCursor.CUR_RETURN then do  --MRE On RETURN we update old cursor to return
-          ocursor.curact=1                       -- alert
-          ocursor.curacttype = RxCursor.CUR_RETURN
-          ocursor.curreturn  = cursor.curreturn
-          leave execute
-        end
-      end
+--      if cursor.curact then do
+          -- MRE RETURN not supported anymore
+--        if cursor.curacttype == RxCursor.CUR_RETURN then do  --MRE On RETURN we update old cursor to return
+--          ocursor.curact=1                       -- alert
+--          ocursor.curacttype = RxCursor.CUR_RETURN
+--          ocursor.curreturn  = cursor.curreturn
+--          leave execute
+--        end
+--      end
       if cursor.curjump\==nojump then do       -- any jump request?
         cursor.curclause=cursor.curjump        -- [this could now be null]
         cursor.curjump=nojump                  -- clear
@@ -428,6 +439,13 @@ class NrInterpret implements RxClauseParser uses RxCode, RxExpr
     end interpret
     leave execute
   end execute
+                                             -- MRE remove tracked new variables
+  trackedvars = cursor.intvpool.keys()       -- enumerate the keys in the pool
+  loop while trackedvars.hasMoreElements()   -- while not empty
+    key = String trackedvars.nextElement()   -- get next
+--    say '## MRE Removing ' key
+    ocursor.curlpool.remove(key)             -- remove variable from local pool
+  end
 
   rxt.interpreting = 0
   rxt.pass  = 3;                    -- continue 'old style' interpretation
