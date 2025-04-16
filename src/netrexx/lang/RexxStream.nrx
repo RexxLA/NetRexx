@@ -2,7 +2,14 @@ package netrexx.lang
 --trace results
 import java.io
 import java.nio.file.
+import java.nio.channels.
+import java.nio.charset.
+import java.nio.file.Paths
+import java.nio.file.Path
+import java.nio.ByteBuffer
+import java.nio.CharBuffer
 import java.text.SimpleDateFormat
+
  /*  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.   */   
  /*  See LICENSE for the licence and information on using, copying, modifying, */
  /*  and distributing this program.                                            */
@@ -14,23 +21,15 @@ import java.text.SimpleDateFormat
  * NOTE: a char is a UTF character, not a single byte nor a Java char.
  * Practical result is that charout() must be used to successfully charin().  
  * Created on: Thu, 03, Feb 2022 16:40:14 +0100 rvj
+ * Updated April 16th 2025  --MRE
  */
 class RexxStream uses RexxDate
   numeric digits 18
   
   properties private static
-  fileReaderHandles	  = TreeMap()
-  fileWriterHandles	  = TreeMap()
-  fileInputStreamHandles  = TreeMap()
-  fileOutputStreamHandles = TreeMap()
-  bufferedReaderHandles	  = TreeMap()
-  dataInputStreamHandles  = TreeMap()
-  dataOutputStreamHandles = TreeMap()
-  printWriterHandles	  = TreeMap()
-  lines			  = TreeMap()
-  chars 		  = TreeMap()
-  linepos		  = TreeMap()
-  charpos		  = TreeMap()
+
+  fileInfoHandles     = TreeMap()
+
 
   /**
    * Default constructor
@@ -42,115 +41,101 @@ class RexxStream uses RexxDate
    * Method chars returns the remaining number of characters
    * in a stream, or 1
    */
+
   method chars(name) static
-    if chars.get(name) == null then do
-      openFile(name,'rc')
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh = null then do
+      fh = RexxStream.FileInfo(name, 'r')
+      if \fh.isReady() then return 0
+      fileInfoHandles.put(name, fh)
     end
-    do
-      if (DataInputStream dataInputStreamHandles.get(name)).available() > 0 then return Rexx 1
-      else return Rexx 0
-    catch IOException
-      return Rexx 0
-    end
-      
-  /**
-   * Method charin returns a string of up to length characters read from the character input stream name.
-   */
-  method charin(name, start='', length='') static
-    fhc = fileInputStreamHandles.get(name)
-    if fhc == null then openFile(name,'rc')
-    -- handle start
-    if start<>'' then do
-      -- close the stream to realign pointer
-      stream(name,'c','CLOSE')
-      -- spin for 'start-1' times
-      loop for start-1
-	char_ = (DataInputStream dataInputStreamHandles.get(name)).readUTF()
-      end
-    catch iox=IOException
-      say 'ioexception while getting to start position' name 
-      return 'ioerror'
-    end -- if start
-    if length=='' then length=1
-    do
-      char_ = ''
-      loop for length
-	char_ = char_||(DataInputStream dataInputStreamHandles.get(name)).readUTF()
-      end
-      return char_
-    catch eof=EOFException
-      chars.put(name, Rexx 0)
-      return char_
-    catch iox=IOException
-      say 'ioexception while reading file' name 
-      return 'ioerror'
-    end
+    return fh.available()
 
   /**
-   * Method charout 
+   * Method charin returns a character from a file
+   name    contains the filename
+   start   is the character posiion to start reading ( 1 is first line ), default 1 upon open
+   length  is number of characters to read
    */
-  method charout(name,text,start='') static
-    -- check 3rd parm
-    if start<>'' then if start<>1 then do
-      say 'third parameter must be 0 or 1'
-      return null
+
+  method charin(name, start=-1, length=1) static
+--  trace results
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh = null then do
+      fh = RexxStream.FileInfo(name, 'r')
+      if \fh.isReady() then return ''           -- cannot open file
+      fileInfoHandles.put(name, fh)
     end
+
+    ch = fh.readChar(start, length)
+    return ch
+
+ /**
+  * Method charout writes a character to a file
+    It normally appends to the file upon open, unless a position is specified
+
+    name    contains the filename
+    str     is the string to write
+    charnum is the character write position in the file, must be positive
+  */
+
+  method charout(name, str, charnum=-1) static
+
     -- special names for std file handles
     if name='stdout' then do
-      System.out.println(text)
+      System.out.print(str)
       return 0
     end
     if name='stderr' then do
-      System.err.println(text)
+      System.err.print(str)
       return 0
     end
     -- end of special names
-    
-    fh = fileReaderHandles.get(name.toString())
-    if fh = null then do
-      openFile(name,'r')
-      start=0 -- cancel any start=1 option
+
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh == null then do
+      fh = RexxStream.FileInfo(name, 'rw')
+      if \fh.isReady() then return 1            -- cannot open file
+      fileInfoHandles.put(name, fh)
     end
-    if start>0 then do -- start must be 1
-      stream(name,'c','CLOSE')
-      openFile(name,'r') -- reposition file position
+    else if \ fh.isWritable() then do
+      rc = fh.makeWritable()
+      if rc = 1 then return 1
     end
-    
-    fhc = fileOutputStreamHandles.get(name)
-    if fhc = null then openFile(name,'wc')
-    do
-      (DataOutputStream dataOutputStreamHandles.get(name)).writeUTF(text)
-      /* need to flush every line when we don't really know when to close */
-      (DataOutputStream dataOutputStreamHandles.get(name)).flush()
-    catch IOException
-      say 'ioexception in charout'
-    end -- if do
-    return 0
+
+    rc = fh.writeChar(str, charnum)
+    return rc
 
   /**
    * Method lineout with stream name, without further arguments
    * close a file when only the filename is specified and no output. 
    */
+
+
   method charout(name) static
-    stream(name,'c','CLOSE')
-    
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh \= null then do
+      fh.close()
+      fileInfoHandles.remove(name)
+    end
+    return 0
   /**
    * Method lines returns 0 or the lines left in a file
    * This is the default which corresponds to lines(filename,N)
    * which returns 1 if there are still lines left to read.  
    * @param name is a Rexx
    */
+
   method lines(name) static
-    if lines.get(name) == null then do
-      openFile(name,'r')
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh == null then do
+      fh = RexxStream.FileInfo(name, 'r')
+      if \fh.isReady() then return 0           -- cannot open file
+      fileInfoHandles.put(name, fh)
     end
-    do
-      if (BufferedReader bufferedReaderHandles.get(name.toString())).ready() then return Rexx 1
-      else return Rexx 0
-    catch IOException
-      return Rexx 0
-    end
-    
+    return fh.available()
+
+
   /**
    * Method linein without arguments, returns line from stdin 
    */
@@ -159,232 +144,661 @@ class RexxStream uses RexxDate
     
   /**
    * Method linein returns a line from a file
-   * @param name is a Rexx that contains the filename
+   name    contains the filename
+   linenum is the line to start reading ( 1 is first line ), default 1
+   count   is number of lines to read (0 or 1)
    */
-  method linein(name,start='',count=1) static
-    if start<>'' then if start<>1 then do
-      say 'third parameter must be 0 or 1'
-      return null
+  method linein(name, linenum=-1, count=1) static
+--    if start<>'' then if start<>1 then do
+--      say 'third parameter must be 0 or 1'
+--      return null
+--    end
+    if linenum \== -1 then if linenum < 1 then return '' -- must be positive
+
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh == null then do
+      fh = RexxStream.FileInfo(name, 'r')
+      if \fh.isReady() then return ''        -- cannot open file
+      fileInfoHandles.put(name, fh)
     end
-    if count=0 then return null
-    fh = fileReaderHandles.get(name.toString())
-    if fh = null then do
-      openFile(name,'r')
-      start=0 -- cancel any start=1 option
-    end
-    if start>0 then do -- start must be 1
-      stream(name,'c','CLOSE')
-      openFile(name,'r') -- reposition file position
-    end
-    do
-      line = Rexx (BufferedReader bufferedReaderHandles.get(name.toString())).readLine()
-      if line = null then lines.put(name, Rexx 0)
-      return line
-    catch IOException
-      say 'ioexception while reading file' name
-      return 'ioerror'
-    end
+    l = fh.readLine(linenum, count)
+    return l
+
   /**
    * Method lineout with stream name, without further arguments
    * close a file when only the filename is specified and no output. 
    */
   method lineout(name) static
-    stream(name,'c','CLOSE')
-    
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh \= null then do
+      fh.close()
+      fileInfoHandles.remove(name)
+    end
+    return 0
+
   /**
    * Method lineout writes a line to a file
-   * It normally appends to the file, unless a position of 1 is specified 
-   * @param name is a Rexx which contains the filename
-   * @param text is a Rexx which contains the line to write
-   * @param position is a Rexx which contains the start position in the file
+   It normally appends to the file upon open, unless a position is specified
+
+   name   contains the filename
+   line   is the line to write
+   linenum is the line write position in the file, must be positive
    */
-  method lineout(name,text,position=0) static
+  method lineout(name, line, linenum=-1) static
+
+    if linenum \== -1 then if linenum < 1 then return 1 -- must be positive
+
     /* special cases for stdout and stderr as filenames */
     if name='stdout' then do
-      System.out.println(text)
+      System.out.println(line)
       return 0
     end
     if name='stderr' then do
-      System.err.println(text)
+      System.err.println(line)
       return 0
     end
-    /* end of special cases */
-    if position=1 then do
-      f = File(name)
-      stream(name,'c','CLOSE')
-      Files.deleteIfExists(f.toPath())
-    catch IOException
-      nop -- don't care
+
+    fh = FileInfo fileInfoHandles.get(name)
+    if fh == null then do
+       fh = RexxStream.FileInfo(name, 'rw')
+       if \fh.isReady() then return 1           -- cannot open file
+       fileInfoHandles.put(name, fh)
     end
-    fh = fileWriterHandles.get(name.toString())
-    if fh = null then openFile(name,'w')
-    (PrintWriter printWriterHandles.get(name)).println(text)
-    /* need to flush every line when we don't really know when to close */
-    (PrintWriter printWriterHandles.get(name)).flush()
-    return 0
- 
-  /**
-   * Method openFile opens a file for read or write
-   * and adds it to the structures 
-   * @param name is a String
-   * @param mode is a Rexx
-   */
-  method openFile(name=String, mode) static
-    do
-      select
-	when mode = 'r' then do
-	  fr = FileReader(name)
-	  fileReaderHandles.put(name,fr)
-	  bfr = BufferedReader(fr)
-	  bufferedReaderHandles.put(name,bfr)
-	  lines.put(name,Rexx 1)
-	end -- when mode
-	when mode = 'rc' then do
-	  frc = FileInputStream(name)
-	  fileInputStreamHandles.put(name,frc)
-	  dfr = DataInputStream(frc)
-	  dataInputStreamHandles.put(name,dfr)
-	  chars.put(name,Rexx 1)
-	end
-	when mode = 'w' then do
-	  do
-	    fw = FileWriter(name,1)
-	    fileWriterHandles.put(name,fw)
-	    pw = PrintWriter(fw)
-	    printWriterHandles.put(name,pw)
-	  catch IOException
-	    say 'ioexception while writing file' name
-	  end
-	end -- when mode
-	when mode = 'wc' then do
-	  do
-	    fwc = FileOutputStream(name)
-	    fileOutputStreamHandles.put(name,fwc)
-	    pwc = DataOutputStream(fwc)
-	    dataOutputStreamHandles.put(name,pwc)
-	  catch IOException
-	    say 'ioexception while writing file' name
-	  end
-	end
-	otherwise
-	  say '?'
-      end -- select
-    catch FileNotFoundException
-      say 'file not found'
+    else if \ fh.isWritable() then do
+      rc = fh.makeWritable()
+      if rc == 1 then return 1
     end
+
+    rc = fh.writeLine(line, linenum)
+    return rc
 
 /**
  * Method stream returns a string describing the state of, or the results
  * of an operation of upon, the character stream referred to in 'name' 
- * @param name is a Rexx naming the stream
- * @param option1 is a Rexx giving an option, defaulting to 'STATE'
+ name is contains the  filename
+ option1  STATE, DESCRIPTION or COMMAND         default STATE
+ option2
+   COMMAND OPEN [READ | WRITE | BOTH | APPEND]  default BOTH
+   COMMAND CLOSE
+   COMMAND SEEK [READ | WRITE]                  default read
+   COMMAND QUERY EXISTS
+   COMMAND QUERY SIZE
+   COMMAND QUERY DATETIME
+   COMMAND QUERY TIMESTAMP
  */
   method stream(name,option1=Rexx'STATE',option2=Rexx '') static
     /* default option is State */
-    option1=option1.upper()
-    option2=option2.upper()
-    select
-      when option1.left(1)='S' then do
-	if File(name).exists() then return "READY"
-	else return "NOTREADY"
-      end
-      when option1.left(1)='C' then do
-	select
-	  when option2='OPEN' then do
-	    return "READY"
-	  end
-	  when option2='CLOSE' then do
-	    lines.remove(name)
-	    chars.remove(name)
-	    fh1 = (FileReader fileReaderHandles.get(name))
-	    if fh1 <> null then do
-	      fh1.close()
-	      fileReaderHandles.remove(name)
-	      bufferedReaderHandles.remove(name)
-	    end
-	    fh2 = (FileWriter fileWriterHandles.get(name))
-	    if fh2 <> null then do
-	      fh2.close()
-	      fileWriterHandles.remove(name)
-	      dataInputStreamHandles.remove(name)
-	    end
-	    fh3 = (PrintWriter printWriterHandles.get(name))
-	    if fh3 <> null then
-	      do
-		fh3.close()
-		printWriterHandles.remove(name)
-		fileWriterHandles.remove(name)
-	      end
-	    fh4 = (FileOutputStream fileOutputStreamHandles.get(name))
-	    if fh4 <> null then do
-	      fh4.close()
-	      fileOutputStreamHandles.remove(name)
-	      dataOutputStreamHandles.remove(name)
-	    end
-	    return "READY"
-	  catch IOException
-	    return ""
-	  end
-	  when option2.left(4)='SEEK' then do
-	    return ""
-	  end
-	  when option2='QUERY EXISTS' then do
-	    if File(name).exists() then return Rexx File(name).getCanonicalPath()
-	    else return "" -- no return value for nonexisting file according to ansi
-	  catch IOException
-	    return ""
-	  end
-	  when option2='QUERY SIZE' then do
-	    size = Rexx File(name).length()
-	    if size == 0 then return ""
-	    else return size
-	  end
-	  when option2='QUERY DATETIME' then do
-	    lm = Rexx File(name).lastModified()
-	    -- time is in unix epoch
-	    lm = lm/1000
-	    if lm==0 then return ""
-	    days = lm / (3600*24)
-	    days=days.trunc()
-	    remainder = lm -(days * 24 * 3600)
-	    baserex = 719162 + days -- add the days between rexx and unix epoch (719162)
-	    newdate = Date('S',baserex,'B')
-	    hh = remainder % 3600
-	    remainder2 = remainder - (hh*3600)
-	    mm = remainder2 % 60
-	    ss = remainder2 - (mm*60)
-	    parse newdate +2 year +2 month +2 day +2 .
-	    return day'-'month'-'year hh.right(2,'0')':'mm.right(2,'0')':'ss.trunc().right(2,'0') 'UTC'
-	  end -- when option2
-	  when option2='QUERY TIMESTAMP' then do
-	    lm = Rexx File(name).lastModified()
-	    -- time is in unix epoch
-	    lm = lm/1000
-	    if lm==0 then return ""
-	    days = lm / (3600*24)
-	    days=days.trunc()
-	    remainder = lm -(days * 24 * 3600)
-	    baserex = 719162 + days -- add the days between rexx and unix epoch (719162)
-	    newdate = Date('S',baserex,'B')
-	    hh = remainder % 3600
-	    remainder2 = remainder - (hh*3600)
-	    mm = remainder2 % 60
-	    ss = remainder2 - (mm*60)
-	    parse newdate year +4 month +2 day +2 .
-	    return year'-'month'-'day hh.right(2,'0')':'mm.right(2,'0')':'ss.trunc().right(2,'0') 'UTC'
-	  end
+    option1=option1.upper().strip()
+    option2=option2.upper().strip().changestr('  ', ' ')
 
-	  otherwise
-	    say 'incorrect call to routine'
-	    return ""
-	end
+      select
+      when option1.left(1)='D' then do
+        fh = FileInfo fileInfoHandles.get(name)
+        if fh \== null then
+          return fh.getState()
+        else
+          return 'UNKNOWN'
+      end
+
+      when option1.left(1)='S' | option1 = '' then do
+        fh = FileInfo fileInfoHandles.get(name)
+        if fh \== null then
+          return fh.getState()
+        else
+          return 'UNKNOWN'
+      end
+
+      when option1.left(1)='C' then do
+        select
+          when option2.word(1) = 'OPEN' then do
+
+            if option2.word(2) = 'READ' then do
+              fh = FileInfo fileInfoHandles.get(name)
+              if fh == null then do
+                fh = RexxStream.FileInfo(name, 'r')
+              end
+              if fh = null then do
+                return 'ERROR'
+              end
+              fileInfoHandles.put(name, fh)
+              return 'READY'
+            end
+            if option2.word(2) = 'WRITE'  | -
+               option2.word(2) = 'APPEND' | -
+               option2.word(2) = 'BOTH'   | -
+               option2.word(2) = '' then do
+              fh = FileInfo fileInfoHandles.get(name)
+              if fh == null then do
+                fh = RexxStream.FileInfo(name, 'rw')
+              end
+              if fh = null then do
+                return 'ERROR'
+              end
+              if option2.word(2) \= 'APPEND' then do
+                fh.setSeekPosition('w', 0)
+              end
+              fileInfoHandles.put(name, fh)
+              return 'READY'
+            end
+            say 'Incorrect call to routine, STREAM C OPEN must be followed by READ, WRITE, APPEND or BOTH, found "'word(2, option2)'"'
+            exit 2
+          end
+
+          when option2='CLOSE' then do
+            fh = FileInfo fileInfoHandles.get(name)
+            if fh \= null then do
+              fh.close()
+              fileInfoHandles.remove(name)
+            end
+            return 'UNKNOWN'
+          end
+
+          when option2.left(4)='SEEK' then do
+            offset = option2.word(2)
+            if offset.datatype('D') \= 1 then do
+              say 'Incorrect call to routine, STREAM C SEEK must be followed by offset, found "'word(2, option2)'"'
+              exit 2
+            end
+            fh = FileInfo fileInfoHandles.get(name)
+
+            if fh \= null then do
+              if option2.word(3) = 'READ' then do
+                fh.setSeekPosition('r', offset)
+              end
+              else if option2.word(3) = 'WRITE' then do
+                fh.setSeekPosition('w', offset)
+              end
+              else if option2.word(3) = '' then do
+                fh.setSeekPosition('', offset)
+              end
+              else do
+                say 'Incorrect call to routine, STREAM C SEEK offset must be followed by READ or WRITE, found "'word(3, option2)'"'
+                exit 2
+              end
+              return ''
+            end
+          end
+
+          when option2='QUERY EXISTS' then do
+            if File(name).exists() then return Rexx File(name).getCanonicalPath()
+            else return '' -- no return value for nonexisting file according to ansi
+          catch IOException
+            return ''
+          end
+
+          when option2='QUERY SIZE' then do
+            size = Rexx File(name).length()
+            if size == 0 then return ''
+            else return size
+          end
+
+          when option2='QUERY DATETIME' then do
+            lm = Rexx File(name).lastModified()
+            -- time is in unix epoch
+            lm = lm/1000
+            if lm==0 then return ""
+            days = lm / (3600*24)
+            days=days.trunc()
+            remainder = lm -(days * 24 * 3600)
+            baserex = 719162 + days -- add the days between rexx and unix epoch (719162)
+            newdate = Date('S',baserex,'B')
+            hh = remainder % 3600
+            remainder2 = remainder - (hh*3600)
+            mm = remainder2 % 60
+            ss = remainder2 - (mm*60)
+            parse newdate +2 year +2 month +2 day +2 .
+            return day'-'month'-'year hh.right(2,'0')':'mm.right(2,'0')':'ss.trunc().right(2,'0') 'UTC'
+          end -- when option2
+
+          when option2='QUERY TIMESTAMP' then do
+            lm = Rexx File(name).lastModified()
+            -- time is in unix epoch
+            lm = lm/1000
+            if lm==0 then return ""
+            days = lm / (3600*24)
+            days=days.trunc()
+            remainder = lm -(days * 24 * 3600)
+            baserex = 719162 + days -- add the days between rexx and unix epoch (719162)
+            newdate = Date('S',baserex,'B')
+            hh = remainder % 3600
+            remainder2 = remainder - (hh*3600)
+            mm = remainder2 % 60
+            ss = remainder2 - (mm*60)
+            parse newdate year +4 month +2 day +2 .
+            return year'-'month'-'day hh.right(2,'0')':'mm.right(2,'0')':'ss.trunc().right(2,'0') 'UTC'
+          end
+          otherwise
+            say 'Incorrect call to routine, STREAM C must be followed by OPEN, CLOSE, SEEK or QUERY, found "'option2'"'
+            exit 2
+        end
       end
       otherwise
-	say '?'
-	return ""
+        say 'Incorrect call to routine, STREAM must be followed by COMMAND, STATE or DESCRIPTION, found "'option1'"'
+        exit 2
     end -- select
+    return ''
 
     /* the scripting mode Classic Rexx equivalent of ask */
   method pull() static
     return RexxIO.Ask()
-    
+
+
+
+class RexxStream.FileInfo
+--  trace methods
+--  properties private static
+--    eol = Rexx System.getProperty('line.separator')
+
+  properties constant
+                        -- State values
+    ERROR    = char 'E'
+    READY    = char 'R'
+    NOTREADY = char 'N'
+    UNKNOWN  = char 'U'
+
+  properties private
+
+    readChannel   = FileChannel
+    writeChannel  = FileChannel
+    tpath         = Path
+
+    mode     = Rexx     -- 'r' or 'rw'
+    isWritable = boolean    --
+    state    = char
+
+    readpos   = Rexx      -- read position (offset in file)
+    charread  = Rexx      -- char read position
+    lineread  = Rexx      -- line read position
+
+    writepos  = Rexx      -- write position (offset in file)
+    charwrite = Rexx      -- char write position
+    linewrite = Rexx      -- line write position
+
+
+  method FileInfo(fileName=String, fmode=String) public
+    -- mode: "rw" for read-write, "r" for read-only
+
+    mode = fmode
+    state = UNKNOWN
+    do
+      tpath = Paths.get(fileName, [''])
+
+      if mode = 'rw' then do
+        writeChannel = FileChannel.open(tpath, -
+          [StandardOpenOption.WRITE, StandardOpenOption.CREATE])
+        charwrite = -1            -- set to -1 as we don't yet known chars written
+        linewrite = -1            -- nor lines written
+        isWritable  = 1
+
+        writepos = writeChannel.size()
+        writeChannel.position(writepos)
+      end
+
+      readChannel = FileChannel.open(tpath, [StandardOpenOption.READ])
+      readpos  = 0
+      charread = 0
+      lineread = 0
+
+      state = READY
+    catch FileNotFoundException
+      state = ERROR
+      say '::constructor: FileNotFoundException'
+    catch IOException
+      state = ERROR
+      say '::constructor: IOException'
+
+    end
+    return this
+
+  method getState()
+    select
+      when state = READY    then return 'READY'
+      when state = NOTREADY then return 'NOTREADY'
+      when state = UNKNOWN  then return 'UNKNOWN'
+      when state = ERROR    then return 'ERROR'
+    end
+
+  method isReady()
+    if state = READY then return 1
+    else return 0
+
+  method isWritable()
+    return isWritable
+
+  method makeWritable()
+    mode = 'rw'
+    do
+      writeChannel = FileChannel.open(tpath, -
+          [StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND])
+      charwrite = -1            -- set to -1 as we don't yet known chars written
+      linewrite = -1            -- nor lines written
+      isWritable  = 1
+
+      writepos = writeChannel.position()
+
+    catch IOException
+      say '::makeWritable: IOException'
+      state = ERROR
+      return 1
+    end
+    state = READY
+    return 0
+
+  method setSeekPosition(rw, pos) public
+    if      rw = 'r' then readpos = pos
+    else if rw = 'r' then writepos = pos
+    else do
+      readpos  = pos
+      writepos = pos
+    end
+
+  method available() public
+    do
+      available = readChannel.size() - readChannel.position()
+      if available > 0 then
+        return 1
+    catch IOException
+      say '::available: IOException'
+    end
+    return 0
+
+
+  method readUTF8Char() returns Rexx
+--trace results
+  -- Method to read the next UTF-8 character from a FileChannel (optimized)
+
+  s = ''
+  do
+    decoder = StandardCharsets.UTF_8.newDecoder()
+    decoder.onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+    decoder.onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+
+    firstByteBuffer = ByteBuffer.allocate(1)
+    bytesToRead = 1
+    byteArray = byte[4]  -- max 4 bytes for a UTF-8 char
+
+    -- Read first byte
+    firstByteBuffer.clear()
+    if readChannel.read(firstByteBuffer) < 0 then return -1  -- EOF
+
+    firstByteBuffer.flip()
+    b = firstByteBuffer.get()
+    byteArray[0] = b
+    bInt = b & 0xFF  -- Convert signed byte to unsigned int
+
+    -- Determine the number of bytes based on first byte
+    if bInt < 0x80 then
+      bytesToRead = 1
+    else if (bInt >= 0xC0) & (bInt < 0xE0) then
+      bytesToRead = 2
+    else if (bInt >= 0xE0) & (bInt < 0xF0) then
+      bytesToRead = 3
+    else if (bInt >= 0xF0) & (bInt < 0xF8) then
+      bytesToRead = 4
+    else do
+      say '::readUTF8Char: No UTF-8'
+      return null
+    end
+--      throw IOException("Invalid UTF-8 start byte: " || bInt)
+
+    -- Read remaining bytes if needed
+    if bytesToRead > 1 then do
+      tempBuffer = ByteBuffer.wrap(byteArray, 1, bytesToRead - 1)
+      bytesRead = readChannel.read(tempBuffer)
+      if bytesRead < (bytesToRead - 1) then do
+        say '::EOF'
+        state = NOTREADY
+        return -1
+       end
+    end
+
+    -- Decode bytes into a single character
+    byteBuffer = ByteBuffer.wrap(byteArray, 0, bytesToRead)
+    charBuffer = java.nio.CharBuffer.allocate(1)
+    decoder.decode(byteBuffer, charBuffer, 0)
+    charBuffer.flip()
+
+    s = charBuffer.toString()
+  catch IOException
+    say '::readUTF8Char: IOException'
+    state = ERROR
+    return null
+  end
+  return s
+
+
+
+  -- Read one UTF-8 character
+  method readChar(charnum = -1 , length=1) public returns Rexx
+    if charnum = 1 then do                -- position at start of file
+      lineread = 0                        -- set counters
+      charread = 0
+      readpos  = 0
+    end
+    else if charnum > 1 then do           -- position in file
+--    trace results
+      if charread > charnum then do       -- count from begin of file
+
+        lineread = 0
+        charread = 1
+        readpos  = 0
+      end
+      do
+        ch = ''
+        readChannel.position(readpos)
+        loop while charread < charnum - 1
+          ch = readUTF8Char()
+          if ch = null then leave
+          if ch = -1 then leave
+          charread = charread + 1
+          if ch = '\n' then lineread = lineread + 1  -- newline
+        end
+        readpos  = readChannel.position()
+        if ch = null then do
+          state = UNKNOWN
+          return ''                    -- not UTF-8
+        end
+        if ch = -1  then do
+          state = NOTREADY
+          return ''                    -- EOF
+        end
+      catch IOException
+        say '::readChar: IOException'
+        state = ERROR
+      end
+    end
+
+    str = ''
+    ch = ''
+    l = 0
+    do while l < length
+      readChannel.position(readpos)
+      ch = readUTF8Char()
+      readpos = readChannel.position()
+      if ch = -1 then do              --EOF
+        state = NOTREADY
+        return ''
+      end
+      charread = charread + 1
+      if ch = '\n' then lineread = lineread + 1
+      str = str''ch
+      l = l + 1
+    catch IOException
+      say '::readChar: IOException'
+      state = ERROR
+      return -1
+    end
+    return str
+
+  -- Read an UTF-8 string
+  method readLine(linenum = -1, count = 1) public
+
+    if linenum = 1 then do               -- position at start of file
+      lineread = 0                        -- set counters
+      charread = 0
+      readpos  = 0
+    end
+    else if linenum > 1 then do                -- position in file
+      if lineread > linenum then do      -- count from begin of file
+        lineread = 0
+        charread = 0
+        readpos  = 0
+      end
+      do
+        ch = ''
+        readChannel.position(readpos)
+        loop while lineread < linenum -1
+          ch = readUTF8Char()
+          if ch = -1 then leave
+          charread = charread + 1
+          if ch = '\n' then lineread = lineread + 1  -- newline
+        end
+        readpos  = readChannel.position()
+        if ch = -1 then do
+          state = NOTREADY
+          return ''                    -- EOF
+        end
+      catch IOException
+        say '::readLine: IOException'
+        state = ERROR
+      end
+    end
+
+    if count = 0 then return ''
+    line = ''
+
+    do
+      readChannel.position(readpos)
+      loop forever
+        ch = readUTF8Char()
+        if ch = -1 then leave              -- EOF, but line read
+        charread = charread + 1
+        if ch = '\n' then do
+          lineread = lineread + 1  -- newline
+          leave
+        end
+        line = line''ch
+      end
+      readpos  = readChannel.position()
+
+    catch IOException
+      say '::readLine: IOException'
+      state = ERROR
+      return ''
+    end
+    return line
+
+
+  method writeChar(str, charnum=-1) public
+--  trace results
+    if charnum = 1 then do                -- position at start of file
+      linewrite = 0                        -- set counters
+      charwrite = 0
+      writepos  = 0
+    end
+    else if charnum > 1 then do           -- position in file
+      if charwrite > charnum then do       -- count from begin of file
+
+        linewrite = 0
+        charwrite = 1
+        writepos  = 0
+      end
+      do
+        ch = ''
+        readChannel.position(readpos)
+        loop while charwrite < charnum
+          ch = readUTF8Char()
+          if ch = -1 then leave
+          charwrite = charwrite + 1
+          if ch = '\n' then linewrite = linewrite + 1  -- newline
+        end
+        readChannel.position(readpos)
+        writepos  = readChannel.position()
+        if ch = -1 then do
+          state = NOTREADY
+          return 1                        -- EOF
+        end
+      catch IOException
+        say '::writeChar: IOException'
+        state = ERROR
+      end
+    end
+
+    do
+      writeChannel.position(writepos)
+
+      encoder = StandardCharsets.UTF_8.newEncoder()
+      charBuffer = CharBuffer.wrap(str)
+      byteBuffer = encoder.encode(charBuffer)
+
+      loop while byteBuffer.hasRemaining()
+        writeChannel.write(byteBuffer)
+      end
+      writepos = writeChannel.position()
+      charwrite = charwrite + str.length()
+      writeChannel.force(1)
+      state = READY
+    catch CharacterCodingException
+      say '::CharacterCodingException: writeChar'
+      state = ERROR
+      return 1
+    catch IOException
+      say '::writeChar: IOException'
+      state = ERROR
+      return 1
+    end
+    return 0
+
+
+  -- Write a UTF-8 string
+  method writeLine(line, linenum=-1) public
+    if linenum = 1 then do                -- position at start of file
+      linewrite = 0                        -- set counters
+      charwrite = 0
+      writepos  = 0
+    end
+    else if linenum > 1 then do            -- position in file
+      if linewrite > linenum then do       -- count from begin of file
+
+        linewrite = 0
+        charwrite = 0
+        writepos  = 0
+      end
+      do
+        ch = ''
+        writeChannel.position(writepos)
+        loop while linewrite < linenum
+          ch = readUTF8Char()
+          if ch = -1 then leave
+          charwrite = charwrite + 1
+          if ch = '\n' then linewrite = linewrite + 1  -- newline
+        end
+--        readChannel.position(readpos)
+        writepos  = readChannel.position()
+        if ch = -1 then do
+          state = NOTREADY
+          return 1                    -- EOF
+        end
+      catch IOException
+        say '::writeLine: IOException'
+        state = ERROR
+      end
+    end
+
+
+    rc = writeChar(line'\n')
+    return rc
+
+  -- Close all resources
+  method close() public
+    do
+      if readChannel \== null then do
+        readChannel.close()
+      end
+      if writeChannel \== null then do
+        writeChannel.close()
+      end
+--      raf.close()
+    catch IOException
+      say '::close: IOException'
+    end
