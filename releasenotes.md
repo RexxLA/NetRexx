@@ -1,4 +1,4 @@
-# NetRexx 5.00-Beta []
+# NetRexx 5.01-RC1 []
 
 ## Language
 - New INTERPRET instruction
@@ -6,6 +6,7 @@
 - NetRexx compiler now emits class file format version 52 files (jdk 1.8), both with -ecj as with -javac 
 - new -targetvm option to compile to a higher class file version, with -ecj up to jdk 15 (class version 59), with -javac not higher than run-time Java
 - more complete JRS223 javax.scripting framework
+- more complete and faster Classic Rexx compatible stream support 
 
 ## Fixes
 - NetRexx-21 superfluous warning on crossref option ("overrides program default")
