@@ -1,127 +1,194 @@
 % \section{Stream()}
 \label{refrexxstream}
-% \index{netrexx.lang,R\textsc{exx}Stream class}
+\index{netrexx.lang,RexxStream class}
 
 % The RexxStream class implements the Classic Rexx inspired I/O
 % functions. Streams are identified by character string identifiers and
 % provide for the reading and writing of data. A \keyword{uses RexxStream} statement is
 % automatically included due to the default commandline option \code{-implicituses}. All methods are \keyword{static}.
 
-  
-\section{charin(name,[start{]}, [length{]})} returns a string read from the stream named by the first
-argument.
-  \index{charin,Stream}
-\section{charout(name,[char{]},[start{]})} returns the count of characters remaining after attempting to
-write the second argument to the stream named by the first
-argument. For \emph{start}, only 1 is currently implemented (which
-rewrites the file, where the default is to append to an existing file). 
-  \index{charout,Stream}
-\section{chars(name)} indicates whether there are characters remaining in the named
-stream. Optionally, it returns a count of the characters remaining and
-immediately available.
-  \index{chars,Stream}
-\section{linein(name,string[,lines=1])} reads a line from the stream named by the first argument,
-unless the third argument is zero.
-  \index{linein,Stream}
-\section{lineout([name{]},[string{]},[line{]})} returns '1' or '0', indicating whether the
-  second argument has been successfully written to the stream named by
-  the first argument. A result of '1' means an unsuccessful write. The
-  line argument, when 1, causes the stream to be rewritten from the
-  start (line 1), where the default is to append to an existing stream. Other values are not implemented. 
-  \index{lineout,Stream}
-\section{lines(name)} returns 1 if there are lines remaining to be read in the named stream.
+\section{charin(name [,start [,length{]}{]})}
+\index{CHARIN method,}
+\index{Method, built-in,CHARIN}
+returns a string of up to \emph{length} characters from
+the character input stream  \emph{name}. A \emph{start} value may be given to specify
+an explicit read position. This read position must be positive and within
+the bounds of the stream. A value of 1 for \emph{start} refers to the first character in the stream.
+If \emph{length} is not specified, one character is read.
 
-\section{stream(name, [operation{]}, [stream\_command{]})}   \index{stream,Stream} (Operations) returns a description of the state of, or the result of an
-operation upon, the stream named by the first argument. The first
-argument is a stream name, the second is either
+A read position, based on UTF-8 characters, is kept independently of the write position.
+Charin() and linein() start at the same read position.
+
+A charin() operation returns the character(s) read, or ''. Stream state is 'READY' when successful.
+
+\section{charout(name [,string [,start{]}{]})}
+\index{CHAROUT method,}
+\index{Method, built-in,CHAROUT}
+returns the count of characters remaining after attempting to
+write \emph{string} to the character output stream \emph{name}. A \emph{start} value may be given
+to specify an explicit write position. This write position must be positive and within the
+bounds of the stream. A value of 1 for start refers to the first character in the stream.
+
+When \emph{string} is omitted, character output stream \emph{name} is closed.
+
+A write position, based on UTF-8 characters, is kept independently of the read position.
+Charout() and lineout() start at the same write position.
+
+The charout() operation returns 0 for success, non-zero if unsuccessful. Stream state is 'READY' when successful.
+
+\section{chars(name)}
+\index{CHARS method,}
+\index{Method, built-in,CHARS}
+indicates whether there are characters remaining in the character input stream
+\emph{name}.
+
+It returns 1 if at least one character can be read from \emph{name},
+otherwise 0 is returned.
+
+\section{linein(name [,line [,count {]}{]})}
+\index{LINEIN method,}
+\index{Method, built-in , LINEIN}
+returns \emph{count} (0 or 1) lines read from the character input stream \emph{name}.
+A \emph{line} number may be given to set the read position to the start of a specified line. This
+line number must be positive and within the bounds of the stream. A value of 1 for line refers
+to the first line in the stream. A call to linein() will return a partial line
+if part of the line has already been read with charin().
+
+A read position, based on UTF-8 characters, is kept independently of the write position.
+Charin() and linein() start at the same read position.
+
+A linein() operation returns the line read, or ''. Stream state is 'READY' when successful.
+
+
+\section{lineout(name [,string, [,line{]}{]})}
+\index{LINEOUT method,}
+\index{Method, built-in , LINEOUT}
+returns the count of lines remaining after attempting to write \emph{string} as
+a line to the character output stream \emph{name}. The count will be either 0
+(meaning the line was successfully written) or 1 (meaning that an error
+occurred while writing the line).
+A \emph{line} number may be given to set the write position to the start of a
+particular line in stream \emph{name}. This \emph{line} number must be positive and
+within the bounds of the stream. A value of 1 for line
+refers to the first line in the stream.
+
+When \emph{string} is omitted, character output stream \emph{name} is closed.
+
+A write position, based on UTF-8 characters, is kept independently of the read position.
+Charout() and lineout() start at the same write position.
+
+The lineout() operation returns 0 for success, non-zero if unsuccessful. Stream state is 'READY' when successful.
+
+\section{lines(name)}
+\index{LINES method,}
+\index{Method, built-in , LINES}
+returns 1 if any data remains between the current read position and the end of the character input
+stream \emph{name}. It returns 0 if no data remains.
+
+\section{stream(name [,operation [,stream\_command{]]})}
+\index{STREAM method,}
+\index{Method, built-in,STREAM}
+returns a string describing the state of, or the result of an \emph{operation}
+upon the character stream \emph{name}.
+\emph{Operation} is one of the following:
 \begin{description}
-\item[C(ommand)]
-\item[D(escription]
-\item[S(tate)]
+  \item[S] State
+  \item[D] Description
+  \item[C] Command
+\end{description}
+If \emph{operation} is not specified, it defaults to \emph{State}.
+
+Requesting the state or description of a character stream returns one of the following:
+\begin{description}
+  \item[READY] When a read or write operation is likely to succeed
+  \item[NOTREADY] When the stream is in a condition that a read or write is not possible, for example when
+  a seek operation is out of bounds
+  \item[ERROR] When a stream is in error
+  \item[UNKNOWN] When the state of the stream is unknown
+\end{description}
+Issuing \emph{operation} C(ommand) must be followed by a \emph{stream\_command} which is one of the following:
+\begin{description}
+  \item[OPEN [READ|WRITE|BOTH|APPEND{]}] Opens the stream in read, write mode or both (which is default), or in write append mode.
+  \item[CLOSE] Closes the stream
+  \item[SEEK <offset> [READ|WRITE{]}] Sets the read, write (or both) position into the stream
+  \item[QUERY EXISTS] Returns the fully qualified filename of the stream if it exists, or the empty string ''
+  \item[QUERY SIZE] Returns the size of the filename represented by the stream \emph{name}
+  \item[QUERY DATETIME] Returns the date and time of last modification of the stream, in format 'DD-MM-YY HH:MM:SS UTC'
+  \item[QUERY TIMESTAMP] Returns the date and time of last modification of the stream, in format 'YYYY-MM-DD HH:MM:SS UTC'
 \end{description}
 
-When used with the S(tate) option, STREAM
-returns one of the following strings:
-\begin{description}
-\item[ERROR]
-\item[NOTREADY]
-\item[READY]
-\item[UNKNOWN]
-\end{description}
+\section{Stream operations}
+Streams (files) are implicitly opened, in read mode for charin/linein, in write mode for charout/lineout,
+and always in \textbf{UTF-8}. UTF-8 is compatible with ASCII, operating systems mostly default to UTF-8,
+and Java defaults to it since JDK18.
 
-Commands are expressions that evaluate to the following command
-strings:
-\begin{description}
-  \item['OPEN'] opens the named stream. The default for 'OPEN' is to
-    open the stream for both reading and writing data. The STREAM function itself
-    returns 'READY' is succesfully opened.
-  \item['CLOSE'] closes the named stream. The STREAM function itself
-    returns 'READY' is succesfully closed.
-  \item['QUERY EXISTS'] returns the full path specification of the
-    named stream, if it exists, or a null string otherwise.
-  \item['QUERY SIZE'] returns the size in bytes of a persistent
-    stream.
-  \item['QUERY DATETIME'] returns the date and time stamps of a
-    persistent stream. This has a 2-digit year format.
-  \item['QUERY TIMESTAMP'] returns the date and time stamps of a
-    persistent stream in ISO-format. (This has a 4-digit year format).
-  \end{description}
+Reading starts at the beginning of the file, writing starts at the end of the file, unless a start position is given.
 
-The methods \keyword{charin} and \keyword{charout} work on UTF
-characters, in practice this means that what is read with
-\keyword{charin}, needs to be written with \keyword{charout}.
+Reading and writing positions are kept independently, and are based on UTF-8 characters.
+
+Repositioning can be costly. Current line and current char positions are kept when
+possible (when starting from begin of file for instance),
+ but to position a read or write file pointer to a specific line or character
+number, it might be necessary to read a significant portion of the file.
+
+When positioning write pointers, characters and lines can be
+re-writtenn, and may overwrite following characters if the line(s) or
+character(s) are larger than what was there before. Note, UTF-8 characters can be represented by 1 to 4 bytes.
+
+Stream(name, 'C', 'SEEK offset') operations are byte based, not UTF-8 character based, so it is possible
+with this operation to position the file pointer not at the start of a multi-byte UTF-8 character.
 
 
 \subsection{Examples}
 \index{examples,Stream}
 \begin{lstlisting}[label=datessexample,caption=Example of using Date()]
--- write two lines to the file testdata.txt
-lineout('testdata.txt','the first quick brown fox')
-lineout('testdata.txt','jumps over the first lazy dog')
 
--- write two lines to the file testdata2.txt
-lineout('testdata2.txt','the second quick brown fox')
-lineout('testdata2.txt','jumps over the second lazy dog')
+rc = lineout('testdata.txt', 'This is line 1')
+rc = lineout('testdata.txt', 'This is line 2')
+rc = lineout('testdata.txt', 'This is line 3')
+rc = stream('testdata.txt', 'C', 'CLOSE')
+rc = lineout('testdata.txt', 'This is line 4')
 
--- close the file
-stream('testdata.txt','c','CLOSE')
+say charin('testdata.txt', 1, 5)   --  > "This "
+say linein('testdata.txt')         --  > "is line 1"
+say linein('testdata.txt', 4)      --  > "This is line 4"
 
--- show the lines() function - loop until eof
-loop i=1 while lines('testdata.txt') > 0
-  say linein('testdata.txt') i
+rc = stream('testdata.txt', 'C', 'SEEK 0')
+
+loop while lines('testdata.txt')
+  say linein('testdata.txt')       -- > shows lines 1 to 4
 end
 
--- see if it exists. Returns the full path
-say stream('testdata.txt','c','QUERY EXISTS')
--- query its size. Should be 56 bytes
-say stream('testdata.txt','c','QUERY SIZE')
+say stream('testdata.txt','c','QUERY EXISTS')  -- > displays fully qualified file name
+say stream('testdata.txt','c','QUERY SIZE')    -- > displays 60
 
--- display lines from different files 
-say linein('testdata.txt')
-say linein('testdata2.txt')
-say linein('testdata.txt')
+rc = stream('testdata.txt', 'C', 'CLOSE')
 
--- show the charout function, which outputs UTF
-loop for 15
-  charout('testdata.dat','a')
+rc  = charout('testdata.txt', 'Overwrite line 1, join line 2', 1)
+rc = stream('testdata.txt', 'C', 'CLOSE')
+
+loop while chars('testdata.txt')
+  say charin('testdata.txt')'\0'   -- > shows lines 1 to 3
 end
 
--- read back these 15 characters
-loop for 15
-  say charin('testdata.dat') 'from loop 15'
-end
+rc = stream('testdata.txt', 'C', 'SEEK 0')
 
--- close the file
-stream('testdata.dat','c','CLOSE')
+loop for 20
+  rc = charout('testdata.txt','€')
+end
+rc = charout('testdata.txt','\n')
+rc = stream('testdata.txt','c','CLOSE')
 
 -- use the chars() function to loop until EOF
-loop i=i while chars('testdata.dat') > 0
-  say charin('testdata.dat') 'from chars' i
+loop while chars('testdata.txt') > 0
+  say charin('testdata.txt')'\0'   -- > shows 20 euro signs
 end
 
+say stream('testdata.txt','c','QUERY SIZE')    -- > displays 61
+
 -- display the last modified date of the last file
-say stream('testdata.dat','c','QUERY DATETIME')
+say stream('testdata.dat','c','QUERY DATETIME')  -- displays timestamp as DD-MM-YY HH:MM:SS UTC
 -- in the post-2000 era
-say stream('testdata.dat','c','QUERY TIMESTAMP')
+say stream('testdata.dat','c','QUERY TIMESTAMP') -- displays timestamp as YYYY-MM-DD HH:MM:SS UTC
 
 \end{lstlisting}
