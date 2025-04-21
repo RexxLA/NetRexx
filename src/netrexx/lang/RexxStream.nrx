@@ -28,7 +28,7 @@ class RexxStream uses RexxDate
   
   properties private static
 
-  fileInfoHandles     = TreeMap()
+  fileHandles     = TreeMap()
 
 
   /**
@@ -43,11 +43,11 @@ class RexxStream uses RexxDate
    */
 
   method chars(name) static
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh = null then do
-      fh = RexxStream.FileInfo(name, 'r')
+      fh = RexxStream.FileHandle(name, 'r')
       if \fh.isReady() then return 0
-      fileInfoHandles.put(name, fh)
+      fileHandles.put(name, fh)
     end
     return fh.available()
 
@@ -60,11 +60,11 @@ class RexxStream uses RexxDate
 
   method charin(name, start=-1, length=1) static
 --  trace results
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh = null then do
-      fh = RexxStream.FileInfo(name, 'r')
+      fh = RexxStream.FileHandle(name, 'r')
       if \fh.isReady() then return ''           -- cannot open file
-      fileInfoHandles.put(name, fh)
+      fileHandles.put(name, fh)
     end
 
     ch = fh.readChar(start, length)
@@ -92,11 +92,11 @@ class RexxStream uses RexxDate
     end
     -- end of special names
 
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh == null then do
-      fh = RexxStream.FileInfo(name, 'rw')
+      fh = RexxStream.FileHandle(name, 'rw')
       if \fh.isReady() then return 1            -- cannot open file
-      fileInfoHandles.put(name, fh)
+      fileHandles.put(name, fh)
     end
     else if \ fh.isWritable() then do
       rc = fh.makeWritable()
@@ -113,10 +113,10 @@ class RexxStream uses RexxDate
 
 
   method charout(name) static
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh \= null then do
       fh.close()
-      fileInfoHandles.remove(name)
+      fileHandles.remove(name)
     end
     return 0
   /**
@@ -127,11 +127,11 @@ class RexxStream uses RexxDate
    */
 
   method lines(name) static
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh == null then do
-      fh = RexxStream.FileInfo(name, 'r')
+      fh = RexxStream.FileHandle(name, 'r')
       if \fh.isReady() then return 0           -- cannot open file
-      fileInfoHandles.put(name, fh)
+      fileHandles.put(name, fh)
     end
     return fh.available()
 
@@ -149,17 +149,13 @@ class RexxStream uses RexxDate
    count   is number of lines to read (0 or 1)
    */
   method linein(name, linenum=-1, count=1) static
---    if start<>'' then if start<>1 then do
---      say 'third parameter must be 0 or 1'
---      return null
---    end
     if linenum \== -1 then if linenum < 1 then return '' -- must be positive
 
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh == null then do
-      fh = RexxStream.FileInfo(name, 'r')
+      fh = RexxStream.FileHandle(name, 'r')
       if \fh.isReady() then return ''        -- cannot open file
-      fileInfoHandles.put(name, fh)
+      fileHandles.put(name, fh)
     end
     l = fh.readLine(linenum, count)
     return l
@@ -169,10 +165,10 @@ class RexxStream uses RexxDate
    * close a file when only the filename is specified and no output. 
    */
   method lineout(name) static
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh \= null then do
       fh.close()
-      fileInfoHandles.remove(name)
+      fileHandles.remove(name)
     end
     return 0
 
@@ -198,11 +194,11 @@ class RexxStream uses RexxDate
       return 0
     end
 
-    fh = FileInfo fileInfoHandles.get(name)
+    fh = FileHandle fileHandles.get(name)
     if fh == null then do
-       fh = RexxStream.FileInfo(name, 'rw')
+       fh = RexxStream.FileHandle(name, 'rw')
        if \fh.isReady() then return 1           -- cannot open file
-       fileInfoHandles.put(name, fh)
+       fileHandles.put(name, fh)
     end
     else if \ fh.isWritable() then do
       rc = fh.makeWritable()
@@ -230,10 +226,9 @@ class RexxStream uses RexxDate
     /* default option is State */
     option1=option1.upper().strip()
     option2=option2.upper().strip().changestr('  ', ' ')
-
       select
       when option1.left(1)='D' then do
-        fh = FileInfo fileInfoHandles.get(name)
+        fh = FileHandle fileHandles.get(name)
         if fh \== null then
           return fh.getState()
         else
@@ -241,7 +236,7 @@ class RexxStream uses RexxDate
       end
 
       when option1.left(1)='S' | option1 = '' then do
-        fh = FileInfo fileInfoHandles.get(name)
+        fh = FileHandle fileHandles.get(name)
         if fh \== null then
           return fh.getState()
         else
@@ -253,23 +248,23 @@ class RexxStream uses RexxDate
           when option2.word(1) = 'OPEN' then do
 
             if option2.word(2) = 'READ' then do
-              fh = FileInfo fileInfoHandles.get(name)
+              fh = FileHandle fileHandles.get(name)
               if fh == null then do
-                fh = RexxStream.FileInfo(name, 'r')
+                fh = RexxStream.FileHandle(name, 'r')
               end
               if fh = null then do
                 return 'ERROR'
               end
-              fileInfoHandles.put(name, fh)
+              fileHandles.put(name, fh)
               return 'READY'
             end
             if option2.word(2) = 'WRITE'  | -
                option2.word(2) = 'APPEND' | -
                option2.word(2) = 'BOTH'   | -
                option2.word(2) = '' then do
-              fh = FileInfo fileInfoHandles.get(name)
+              fh = FileHandle fileHandles.get(name)
               if fh == null then do
-                fh = RexxStream.FileInfo(name, 'rw')
+                fh = RexxStream.FileHandle(name, 'rw')
               end
               if fh = null then do
                 return 'ERROR'
@@ -277,7 +272,7 @@ class RexxStream uses RexxDate
               if option2.word(2) \= 'APPEND' then do
                 fh.setSeekPosition('w', 0)
               end
-              fileInfoHandles.put(name, fh)
+              fileHandles.put(name, fh)
               return 'READY'
             end
             say 'Incorrect call to routine, STREAM C OPEN must be followed by READ, WRITE, APPEND or BOTH, found "'word(2, option2)'"'
@@ -285,12 +280,12 @@ class RexxStream uses RexxDate
           end
 
           when option2='CLOSE' then do
-            fh = FileInfo fileInfoHandles.get(name)
+            fh = FileHandle fileHandles.get(name)
             if fh \= null then do
               fh.close()
-              fileInfoHandles.remove(name)
+              fileHandles.remove(name)
             end
-            return 'UNKNOWN'
+            return 'READY'
           end
 
           when option2.left(4)='SEEK' then do
@@ -299,7 +294,7 @@ class RexxStream uses RexxDate
               say 'Incorrect call to routine, STREAM C SEEK must be followed by offset, found "'word(2, option2)'"'
               exit 2
             end
-            fh = FileInfo fileInfoHandles.get(name)
+            fh = FileHandle fileHandles.get(name)
 
             if fh \= null then do
               if option2.word(3) = 'READ' then do
@@ -384,7 +379,7 @@ class RexxStream uses RexxDate
 
 
 
-class RexxStream.FileInfo
+class RexxStream.FileHandle
 --  trace methods
 --  properties private static
 --    eol = Rexx System.getProperty('line.separator')
@@ -415,7 +410,7 @@ class RexxStream.FileInfo
     linewrite = Rexx      -- line write position
 
 
-  method FileInfo(fileName=String, fmode=String) public
+  method FileHandle(fileName=String, fmode=String) public
     -- mode: "rw" for read-write, "r" for read-only
 
     mode = fmode
@@ -442,11 +437,10 @@ class RexxStream.FileInfo
       state = READY
     catch FileNotFoundException
       state = ERROR
-      say '::constructor: FileNotFoundException'
+--      say '::constructor: FileNotFoundException'
     catch IOException
       state = ERROR
-      say '::constructor: IOException'
-
+--      say '::constructor: IOException'
     end
     return this
 
@@ -469,7 +463,7 @@ class RexxStream.FileInfo
     mode = 'rw'
     do
       writeChannel = FileChannel.open(tpath, -
-          [StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND])
+          [StandardOpenOption.WRITE, StandardOpenOption.CREATE])
       charwrite = -1            -- set to -1 as we don't yet known chars written
       linewrite = -1            -- nor lines written
       isWritable  = 1
@@ -477,7 +471,7 @@ class RexxStream.FileInfo
       writepos = writeChannel.position()
 
     catch IOException
-      say '::makeWritable: IOException'
+--      say '::makeWritable: IOException'
       state = ERROR
       return 1
     end
@@ -498,7 +492,7 @@ class RexxStream.FileInfo
       if available > 0 then
         return 1
     catch IOException
-      say '::available: IOException'
+--      say '::available: IOException'
     end
     return 0
 
@@ -536,17 +530,16 @@ class RexxStream.FileInfo
     else if (bInt >= 0xF0) & (bInt < 0xF8) then
       bytesToRead = 4
     else do
-      say '::readUTF8Char: No UTF-8'
+--      say '::readUTF8Char: No UTF-8'
       return null
     end
---      throw IOException("Invalid UTF-8 start byte: " || bInt)
 
     -- Read remaining bytes if needed
     if bytesToRead > 1 then do
       tempBuffer = ByteBuffer.wrap(byteArray, 1, bytesToRead - 1)
       bytesRead = readChannel.read(tempBuffer)
       if bytesRead < (bytesToRead - 1) then do
-        say '::EOF'
+--        say '::EOF'
         state = NOTREADY
         return -1
        end
@@ -560,7 +553,7 @@ class RexxStream.FileInfo
 
     s = charBuffer.toString()
   catch IOException
-    say '::readUTF8Char: IOException'
+--    say '::readUTF8Char: IOException'
     state = ERROR
     return null
   end
@@ -570,6 +563,7 @@ class RexxStream.FileInfo
 
   -- Read one UTF-8 character
   method readChar(charnum = -1 , length=1) public returns Rexx
+
     if charnum = 1 then do                -- position at start of file
       lineread = 0                        -- set counters
       charread = 0
@@ -603,7 +597,7 @@ class RexxStream.FileInfo
           return ''                    -- EOF
         end
       catch IOException
-        say '::readChar: IOException'
+  --      say '::readChar: IOException'
         state = ERROR
       end
     end
@@ -615,6 +609,7 @@ class RexxStream.FileInfo
       readChannel.position(readpos)
       ch = readUTF8Char()
       readpos = readChannel.position()
+      if ch = null then iterate
       if ch = -1 then do              --EOF
         state = NOTREADY
         return ''
@@ -624,7 +619,7 @@ class RexxStream.FileInfo
       str = str''ch
       l = l + 1
     catch IOException
-      say '::readChar: IOException'
+--      say '::readChar: IOException'
       state = ERROR
       return -1
     end
@@ -659,7 +654,7 @@ class RexxStream.FileInfo
           return ''                    -- EOF
         end
       catch IOException
-        say '::readLine: IOException'
+--        say '::readLine: IOException'
         state = ERROR
       end
     end
@@ -671,6 +666,7 @@ class RexxStream.FileInfo
       readChannel.position(readpos)
       loop forever
         ch = readUTF8Char()
+        if ch = null then iterate
         if ch = -1 then leave              -- EOF, but line read
         charread = charread + 1
         if ch = '\n' then do
@@ -682,7 +678,7 @@ class RexxStream.FileInfo
       readpos  = readChannel.position()
 
     catch IOException
-      say '::readLine: IOException'
+--      say '::readLine: IOException'
       state = ERROR
       return ''
     end
@@ -719,7 +715,7 @@ class RexxStream.FileInfo
           return 1                        -- EOF
         end
       catch IOException
-        say '::writeChar: IOException'
+--        say '::writeChar: IOException'
         state = ERROR
       end
     end
@@ -739,11 +735,11 @@ class RexxStream.FileInfo
       writeChannel.force(1)
       state = READY
     catch CharacterCodingException
-      say '::CharacterCodingException: writeChar'
+--      say '::CharacterCodingException: writeChar'
       state = ERROR
       return 1
     catch IOException
-      say '::writeChar: IOException'
+--      say '::writeChar: IOException'
       state = ERROR
       return 1
     end
@@ -780,7 +776,7 @@ class RexxStream.FileInfo
           return 1                    -- EOF
         end
       catch IOException
-        say '::writeLine: IOException'
+--        say '::writeLine: IOException'
         state = ERROR
       end
     end
@@ -798,7 +794,6 @@ class RexxStream.FileInfo
       if writeChannel \== null then do
         writeChannel.close()
       end
---      raf.close()
     catch IOException
-      say '::close: IOException'
+--      say '::close: IOException'
     end
