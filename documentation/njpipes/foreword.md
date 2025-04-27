@@ -1,4 +1,4 @@
-\chapter*{Foreword - by Jeff Hennick}
+# Foreword - by Jeff Hennick
 Often in programming projects, either in part or in the whole, we are faced with a collection of objects or text records where each is to be filtered and/or transformed in some way. Sometimes this is easy, many times there are special considerations to be handled.
 
 Pipelines is specifically designed to do all the dirty work around this and by selected small already written and tested programs (called stages).  NetRexx Pipelines make this quite easy. And now Pipelines, with over 150 stages, are built into NetRexx. Custom stages are easily written in NetRexx.
