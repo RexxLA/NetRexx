@@ -58,3 +58,10 @@ current directory. Here the NetRexxC and NetRexxR jars are put by the
 archiving process that is started by the task. These new jars can be
 used immediately, by having them (NetRexxC.jar will suffice on a system
 that has a functioning Java compiler) on the classpath.
+
+## CLASSPATH
+
+The start scripts in the bin directory contain logic that enables an automatic
+setting of the CLASSPATH environment variable for compiling simple programs
+which use NetRexx built-in methods. Any class used beyond that needs to be
+found on the CLASSPATH.
