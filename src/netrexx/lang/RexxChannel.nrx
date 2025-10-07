@@ -1,0 +1,63 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* netrexx.lang.RexxChannel -- channels for go methods                */
+/* ------------------------------------------------------------------ */
+/*                                                                    */
+/*                                                                    */
+/*                                                                    */
+  /* ------------------------------------------------------------------ */
+/* 2025.10.04 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+package netrexx.lang
+options binary nodecimal strictargs strictcase noformat
+
+class RexxChannel implements Serializable
+
+  properties private
+    queue = LinkedBlockingQueue
+    lock  = Semaphore
+
+  method RexxChannel()        -- unbuffered channel
+    queue = LinkedBlockingQueue(1)
+    lock  = Semaphore(1)
+    do
+      lock.acquire()
+    catch InterruptedException
+       nop
+    end
+    return this
+
+  method RexxChannel(s = int)  -- buffered channel
+    queue = LinkedBlockingQueue(s)
+    lock  = Semaphore(1)
+    do
+      lock.acquire()
+    catch InterruptedException
+       nop
+    end
+    return this
+
+  method write(o = Object)
+    do
+      queue.put(o)
+      if queue.remainingCapacity() == 0 then lock.acquire()
+    catch InterruptedException
+      nop
+    end
+    return
+
+  method read()  returns Object
+    o = Object null
+    do
+      o =  queue.take()
+      if queue.remainingCapacity() == 1 then lock.release()
+    catch InterruptedException
+      nop
+    end
+    return o
+
