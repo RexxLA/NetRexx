@@ -19,33 +19,42 @@ options binary nodecimal strictargs strictcase noformat
 class RexxChannel implements Serializable
 
   properties private
-    queue = LinkedBlockingQueue
-    lock  = Semaphore
+    queue      = LinkedBlockingQueue
+    lock       = Semaphore
+    capacity   = int
+    unbuffered = boolean
 
+/**
+  Unbuffered RexxChannel
+  Queue capacity is 1. Semaphore starts at 0 permits
+  Writer puts the item, then blocks on lock.acquire() until reader signals
+*/
   method RexxChannel()        -- unbuffered channel
-    queue = LinkedBlockingQueue(1)
-    lock  = Semaphore(1)
-    do
-      lock.acquire()
-    catch InterruptedException
-       nop
-    end
+    capacity   = 1
+    unbuffered = 1
+
+    queue = LinkedBlockingQueue(capacity)
+    lock  = Semaphore(0)
     return this
 
+/**
+  Buffered RexxChannel
+  Semaphore represents the available slots in the buffer
+  Writer acquires a slot before writing
+*/
   method RexxChannel(s = int)  -- buffered channel
-    queue = LinkedBlockingQueue(s)
-    lock  = Semaphore(1)
-    do
-      lock.acquire()
-    catch InterruptedException
-       nop
-    end
+    capacity   = s
+    unbuffered = 0
+
+    queue = LinkedBlockingQueue(capacity)
+    lock  = Semaphore(capacity)
     return this
 
   method write(o = Object)
     do
+      if unbuffered == 0 then lock.acquire()  -- wait if buffer full
       queue.put(o)
-      if queue.remainingCapacity() == 0 then lock.acquire()
+      if unbuffered == 1 then lock.acquire()  -- wait until the reader releases
     catch InterruptedException
       nop
     end
@@ -54,8 +63,8 @@ class RexxChannel implements Serializable
   method read()  returns Object
     o = Object null
     do
-      o =  queue.take()
-      if queue.remainingCapacity() == 1 then lock.release()
+      o = queue.take()
+      lock.release()                         -- signal free slot when buffered or unlock writer when unbuffered
     catch InterruptedException
       nop
     end
