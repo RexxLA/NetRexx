@@ -23,6 +23,7 @@ class RexxChannel implements Serializable
     lock       = Semaphore
     capacity   = int
     unbuffered = boolean
+    closed     = boolean 0
 
 /**
   Unbuffered RexxChannel
@@ -50,7 +51,13 @@ class RexxChannel implements Serializable
     lock  = Semaphore(capacity)
     return this
 
-  method write(o = Object)
+/**
+  Write to a channel
+
+*/
+  method write(o = Object) signals IOException
+    if closed then signal IOException('Writing to a closed channel')
+
     do
       if unbuffered == 0 then lock.acquire()  -- wait if buffer full
       queue.put(o)
@@ -60,13 +67,38 @@ class RexxChannel implements Serializable
     end
     return
 
-  method read()  returns Object
+/**
+  Read from a channel
+
+*/
+  method read() returns Object signals IOException
+    if closed then if queue.size() == 0 then signal IOException('Reading a closed channel')
     o = Object null
     do
       o = queue.take()
-      lock.release()                         -- signal free slot when buffered or unlock writer when unbuffered
+      if o <= RexxChannelEOF then signal IOException('Reading a closed channel')
+      lock.release()                          -- unlock writer when unbuffered, signal free slot when buffered
     catch InterruptedException
       nop
     end
     return o
 
+/**
+  Close a channel
+
+*/
+  method close()
+    loop for capacity
+      queue.put(RexxChannelEOF())             -- inform reader(s)
+    catch InterruptedException
+      nop
+    end
+    closed = 1                                -- inform writer
+
+
+/**
+   internal class to flag closure of a channel
+*/
+  class RexxChannelEOF private
+    method RexxChannelEOF()
+      return this
