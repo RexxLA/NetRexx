@@ -32,6 +32,7 @@
 /* 2022.03.24 Use RexxStream, RexxDate in scripting mode --MRE        */
 /* 2022.04.01 Use RexxRexx in scripting mode --RVJ                    */
 /* 2022.11.03 Implicit uses of RexxDate, RexxStream and RexxRexx --MRE*/
+/* 2025.10.05 Correct handling of default methods --MRE               */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -675,6 +676,13 @@ class RxClass implements RxClauseParser
       loop nonimp=0 for unfields.size()
         field=RxField unfields.elementAt(nonimp)
 
+        if field.isDefault() then do              -- MRE queue any default method for later processing at endclassx
+          item=RxField[3]                         -- three fields denote default method
+          item[0]=field
+          implerror.addElement(item)
+          iterate nonimp
+        end
+
         -- if we have already processed a method with the same
         -- signature and returns, then no error or generation needed
         fieldcs=field.toConciseString(classprogram, 1)
@@ -987,6 +995,9 @@ class RxClass implements RxClauseParser
               e.excepinfo.type.classname)
       end i
     end
+                            -- MRE handle default methods
+defmeths = Rexx ''          -- indexed string containing default methods
+implerrs = Rexx ''          -- indexed string containing reported does.not.implement methods
 
   /* Report any deferred does.not.implement/cannot.implement errors */
   loop errnum=0 for implerror.size()
@@ -1006,17 +1017,36 @@ class RxClass implements RxClauseParser
       if field.fieldname==classinfo.shortname
        then RxError(rxt, classtoken, 'cannot.implement.with.constructor',-
                     meth, badinfo.type.classname, classtype)
-       else RxError(rxt, classtoken, 'does.not.implement',-
+       else do
+         RxError(rxt, classtoken, 'does.not.implement',-
                     meth, badinfo.type.classname, classtype)
+         implerrs[field.fieldname] = 1                               -- record error
+       end
       end
-     else do
+     else if fields.length = 2 then do
       newfield=fields[1]
       if newfield.fieldtype=RxType.VOID_TYPE then newmeth=fieldcs
        else newmeth=fieldcs 'returns' rxt.program.babel.typeString(newfield.fieldtype)
       RxError(rxt, classtoken, 'cannot.implement',-
               meth, badinfo.type.classname, classtype, newmeth)
       end
+     else do                                           -- MRE new three field items are default methods
+                                                       -- count unimplemented default methods
+      f = classer.findfield(pcursor, 0, 1, 0, 0, classinfo, field.fieldname, field.fieldargtypes, null)
+      if f = null then do                              -- not implemented
+        if defmeths.exists(field.fieldname) then
+          defmeths[field.fieldname] =  defmeths[field.fieldname].OpAdd(null, 1)
+        else
+          defmeths[field.fieldname] = 1
+      end
+     end
     end errnum
+
+    d = Rexx ''
+    loop d over defmeths            -- if 2 or more default unimplemented methods, log error when no does.not.implement
+      if defmeths[d] >> 1 then
+        if \implerrs.exists(d) then RxError(rxt, classtoken, 'duplicate.default.methods', classname, d)
+    end
 
   parser.indention=1                    -- cosmetic for pass 2 code generation
 
