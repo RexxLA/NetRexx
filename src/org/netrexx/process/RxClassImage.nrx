@@ -438,6 +438,7 @@ class RxClassImage binary-
     NEXTSTART is updated offset in data after the field is processed
     */
  method parsefield(o=int) private returns RxField
+-- trace results
   facc=u2(o)                       -- access flags
   fname=getutf8(u2(o+2))           -- name
   fjsig=getutf8(u2(o+4))           -- signature (Java-style)
@@ -448,6 +449,9 @@ class RxClassImage binary-
   /* Parse the attributes we're interested in (and step over others) */
   attcount=u2(o+6)                 -- attribute count
   attstart=o+8                     -- -> first attribute
+
+  hasCode = boolean 0
+
   loop label a for attcount
     aname=getutf8(u2(attstart))    -- attribute name
     alen=u4(attstart+2)            -- length
@@ -469,6 +473,9 @@ class RxClassImage binary-
         end
       when aname=='Deprecated' then do
         deprecated=1                    -- for use shortly
+        end
+      when aname=='Code' then do
+        hasCode=1                       -- possibly a default method
         end
       otherwise
         nop
@@ -507,6 +514,19 @@ class RxClassImage binary-
   if (facc & ACC_VOLATILE    )\=0 then atts=atts | ATT_VOLATILE
   if (facc & ACC_FINAL       )\=0 then atts=atts | ATT_FINAL
   if constvalue                   then atts=atts | ATT_CONSTVALUE
+
+-- MRE
+-- an interface class' method that is public, not abstract and not static
+-- with code, is a default method. Update atts accordingly
+
+  if isinterface then
+    if (facc & ACC_PUBLIC) \= 0 then
+      if (facc & ACC_ABSTRACT) = 0 then
+        if (facc & ACC_STATIC) = 0 then
+          if hasCode then do
+            atts=atts | ATT_DEFAULT
+            if rxt.superflag.diag then say fname' is a default method of 'thisname
+          end
 
   /* Now split and parse the signature */
 
