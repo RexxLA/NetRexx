@@ -1,0 +1,334 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagDefault                                                        */
+/*                                                                    */
+/*   An object that tests the default interface methods               */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2025.11.06 Initial  --MRE                                          */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.diag
+
+options nobinary decimal
+
+class DiagDefault
+
+
+  method DiagDefault
+
+    su = SysUtils()
+
+    classpath = System.getProperty('java.class.path')
+    userdir   = System.getProperty('user.dir')
+    psep      = System.getProperty('path.separator')
+    classpath = classpath||psep||userdir
+    jvhome = System.getProperty('java.home')
+    jv='"'jvhome'/bin/java"'
+
+    ostem = ''
+
+
+/********** Test 1 **********
+   two default interface methods which are implemented
+   should compile OK
+   should run OK
+*/
+
+    say 'DiagDefault : Test 1, expected result ''Success'''
+
+    FlyingNrx = """
+class Flying interface
+  method move() default
+    say 'Flying in the air'
+"""
+
+    SwimmingNrx = """
+class Swimming interface
+  method move() default
+    say 'Flying on water'
+"""
+
+    DuckNrx = """    
+class Duck implements Flying, Swimming
+
+  method Duck()
+
+  method move()
+    say 'Duck can both fly and swim'
+
+  method main(s = String[]) static
+    donald = Duck()
+    donald.move()
+"""
+
+    rc = su.SysFileDelete('Flying.nrx')
+    rc = su.SysFileDelete('Swimming.nrx')
+    rc = su.SysFileDelete('Duck.nrx')
+
+    rc = lineout('Flying.nrx',   FlyingNrx, 1)
+    rc = lineout('Swimming.nrx', SwimmingNrx, 1)
+    rc = lineout('Duck.nrx',     DuckNrx, 1)
+
+    rc = lineout('Flying.nrx')
+    rc = lineout('Swimming.nrx')
+    rc = lineout('Duck.nrx')
+
+    args = '-cp 'classpath' org.netrexx.process.NetRexxC -nologo -verbose1 -nocolor Flying.nrx Swimming.nrx Duck.nrx;'
+    do 
+      address system jv args with output stem ostem
+    end
+    OK = 0
+    do i = 1 to ostem[0]
+      if ostem[i].pos('Compilation of ''Duck.nrx'' successful') > 0 then do 
+        say ostem[i]
+        OK = 1
+      end  
+    end
+
+    if \OK then signal DiagX('two defaults, implemented')
+
+/********** Test 2 **********
+   two default interface methods which are not implemented
+   should not compile OK, expected result 2
+*/
+
+    say 'DiagDefault : Test 2, expected result ''must implement'''
+
+    FlyingNrx = """
+class Flying interface
+  method move() default
+    say 'Flying in the air'
+"""
+
+    SwimmingNrx = """
+class Swimming interface
+  method move() default
+    say 'Flying on water'
+"""
+    DuckNrx = """
+class Duck implements Flying, Swimming
+
+  method Duck()
+/*                            not implemented
+  method move()
+  say 'Duck can both fly and swim'
+*/
+  method main(s = String[]) static
+    donald = Duck()
+    donald.move()
+"""
+
+    rc = su.SysFileDelete('Flying.nrx')
+    rc = su.SysFileDelete('Swimming.nrx')
+    rc = su.SysFileDelete('Duck.nrx')
+
+    rc = lineout('Flying.nrx',   FlyingNrx, 1)
+    rc = lineout('Swimming.nrx', SwimmingNrx, 1)
+    rc = lineout('Duck.nrx',     DuckNrx, 1)
+
+    rc = lineout('Flying.nrx')
+    rc = lineout('Swimming.nrx')
+    rc = lineout('Duck.nrx')
+
+    args = '-cp 'classpath' org.netrexx.process.NetRexxC -nologo -verbose1 -nocolor Flying.nrx Swimming.nrx Duck.nrx;'
+    do 
+      address system jv args with output stem ostem
+    end
+    OK = 0
+    do i = 1 to ostem[0]
+      if ostem[i].pos('Multiple default interface methods, class ''Duck'' must implement method ''move()''') > 0 then do 
+        say ostem[i]
+        OK = 1
+      end  
+    end
+
+ 
+  if \OK then signal DiagX('two defaults, not implemented')
+
+/********** Test 3 **********
+   one default interface method
+   one interface method which is not implemented
+   should not compile OK, expected result 2
+*/
+
+    say 'DiagDefault : Test 3, expected result ''does not implement'''
+
+    FlyingNrx = """
+class Flying interface
+  method move() default
+    say 'Flying in the air'
+"""
+
+    SwimmingNrx = """
+class Swimming interface
+  method move() 
+"""
+    DuckNrx = """
+class Duck implements Flying, Swimming
+
+  method Duck()
+/*                            not implemented
+  method move()
+  say 'Duck can both fly and swim'
+*/
+  method main(s = String[]) static
+    donald = Duck()
+    donald.move()
+"""
+
+    rc = su.SysFileDelete('Flying.nrx')
+    rc = su.SysFileDelete('Swimming.nrx')
+    rc = su.SysFileDelete('Duck.nrx')
+
+    rc = lineout('Flying.nrx',   FlyingNrx, 1)
+    rc = lineout('Swimming.nrx', SwimmingNrx, 1)
+    rc = lineout('Duck.nrx',     DuckNrx, 1)
+
+    rc = lineout('Flying.nrx')
+    rc = lineout('Swimming.nrx')
+    rc = lineout('Duck.nrx')
+
+     args = '-cp 'classpath' org.netrexx.process.NetRexxC -nologo -verbose1 -nocolor Flying.nrx Swimming.nrx Duck.nrx;'
+     address system jv args with output stem ostem
+     
+     OK = 0
+     do i = 1 to ostem[0]
+       if ostem[i].pos('Error: Class is not abstract, yet it does not implement method ''move'' from interface class ''Swimming''') > 0 then do 
+         say ostem[i]
+         OK = 1
+       end  
+     end
+
+
+     if \OK then signal DiagX('not abstract, not implemented')
+
+/********** Test 4 **********
+   one default interface method
+   one default interface method with different signature 
+   method is not implemented
+   should compile OK, expected result 2
+*/
+
+    say 'DiagDefault : Test 4, expected result  ''Success'''
+
+    FlyingNrx = """
+class Flying interface
+  method move() default
+    say 'Flying in the air'
+"""
+
+    SwimmingNrx = """
+class Swimming interface
+  method move(speed) default
+    say 'Swimming fast on the water' 
+"""
+    DuckNrx = """
+class Duck implements Flying, Swimming
+
+  method Duck()
+/*                            not implemented
+  method move()
+  say 'Duck can both fly and swim'
+*/
+  method main(s = String[]) static
+    donald = Duck()
+    donald.move()
+"""
+
+
+    rc = su.SysFileDelete('Flying.nrx')
+    rc = su.SysFileDelete('Swimming.nrx')
+    rc = su.SysFileDelete('Duck.nrx')
+
+    rc = lineout('Flying.nrx',   FlyingNrx, 1)
+    rc = lineout('Swimming.nrx', SwimmingNrx, 1)
+    rc = lineout('Duck.nrx',     DuckNrx, 1)
+
+    rc = lineout('Flying.nrx')
+    rc = lineout('Swimming.nrx')
+    rc = lineout('Duck.nrx')
+
+    args = '-cp 'classpath' org.netrexx.process.NetRexxC -nologo -verbose1 -nocolor Flying.nrx Swimming.nrx Duck.nrx;'
+    address system jv args with output stem ostem
+ 
+    OK = 0
+    do i = 1 to ostem[0]
+      if ostem[i].pos('Compilation of ''Duck.nrx'' successful') > 0 then do 
+        say ostem[i]
+        OK = 1
+      end  
+    end
+
+    if \OK then signal DiagX('two different defaults, not implemented')
+     
+
+
+    -- Clean up work files 
+
+    rc = su.SysFileDelete('Flying.nrx')
+    rc = su.SysFileDelete('Swimming.nrx')
+    rc = su.SysFileDelete('Duck.nrx')
+    rc = su.SysFileDelete('Flying.class')
+    rc = su.SysFileDelete('Swimming.class')
+    rc = su.SysFileDelete('Duck.class')
+
+
+  /*--------------------------------------------------------------------*/
+    say 'DiagDefault: OK'
+
+
+
+
+
+
+
+
+
+--    if i \= 1 then signal DiagX('Failed i+1')
+
+/*
+-- invalid clauses, should be detected
+    it = 'Some faulty clauses to test'    
+    interpret 'say it'
+
+    faulty = ''
+    faulty[0] = 9
+    faulty[1] = 'r = substr('
+    faulty[2] = 'parse v v'
+    faulty[3] = 'i = 1/0'
+    faulty[4] = 'i =  i +'
+    faulty[5] = 'leave'
+    faulty[6] = 'end'
+    faulty[7] = 'end;end'
+    faulty[8] = 'end: end;'
+    faulty[9] = 'do'
+    do f = 1 to faulty[0]
+      do
+        it = faulty[f]
+        say  '  >> 'it
+        interpret it
+      catch e =  InterpretException
+        say e.getMessage()
+      end
+    end
+*/
+
+  method main(s=String[]) static
+    do
+       DiagDefault()
+       exit 0
+    catch dx=DiagX
+      say 'DiagDefault: "'dx.getMessage'"'
+      exit 1
+    end
+
+
