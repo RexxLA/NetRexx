@@ -20,10 +20,11 @@
 /* 2018.03.12 RVJ add methods to push and pop outputstreams           */
 /* 2018.03.14 RVJ add one liner linehandler                           */
 /* 2022.03.21 RVJ say null should not output but just return          */
+/* 2025.10.04 MRE avoid race for Stdout                               */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
-options binary strictargs nodecimal noformat
+options binary strictargs  nodecimal noformat
 
 /**
    This defines the I/O utility class for NetRexx.
@@ -43,7 +44,7 @@ class RexxIO implements Serializable
   
 --  method initDeque() constant
 --    StdOut.push(PrintWriter(System.out))
-    
+
   /** Function to return a line read from the standard input stream.
      If the stream is closed or otherwise unavailable, null is returned.
    */
@@ -118,13 +119,15 @@ class RexxIO implements Serializable
   method Say(b=boolean) static returns boolean; return Say(Rexx(b))
 
   method Say(aline=char[]) static returns boolean
-    if StdOut.size() == 0 then StdOut.push(PrintWriter(System.out))
+    do protect StdOut                       -- protect Stdout to push System.out only once
+      if StdOut.size() == 0 then StdOut.push(PrintWriter(System.out))
+    end
     i = StdOut.iterator()
     loop while i.hasNext()
       out=PrintWriter i.next()
-     if aline=null then out.println()      -- just new line
+      if aline=null then out.println()      -- just new line
       else do                                 -- have some data
-	select
+      	select
           when aline.length=0 then out.println()
           when aline[aline.length-1]\=='\-' then out.println(aline)
           otherwise                            -- rarer continuation case
