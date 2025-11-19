@@ -78,6 +78,7 @@
 /* 2023.01.10 -- MRE -- packdirfind again using File, faster          */
 /* 2023.01.10 -- rvj -- limit home dir restriction macOS to ./Library */
 /* 2025.10.05 Correct handling of default methods --MRE               */
+/* 2025.11.18 Complete handling of default methods --MRE              */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -1642,12 +1643,14 @@ return count
    explicitly.  In this case, deprecation is checked -- both class and
    field warnings.  If both field and class are marked deprecated, only
    the more specific (field) warning is given.
+   --MRE 2025.11.16 added default skipimpl argument. 
+                    set to 1 only from RxClass.endclassx when looking for duplicate default interface methods
    */
  method findfield(cursor=RxCursor,-
                   local=boolean, lookmeth=boolean, lookprop=boolean,-
                   statics=boolean, infostart=RxClassInfo,-
                   exactname=Rexx, argtypearray=RxType[],-
-                  tok=RxToken, checkacc=boolean 1) returns RxField
+                  tok=RxToken, checkacc=boolean 1, skipimpl = boolean 0) returns RxField
 
   if cursor=null then flag=rxt.superflag
   else flag=cursor.curprogram.flag
@@ -1675,7 +1678,7 @@ return count
 
   retfield=searchfield(cursor, local, lookmeth, lookprop, statics,-
                        infostart, infostart, exactname, argtypearray,-
-                       tok, checkacc, isconstructor)
+                       tok, checkacc, isconstructor, skipimpl)
   if retfield=null then return null     -- not found
 
   if tok=null then return retfield      -- no message possible
@@ -1694,13 +1697,12 @@ return count
                      infofrom=RxClassInfo, infostart=RxClassInfo,-
                      exactname=Rexx, argtypearray=RxType[],-
                      tok=RxToken, checkacc=boolean,-
-                     isconstructor=boolean) private returns RxField
-    --  say "searchfield infofrom="infofrom.shortname "infostart="infostart.shortname "exactname="exactname "KK"
+                     isconstructor=boolean, skipimpl=boolean 0) private returns RxField
+    -- say "searchfield infofrom="infofrom.shortname "infostart="infostart.shortname "exactname="exactname "KK"
     gotfield=RxField null
 
   if cursor=null then flag=rxt.superflag               -- external lookup
                  else flag=cursor.curprogram.flag
-
   if argtypearray=null then argcount=0                 -- count of arguments
                        else argcount=argtypearray.length -- ..
 
@@ -1754,7 +1756,6 @@ return count
         end
       /* If not found, drop through to try methods and/or superclass */
       end proplook
-
     if lookmeth then /* we're doing a method lookup */ do label methodlook
 --      gotfield=RxField null
       /**
@@ -1888,10 +1889,12 @@ end exact
 --    say "search superclass KK"
     newfield=searchfield(cursor, 0, lookmeth, lookprop, statics,-
                          infofrom, superinfo, lookname,-
-                         argtypearray, tok, checkacc, isconstructor)
-    if newfield\=null then
+                         argtypearray, tok, checkacc, isconstructor, skipimpl)
+    if newfield\=null then 
         if newfield.fieldcost=0 then return newfield        -- found in superclass
     end
+
+  if skipimpl then return null    --MRE if looking for multiple defaults, skip implemented interfaces
 
   -- Now try the implements list
   -- Resolve the interface names, if needed
@@ -1903,7 +1906,7 @@ end exact
 --    say "search interfaces KK"
     newfieldi=searchfield(cursor, 0, lookmeth, lookprop, statics,-
                           infofrom, impinfo, exactname,-
-                          argtypearray, tok, checkacc, isconstructor)
+                          argtypearray, tok, checkacc, isconstructor, skipimpl)
     if newfield2=null then newfield2=newfieldi
     else if newfieldi \= null then
       if newfieldi.fieldcost<newfield2.fieldcost then newfield2=newfieldi

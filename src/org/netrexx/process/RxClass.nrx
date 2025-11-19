@@ -33,6 +33,7 @@
 /* 2022.04.01 Use RexxRexx in scripting mode --RVJ                    */
 /* 2022.11.03 Implicit uses of RexxDate, RexxStream and RexxRexx --MRE*/
 /* 2025.10.05 Correct handling of default methods --MRE               */
+/* 2025.11.18 Complete handling of default methods --MRE              */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -1032,20 +1033,24 @@ implerrs = Rexx ''          -- indexed string containing reported does.not.imple
       end
      else do                                           -- MRE new three field items are default methods
                                                        -- count unimplemented default methods
-      f = classer.findfield(pcursor, 0, 1, 0, 0, classinfo, field.fieldname, field.fieldargtypes, null)
-      if f = null then do                              -- not implemented
-        if defmeths.exists(field.fieldname) then
-          defmeths[field.fieldname] =  defmeths[field.fieldname].OpAdd(null, 1)
+                                                       -- look for the method, but not in implemented interface classes
+                                                       -- skipimpl = 1
+      f = classer.findfield(pcursor, 0, 1, 0, 0, classinfo, field.fieldname, field.fieldargtypes, null, 1, 1)
+      if f = null then do                              -- not implemented, count 
+        key = field.fieldname'('rxt.program.toString(field.fieldargtypes)')'
+        if defmeths.exists(key) then                   
+          defmeths[key] =  defmeths[key].OpAdd(null, 1)
         else
-          defmeths[field.fieldname] = 1
+          defmeths[key] = 1
       end
      end
     end errnum
 
-    d = Rexx ''
-    loop d over defmeths            -- if 2 or more default unimplemented methods, log error when no does.not.implement
-      if defmeths[d] >> 1 then
-        if \implerrs.exists(d) then RxError(rxt, classtoken, 'duplicate.default.methods', classname, d)
+    key = Rexx ''
+    loop key over defmeths            -- if 2 or more default unimplemented methods, log error
+      if defmeths[key] >> 1 then do
+        RxError(rxt, classtoken, 'duplicate.default.methods', classname, key)
+      end  
     end
 
   parser.indention=1                    -- cosmetic for pass 2 code generation
