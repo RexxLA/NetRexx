@@ -8,47 +8,47 @@
 /* ------------------------------------------------------------------ */
 /*                                                                    */
 /*                                                                    */
-/*                                                                    */
-  /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
 /* 2025.10.04 MRE Initial                                             */
+/* 2025.12.11 MRE Handle concurrent execution                         */
 /* ------------------------------------------------------------------ */
 
 package netrexx.lang
 options binary nodecimal strictargs strictcase noformat
 
 class RexxChannel implements Serializable
-
+--trace results
   properties private
-    queue      = LinkedBlockingQueue
-    lock       = Semaphore
-    capacity   = int
-    unbuffered = boolean
-    closed     = boolean 0
-
+    queue        = LinkedBlockingQueue
+    capacity     = int
+    closed       = boolean 0
+    unbuffered   = boolean    
+    lockObject   = java.lang.Object
+    canWrite     = Semaphore
+    canRead      = Semaphore
+    readComplete = Semaphore   
+  
+  
 /**
-  Unbuffered RexxChannel
-  Queue capacity is 1. Semaphore starts at 0 permits
-  Writer puts the item, then blocks on lock.acquire() until reader signals
+  Constructor
+    s = 0 : Unbuffered/Synchronous (Rendezvous) - Go-style channel
+    s > 0 : Buffered/Asynchronous (Flow control) - Go-style channel
 */
-  method RexxChannel()        -- unbuffered channel
-    capacity   = 1
-    unbuffered = 1
+  method RexxChannel(s = int 0)  
+    if s = 0 then do
+      unbuffered = 1
+      capacity   = 1 -- Needs 1 physical slot to hold the item during the handshake
+    end
+    else do
+      unbuffered = 0
+      capacity   = s
+    end
+    queue        = LinkedBlockingQueue(capacity)  
+    lockObject   = java.lang.Object()    -- locking object
+    canWrite     = Semaphore(capacity)   -- writeable slots availabe 
+    canRead      = Semaphore(0)          -- signal data available
+    readComplete = Semaphore(0)          -- signal read completed
 
-    queue = LinkedBlockingQueue(capacity)
-    lock  = Semaphore(0)
-    return this
-
-/**
-  Buffered RexxChannel
-  Semaphore represents the available slots in the buffer
-  Writer acquires a slot before writing
-*/
-  method RexxChannel(s = int)  -- buffered channel
-    capacity   = s
-    unbuffered = 0
-
-    queue = LinkedBlockingQueue(capacity)
-    lock  = Semaphore(capacity)
     return this
 
 /**
@@ -56,14 +56,32 @@ class RexxChannel implements Serializable
 
 */
   method write(o = Object) signals IOException
-    if closed then signal IOException('Writing to a closed channel')
+    do protect lockObject      -- check closed flag
+      if closed then signal IOException('Writing to a closed channel')
+    end  
 
-    do
-      if unbuffered == 0 then lock.acquire()  -- wait if buffer full
-      queue.put(o)
-      if unbuffered == 1 then lock.acquire()  -- wait until the reader releases
+    do 
+      canWrite.acquire()       -- wait for an available slot or flooding close()
+      
+      do protect lockObject    -- recheck closed flag
+        if closed then do
+          canWrite.release() 
+          signal IOException('Writing to a closed channel')
+        end
+      end
+      
+      queue.put(o)             -- put it on queue
+
+      canRead.release()        -- notify reader(s)
+      if unbuffered then do
+        readComplete.acquire() -- wait for a reader to send a readComplete
+
+        do protect lockObject  -- recheck closed flag
+          if closed then signal IOException('Writing to a closed channel')
+        end
+      end
     catch InterruptedException
-      nop
+      nop                  
     end
     return
 
@@ -72,35 +90,49 @@ class RexxChannel implements Serializable
 
 */
   method read() returns Object signals IOException
-    if closed then do protect queue
-      if queue.size() == 0 then signal IOException('Reading a closed channel')
-    end
+
     o = Object null
-    do
-      o = queue.take()
-      if o <= RexxChannelEOF then signal IOException('Reading a closed channel')
-      lock.release()                          -- unlock writer when unbuffered, signal free slot when buffered
+  
+    loop forever
+      canRead.acquire()       -- wait for data available or flooding close()
+            
+      o = queue.poll()        -- non-blocking, returns null when queue is empty.
+      
+      if o \= null then do
+        if unbuffered then readComplete.release()  -- notify writer
+        canWrite.release()    -- release slot
+        return o
+      end
+
+                              -- queue is empty, check if we should close.
+      do protect lockObject   
+        if closed then do
+          canRead.release() 
+          signal IOException('Reading a closed channel')
+        end
+      end
+                              -- queue is empty, but not closing  
+                              -- phantom wakeup or race. We loop back acquire again.
     catch InterruptedException
       nop
     end
-    return o
+    return null               -- never reached
 
 /**
   Close a channel
 
 */
-  method close()
-    loop for capacity
-      queue.put(RexxChannelEOF())             -- inform reader(s)
-    catch InterruptedException
-      nop
+  method close() protect
+    do protect lockObject
+      if closed then return
+      closed = 1
     end
-    closed = 1                                -- inform writer
+    
+                              -- flood the semaphores
+                              -- all blocked threads wake up 
+                              -- release a number larger than any possible number of threads
+    
+    canWrite.release(2000000) 
+    canRead.release(2000000)
+    readComplete.release(2000000)     
 
-
-/**
-   internal class to flag closure of a channel
-*/
-  class RexxChannelEOF private
-    method RexxChannelEOF()
-      return this
