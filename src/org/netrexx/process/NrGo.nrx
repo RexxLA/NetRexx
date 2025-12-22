@@ -14,6 +14,7 @@
 /* ------------------------------------------------------------------ */
 /* Change list                                                        */
 /* 2025.10.04 MRE Initial                                             */
+/* 2025.12.19 MRE immutable variables for lambda expression           */
 /* ------------------------------------------------------------------ */
 
 
@@ -28,6 +29,7 @@ class NrGo implements RxClauseParser, Runnable
   code    =RxCode
   cursor  =RxCursor
   tparser =RxTermParser
+  finals  =Rexx           -- immutable final copies of arguments
 
  /** Construct an object from the current clause */
  method NrGo(newrxt=RxTranslator)
@@ -49,12 +51,24 @@ class NrGo implements RxClauseParser, Runnable
 
 --  if tokens[1].type=RxToken.SP then begin=2; else begin=1  -- should be two
 
-  code=rxt.tparser.parseterm(parser.cursor, 2, 0)
+  parser.cursor.curIsGO = 1                                  -- set parsing GO instruction
+  code=rxt.tparser.parseterm(parser.cursor, 2, 0)            
+  parser.cursor.curIsGO = 0                                  -- unset
+
   if code.group \== RxCode.S_METHOD then do                  -- not a method
     signal RxError(rxt, tokens[2],  'method.expected')
   end
   if tokens[code.endoff+1].type \== RxToken.END then do      -- can be followed by methodcall only
     signal RxError(rxt, tokens[code.endoff+1], 'bad.expression.syntax')
+  end
+                          -- parseterm massages the java code for GO instruction, vars need to be immutable
+                          -- temp '$'variables are prefix between ';' which is java code to include before lambda
+
+  finals = ''
+  if code.javacode.substr(1,1) == ';' then do              -- get final variable definitions
+    lpos = Rexx code.javacode.lastpos(';')
+    finals = code.javacode.substr(1,lpos)
+    code.javacode = code.javacode.substr(lpos.OpAdd(null, 1))
   end
   return
 
@@ -66,7 +80,8 @@ class NrGo implements RxClauseParser, Runnable
  /** code generation [only] */
  method generate
   -- generate java code to run the given method as a thread
-  prefix = '{new Thread(() -> { try {'
+
+  prefix = '{' finals '{new Thread(() -> { try {'
   postfix = ';}catch (Throwable t) {'-
       'System.out.println("Throwable:"+t.getClass().getName()+'-
       '" at 'rxt.program.programname' in method " +'-
@@ -74,7 +89,7 @@ class NrGo implements RxClauseParser, Runnable
       '(t.getStackTrace())[0].getFileName()+ " line " +'-
       '(t.getStackTrace())[0].getLineNumber() + ")" );'-
       't.printStackTrace(System.out);}'-
-   '}).start();}'
+   '}).start();}}'
 
 
   if code=null then jcode='""'

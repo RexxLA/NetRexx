@@ -60,6 +60,7 @@
 /* 2016.01.01 support for NETREXX-122 (annotations)                   */
 /* 2024.01.10 detect \\ disguised as \U005C      -- MRE fix issue #55 */
 /* 2024.12.16 Read ASK input from jsr223 engine, when set       --MRE */
+/* 2025.12.19 Immutable lambda variables for GO instructions    --MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -90,7 +91,6 @@ class RxTermParser uses RxCode
   properties private constant
   specialwords   =Rexx 'null ask asknoecho this super parent version source sourceline'-
                   'digits form trace'
-  
   /* Construct the factory
      Arg1 is translator */
   method RxTermParser(newrxt=RxTranslator)
@@ -173,10 +173,23 @@ class RxTermParser uses RxCode
 
     Special words and fields from USES classes are possible if the
     'onrhs' flag is set, or if the stub is qualified.
+
+    2025.12.19 MRE
+    cursor.curIsGO flag is only set when the GO instruction parses the term,
+    which must be a method, of which the arguments must be immutable
+
+    We 'convert' the javacode for S_VAR and S_PROP args which is changed from
+     callMethod(a, b)
+    to
+     final netrexx.lang.rexx $a =a; final netrexx.lang.rexx $b=b; callMethod($a, $b)
+    or for S_EXPR which is changed from
+     callMethod(a*b)
+    to
+     final netrexx.lang.Rexx $x =i.OpMult(null,new netrexx.lang.Rexx(j)); callMethod($x)
+     where x is uniques + 1
     */
   method parseterm(cursor=RxCursor, n=int, onrhs=boolean) returns RxCode
     exec=cursor.curexec                   -- active?
-    
     code=RxCode()
     code.begclause=cursor.curclause
     code.endclause=cursor.curclause
@@ -186,6 +199,7 @@ class RxTermParser uses RxCode
     classusei=cursor.curclass.classusei   -- local reference to uses array
     tokens   =cursor.curclause.tokens     -- local reference
     
+    gofinals = Rexx[1]
     
     /* ---------------------------------------------------------------- */
     /* Collect a starter object (stub+)                                 */
@@ -713,9 +727,10 @@ end sqstub
                                   methname, argtypes, tokstart)
           if field\=null then /* found method */ do
             if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
-
             -- [convertargs checks for ambiguity and void result]
-            termargs=convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
+--say 'conv 1'
+            gofinals[0] = ''
+            termargs=convertargs(cursor, tokstart, field, argcodes, onrhs, exec, gofinals)
             if field.isConstructor() then do
               if classinfo.isabstract then   -- unlikely
                 signal RxError(rxt, tokstart,-
@@ -737,6 +752,11 @@ end sqstub
                                     else prefix='this'
                 code.javacode=prefix'.'code.javacode
                 end
+
+              -- check for generated GO 'final' variables
+              -- update code.javacode (only)
+              code.javacode = gofinals[0]''code.javacode             -- MRE mix in final GO variables, if any
+
               end
             if exec then do
               code.value=interpreter.callMethod(cursor.curthis, field,-
@@ -765,8 +785,12 @@ end sqstub
               field.fieldref2=rxt.pass2
               if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
               -- [convertargs checks for ambiguity and void result]
-              code.javacode=classusei[u].type.classname'.'field.fieldname-
-                ||convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
+--say 'conv 2'
+              code.javacode=classusei[u].type.classname'.'field.fieldname
+              gofinals[0] = ''
+              termargs = convertargs(cursor, tokstart, field, argcodes, onrhs, exec, gofinals)
+              code.javacode=gofinals[0]''code.javacode''termargs     -- MRE mix in final GO variables, if any
+
               code.group=S_METHOD            -- it's a method term
               code.type=field.fieldtype      -- is now one of these
               n=next; tok=tokens[n]
@@ -942,6 +966,7 @@ end sqstub
         /* Add 'new' (if needed) and converted arguments */
         if special then what=termbit.lower()
                    else what='new' shortestname(cursor, info)
+--say 'conv 3'
         code.javacode=what-
           ||convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
         /* remember it's a short reference */
@@ -1446,9 +1471,12 @@ end sqstub
         -- add the method name (unless super() special)
         if \special then
           code.javacode=code.javacode||field.fieldname
-        -- [convertargs checks for ambiguity and void result]
-        code.javacode=code.javacode-
-          ||convertargs(cursor, parttok, field, argcodes, onrhs, exec)
+        -- [convertargs checks for ambiguity and void result]  
+--say 'conv 4'
+        gofinals[0] = ''
+        termargs = convertargs(cursor, parttok, field, argcodes, onrhs, exec, gofinals)
+        code.javacode = gofinals[0]''code.javacode''termargs         -- MRE mix in final GO variables, if any
+
         code.type=field.fieldtype            -- is now one of these
         if special then code.group=S_CONSTR  -- it's actually a constructor
                    else code.group=S_METHOD
@@ -1945,10 +1973,20 @@ end sqstub
 
     Also updates the RxCode objects in the codes array by converting
       their values (if they have any)
+
+    2025.12.19 MRE support for GO instruction
+      Java needs immutable variables in lambda
+      convertargs 'converts' GO's method arguments further
+      any arg that is a var or property is modified by adding a $
+      any arg that is an expression is modified to $n
+      if modified, finals[0] holds GO's final variable definitions
+      which have the original arg value assigned
+
+      only code.javacode is modified, and only when it's a GO cursor
    */
  method convertargs(cursor=RxCursor, tok=RxToken, field=RxField,-
-                    codes=RxCode[], onrhs=boolean, exec=boolean)-
-                   private returns Rexx
+                    codes=RxCode[], onrhs=boolean, exec=boolean, finals=Rexx[] null)-
+                   private returns Rexx                 
   if field.fieldambig then
     signal RxError(rxt, tok, 'ambiguous.method.reference',-
       field.fieldinfo.type.classname'.'tok.value'('codestypeString(cursor,-
@@ -1959,11 +1997,12 @@ end sqstub
                    field.toString(cursor.curprogram))
 
   if codes.length=0 then return '()'    -- easy: no conversions needed
-
   lhtypes =field.fieldargtypes     -- actual method's arguments signatures
   converts=field.fieldconvert      -- conversion list
 
   acc=Rexx ''                      -- accumulates result
+  final=Rexx ''
+  gofinals = Rexx ''
   loop i=0 for codes.length
     if i>0 then acc=acc','
     /* Convert each code segment and accumulate */
@@ -1972,10 +2011,49 @@ end sqstub
      if cursor.curprogram.flag.diag then
       say '# Convertarg:' cursor.curprogram.toString(codes[i].type)-
           'to' cursor.curprogram.toString(lhtypes[i])
+    final = ''
+
+    if cursor.curIsGO then do
+--      codes[i].dump()
+      if codes[i].group = RxCode.S_VAR | codes[i].group = RxCode.S_PROP then do
+        final = '$'codes[i].javacode                 -- we assume all variables and properties
+        codes[i].javacode =  final
+        finaltype = codes[i].type
+      end
+      if codes[i].group = RxCode.S_EXPR then do      -- argument is an expression
+        final = codes[i].javacode
+        codes[i].javacode =  '$'||cursor.curclass.uniques+1     -- generate new temp var
+        finaltype = codes[i].type
+      end
+      if codes[i].group = RxCode.S_METHOD then do
+        if codes[i].javacode.substr(1,1) == ';' then do
+          termargs = codes[i].javacode
+          lpos = termargs.lastpos(';')
+          gofinals = termargs.substr(1, lpos)
+          codes[i].javacode = termargs.substr(lpos.OpAdd(null, 1))
+        end
+      end
+    end
 
     converter.convertcode(cursor, lhtypes[i], converts[i].proc, codes[i])
     if \exec then acc=acc||codes[i].javacode
-    end i
+
+    if cursor.curIsGO then do                                        -- MRE special for GO instruction
+      if final \== '' then do
+                                                                     -- add GO's immutable final variables
+        if codes[i].group = RxCode.S_EXPR then do
+           gofinals = gofinals';final 'codes[i].type.toSig()' $'||cursor.curclass.uniques+1' ='final';'
+        end
+        else do
+          gofinals = gofinals';final 'codes[i].type.toSig()' 'final'='
+          if codes[i].type = finaltype then gofinals = gofinals''final.substr(2)';'
+          else gofinals = gofinals'new 'codes[i].type.toSig()'('final.substr(2)');'
+        end
+      end
+      finals[0] = gofinals
+    end
+  end i
+--  say '#MRE convertargs ' gofinals'('acc')'
   return '('acc')'
 
  /* SPECIALWORDCODE -- return the code object for one of the special words
