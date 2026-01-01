@@ -1977,8 +1977,8 @@ end sqstub
     2025.12.19 MRE support for GO instruction
       Java needs immutable variables in lambda
       convertargs 'converts' GO's method arguments further
-      any arg that is a var or property is modified by adding a $
-      any arg that is an expression is modified to $n
+      any arg that is a var or property is modified by prefixing a $
+      any arg that is an expression is modified to $n (uniques)
       if modified, finals[0] holds GO's final variable definitions
       which have the original arg value assigned
 
@@ -2012,11 +2012,13 @@ end sqstub
       say '# Convertarg:' cursor.curprogram.toString(codes[i].type)-
           'to' cursor.curprogram.toString(lhtypes[i])
     final = ''
+    origjavacode = ''
 
     if cursor.curIsGO then do
---      codes[i].dump()
-      if codes[i].group = RxCode.S_VAR | codes[i].group = RxCode.S_PROP then do
-        final = '$'codes[i].javacode                 -- we assume all variables and properties
+--      codes[i].dump()                              -- argument is variable or property
+      if codes[i].group = RxCode.S_VAR | codes[i].group = RxCode.S_PROP then do 
+        origjavacode=codes[i].javacode               -- keep original for primitives
+        final = '$'codes[i].javacode
         codes[i].javacode =  final
         finaltype = codes[i].type
       end
@@ -2041,13 +2043,19 @@ end sqstub
     if cursor.curIsGO then do                                        -- MRE special for GO instruction
       if final \== '' then do
                                                                      -- add GO's immutable final variables
+                                                                     -- we expect all valid conversions
         if codes[i].group = RxCode.S_EXPR then do
            gofinals = gofinals';final 'codes[i].type.toSig()' $'||cursor.curclass.uniques+1' ='final';'
         end
         else do
-          gofinals = gofinals';final 'codes[i].type.toSig()' 'final'='
+          gofinals = gofinals';final 'finaltype.toSig()' 'final'='
           if codes[i].type = finaltype then gofinals = gofinals''final.substr(2)';'
-          else gofinals = gofinals'new 'codes[i].type.toSig()'('final.substr(2)');'
+          else do 
+            if codes[i].type.isPrimitive() | finaltype.isPrimitive() then
+              gofinals = gofinals''origjavacode';'
+            else
+              gofinals = gofinals'new 'codes[i].type.toSig()'('final.substr(2)');'      
+          end 
         end
       end
       finals[0] = gofinals
