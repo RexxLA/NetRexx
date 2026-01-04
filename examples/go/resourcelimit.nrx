@@ -1,0 +1,40 @@
+
+                               -- Buffered channel acts as a Semaphore. Size 3 = 3 permits
+resourceLimit = 3
+numTasks      = 10
+su            = SysUtils()
+semaphore     = RexxChannel(resourceLimit)
+                               -- Initialize the Semaphore by filling it with permits 
+say 'Initializing semaphore with' resourceLimit 'permits.'
+loop for resourceLimit
+  semaphore.write('permit')
+end
+                               -- Launch all 10 concurrent tasks 
+say 'Launching' numTasks 'tasks. Only 'resourceLimit' will run concurrently.'
+do t = 1 to numTasks
+  go limitedTask(t, semaphore)
+end
+su.SysSleep(3)                 -- 10 * 0.5 seconds / 3  
+
+say 'All tasks completed their resource usage.'
+
+                               -- The Resource-Bound Task */
+method limitedTask(id = int, sem = RexxChannel) public static
+  
+  do                                 
+    say 'Task' id ': Waiting to acquire resource permit...'
+                               --  Acquire permit, read blocks if the semaphore channel is empty 
+    permit = sem.read()
+                               -- Critical section start
+    say 'Task' id ': >>> ACQUIRED. Using limited resource...'
+    su = SysUtils()
+    su.SysSleep(0.5)           -- Simulate exclusive resource usage 
+    say 'Task' id ': <<< RELEASED. Finished using resource.'
+                               -- Critical section end
+                               -- Release permit, write unblocks another waiting thread 
+    sem.write(permit)
+  catch IOException 
+    nop
+  catch InterruptedException
+    nop    
+  end  

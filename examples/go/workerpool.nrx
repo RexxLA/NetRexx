@@ -1,0 +1,40 @@
+
+
+
+numWorkers    = 3
+numJobs       = 10
+jobChannel    = RexxChannel(numJobs)     -- Buffered channel for 10 jobs 
+resultChannel = RexxChannel(numJobs)     -- Buffered channel for 10 results
+
+do w = 1 to numWorkers
+  go worker(w, jobChannel, resultChannel)
+end
+
+say 'Sending 'numJobs' jobs to the channel..'
+do j = 1 to numJobs
+  jobChannel.write(j)
+end
+say 'Finished sending all jobs.'
+jobChannel.close()                       -- Close channel to end workers
+
+say 'Collecting results..'
+do j = 1 to numJobs
+  result = resultChannel.read()          -- Blocking, waits for the next result 
+  say result
+end
+say 'All jobs processed successfully.'
+
+method worker(id = int, jobs = RexxChannel, results = RexxChannel) public static
+  su = SysUtils()
+  say '  Worker 'id' is starting'
+  loop forever
+    jobID = jobs.read()
+    say '  Worker 'id' started job 'jobID'..'
+    su.SysSleep(0.5)                    -- simulate the work
+    results.write('Job 'jobID' done by worker 'id)
+  catch IOException
+    nop  
+  catch InterruptedException
+    nop  
+  end
+  say '  Worker 'id' is shutting down'

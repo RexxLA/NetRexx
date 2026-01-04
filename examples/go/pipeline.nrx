@@ -1,0 +1,66 @@
+
+  -- Buffered channels connect the stages 
+
+rawChannel      = RexxChannel(5)     -- Generator -> Filter 
+filteredChannel = RexxChannel(5)     -- Filter    -> Consumer 
+numItems = 10
+
+say 'Building concurrent pipeline...'
+
+                 -- Launch the stages concurrently, connected by channels 
+go generator(rawChannel, numItems)
+go filter(rawChannel, filteredChannel)
+go consumer(filteredChannel)
+                 -- We"re done here
+
+                               -- The Generator Stage (Producer) 
+method generator(out = RexxChannel, count = int) public static
+  say '   Generator: Starting...'
+  do i = 1 to count
+    item = 'RawData_'i
+    say '   Generator: Generating 'item
+    out.write(item)            -- Blocking if rawChannel is full 
+  catch IOException
+    nop  
+  end
+  out.close()
+  say '   Generator: Finished.'
+
+                               -- The Filter Stage (Transformer) 
+method filter(in = RexxChannel, out = RexxChannel) public static
+  say '  Filter    : Starting...'
+  loop forever
+    item = in.read()           -- Blocking when rawChannel is empty
+
+    processedItem = 'Filtered('item')'
+                            
+    su = SysUtils()
+    su.SysSleep(0.5)           -- Simulate work
+    out.write(processedItem)   -- Blocking when filteredChannel is full
+    say '  Filter    : Filtered 'item
+  catch IOException
+    nop
+  catch InterruptedException
+    nop  
+  end
+  out.close()
+  say '  Filter    : Finished.'
+
+                               -- The Consumer Stage (Final Sink) 
+method consumer(in = RexxChannel) public static
+  count =  0
+  say ' Consumer   : Starting...'
+  loop forever
+    item = in.read()           -- Blocking if filteredChannel is empty 
+
+    say ' Consumer   : Received 'item
+    count = count + 1
+    su = SysUtils()
+    su.SysSleep(1)
+  catch IOException
+    nop  
+  catch InterruptedException
+    nop  
+  end
+  say ' Consumer   : Processed' count 'items.'
+  say 'Pipeline execution complete.'
