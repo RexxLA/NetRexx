@@ -1,0 +1,292 @@
+\section{The GO instruction}
+The GO instruction greatly simplifies concurrent and multi-threaded programming in NetRexx. 
+
+The instruction accepts a method as argument and starts this method in a new thread of execution. 
+Returning from the method will terminate the thread, and any value returned by the method is ignored. 
+
+The goeasy.nrx example below
+\lstinputlisting[label=goeasy,caption=GO sample 1]{../../../../examples/go/goeasy.nrx} 
+could produce the following output: 
+\begin{lstlisting}
+hello 2 from Thread-1
+hello 5 from Thread-4
+hello 1 from Thread-0
+hello 3 from Thread-2
+hello 4 from Thread-3
+\end{lstlisting}
+
+Threads are started undeterministically, so the order of output may vary from run to run. 
+RexxChannels control concurrency, synchronization and inter-thread communication.
+
+
+Exceptions thrown in the method are printed on standard output, slightly different in interpreted versus compiled mode.
+
+
+The following goexcept.nrx example
+\lstinputlisting[label=goexcept,caption=GO sample 2]{../../../../examples/go/goexcept.nrx} 
+which in interpreted mode produces
+\begin{lstlisting}
+$ nr goexcept
+In exceptDivide method
+Throwable:netrexx.lang.DivideException: Divide by 0 at goexcept.nrx line 6 pos 8
+\end{lstlisting}
+shows a full Java stacktrace in compiled mode 
+\begin{lstlisting}
+$ java goexcept
+In exceptDivide method
+Throwable:netrexx.lang.DivideException at goexcept.nrx in method dodivide (Rexx.java line 2013)
+netrexx.lang.DivideException: Divide by 0
+	at netrexx.lang.Rexx.dodivide(Rexx.java:2013)
+	at netrexx.lang.Rexx.OpDiv(Rexx.java:1905)
+	at goexcept.exceptDivide(goexcept.java:6)
+	at goexcept.lambda$main$0(goexcept.java:2)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+\end{lstlisting}
+
+
+\section{RexxChannels}
+
+RexxChannels are the communication mechanism between threads in NetRexx. They come in two flavors: unbuffered and buffered.
+Unbuffered channels are used for direct handoff of data between threads, while buffered channels provide a FIFO queue-like 
+structure for communication.
+
+Unbuffered channels are created without specifying a size. A write operation blocks until a corresponding read occurs, a read
+blocks until something is written.
+
+Buffered channels are created with a given size (capacity). Write operations complete up to the given capacity. 
+When a channel is full, a write operation blocks until a reader consumes an item. 
+When a channel is empty, a read operation blocks until something is available.
+
+The following table summarizes the differences between unbuffered and buffered channels:
+
+\begin{tabular}{p{0.24\textwidth}p{0.38\textwidth}p{0.38\textwidth}} %{lll}
+\toprule
+Feature & Unbuffered Channel & Buffered Channel \\
+\midrule
+Size & No size specified & Explicit capacity \\
+Write & Blocks when no reader waiting & Blocks when channel full \\
+Read & Blocks when nothing written & Blocks when channel empty \\
+Best for & Synchronization & Communication \\
+Closing behavior & \multicolumn{2}{p{0.76\textwidth}}{Same for both, can read until empty, then IOException on further reads/writes} 
+% \bottomrule
+\end{tabular}
+	
+
+A channel can have multiple writers and multiple readers, and can be closed by both readers and writers. 
+
+\subsection{RexxChannel use cases}
+RexxChannels can be used for various purposes in concurrent programming. Here are some common use cases.
+\subsubsection{Synchronous communication with unbuffered }
+
+The following pingpong.nrx example demonstrates a simple communication pattern between two threads using an unbuffered channel.
+\lstinputlisting[label=pingpong,caption=PingPong example]{../../../../examples/go/pingpong.nrx} 
+The program starts two threads which play a game of table tennis over two unbuffered channels. The unbuffered channels
+ensure that the ping and pong messages are exchanged in a synchronized manner:
+\begin{lstlisting}
+	 ping received start
+pong received ping
+   ping received pong
+pong received ping
+   ping received pong
+pong received ping
+   ping closing
+   pong closing
+Writing to a closed channel
+pong closing
+ping closing
+\end{lstlisting}
+
+
+The godemo1.nrx program even more clearly shows the synchronization effect of unbuffered channels:
+\lstinputlisting[label=godemo1,caption=GO demo 1]{../../../../examples/go/godemo1.nrx}
+\begin{lstlisting}
+$ java godemo1 r
+press enter to start reading from channel
+writing 1
+
+reading..
+written 1
+read    1
+writing 2
+reading..
+read    2
+written 2
+reading..
+writing 3
+read    3
+written 3
+reading..
+closing channel
+Writer IOException Writing to a closed channel
+Reader IOException Reading a closed channel
+
+$ java godemo1 w
+press enter to start writing to channel
+reading..
+
+writing 1
+written 1
+read    1
+writing 2
+reading..
+read    2
+written 2
+reading..
+writing 3
+read    3
+written 3
+reading..
+closing channel
+Writer IOException Writing to a closed channel
+Reader IOException Reading a closed channel
+\end{lstlisting}	
+After 'stabilization' of the undeterministic scheduling of threads, the output clearly shows that with unbuffered channels 
+the reader waits for the writer and the writer for the reader.
+
+\subsubsection{Resource management and structured parallelism with buffered channels}
+This pattern is suitable for limiting resource consumption when there are many 
+tasks to process, and only a fixed number of concurrent workers available.
+The following workerpool.nrx example demonstrates this pattern.
+\lstinputlisting[label=workerpool,caption=Worker Pool example]{../../../../examples/go/workerpool.nrx}
+
+Ten demanding tasks need to be processed by only three dedicated worker methods. 
+We use two channels: a buffered channel to hold the tasks, and a buffered channel for workers to report completion.
+The main method starts the worker threads, and fills the buffered job channel with tasks, and closes it.
+The worker threads read their tasks from the buffered job channel, process them, and report results on the buffered result channel.
+Meanwhile the main method reads all results from the result channel.
+\begin{lstlisting}
+Sending 10 jobs to the channel..
+  Worker 1 is starting
+  Worker 2 is starting
+Finished sending all jobs.
+  Worker 3 is starting
+Collecting results..
+  Worker 1 started job 1..
+  Worker 2 started job 2..
+  Worker 3 started job 3..
+  Worker 1 started job 6..
+  Worker 3 started job 4..
+Job 1 done by worker 1
+  Worker 2 started job 5..
+Job 2 done by worker 2
+Job 3 done by worker 3
+  Worker 1 started job 7..
+Job 6 done by worker 1
+  Worker 2 started job 9..
+  Worker 3 started job 8..
+Job 4 done by worker 3
+Job 5 done by worker 2
+  Worker 1 started job 10..
+  Worker 3 is shutting down
+Job 7 done by worker 1
+  Worker 2 is shutting down
+Job 9 done by worker 2
+Job 8 done by worker 3
+  Worker 1 is shutting down
+Job 10 done by worker 1
+All jobs processed successfully.
+\end{lstlisting}
+
+\subsubsection{Pipelines with buffered channels}
+Another common pattern is the pipeline pattern, where data flows through a series of processing stages.
+Each stage is implemented as a separate method running in its own thread, and stages communicate via buffered channels.
+The following pipeline.nrx example demonstrates this pattern.
+\lstinputlisting[label=pipeline,caption=Pipeline example]{../../../../examples/go/pipeline.nrx}
+In this example, data flows through three stages: generation, processing, and output.
+The generator method produces data and sends it to the processor method via a buffered channel.
+The processor method processes the data and sends it to the output method via another buffered channel.
+\begin{lstlisting}
+Building concurrent pipeline...
+   Generator: Starting...
+   Generator: Generating RawData_1
+   Generator: Generating RawData_2
+   Generator: Generating RawData_3
+   Generator: Generating RawData_4
+   Generator: Generating RawData_5
+   Generator: Generating RawData_6
+  Filter    : Starting...
+   Generator: Generating RawData_7
+ Consumer   : Starting...
+  Filter    : Filtered RawData_1
+ Consumer   : Received Filtered(RawData_1)
+   Generator: Generating RawData_8
+  Filter    : Filtered RawData_2
+   Generator: Generating RawData_9
+  Filter    : Filtered RawData_3
+ Consumer   : Received Filtered(RawData_2)
+   Generator: Generating RawData_10
+  Filter    : Filtered RawData_4
+   Generator: Finished.
+ Consumer   : Received Filtered(RawData_3)
+  Filter    : Filtered RawData_5
+  Filter    : Filtered RawData_6
+ Consumer   : Received Filtered(RawData_4)
+  Filter    : Filtered RawData_7
+  Filter    : Filtered RawData_8
+ Consumer   : Received Filtered(RawData_5)
+  Filter    : Filtered RawData_9
+  Filter    : Filtered RawData_10
+  Filter    : Finished.
+ Consumer   : Received Filtered(RawData_6)
+ Consumer   : Received Filtered(RawData_7)
+ Consumer   : Received Filtered(RawData_8)
+ Consumer   : Received Filtered(RawData_9)
+ Consumer   : Received Filtered(RawData_10)
+ Consumer   : Processed 10 items.
+Pipeline execution complete.
+\end{lstlisting}	 
+The most sophisticated aspect here is backpressure. If the Consumer slows down, the filteredChannel fills up. 
+This blocks the Filter's write() operation, which then causes the rawChannel to fill up, eventually blocking the Generator. 
+The buffered channels automatically regulate the entire pipeline's speed based on the slowest stage.
+
+\subsubsection{Resource limiting}
+A final example demonstrates a buffered channel acting as semaphore to limit accessing a specific, constrained resource.
+
+The following resourcelimit.nrx example demonstrates this pattern.
+\lstinputlisting[label=resourcelimit,caption=Resource Limiting example]{../../../../examples/go/resourcelimit.nrx}
+Ten tasks need to run, but a shared resource can only handle three concurrent operations at a time. 
+
+The channel buffer size sets the resource limit.
+\begin{lstlisting}
+Initializing semaphore with 3 permits.
+Launching 10 tasks. Only 3 will run concurrently.
+Task 1 : Waiting to acquire resource permit...
+Task 2 : Waiting to acquire resource permit...
+Task 1 : >>> ACQUIRED. Using limited resource...
+Task 2 : >>> ACQUIRED. Using limited resource...
+Task 3 : Waiting to acquire resource permit...
+Task 3 : >>> ACQUIRED. Using limited resource...
+Task 4 : Waiting to acquire resource permit...
+Task 5 : Waiting to acquire resource permit...
+Task 6 : Waiting to acquire resource permit...
+Task 7 : Waiting to acquire resource permit...
+Task 8 : Waiting to acquire resource permit...
+Task 9 : Waiting to acquire resource permit...
+Task 10 : Waiting to acquire resource permit...
+Task 1 : <<< RELEASED. Finished using resource.
+Task 2 : <<< RELEASED. Finished using resource.
+Task 3 : <<< RELEASED. Finished using resource.
+Task 4 : >>> ACQUIRED. Using limited resource...
+Task 5 : >>> ACQUIRED. Using limited resource...
+Task 6 : >>> ACQUIRED. Using limited resource...
+Task 4 : <<< RELEASED. Finished using resource.
+Task 5 : <<< RELEASED. Finished using resource.
+Task 6 : <<< RELEASED. Finished using resource.
+Task 8 : >>> ACQUIRED. Using limited resource...
+Task 7 : >>> ACQUIRED. Using limited resource...
+Task 9 : >>> ACQUIRED. Using limited resource...
+Task 8 : <<< RELEASED. Finished using resource.
+Task 7 : <<< RELEASED. Finished using resource.
+Task 9 : <<< RELEASED. Finished using resource.
+Task 10 : >>> ACQUIRED. Using limited resource...
+Task 10 : <<< RELEASED. Finished using resource.
+All tasks completed their resource usage.
+\end{lstlisting}
+The buffered channel acts as a gate keeper, limiting the number of concurrent accesses to the shared resource.
+By pre-filling the buffered channel with tokens (permits), the channel's read() and write() methods are repurposed:
+\begin{itemize}
+\item read() acts as Acquire(): blocks until a permit is available
+\item write() acts as Release(): adds a permit back, unblocking the next waiting task
+\end{itemize}
+The example shows how a simple buffered channel performs as a semaphore, one of the most fundamental concurrency 
+patterns for managing access to shared, scarce resources.
