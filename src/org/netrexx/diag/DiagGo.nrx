@@ -1,0 +1,93 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagDefault                                                        */
+/*                                                                    */
+/*   An object that tests the GO instruction and RexxChannels         */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2026.01.05 Initial  --MRE                                          */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.diag
+
+options nobinary decimal
+
+class DiagGo
+properties public
+  in  = RexxChannel
+  out = RexxChannel
+ 
+  method goDiag1()
+    j = Rexx 0
+    loop forever
+      i = Rexx in.read()
+      j = j + i
+    catch IOException
+      nop  
+    end 
+    out.write(j)
+
+
+  method diag1
+    in = RexxChannel(10)
+    out = RexxChannel(1)
+    go goDiag1()
+    loop t = 0 to 10
+      in.write(t)
+    end
+    in.close()
+    do 
+      j = Rexx out.read()
+    catch IOException
+      nop
+    end  
+    out.close()
+    -- 0+1+2+3+4+5+6+7+8+9+10 = 55
+    if j \= 55 then signal DiagX('DiagGo: Failed diag1')
+
+  method goDiag2(j = Rexx)
+    do 
+      out.write(j)
+    catch IOException
+      nop
+    end    
+
+  method diag2
+    out = RexxChannel()
+    j = Rexx 0
+    loop t = 0 to 10
+      go goDiag2(t)
+      i = Rexx out.read()
+      j = j + i
+    end
+    out.close()
+    if j \= 55 then signal DiagX('DiagGo: Failed diag1')
+  
+
+
+  method DiagGo
+    diag1()
+    diag2()    
+
+
+  /*--------------------------------------------------------------------*/
+    say 'DiagGo: OK'
+
+  method main(s=String[]) static
+    do
+       DiagGo()
+       exit 0
+    catch dx=DiagX
+      say 'DiagGo: "'dx.getMessage'"'
+      exit 1
+    end
+
+
