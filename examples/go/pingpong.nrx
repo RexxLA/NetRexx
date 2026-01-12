@@ -1,0 +1,44 @@
+
+su = SysUtils()
+
+-- Channels for communication
+pingChannel = RexxChannel()
+pongChannel = RexxChannel()
+
+-- Start pinger and ponger 
+go pinger(pingChannel, pongChannel)
+go ponger(pingChannel, pongChannel)
+
+-- Start the game by sending the first message 
+pongChannel.write('start')
+
+su.SysSleep(1)
+
+method pinger(pingChan = RexxChannel, pongChan = RexxChannel) public static 
+  loop for 3
+    msg = pongChan.read()            -- Wait for pong's turn 
+    say '   ping received' msg
+    pingChan.write('ping')           -- Send 'ping' back
+  catch IOException
+    nop  
+  end
+  say '   ping closing'
+  pingChan.close()
+  say '   pong closing'
+  pongChan.close()
+
+method ponger(pingChan = RexxChannel, pongChan = RexxChannel) public static 
+  loop forever
+    do 
+      msg = pingChan.read()          -- Wait for ping's turn 
+      say 'pong received' msg
+      pongChan.write('pong')         -- Send 'pong' back 
+    catch e=IOException
+      say e.getMessage()
+      leave  
+    end  
+  end
+  say 'pong closing'
+  pongChan.close()
+  say 'ping closing'
+  pingChan.close()
