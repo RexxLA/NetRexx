@@ -1,0 +1,224 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* LspNetRexxEngine                                                   */
+/* ------------------------------------------------------------------ */
+/* run scheduled diagnosticsc on didOpen, didSave, didChange          */
+/* run documentSymbol for outline structure                           */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.01.24 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+
+package org.netrexx.lsp
+options strictcase
+
+import org.json.JSONObject
+import org.json.JSONArray
+import java.io.StringWriter
+import java.io.PrintWriter
+import java.nio.file.Paths
+import java.util.Timer  
+import java.util.TimerTask
+import org.netrexx.process
+
+
+
+class LspNetRexxEngine extends org.netrexx.process.NetRexxC
+  properties public
+    debounceTime = 1000          -- in MilliSeconds
+
+  properties private
+    transport = LspTransport
+    debounceTimers  = HashMap() -- Stores <String, Timer>
+    lock = Object               -- lock to serialise NetRexxC access
+  
+  method LspNetRexxEngine(t = LspTransport)
+    super()                        -- our NetRexxC 
+    transport = t
+    lock = Object()
+ 
+  method setTimer(timeout)
+    debounceTime = timeout
+
+  method scheduleDiagnostics(uri = String, source = String, timeout = 0)
+    if timeout = 0 then do                            -- didChange request
+      timeout = debounceTime
+      if debounceTime = 0 then return                 -- didChange set off
+    end  
+
+    oldTimer = Timer debounceTimers.get(uri)
+    if oldTimer \= null then oldTimer.cancel()  -- cancel previous one
+    newTimer = Timer() 
+    debounceTimers.put(uri, newTimer)
+    
+    -- We use an inner class or a helper class that extends TimerTask
+    task = LspNetRexxEngineTask(this, uri, source)
+    
+    newTimer.schedule(task, timeout)
+
+  
+  method runDiagnostics(uri = String, source = String)
+    output = StringWriter()
+
+    nrcArgs = Rexx '-compact -verbose0 -noconsole -nocompile -nokeep -nocolor'
+    c = nrcArgs.words()
+
+    args = String[c+1]
+    loop i = 0 to c-1
+    	args[i] = String(nrcArgs.word(i+1))
+    end
+    args[c] = getFileNameFromURI(uri)
+    
+    do protect lock
+      if source = null then                             
+        this.main2(args, PrintWriter(output, 1))         -- read from file, at save/open
+      else do
+        prgsrc = String[1]  
+        prgsrc[0] = source
+        this.main2(args, prgsrc, PrintWriter(output, 1)) -- read from string, at change
+      end
+    end
+
+    parseDiagnosticsAndSend(uri, output.toString())
+
+  method runDocumentSymbols(uri = String, id = Object)  
+    output = StringWriter()
+
+    nrcArgs = Rexx '-compact -verbose0 -noconsole -nocompile -nokeep -nocolor -aslspserver'
+    c = nrcArgs.words()
+
+    args = String[c+1]
+    loop i = 0 to c-1
+    	args[i] = String(nrcArgs.word(i+1))
+    end
+    args[c] = getFileNameFromURI(uri)
+    do protect lock
+      this.main2(args, PrintWriter(output, 1))         -- read from file, at save/open
+    end
+    parseDocumentSymbolsAndSend(id, output.toString())
+
+  method parseDocumentSymbolsAndSend(id = Object, output = String) private
+
+    reader = BufferedReader(StringReader(output.toString()));
+
+    res = JSONObject()
+    res.put("jsonrpc", "2.0")
+    res.put("id", id)
+
+    result = JSONArray()
+    loop forever 
+      line = Rexx reader.readLine()
+      if line = null then leave
+      if line.substr(1, 1) = '{' then do   -- this an LSP line from NetRexxC        
+         result.put(JSONObject(line.toString()))
+      end
+    catch IOException
+      nop  
+    end
+    res.put("result", result)  
+    transport.log(res.toString())
+    transport.sendResponse(res.toString())
+      
+
+
+  method parseDiagnosticsAndSend(uri = String, output = String) private
+    -- Logic to parse "[line col1 col2] type message" ]
+    -- Create JSONArray of diagnostics 
+    -- transport.sendResponse(diagnosticJson) ]
+  
+    reader = BufferedReader(StringReader(output.toString()));
+
+    res = JSONObject()
+    res.put("jsonrpc", "2.0")
+    res.put("method", "textDocument/publishDiagnostics")
+    params = JSONObject()
+    params.put("uri", uri)
+
+    diagnostics = JSONArray()
+
+    loop forever 
+      line = Rexx reader.readLine()
+      if line = null then leave
+      if line.substr(1,1) = '[' then do               -- read out error message
+        parse line '[' .  linenum startcol len ']' type msg
+        select 
+          when type = 'Error:'        then sevcode = 1 -- Error
+          when type = 'Warning:'      then sevcode = 2 -- Warning
+          when type = 'Severe Error:' then sevcode = 1 -- Error
+          when type = 'Information:'  then sevcode = 3 -- Info
+          otherwise sevcode = 4
+        end
+
+        diag = JSONObject()
+        diag.put('severity', int sevcode)
+        diag.put("message", msg)
+        diag.put("source", "NetRexx")
+        
+        range = JSONObject()
+                                                      -- Note the 0-indexing for LSP
+        range.put("start", JSONObject().put("line", int linenum-1).put("character", int startcol-1))
+        range.put("end",   JSONObject().put("line", int linenum-1).put("character", int startcol + len-1))
+ 
+        diag.put("range", range)
+        diagnostics.put(diag)
+--        say uri ':' linenum ':' startcol ':' endcol ':' type ':' msg ':'
+      end
+--      transport.log('>> Processing : 'line)
+    catch IOException
+      nop  
+    end  
+    params.put("diagnostics", diagnostics)
+    res.put("params", params)
+    
+    transport.sendResponse(res.toString())
+  
+
+  method getFileNameFromURI(uriString = String) returns String
+    do
+      uri = URI(uriString)
+      path = Paths.get(uri)
+      filename = path.toString()
+      return filename
+    catch URISyntaxException
+      return ''
+    end  
+
+  method clearDiagnostics(uri = String)
+    res = JSONObject()
+    res.put("jsonrpc", "2.0")
+    res.put("method", "textDocument/publishDiagnostics")
+  
+    params = JSONObject()
+    params.put("uri", uri)
+    params.put("diagnostics", JSONArray()) -- An empty list tells the IDE to clear all errors
+  
+    res.put("params", params)
+    transport.sendResponse(res.toString())
+   
+    oldTimer = Timer debounceTimers.get(uri)
+    if oldTimer \= null then do 
+      oldTimer.cancel()  -- cancel previous one
+      debounceTimers.remove(uri)
+    end  
+    
+
+-- Helper class to wrap the call back into your main class
+class LspNetRexxEngineTask extends TimerTask
+  properties private
+    parent = LspNetRexxEngine
+    uri    = String
+    source = String
+
+  method LspNetRexxEngineTask(p = LspNetRexxEngine, u = String, s = String)
+    parent = p
+    uri = u
+    source = s
+
+  method run()
+    -- This runs on the Timer thread
+    parent.runDiagnostics(uri, source)

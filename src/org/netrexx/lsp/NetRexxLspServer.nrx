@@ -1,0 +1,75 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexxLspServer LSP for NetRexx                                   */
+/* ------------------------------------------------------------------ */
+/* Entrypoint org.netrexx.lsp.NetRexxLspServer                        */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.01.24 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+
+
+package org.netrexx.lsp
+options strictcase
+
+class NetRexxLspServer
+  properties public
+     transport     = LspTransport
+     onChangeTimer = 1000          -- ms
+
+  method main(args = String[]) static
+     lsp4nrx = NetRexxLspServer()  
+     lsp4nrx.start(args)
+  
+  method NetRexxLspServer()
+   
+  method start(args = String[])
+  do
+      transport = LspTransportStdio()
+
+      loop arg over args
+        parse arg '--' option '=' value
+        select 
+          when option = 'sock' then do 
+            transport = LspTransportSocket()
+          end  
+          when option = 'stdio' then do 
+            nop                             -- default
+          end  
+          when option = 'onChange' then do
+            if value.datatype('D') then do 
+              onChangeTimer = value
+            end
+            else if value = 'off' then do
+              onChangeTimer = 0
+            end
+            else do
+              transport.log('Invalid option --'option'='value)
+            end
+          end  
+          otherwise do
+            transport.log('Invalid option 'arg)
+            transport.log('Usage : --sock            connect over Socket\n'-
+                          '       --onChange=nnnn   wait nnnn ms onChange\n'-
+                          '       --onChange=off    discard onChange')          
+          end  
+        end
+      end     
+   
+      handler = LspHandler(transport)
+      handler.engine.setTimer(onChangeTimer)
+ 
+      loop forever
+        transport.log("Reading message")
+        msg = transport.readMessage()
+        if msg = null then leave
+--        transport.log("Processing message" msg)
+        handler.processMessage(msg)
+      end   
+    end
+ 

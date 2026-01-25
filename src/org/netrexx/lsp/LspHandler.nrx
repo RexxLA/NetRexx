@@ -1,0 +1,105 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* LspHandler                                                         */
+/* ------------------------------------------------------------------ */
+/* dispatches messages didOpen, didClose, didSave, didChange,         */
+/*   documentSymbol, shutdown, exit                                   */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.01.24 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+
+package org.netrexx.lsp
+options strictcase
+import org.json.JSONObject
+import java.util.HashMap
+
+class LspHandler
+  properties public
+    documentCache = HashMap()
+    transport     = LspTransport
+    engine        = LspNetRexxEngine
+
+  method LspHandler(t = LspTransport)
+    transport = t
+    engine = LspNetRexxEngine(t)
+ 
+  method processMessage(payload = String)
+    json = JSONObject(payload)
+    methodName = json.optString("method")
+    params = json.optJSONObject("params")
+ 
+    transport.log('Handling 'methodName)
+ 
+    select case methodName
+      when "initialize" then handleInitialize(json.opt("id"))
+      
+      when "textDocument/didOpen" then do
+        doc = params.getJSONObject("textDocument")
+        uri = doc.getString("uri")
+        text = doc.getString("text")
+        documentCache.put(uri, text)
+        engine.scheduleDiagnostics(uri, text, 100)
+      end      
+
+      when "textDocument/didClose" then do
+        uri = params.getJSONObject("textDocument").getString("uri")
+        documentCache.remove(uri) 
+        engine.clearDiagnostics(uri)
+      end      
+
+      when "textDocument/didChange" then do
+        doc = params.getJSONObject("textDocument")
+        uri = doc.getString("uri")
+        text = params.getJSONArray("contentChanges").getJSONObject(0).getString("text") 
+        documentCache.put(uri, text)
+        engine.scheduleDiagnostics(uri, text)
+      end
+
+      when "textDocument/didSave" then do
+        uri = params.getJSONObject("textDocument").getString("uri") 
+--        text = params.getJSONArray("textDocument").getJSONObject(0).getString("text") 
+--        documentCache.put(uri, text)
+        engine.scheduleDiagnostics(uri, null, 100)
+      end
+
+      when "textDocument/documentSymbol" then do
+        id = json.opt("id")
+        uri = params.getJSONObject("textDocument").getString("uri") 
+        engine.runDocumentSymbols(uri, id)
+      end
+      
+      when "shutdown" then handleShutdown(json.opt("id")) 
+
+      when "exit" then System.exit(0) 
+
+      otherwise do
+        transport.log('Unhandled 'methodName)
+      end
+    end
+
+  method handleInitialize(id = Object)
+    res = JSONObject().put("jsonrpc", "2.0").put("id", id)
+    caps = JSONObject()
+    caps.put("textDocumentSync", 1) 
+    caps.put("documentSymbolProvider",  JSONObject())
+--    caps.put("documentSymbolProvider",  boolean 1)
+    res.put("result", JSONObject().put("capabilities", caps))
+    transport.sendResponse(res.toString())
+    transport.log('-- Initialize ->' res.toString(3))
+
+
+  method handleShutdown(id = Object) 
+    res = JSONObject()
+    res.put("jsonrpc", "2.0")
+    res.put("id", id)
+    res.put("result", JSONObject.NULL)
+
+    transport.sendResponse(res.toString())
+    transport.log('-- Shutdown ->' res.toString(3))
+

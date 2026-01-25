@@ -1,0 +1,77 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* LspTransport                                                       */
+/* ------------------------------------------------------------------ */
+/* Abstract read and write LSP traffic                                */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.01.24 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+
+package org.netrexx.lsp
+options strictcase   
+import java.io.DataInputStream
+
+class LspTransport abstract
+  properties inheritable
+    inputStream = DataInputStream
+    outputStream = OutputStream
+
+  method readMessage() returns String
+
+    contentLength = 0
+    loop label headerLoop
+      line = readHeaderLine()
+      if line = null then return null
+      if line.strip() = "" then leave headerLoop
+      if line.lower().pos("content-length:") == 1 then contentLength = line.substr(16).strip()
+    end 
+    
+    if contentLength > 0 then do
+      buffer = byte[contentLength]
+      inputStream.readFully(buffer)
+      payload = String(buffer, "UTF-8")
+      log('Request   :' payload)
+      return payload  
+    catch IOException
+      nop
+--    catch UnsupportedEncodingException
+--      nop  
+    end 
+    return null
+
+  method readHeaderLine() private returns Rexx
+    line = ""
+    loop forever
+      b = inputStream.read()
+      if b = -1 then return null
+      c = (Rexx b).d2c()
+      if c = '\n' then leave
+      if c \= '\r' then line = line''c
+    catch IOException
+      return null  
+    end
+    return line
+
+  method sendResponse(payload = String) public
+    log('Response:'payload)
+    do 
+      bodyBytes = payload.getBytes("UTF-8")
+      header = String
+      header = "Content-Length: " || bodyBytes.length || "\r\n\r\n"
+      outputStream.write(header.getBytes("ASCII"))
+      outputStream.write(bodyBytes)
+      outputStream.flush()
+    catch IOException
+      nop
+    end    
+
+  method log(msg)
+    System.err.println(msg)
+
+  
