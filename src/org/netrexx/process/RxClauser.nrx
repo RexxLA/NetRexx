@@ -34,6 +34,7 @@
 /* 2023.03.03 Enhancement #45, support shebang --MRE                  */
 /* 2025.03.27 fix exception when single # on line 1  -- MRE           */
 /* 2025.03.30 support for multi-line text """ strings  -- MRE         */
+/* 2026.01.26 LspDocumentSymbol after pass 0 on -asLspServer --MRE    */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -133,6 +134,129 @@ class RxClauser
   if type=RxToken.EOS then
     signal RxQuit(rxt, null, 'no.lines.in.source', source.getName())
   return
+
+--MRE LSP begin
+-- called after pass0, note : can be syntactilally wrong.. 
+
+ method equalsIgnoreCase(al=char[], kr=String) returns boolean
+  if al.length\=kr.length() then return 0
+  ar=kr.toCharArray()
+  loop i=0 to al.length-1
+    cl=al[i]; cr=ar[i]
+    if cl=cr then iterate
+    cl=Character.toUpperCase(cl)
+    if cl\=cr then return 0
+    end
+  return 1  
+
+ method LspDocumentSymbol()
+
+   LSP = Rexx ''
+   classname = ''
+   methodname = ''
+   cclasses = 0
+   cmethods = 0
+
+   prevtok = RxToken null
+
+   do c = 0 to ccount-1          -- loop over the clauses
+     cl = carray[c]
+--     say ':: 'cl.showtokens()
+     loop t=0 by 1               -- loop over the tokens of each clause
+       tok = cl.tokens[t]
+       tt = t + 1     -- next token
+       ttt = t + 2    -- second next token
+       if tok.type = RxToken.SYM then if equalsIgnoreCase(tok.value, 'CLASS') then do
+         if cl.tokens[tt].type = RxToken.SP then if cl.tokens[ttt].type = RxToken.SYM then do   -- this is a class declaration
+           cclasses = cclasses + 1
+--           say 'MRE Likely a class definition : class 'cl.tokens[ttt].value
+--           say '------ 'cl.showtokens()
+
+           if classname \== '' then do
+              LSP['class', classname, 'range', 'end'] = '"line" : 'tok.line-1' , "character" : 'tok.pos-1
+              if methodname \== '' then do
+                 prevpos = prevtok.pos - 1
+                 if prevpos < 0 then prevpos = 0
+                 LSP['class', classname, 'method', methodname, 'range', 'end'] = '"line" : 'prevtok.line-1' , "character" : 'prevpos
+              end   
+              methodname = ''
+              cmethods = 0
+           end
+           classname = cl.tokens[ttt].value
+  
+           LSP['class', classname] = 1
+
+           LSP['class', classname, 'range', 'start'] = '"line" : 'tok.line-1' , "character" : 'tok.pos-1
+           LSP['class', classname, 'selection', 'start'] = '"line" : 'cl.tokens[ttt].line-1' , "character" : 'cl.tokens[ttt].pos-1
+           LSP['class', classname, 'selection', 'end'] = '"line" : 'cl.tokens[ttt].line-1' , "character" : 'cl.tokens[ttt].pos + cl.tokens[ttt].len - 1
+         end
+       end  
+       if tok.type = RxToken.SYM then if equalsIgnoreCase(tok.value, 'METHOD') then do
+         if cl.tokens[tt].type = RxToken.SP then if cl.tokens[ttt].type = RxToken.SYM then do  -- this is a method declaration
+--           say 'MRE Likely a method definition : method 'cl.tokens[ttt].value
+--           say '------ 'cl.showtokens()
+           cmethods = cmethods + 1
+           if methodname \== '' then do
+             prevpos = prevtok.pos - 1
+             if prevpos < 0 then prevpos = 0
+             LSP['class', classname, 'method', methodname, 'range', 'end'] = '"line" : 'prevtok.line-1' , "character" : 'prevpos
+           end
+           methodname = cl.tokens[ttt].value
+           LSP['class', classname, 'method', methodname] = 1
+
+           LSP['class', classname, 'method', methodname, 'range', 'start'] = '"line" : 'tok.line-1' , "character" : 'tok.pos-1
+           LSP['class', classname, 'method', methodname, 'selection', 'start'] = '"line" : 'cl.tokens[ttt].line-1' , "character" : 'cl.tokens[ttt].pos-1
+           LSP['class', classname, 'method', methodname, 'selection', 'end'] = '"line" : 'cl.tokens[ttt].line-1' , "character" : 'cl.tokens[ttt].pos + cl.tokens[ttt].len - 1
+         end
+       end
+       prevtok = tok
+       if tok.type = RxToken.END then
+         leave
+     end
+   end
+   if cclasses > 0 then do
+     LSP['class', classname, 'range', 'end'] = '"line" : 'prevtok.line+1' , "character" : '999
+   end
+   if cmethods > 0 then do
+     LSP['class', classname, 'method', methodname, 'range', 'end'] = '"line" : 'prevtok.line-1' , "character" : 'prevtok.pos-1 
+   end
+
+   -- no JSON lib here, generate plaintext
+   msg = Rexx ''
+   loop classname over LSP['class']
+--     say '=== 'classname 
+
+     msg = msg',{ "name":"'classname'", "kind":5, '-
+     '"range":{ "start": { 'LSP['class', classname, 'range', 'start']'},'-
+                 '"end": { 'LSP['class', classname, 'range', 'end']'}},'-
+     '"selectionRange":{ "start": { 'LSP['class', classname, 'selection', 'start']'},'-
+                          '"end": { 'LSP['class', classname, 'selection', 'end']'}}'
+
+     children = Rexx ''
+     loop methodname over LSP['class', classname, 'method']
+--       say '===--- 'methodname
+       children = children',{ "name":"'methodname'", "kind": 6,'-
+       '"children":[],' -
+       '"range":{ "start": { 'LSP['class', classname, 'method', methodname, 'range', 'start']'},'-
+                   '"end": { 'LSP['class', classname, 'method', methodname, 'range', 'end']'}},'-
+       '"selectionRange":{ "start": { 'LSP['class', classname, 'method', methodname, 'selection', 'start']'},'-
+                            '"end": { 'LSP['class', classname, 'method', methodname, 'selection', 'end']'}}}'
+     end
+     if children \== '' then do
+        msg = msg',"children":['children.substr(2)']'
+     end
+     msg = msg'}'
+   end
+   msg = msg.substr(2)
+--   'echo MSG: 'msg' >&2'
+
+
+   rxt.say(msg)
+
+   return
+
+--MRE LSP end
+
 
  /** CLAUSES: Return the number of known clauses
     After the first pass, this is the total in program. */
