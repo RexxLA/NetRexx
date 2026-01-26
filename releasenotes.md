@@ -1,3 +1,22 @@
+# NetRexx 5.10-BETA [1 Jan 2026]
+
+## Language
+- New GO instruction facilitates multi-threading and concurrency
+- New RexxChannel communication and synchronisation mechanism between threads
+- Language Server Protocol implementation for Diagnostics and DocumentSymbol
+- LSP plugins for Microsoft Visual Studio Code and JetBrains IntelliJ
+- Default methods on interfaces
+
+## Fixes
+- Various documentation updates
+- NetRexx-79 diskr, diskw convert filenames to lower case in Linux
+- NetRexx-74 default method on interface statement (jvm=>8) is allowed but not documented in language reference
+- NetRexx-75 Typo in netrexx.lang.Rexx, method finish
+
+## Examples
+- GO and RexxChannel examples
+
+
 # NetRexx 5.01-GA [2 May 2025]
 
 ## Language
