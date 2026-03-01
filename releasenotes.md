@@ -16,6 +16,9 @@
 ## Examples
 - GO and RexxChannel examples
 
+## Documentation
+- LSP implementation
+- GO and RexxChannel use cases 
 
 # NetRexx 5.01-GA [2 May 2025]
 
