@@ -1,0 +1,100 @@
+\section{Language Server Protocol for \nr{}}
+\index{Language Server Protocol}
+\index{LSP}
+
+The Language Server Protocol (LSP) is an open standard which most modern editors and 
+integrated development environments (IDEs) use to assist programmers with syntax assist 
+and code analysis.
+
+LSP servers are language agnostic and communicate, usually over stdin/stdout, with any client 
+in the JSON-RPC (JavaScript Object Notation-Remote Procedure Call) protocol.
+
+The full protocol is published at \\ \url{https://microsoft.github.io/language-server-protocol/}.
+
+The \nr{} LSP server is written in \nr{} and implemented as \\ org.netrexx.lsp.NetRexxLspServer. 
+
+The following arguments are accepted:
+
+\begin{tabular}{ l l }
+-\/-onChange=nnnn & wait nnnn milliseconds after typing to run diagnostics \\
+-\/-onChange=off & run diagnostics on save only \\
+-\/-log & log JSON-RPC messages on stderr \\
+-\/-stdio & communicate over stdin/stdout \\
+-\/-sock  & communicate over socket (development) \\
+\end{tabular}
+
+The LSP communication generally flows from the IDE to the LSP server, where the IDE sends a JSON-RSP request 
+to the LSP server, upon which the LSP server replies with the appropriate JSON-RPC response. The LSP server 
+and the IDE can also send JSON-RPC notifications upon which no response is expected.
+
+LSP servers do not have to implement the full stack of the protocol.
+During initial handshake, the IDE client sends an \emph{initialize} JSON-RPC request with which it announces all
+protocol features the IDE supports. 
+The LSP server then responds documenting its capabilities. When \emph{initialized}, the IDE will restrict its 
+requests to the LSP server capabilites.
+
+The \nr{} language server supports the following LSP features: 
+
+\begin{tabular} { |p{4.5cm}|p{8cm}|  }
+\hline
+TextDocumentSync & Notifications sent from client to server to signal changes to a source file \\
+\hline
+DocumentSymbols & Requests sent from client to server to request symbol information of a source file \\
+\hline
+PublishDiagnostics & Notifications sent from server to client to report warnings and errors in a source file \\
+\hline
+\end{tabular}
+
+When receiving \emph{textDocument/didChange} and \emph{textDocument/didSave} JSON-RPC requests the \nr{} language server 
+compiles the source code (without generating a .class file) and sends possible warnings or errors back 
+to the client with a \\ 
+\emph{textDocument/publishDiagnostics} notification, detailing line number, column and messages if any.\\
+Response on \emph{textDocument/didChange} is somewhat delayed (1.5 second by default), so every keystroke would
+not trigger a compilation. The delay can be increased by the --onChange argument, or completely switched off 
+- a compilation is then only triggered when saving a source file. 
+
+The IDE also sends a \emph{textDocument/documentSymbol} request when an .nrx file is opened or changed,
+ the server's response describes the hierarchy of class(es) and method(s) in the 
+source file.
+
+The tools/ide-plugins directory of the package contains plugins for the \nr{} Language Server Protocol support.
+
+\begin{itemize}
+\item \textbf{lsp4nrx-\emph{Major.Minor.Patch}.vsix} is the plugin for Microsoft's Visual Studio Code. 
+Install from \emph{View\~{}Extensions\~{}three dots\~{}Install from VSIX}.
+\item \textbf{lsp4nrx-\emph{Major.Minor.Patch}.zip} is the plugin for JetBrains' IntelliJ IDEA.
+\item \textbf{\nr{}-UpdateSite.zip} is the plugin for the Eclipse IDE for Java Developers of the
+ Eclipse Foundation.
+\end{itemize}
+
+All plugins start the language server when any .nrx file is opened.
+The language server is started by command \\
+'java -cp \emph{dir}/NetRexxC.jar org.netrexx.lsp.NetRexxLspServer', 
+where \emph{dir} is the relative path into the plugin to the self-contained current NetRexxC.jar.
+This process is terminated by the plugin when the last .nrx file is closed.
+
+All plugins expose the following settings/preferences:
+\begin{itemize}
+\item \textbf{onChange} controls the compilation delay after typing. When set, the --onChange 
+argument is added to the command. 
+\item \textbf{log stderr} displays raw JSON-RPC traffic on stderr. When set, the --log argument
+ is added to the command.
+\item \textbf{classpath} allows to adjust the classpath to find dependent classes. When set, 
+its contents is pre-pended on the java -cp classpath command argument.
+\end{itemize}
+
+Any LSP compatible IDE has its own specific manner to interface with the language server.
+Here we document how to connect the \nr{} language server to Bare Bones Software's BBedit for macOS.
+
+BBEdit defines a new language as a Codeless Language Module. The definition is described in XML plist format.
+The \nr{}.plist can be found in the tools/ide-plugins directory of the package.\\
+Place the \nr{}.plist in the special dedicated 'Language Modules' folder, and restart BBedit. Go to the 
+BBedit Settings and select the Languages section. Click on the +, define .nrx as Extension and 
+associate it to \nr{} from the Languages list.\\
+Next select 'custom settings', using + again select \nr{} and in the popup window go to the 'Server' tab.\\
+Use '/usr/bin/java' as \textbf{Command} and \\
+'-cp \emph{dir}/NetRexxC.jar org.netrexx.lsp.NetRexxLspServer' as \textbf{Arguments}.
+Adjust \emph{dir} according to where NetRexxC.jar is placed. 
+Language ID will be \emph{netrexx}.\\
+The icon 'Ready to start the server' will be green. Ensure \textbf{Enable language server} is selected.
+
