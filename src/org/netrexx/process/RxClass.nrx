@@ -32,8 +32,6 @@
 /* 2022.03.24 Use RexxStream, RexxDate in scripting mode --MRE        */
 /* 2022.04.01 Use RexxRexx in scripting mode --RVJ                    */
 /* 2022.11.03 Implicit uses of RexxDate, RexxStream and RexxRexx --MRE*/
-/* 2025.10.05 Correct handling of default methods --MRE               */
-/* 2025.11.18 Complete handling of default methods --MRE              */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -667,22 +665,32 @@ class RxClass implements RxClauseParser
     -- signature appears in a class as an abstract method and also in a
     -- class that it implements.)  The return type also matters.
     seenfields=Vector(10)               -- Fields we've acted upon
+    seendefclasses=Vector(10)           -- Interface classes with default methods
     -- process last first so get highest unimplemented reported
     loop classi=impvect.size()-1 to 0 by -1
       checkinfo=RxClassInfo impvect.elementAt(classi)
+ 
+      -- Gather all default methods in implementers
+      deffields=classer.getDefaults(pcursor, checkinfo)       -- MRE get default methods
+      loop defimp=0 for deffields.size()
+        field=RxField deffields.elementAt(defimp)
+        
+        loop oldie=0 for seendefclasses.size()                -- possible multi level implementers
+          oldclass = RxClassInfo seendefclasses.elementAt(oldie)
+          if oldclass = field.fieldinfo then iterate defimp   -- defaults for class already handled
+        end  
+        seendefclasses.addElement(field.fieldinfo)
+        item=RxField[3]                        -- three fields denote default method
+        item[0]=field
+        implerror.addElement(item)             -- MRE queue any default method for later processing at endclassx
+      end
+
       -- Check that all the methods in checkinfo class are implemented
       -- [unimplemented reports lookup errors directly]
       unfields=classer.unimplemented(pcursor, classinfo, checkinfo)
       -- unfields now lists any unimplemented fields
       loop nonimp=0 for unfields.size()
         field=RxField unfields.elementAt(nonimp)
-
-        if field.isDefault() then do              -- MRE queue any default method for later processing at endclassx
-          item=RxField[3]                         -- three fields denote default method
-          item[0]=field
-          implerror.addElement(item)
-          iterate nonimp
-        end
 
         -- if we have already processed a method with the same
         -- signature and returns, then no error or generation needed
@@ -996,9 +1004,8 @@ class RxClass implements RxClauseParser
               e.excepinfo.type.classname)
       end i
     end
-                            -- MRE handle default methods
-defmeths = Rexx ''          -- indexed string containing default methods
-implerrs = Rexx ''          -- indexed string containing reported does.not.implement methods
+                              -- MRE handle default methods
+  defmeths = Rexx ''          -- indexed string containing default methods
 
   /* Report any deferred does.not.implement/cannot.implement errors */
   loop errnum=0 for implerror.size()
@@ -1018,25 +1025,24 @@ implerrs = Rexx ''          -- indexed string containing reported does.not.imple
       if field.fieldname==classinfo.shortname
        then RxError(rxt, classtoken, 'cannot.implement.with.constructor',-
                     meth, badinfo.type.classname, classtype)
-       else do
-         RxError(rxt, classtoken, 'does.not.implement',-
+       else RxError(rxt, classtoken, 'does.not.implement',-
                     meth, badinfo.type.classname, classtype)
-         implerrs[field.fieldname] = 1                               -- record error
-       end
       end
-     else if fields.length = 2 then do
+    else if fields.length = 2 then do
+
       newfield=fields[1]
       if newfield.fieldtype=RxType.VOID_TYPE then newmeth=fieldcs
        else newmeth=fieldcs 'returns' rxt.program.babel.typeString(newfield.fieldtype)
       RxError(rxt, classtoken, 'cannot.implement',-
               meth, badinfo.type.classname, classtype, newmeth)
       end
-     else do                                           -- MRE new three field items are default methods
-                                                       -- count unimplemented default methods
-                                                       -- look for the method, but not in implemented interface classes
-                                                       -- skipimpl = 1
-      f = classer.findfield(pcursor, 0, 1, 0, 0, classinfo, field.fieldname, field.fieldargtypes, null, 1, 1)
+    else do                                           -- MRE three field items are default methods
+                                                      -- count unimplemented default methods
+                                                      -- look for the method, local 
+                                                      
+      f = classer.findfield(pcursor, 1, 1, 0, 0, classinfo, field.fieldname, field.fieldargtypes, null, 1)
       if f = null then do                              -- not implemented, count 
+           
         key = field.fieldname'('rxt.program.toString(field.fieldargtypes)')'
         if defmeths.exists(key) then                   
           defmeths[key] =  defmeths[key].OpAdd(null, 1)
