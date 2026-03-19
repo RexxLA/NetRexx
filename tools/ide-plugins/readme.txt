@@ -11,6 +11,6 @@ Configure the onChange timeout in the NetRexx Language plugin setttings
 Configure classpath field to find dependent classes
 Configure log checkbox to report raw LSP traffic in stderr
 
-Install extension lsp4nrx-1.0.1.vsix on Microsoft's vscode 
-Install plugin lsp4nrx-1.0.1.zip on JetBrains' Ultimate IntelliJ - prereqs LSP4IJ plugin
-Install plugin lsp4nrx.1.0.0.1 from NetRexx-UpdateSite.zip  on eclipse
+Install extension lsp4nrx-1.0.2.vsix on Microsoft's vscode 
+Install plugin lsp4nrx-1.0.2.zip on JetBrains' Ultimate IntelliJ - prereqs LSP4IJ plugin
+Install plugin lsp4nrx.1.0.0.2 from NetRexx-UpdateSite.zip  on eclipse
