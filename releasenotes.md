@@ -1,4 +1,4 @@
-# NetRexx 5.10-BETA [10 Mar 2026]
+# NetRexx 5.10-GA [20 Mar 2026]
 
 ## Language
 - New GO instruction facilitates multi-threading and concurrency
