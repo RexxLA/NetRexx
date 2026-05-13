@@ -15,6 +15,7 @@
 /* Change list                                                        */
 /* 2025.10.04 MRE Initial                                             */
 /* 2025.12.19 MRE immutable variables for lambda expression           */
+/* 2026.05.13 MRE snapshot method arguments when interpret            */
 /* ------------------------------------------------------------------ */
 
 
@@ -28,8 +29,10 @@ class NrGo implements RxClauseParser, Runnable
   tokens  =RxToken[]      -- local reference
   code    =RxCode
   cursor  =RxCursor
-  tparser =RxTermParser
   finals  =Rexx           -- immutable final copies of arguments
+  capturedArgCodes =RxCode[]       -- snapshotted argument codes  (interpret)
+  capturedField    =RxField        -- snapshotted method field    (interpret)
+  capturedObject   =Object         -- snapshotted object          (interpret)
 
  /** Construct an object from the current clause */
  method NrGo(newrxt=RxTranslator)
@@ -37,10 +40,15 @@ class NrGo implements RxClauseParser, Runnable
   parser =rxt.program.parser
   tokens =parser.cursor.curclause.tokens
 
-/** Construct an instance from a cursor and a termparser to go */
- method NrGo(newcursor=RxCursor, newtparser=RxTermParser)
-   cursor = newcursor
-   tparser = newtparser
+/** Construct an instance from a cursor, termparser, and pre-captured
+    argument snapshot. Used exclusively by interpret(). */
+ method NrGo(newRxt=RxTranslator, newcursor=RxCursor, -
+             newArgCodes=RxCode[], newField=RxField, newObject=Object null)
+   rxt              = newRxt
+   cursor           = newcursor
+   capturedArgCodes = newArgCodes
+   capturedField    = newField
+   capturedObject   = newObject
 
  /** Pass processing */
  method scan(pass=int)
@@ -106,24 +114,46 @@ class NrGo implements RxClauseParser, Runnable
  method interpret(tcursor=RxCursor null)
   if code = null then return
 
+  -- Snapshot argument values on the calling (main) thread.
+  -- rxt.tparser.snapshotGoArgs() parses the argument list with exec=1
+  -- so every RxCode[i].value reflects the current variable state,
+  -- but does NOT invoke the target method.
+
+  snapshot = rxt.tparser.snapshotGoArgs(tcursor, 2)   -- token 2 = method name
+
   -- create a new cursor, and assign our needed properties
   newcursor = RxCursor(rxt.program, tcursor.curclass, tcursor.curmethod, tcursor.curclause)
   newcursor.curexec = tcursor.curexec     -- yes, we're exec-ing..
   newcursor.curlpool = tcursor.curlpool
+  newcursor.curthis  = tcursor.curthis
+--  say '....'newcursor.curclause.showtokens()
 
-  r = NrGo(newcursor, rxt.tparser)        -- create our go instance, and start the thread
+  -- create a new GO instance to run method on a newly started thread
+  r = NrGo(rxt, newcursor, snapshot.argCodes, snapshot.field, snapshot.targetObj)
   t = Thread(r)
   t.start()
   return
 
+--
+--    When capturedField is non-null the argument values were already
+--    evaluated on the calling thread; call callMethod() directly with
+--    the captured RxCode[] (whose .value fields hold the snapshots).
+--    This mirrors the compiled 'final $copy' variables exactly.
+
   method run()
-   --  here the interpreter is runnning in a new thread (started by interpret above)
-   --  parse and exec our cursor
+   -- interpreter is running in a new thread (started by interpret above)
    do
---     say '....'cursor.curclause.showtokens()
-       code=tparser.parseterm(cursor, 2, 0)
+     if capturedField \= null then do
+       -- Use pre-snapshotted argument values: mirrors compiled 'final $copy'
+       rxt.interpreter.callMethod(capturedObject, capturedField,-
+                                  capturedArgCodes, cursor.curclause.tokens[2])
+     end
+     else do
+       -- Fallback: full re-parse (no snapshot available)
+       code = rxt.tparser.parseterm(cursor, 2, 0)
+     end
    catch s = RxSignal
      say s.toString()' at 'cursor.curprogram.programname' line 's.signaltoken.line' pos 's.signaltoken.pos
    catch e = RxError
      say e.toString()' at 'cursor.curprogram.programname
-   end
+   end  

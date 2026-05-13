@@ -61,6 +61,7 @@
 /* 2024.01.10 detect \\ disguised as \U005C      -- MRE fix issue #55 */
 /* 2024.12.16 Read ASK input from jsr223 engine, when set       --MRE */
 /* 2025.12.19 Immutable lambda variables for GO instructions    --MRE */
+/* 2026.05.13 snapshot method arguments when interpreting GO    --MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -1986,7 +1987,7 @@ end sqstub
    */
  method convertargs(cursor=RxCursor, tok=RxToken, field=RxField,-
                     codes=RxCode[], onrhs=boolean, exec=boolean, finals=Rexx[] null)-
-                   private returns Rexx                 
+                   private returns Rexx
   if field.fieldambig then
     signal RxError(rxt, tok, 'ambiguous.method.reference',-
       field.fieldinfo.type.classname'.'tok.value'('codestypeString(cursor,-
@@ -2578,4 +2579,110 @@ end sqstub
   if cursor.curprogram.javaimports.containsKey(key)
    then return info.fullname  -- short name [with parents, no package]
   return info.type.classname  -- fully qualified name
+
+-- ============================================================
+-- Also see RxGoSnapshot.nrx (new file) and NrGo.nrx (updated).
+-- ============================================================
+
+ /* SNAPSHOTGOARGS -- Evaluate GO method arguments on the calling thread
+    without invoking the target method.
+
+    This is the interpret-time equivalent of the compiler's
+    'final $copy' variable emission in convertargs() (curIsGO path):
+
+      Compile:   final Type $a = a;  final Type $b = b;  method($a, $b)
+      Interpret: evaluate a and b NOW (calling thread), freeze values in
+                 RxGoSnapshot.argCodes[*].value, call method later (GO thread)
+
+    Called by NrGo.interpret() BEFORE the new Thread is started.
+    The returned snapshot is passed to the new NrGo instance so
+    run() can call interpreter.callMethod() with those frozen values.
+
+    Arg1  cursor  context of the GO clause (curexec must be 1)
+    Arg2  n       token index of the method-name token (origin 0;
+                  token 2 in a GO clause: GO <sp> methodcall(...) )
+
+    Returns RxGoSnapshot with:
+      .argCodes  RxCode[] where every [i].value holds the evaluated argument
+      .field     the resolved RxField for the target method
+      .tokStart  the method-name token
+      .targetObj the object to run on
+
+    Signals RxError / RxQuit on the usual error conditions.
+ */
+
+ method snapshotGoArgs(cursor=RxCursor, n=int) returns RxGoSnapshot
+
+  tokens    = cursor.curclause.tokens
+  classinfo = cursor.curclass.classinfo
+  classusei = cursor.curclass.classusei
+
+  -- Detect token layout:
+  --   Unqualified:  GO method(args)      tokens[n]=name  tokens[n+1]='('
+  --   Qualified:    GO obj.method(args)  tokens[n]=obj   tokens[n+1]='.'  tokens[n+2]=name  tokens[n+3]='('
+
+  targetObj = Object null
+  field     = RxField null
+
+  if tokens[n+1].type = RxToken.DOT then do  --instance method
+
+    rxtok     = tokens[n]                     -- receiver token (e.g. 'g')
+    bitvar    = cursor.curprogram.pooler.findvar(cursor, rxtok.value, rxtok, 1, 0, 1)
+    if bitvar = null then
+      signal RxError(rxt, rxtok, 'unknown.variable', rxtok.value)
+    targetObj = interpreter.getVar(cursor, bitvar, rxtok)  -- live value on calling thread
+    objtype   = bitvar.vartype                -- type of the receiver
+    tokstart  = tokens[n+2]
+    methname  = tokstart.value
+    argsN     = n+3                           -- index of '('
+    terminfo  = classer.findanyclass(cursor, objtype.classname, tokstart)
+
+    argcodes = parsemethargs(cursor, argsN)
+    argtypes = codetypes(argcodes)
+
+    field = classer.findfield(cursor, 0, 1, 0, 0, terminfo,-
+                              methname, argtypes, tokstart)
+    if field = null then
+      signal RxError(rxt, tokstart, 'method.not.found',-
+                     methname'('codestypeString(cursor, argcodes)')',-
+                     objtype.classname)
+  end
+  else do                                   -- static method
+
+
+    tokstart  = tokens[n]              -- method-name token
+    methname  = tokstart.value         -- method name as spelled
+
+    argcodes = parsemethargs(cursor, n+1)    -- n+1 = '(' token
+    argtypes = codetypes(argcodes)
+
+    field = RxField null
+    field = classer.findfield(cursor, 0, 1, 0, 0, classinfo,-
+                              methname, argtypes, tokstart)
+
+    if field = null then do
+      loop u = 0 to classusei.length - 1
+        field = classer.findfield(cursor, 0, 1, 0, 1, classusei[u],-
+                                  methname, argtypes, tokstart)
+        if field \= null then leave
+      end u
+    end
+
+    if field = null then
+      signal RxError(rxt, tokstart, 'undefined.method.reference', methname)
+
+    -- For an unqualified instance method the receiver is curthis
+    if \field.isStatic() then targetObj = cursor.curthis
+
+  end
+
+  -- Run convertargs() for its coercion / boxing side-effects on
+  -- code.value (the same transforms that callMethod() will expect).
+  -- curIsGO is NOT set here, so no '$'-renaming of javacode occurs.
+  -- exec=1 ensures value-update logic inside convertargs() fires.
+  dummyFinals = Rexx[1]
+  dummyFinals[0] = ''
+  convertargs(cursor, tokstart, field, argcodes, 0, 1, dummyFinals)
+
+  return RxGoSnapshot(argcodes, field, tokstart, targetObj)
 
