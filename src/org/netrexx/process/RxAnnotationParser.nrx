@@ -1,0 +1,1093 @@
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor                                     mfc */
+/* Copyright (c) 2017- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* RxAnnotationParser                                                 */
+/*                                                                    */
+/*   Parses an annotation and checks its validity for syntax and      */
+/*       semantics                                                    */
+/*                                                                    */
+/*  Largely written by Claude, some ChatGPT and Gemini                */
+/* ------------------------------------------------------------------ */
+/* Change list                                                        */
+/* 2026.08.31 Initial  --MRE                                          */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.process
+--options binary nodecimal strictcase strictargs
+
+
+class RxAnnotationParser
+
+  properties private
+    semantics    =RxAnnotationParser.Semantics
+
+  -- Create a parser for the given source line and set up the semantic checker.
+  method RxAnnotationParser(line) public
+    semantics = RxAnnotationParser.Semantics(line)
+
+  -- Delegates validation to the semantic checker.
+  method validate() public returns RxAnnotationParser.Result
+    return semantics.validate()
+
+  method isRepeatable() public returns boolean
+    return semantics.isRepeatable()
+
+  method getAnnotationClass() public returns Class
+    return semantics.getAnnotationClass()
+
+  method isApplicableTo(target=String) public returns boolean
+    return semantics.isApplicableTo(target)
+
+  method getStringValues() public returns String[]        -- add this
+    return semantics.getStringValues()
+
+/* AnnotationSemanticChecker
+
+Semantic validation for Java annotations.
+*/
+
+
+-- Performs full semantic validation of an annotation once its syntax has been confirmed valid.
+class RxAnnotationParser.Semantics
+  properties private
+    src=""
+    pos=int 1
+    len=int 0
+    clssLoader=ClassLoader
+    syntaxChecker=RxAnnotationParser.Syntax
+    resolvedClass=Class
+    valueElement=RxAnnotationParser.ParsedValue
+
+
+  -- Public API
+
+    -- Normalize the input line and prepare the syntax checker.
+  method Semantics(line) public
+      src=line.strip()
+      len=src.length()
+      pos=1
+      syntaxChecker=RxAnnotationParser.Syntax(src)
+
+  -- Runs syntax checking followed by semantic (annotation-model) validation.
+  method validate() public returns RxAnnotationParser.Result
+    -- Syntax is the first gate.
+    if \syntaxChecker.validate() then
+      return RxAnnotationParser.Result(0,"Syntax error")
+
+    clssLoader=Thread.currentThread().getContextClassLoader()
+    if clssLoader=null then
+      clssLoader=RxAnnotationParser.Semantics.class.getClassLoader()
+
+    annotation=parseAnnotationModel()
+    if annotation=null then
+      return RxAnnotationParser.Result(0,"Could not parse annotation model")
+
+    return validateAnnotation(annotation)
+
+  -- Main semantic validation
+
+  method isRepeatable() public returns boolean
+    if resolvedClass=null then
+      return 0
+
+    repeatableAnno=resolveClass('Repeatable')
+    if repeatableAnno=null then
+      return 0
+
+    return resolvedClass.isAnnotationPresent(repeatableAnno)
+
+  method getAnnotationClass() public returns Class
+    return resolvedClass
+
+  method isApplicableTo(target=String) public returns boolean
+    if resolvedClass=null then
+      return 0
+
+    targetAnno=resolveClass('Target')
+    if targetAnno=null then
+      return 1              -- can't resolve @Target itself; don't block
+
+    if \resolvedClass.isAnnotationPresent(targetAnno) then
+      return 1  -- no @Target = applies everywhere
+
+    noArgs=Class[0]                                   -- explicit empty Class[] for the varargs slot
+    do
+      targetMethod=targetAnno.getMethod('value', noArgs)
+      values=Object[] targetMethod.invoke(resolvedClass.getAnnotation(targetAnno), noArgs)
+      loop i=0 to values.length-1
+        et=Object values[i]
+        if et.toString()==target then
+          return 1
+      end
+    catch e=Exception
+      say 'isApplicableTo Exception: 'e.getMessage()
+    end
+    return 0
+
+  method getStringValues() public returns String[]
+    if valueElement=null then
+      return String[0]
+    if valueElement.kind=="array" then do
+      n=valueElement.items.size()
+      result=String[n]
+      loop i=0 to n-1
+        item=RxAnnotationParser.ParsedValue valueElement.items.get(i)
+        result[i]=item.text
+      end
+      return result
+    end
+    result=String[1]
+    result[0]=valueElement.text
+    return result
+
+  method validateAnnotation(annotation=RxAnnotationParser.ParsedAnnotation) private returns RxAnnotationParser.Result
+
+    annotationClass=resolveClass(annotation.typeName)
+    if annotationClass=null then
+      return fail("Annotation type not found: "annotation.typeName)
+
+    resolvedClass=annotationClass                        -- store it
+
+    if \annotationClass.isAnnotation() then
+      return fail("Type is not an annotation: "annotation.typeName)
+
+    methods=annotationClass.getDeclaredMethods()
+    supplied=HashMap()
+    methodsByName=HashMap()
+    loop i=0 to methods.length-1
+      m=methods[i]
+      methodsByName.put(m.getName(),m)
+    end
+
+    -- Convert shorthand @Foo(x) to value = x
+    if annotation.singleValue\=null then do
+      valueMethod=Method methodsByName.get("value")
+      if valueMethod=null then
+        return fail("Annotation "annotation.typeName " has no element named \"value\"")
+
+      supplied.put("value",annotation.singleValue)
+    end
+
+    -- Validate explicitly supplied pairs
+    loop pairObj over annotation.values
+      pair=RxAnnotationParser.ParsedPair pairObj
+
+      elementName=pair.name
+      if supplied.containsKey(elementName) then
+        return fail("Duplicate annotation element: \""elementName"\"")
+
+      smethod=Method methodsByName.get(elementName)
+      if smethod=null then
+        return fail("Unknown annotation element \""elementName"\" for "annotation.typeName)
+
+      supplied.put(elementName,pair.value)
+    end
+
+    if supplied.containsKey("value") then
+      valueElement=RxAnnotationParser.ParsedValue supplied.get("value")    -- store it
+
+    -- Check every declared annotation element
+    loop i=0 to methods.length-1
+      m=methods[i]
+
+      elementName=m.getName()
+      if supplied.containsKey(elementName) then do
+        val=RxAnnotationParser.ParsedValue supplied.get(elementName)
+        res=validateValue(val,m.getReturnType())
+        if \res.isValid then
+          return fail("Invalid value for \""elementName"\" in "annotation.typeName": "res.message)
+      end
+      else do
+        -- No supplied value: annotation method must have a default.
+        if m.getDefaultValue()=null then
+          return fail("Missing required annotation element \""elementName"\" for "annotation.typeName)
+      end
+    end
+    return RxAnnotationParser.Result(1,"")
+
+  -- Dispatches to array or scalar validation based on the expected return type.
+  method validateValue(val=RxAnnotationParser.ParsedValue,expType=Class) private returns RxAnnotationParser.Result
+
+    if expType.isArray() then
+      return validateArrayValue(val,expType.getComponentType())
+
+    return validateScalarValue(val,expType)
+
+  -- Validates an annotation element expected to be an array type.
+  method validateArrayValue(val=RxAnnotationParser.ParsedValue,componentType=Class) private returns RxAnnotationParser.Result
+
+    if val.kind\=="array" then
+      return validateScalarValue(val,componentType)
+
+    loop itemObj over val.items
+      item=RxAnnotationParser.ParsedValue itemObj
+
+      res=validateScalarValue(item,componentType)
+      if\res.isValid then
+        return res
+    end
+    return RxAnnotationParser.Result(1,"")
+
+  -- Routes to the appropriate validator based on the expected scalar type.
+  method validateScalarValue(val=RxAnnotationParser.ParsedValue,expType=Class) private returns RxAnnotationParser.Result
+    select
+      when expType.isAnnotation()           then return validateAnnotationValue(val,expType)
+      when expType.isEnum()                 then return validateEnumValue(val,expType)
+      when expType=Class.class              then return validateClassValue(val)
+      when expType=String.class             then return validateStringValue(val)
+      when expType=java.lang.Boolean.TYPE   then return validateBooleanValue(val)
+      when expType=java.lang.Character.TYPE then return validateCharValue(val)
+      when isPrimitiveNumeric(expType)      then return validateNumericValue(val,expType)
+      otherwise
+        return fail("Unsupported annotation element type: "expType.getName())
+    end
+
+  -- Nested annotation
+
+  method validateAnnotationValue(val=RxAnnotationParser.ParsedValue,expType=Class) private returns RxAnnotationParser.Result
+
+    if val.kind\=="annotation" then
+      return fail("Expected annotation value of type "expType.getName())
+
+    nested=val.annotation
+
+    actualType=resolveClass(nested.typeName)
+    if actualType=null then
+      return fail("Annotation type not found: "nested.typeName)
+
+    if actualType\=expType then
+      return fail("Expected annotation type "expType.getName()", got "actualType.getName())
+
+    return validateAnnotation(nested)
+
+  -- Enum
+
+  method validateEnumValue(val=RxAnnotationParser.ParsedValue,expType=Class) private returns RxAnnotationParser.Result
+
+    if val.kind\=="name" then
+      return fail("Expected enum constant of type "expType.getName())
+
+    text=val.text
+    lastDot=text.lastIndexOf(".")
+    if lastDot>=0 then
+      enumName=text.substring(lastDot+1)
+    else
+      enumName=text
+
+    constants=expType.getEnumConstants()
+    if constants\=null then loop i=0 to constants.length-1
+      enumObj=Object constants[i]
+      if enumObj.toString()==enumName then
+        return RxAnnotationParser.Result(1,"")
+    end
+    return fail("Unknown enum constant \""enumName"\" for "expType.getName())
+
+  -- Class literal
+
+  method validateClassValue(val=RxAnnotationParser.ParsedValue) private returns RxAnnotationParser.Result
+
+    if val.kind\=="name" then
+      return fail("Expected class literal")
+
+    text=val.text
+    if\text.endsWith(".class") then
+      return fail("Expected class literal ending in .class")
+
+    className=text.substring(0,text.length()-6)
+    if isPrimitiveClassName(className) then
+      return RxAnnotationParser.Result(1,"")
+
+    clazz=resolveClass(className)
+    if clazz=null then
+      return fail("Class not found: "className)
+
+    return RxAnnotationParser.Result(1,"")
+
+  -- String
+
+  method validateStringValue(val=RxAnnotationParser.ParsedValue) private returns RxAnnotationParser.Result
+
+    if val.kind=="string" then
+      return RxAnnotationParser.Result(1,"")
+    return fail("Expected String constant")
+
+  -- Boolean
+
+  method validateBooleanValue(val=RxAnnotationParser.ParsedValue) private returns RxAnnotationParser.Result
+
+    if val.kind=="name" then do
+      if val.text=="true"|val.text=="false" then
+        return RxAnnotationParser.Result(1,"")
+    end
+    return fail("Expected boolean constant")
+
+  -- Character
+
+  method validateCharValue(val=RxAnnotationParser.ParsedValue) private returns RxAnnotationParser.Result
+
+    if val.kind\=="char" then
+      return fail("Expected character literal")
+
+    content=unescapeCharLiteral(val.text)
+    if content=null then
+      return fail("Invalid character literal")
+
+    if content.length()\=1 then
+      return fail("Character literal must contain exactly one character")
+
+    return RxAnnotationParser.Result(1,"")
+
+  -- Numeric primitives
+
+  method validateNumericValue(val=RxAnnotationParser.ParsedValue,expType=Class) private returns RxAnnotationParser.Result
+
+    if val.kind\=="number" then
+      return fail("Expected numeric constant")
+
+    text=val.text
+    do
+      if expType=java.lang.Byte.TYPE         then java.lang.Byte.decode(text)
+      else if expType=java.lang.Short.TYPE   then java.lang.Short.decode(text)
+      else if expType=java.lang.Integer.TYPE then java.lang.Integer.decode(removeNumericSuffix(text))
+      else if expType=java.lang.Long.TYPE    then java.lang.Long.decode(removeNumericSuffix(text))
+      else if expType=java.lang.Float.TYPE   then java.lang.Float.parseFloat(removeNumericSuffix(text))
+      else if expType=java.lang.Double.TYPE  then java.lang.Double.parseDouble(removeNumericSuffix(text))
+      else
+        return fail("Unsupported numeric type")
+     catch NumberFormatException
+      return fail("Numeric value is outside the range of "expType.getName())
+    end
+    return RxAnnotationParser.Result(1,"")
+
+  -- True if the given type is one of the primitive numeric TYPE constants.
+  method isPrimitiveNumeric(typ=Class) private returns boolean
+    return typ=java.lang.Byte.TYPE|-
+           typ=java.lang.Short.TYPE|-
+           typ=java.lang.Integer.TYPE|-
+           typ=java.lang.Long.TYPE|-
+           typ=java.lang.Float.TYPE|-
+           typ=java.lang.Double.TYPE
+
+  -- Strips a trailing numeric type suffix (l/L/f/F/d/D) so the remaining text can be parsed.
+  method removeNumericSuffix(text=String) private returns String
+
+    if text.length()=0 then
+      return text
+
+    last=text.substring(text.length()-1)
+    targets=String "lLfFdD"
+    if targets.indexOf(last)>=0 then
+      return text.substring(0,text.length()-1)
+
+    return text
+
+  -- Class resolution
+
+  method resolveClass(name=String) private returns Class
+
+    clazz=tryLoadClass(name)
+    if clazz\=null then
+      return clazz
+
+    clazz=tryLoadClass("java.lang."name)
+    if clazz\=null then
+      return clazz
+
+    clazz=tryLoadClass("java.lang.annotation."name)
+    if clazz\=null then
+      return clazz
+
+    clazz=tryLoadClass("java.lang.reflect."name)
+    if clazz\=null then
+      return clazz
+    return null
+
+  -- Attempts to load a class by name, returning null instead of throwing on failure.
+  method tryLoadClass(name=String) private returns Class
+    do
+      return Class.forName(name,boolean 0,clssLoader)
+     catch ClassNotFoundException
+      return null
+     catch LinkageError
+      return null
+    end
+
+  -- Helpers
+
+  method isPrimitiveClassName(name=String) private returns boolean
+    select
+      when name=="boolean" then return 1
+      when name=="byte"    then return 1
+      when name=="short"   then return 1
+      when name=="int"     then return 1
+      when name=="long"    then return 1
+      when name=="float"   then return 1
+      when name=="double"  then return 1
+      when name=="char"    then return 1
+      when name=="void"    then return 1
+      otherwise
+        return 0
+    end
+
+  -- Decodes the contents of a character literal, resolving any escape sequence.
+  method unescapeCharLiteral(text=String) private returns String
+
+    if text.length()<2 then
+       return null
+
+    content=text.substring(1,text.length()-1)
+    if content.length()=0 then
+      return ""
+
+    if content.charAt(0)\="\\" then
+      return content
+
+    if content.length()\=2 then
+      return null
+
+    escape=content.charAt(1)
+    select
+      when escape="n" then return String.valueOf("\n")
+      when escape="r" then return String.valueOf("\r")
+      when escape="t" then return String.valueOf("\t")
+      when escape="b" then return String.valueOf(char 8)
+      when escape="f" then return String.valueOf("\f")
+      when escape="\'" then return "\'"
+      when escape="\"" then return "\""
+      when escape="\\" then return "\\"
+      otherwise
+        return null
+    end
+
+  -- Convenience wrapper for building a failed Result with a message.
+  method fail(message=String) private returns RxAnnotationParser.Result
+    return RxAnnotationParser.Result(0,message)
+
+  -- Model parser
+
+  method parseAnnotationModel() private returns RxAnnotationParser.ParsedAnnotation
+
+    skipWs()
+    if current()\=="@" then
+      return null
+
+    pos=pos+1
+    skipWs()
+    typeName=parseQualifiedNameText()
+    if typeName=null then
+      return null
+
+    annotation=RxAnnotationParser.ParsedAnnotation(typeName)
+    skipWs()
+    if current()\=="(" then
+      return annotation
+
+    pos=pos+1
+    skipWs()
+    if current()==")" then do
+      pos=pos+1
+      return annotation
+    end
+
+    saved=pos
+    identifier=parseIdentifierText()
+    if identifier\==null then do
+      skipWs()
+      if current()=="=" then do
+        pos=saved
+        loop forever
+          name=parseIdentifierText()
+          skipWs()
+          pos=pos+1
+          skipWs()
+          val=parseValueModel()
+          annotation.values.add(RxAnnotationParser.ParsedPair(name,val))
+          skipWs()
+
+          if current()\=="," then
+            leave
+
+          pos=pos+1
+          skipWs()
+        end
+      end
+      else do
+        pos=saved
+        annotation.singleValue=parseValueModel()
+      end
+    end
+    else do
+      pos=saved
+      annotation.singleValue=parseValueModel()
+    end
+    skipWs()
+
+    if current()==")" then
+      pos=pos+1
+
+    return annotation
+
+  -- Parses a single element value (annotation, array, string, char, number, or name).
+  method parseValueModel() private returns RxAnnotationParser.ParsedValue
+    skipWs()
+    ch=current()
+    if ch=="@"  then return RxAnnotationParser.ParsedValue.annotationValue(parseAnnotationModel())
+    if ch=="{"  then return parseArrayModel()
+    if ch=="\"" then return RxAnnotationParser.ParsedValue.stringValue(parseQuoted("\""))
+    if ch=="\'" then return RxAnnotationParser.ParsedValue.charValue(parseQuoted("\'"))
+    saved=pos
+    if parseNumberText() then do
+      textStr=(String src).substring(saved-1,pos-1)
+      return RxAnnotationParser.ParsedValue.numberValue(textStr)
+    end
+    pos=saved
+    name=parseQualifiedNameText()
+    return RxAnnotationParser.ParsedValue.nameValue(name)
+
+  -- Parses a '{' ... '}' array initializer into a ParsedValue of kind "array".
+  method parseArrayModel() private returns RxAnnotationParser.ParsedValue
+    val=RxAnnotationParser.ParsedValue.arrayValue()
+    pos=pos+1
+    skipWs()
+    if current()=="}" then do
+      pos=pos+1
+      return val
+    end
+    loop forever
+      val.items.add(parseValueModel())
+      skipWs()
+
+      if current()\=="," then
+        leave
+
+      pos=pos+1
+      skipWs()
+
+      if current()=="}" then
+        leave
+    end
+    if current()=="}" then
+      pos=pos+1
+    return val
+
+  -- Parses a quoted literal (string or char), honoring backslash escapes.
+  method parseQuoted(quote=String) private returns String
+    start=pos
+    pos=pos+1
+    loop while pos<=len
+      ch=current()
+      if ch=="\\" then do
+        pos=pos+2
+        iterate
+      end
+      if ch==quote then do
+        pos=pos+1
+        return String(src).substring(start-1,pos-1)
+      end
+      pos=pos+1
+    end
+    return ""
+
+  -- Consumes a numeric literal (optional sign, decimal point, and type suffix).
+  method parseNumberText() private returns boolean
+    saved=pos
+    if current()=="+"|current()=="-" then pos=pos+1
+    start=pos
+    digits=String "0123456789"
+    loop while pos<=len&digits.indexOf(current())>=0
+      pos=pos+1
+    end
+    if current()=="." then do
+      pos=pos+1
+      loop while pos<=len&digits.indexOf(current())>=0
+        pos=pos+1
+      end
+    end
+    if pos=start then do
+      pos=saved
+      return 0
+    end
+    if pos<=len then do
+      suffixes=String "lLfFdD"
+      if suffixes.indexOf(current())>=0 then
+        pos=pos+1
+    end
+    return 1
+
+  -- Parses a possibly dotted identifier chain, e.g. com.example.Foo.
+  method parseQualifiedNameText() private returns String
+
+    first=parseIdentifierText()
+    if first=null then
+      return null
+
+    res=first
+    loop forever
+      saved=pos
+      skipWs()
+      if current()\=="." then do
+        pos=saved
+        leave
+      end
+      pos=pos+1
+      skipWs()
+      nxt=parseIdentifierText()
+      if nxt=null then do
+        pos=saved
+        leave
+      end
+      res=res"."nxt
+    end
+    return res
+
+  -- Parses a single identifier starting with a letter, '_' or '$'.
+  method parseIdentifierText() private returns String
+
+    skipWs()
+    if pos>len then
+      return null
+
+    start=pos
+    ch=current()
+    alpha=String "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$"
+    if alpha.indexOf(ch)<0 then return null
+    pos=pos+1
+    alphanum=String "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$0123456789"
+    loop while pos<=len
+      ch=current()
+
+      if alphanum.indexOf(ch)<0 then
+        leave
+
+      pos=pos+1
+    end
+    return (String src).substring(start-1,pos-1)
+
+  -- Returns the character at the current position, or "" at end of input.
+  method current() private returns String
+
+    if pos>len then
+      return ""
+
+    return (String src).substring(pos-1,pos)
+
+  -- Advances past any spaces at the current position.
+  method skipWs() private
+    loop while pos<=len&current()==" "
+      pos=pos+1
+    end
+
+/* ================================================================
+Data classes
+================================================================ */
+
+-- Simple pass/fail result with an optional error message.
+class RxAnnotationParser.Result
+  properties public
+    isValid=boolean
+    message=String
+
+  method Result(ok=boolean,msg=String)
+    isValid=ok
+    message=msg
+
+
+-- A single name=value pair inside an annotation's parentheses.
+class RxAnnotationParser.ParsedPair
+  properties shared
+    name=String
+    value=RxAnnotationParser.ParsedValue
+
+  method ParsedPair(n=String,v=RxAnnotationParser.ParsedValue)
+    name=n
+    value=v
+
+-- Parsed representation of an '@Type(...)' annotation prior to semantic checking.
+class RxAnnotationParser.ParsedAnnotation
+  properties shared
+    typeName=String
+    values=ArrayList
+    singleValue=RxAnnotationParser.ParsedValue
+
+  method ParsedAnnotation(name=String)
+    typeName=name
+    values=ArrayList()
+    singleValue=null
+
+-- Parsed representation of a single element value; 'kind' selects which field is populated.
+class RxAnnotationParser.ParsedValue
+  properties shared
+    kind=String
+    text=String
+    annotation=RxAnnotationParser.ParsedAnnotation
+    items=ArrayList
+
+  method ParsedValue(k=String)
+    kind=k
+    text=null
+    annotation=null
+    items=ArrayList()
+
+  -- Factory methods for building a ParsedValue of each kind.
+  method stringValue(text_=String) public static returns ParsedValue
+    val=RxAnnotationParser.ParsedValue("string")
+    val.text=text_
+    return val
+
+  method charValue(text_=String) public static returns ParsedValue
+    val=RxAnnotationParser.ParsedValue("char")
+    val.text=text_
+    return val
+
+  method numberValue(text_=String) public static returns ParsedValue
+    val=RxAnnotationParser.ParsedValue("number")
+    val.text=text_
+    return val
+
+  method nameValue(text_=String) public static returns ParsedValue
+    val=RxAnnotationParser.ParsedValue("name")
+    val.text=text_
+    return val
+
+  method annotationValue(annotation_=RxAnnotationParser.ParsedAnnotation) public static returns ParsedValue
+    val=RxAnnotationParser.ParsedValue("annotation")
+    val.annotation=annotation_
+    return val
+
+  method arrayValue() public static returns ParsedValue
+    return RxAnnotationParser.ParsedValue("array")
+
+
+
+/* AnnotationSyntaxChecker
+
+ Validates that a single line of source text is a syntactically valid
+ Java/NetRexx-style annotation, following the JLS Annotation grammar:
+
+   Annotation               ::= MarkerAnnotation | SingleElementAnnotation | NormalAnnotation
+   MarkerAnnotation          ::= '@' TypeName
+   SingleElementAnnotation   ::= '@' TypeName '(' ElementValue ')'
+   NormalAnnotation          ::= '@' TypeName '(' [ElementValuePairList] ')'
+   ElementValuePairList      ::= ElementValuePair (',' ElementValuePair)*
+   ElementValuePair          ::= Identifier '=' ElementValue
+   ElementValue               ::= ConditionalExpr | ElementValueArrayInit | Annotation
+   ElementValueArrayInit      ::= '{' [ElementValueList] [','] '}'
+   ElementValueList           ::= ElementValue (',' ElementValue)*
+
+ Simplifications:
+ - ConditionalExpr is reduced to: string literal, char literal, number
+   literal, or a (possibly dotted) qualified name such as
+   RetentionPolicy.RUNTIME or Integer.MAX_VALUE. Full Java constant
+   expressions (arithmetic, ternaries, casts, ...) are not parsed.
+ - Char literals are only checked for matching quotes, not for
+   containing exactly one character.
+ - Whitespace (blank) is the only recognized separator; tabs are not
+   treated as whitespace, since the input is assumed to be one
+   already-extracted source line.
+
+ Uses a recursive-descent parser (not a single regex) so that nested
+ parentheses and braces of arbitrary depth - e.g. @Outer(@Inner(x=1))
+ or @Foo({1,{2,3}}) - are handled correctly.
+*/
+
+class RxAnnotationParser.Syntax
+
+  src=Rexx ""
+  pos=0
+  len=0
+  alpha=Rexx "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$"
+  digit=Rexx "0123456789"
+
+    -- Normalize the input line and record its length for parsing.
+  method Syntax(line) public
+    src=line.strip()
+    pos=1
+    len=src.length()
+
+  -- True if the line is a well-formed annotation with no trailing content.
+  method validate() public returns boolean
+
+    if len=0 then
+      return isFalse()
+
+    if\parseAnnotation() then
+      return isFalse()
+
+    skipWs()
+    if pos<=len then
+      return isFalse() -- trailing junk after the annotation
+
+    return isTrue()
+
+  -- '@' TypeName [ '(' ... ')' ]
+
+  method parseAnnotation() private returns boolean
+    skipWs()
+
+    if pos>len then
+      return isFalse()
+
+    if src.substr(pos,1)\=="@" then
+      return isFalse()
+
+    pos=pos+1
+    skipWs()
+    if\parseQualifiedName() then
+      return isFalse()
+
+    skipWs()
+    if pos>len then
+      return isTrue() -- marker annotation
+
+    if src.substr(pos,1)\=="(" then
+      return isTrue() -- marker annotation
+
+    pos=pos+1
+    skipWs()
+    if pos<=len then
+      if src.substr(pos,1)==")" then do
+        pos=pos+1
+        return isTrue()
+      end
+
+    saved=pos
+    if parseElementValuePairList() then do
+      skipWs()
+      if pos<=len then if src.substr(pos,1)==")" then do
+        pos=pos+1
+        return isTrue()
+      end
+      return isFalse()
+    end
+
+    pos=saved
+    if parseElementValue() then do
+      skipWs()
+      if pos<=len then if src.substr(pos,1)==")" then do
+        pos=pos+1
+        return isTrue()
+      end
+      return isFalse()
+    end
+    return isFalse()
+
+  -- Parses one or more comma-separated element-value pairs.
+  method parseElementValuePairList() private returns boolean
+    if \parseElementValuePair() then
+      return isFalse()
+
+    loop forever
+      saved=pos
+      skipWs()
+
+      if pos>len then
+        leave
+
+      if src.substr(pos,1)\=="," then do
+        pos=saved
+        leave
+      end
+      pos=pos+1
+      if\parseElementValuePair() then do
+        pos=saved
+        leave
+      end
+    end
+    return isTrue()
+
+  -- Parses a single 'identifier = value' pair.
+  method parseElementValuePair() private returns boolean
+    skipWs()
+
+    if\parseIdentifier() then
+      return isFalse()
+
+    skipWs()
+    if pos>len then
+      return isFalse()
+
+    if src.substr(pos,1)\=="=" then
+      return isFalse()
+
+    pos=pos+1
+    return parseElementValue()
+
+  -- Parses one element value, dispatching on its leading character.
+  method parseElementValue() private returns boolean
+    skipWs()
+
+    if pos>len then
+      return isFalse()
+
+    ch=src.substr(pos,1)
+    if ch=="@"               then return parseAnnotation()
+    if ch=="{"               then return parseArrayInitializer()
+    if ch=="\""              then return parseStringLiteral()
+    if ch=="\'"              then return parseCharLiteral()
+    if parseNumberLiteral() then return isTrue()
+    return parseQualifiedName()
+
+  -- Parses a '{' ... '}' array initializer, allowing an optional trailing comma.
+  method parseArrayInitializer() private returns boolean
+
+    if src.substr(pos,1)\=="{" then
+      return isFalse()
+    pos=pos+1
+    skipWs()
+
+    if pos<=len then if src.substr(pos,1)=="}" then do
+      pos=pos+1
+      return isTrue()
+    end
+
+    if\parseElementValue() then
+      return isFalse()
+    loop forever
+      skipWs()
+      if pos>len then
+        return isFalse()
+      if src.substr(pos,1)=="," then do
+        pos=pos+1
+        skipWs()
+        if pos<=len then if src.substr(pos,1)=="}" then leave -- trailing comma before '}'
+        if\parseElementValue() then
+          return isFalse()
+        iterate
+      end
+      leave
+    end
+    skipWs()
+
+    if pos>len then
+      return isFalse()
+
+    if src.substr(pos,1)\=="}" then
+      return isFalse()
+
+    pos=pos+1
+    return isTrue()
+
+  -- Parses a double-quoted string literal, honoring backslash escapes.
+  method parseStringLiteral() private returns boolean
+
+    if src.substr(pos,1)\=="\"" then
+      return isFalse()
+
+    pos=pos+1
+    loop while pos<=len
+      ch=src.substr(pos,1)
+      if ch=="\\" then do
+        pos=pos+2
+        iterate
+      end
+      if ch=="\"" then do
+        pos=pos+1
+        return isTrue()
+      end
+      pos=pos+1
+    end
+    return isFalse() -- unterminated string
+
+  -- Parses a single-quoted character literal, honoring backslash escapes.
+  method parseCharLiteral() private returns boolean
+
+    if src.substr(pos,1)\=="\'" then
+      return isFalse()
+
+    pos=pos+1
+    loop while pos<=len
+      ch=src.substr(pos,1)
+      if ch=="\\" then do
+        pos=pos+2
+        iterate
+      end
+      if ch=="\'" then do
+        pos=pos+1
+        return isTrue()
+      end
+      pos=pos+1
+    end
+    return isFalse() -- unterminated char literal
+
+  -- Parses a numeric literal (optional sign, digits, optional fraction and type suffix).
+  method parseNumberLiteral() private returns boolean
+    saved=pos
+    if pos<=len then if src.substr(pos,1)=="-"|src.substr(pos,1)=="+" then pos=pos+1
+    start=pos
+    loop while pos<=len & digit.pos(src.substr(pos,1))>>0
+      pos=pos+1
+    end
+    if pos<=len then if src.substr(pos,1)=="." then do
+      pos=pos+1
+      loop while pos<=len&digit.pos(src.substr(pos,1))>>0
+        pos=pos+1
+      end
+    end
+
+    if pos=start then do
+      pos=saved
+      return isFalse() -- no digits found at all
+    end
+
+    if pos<=len then if "lLfFdD".pos(src.substr(pos,1))>>0 then pos=pos+1
+    return isTrue()
+
+  -- TypeName, possibly dotted, e.g. com.example.Foo
+
+  method parseQualifiedName() private returns boolean
+
+    if \parseIdentifier() then
+      return isFalse()
+
+    loop forever
+      saved=pos
+      skipWs()
+      if pos>len then do
+        pos=saved
+        leave
+      end
+      if src.substr(pos,1)\=="." then do
+        pos=saved
+        leave
+      end
+      pos=pos+1
+      skipWs()
+      if\parseIdentifier() then do
+        pos=saved
+        leave
+      end
+    end
+    return isTrue()
+
+  -- Parses a single identifier starting with a letter, '_' or '$'.
+  method parseIdentifier() private returns boolean
+
+    if pos>len then
+      return isFalse()
+
+    ch=src.substr(pos,1)
+    if alpha.pos(ch)==0 then
+      return isFalse() -- first char must be letter, '_' or '$'
+
+    pos=pos+1
+    loop while pos<=len
+      ch=src.substr(pos,1)
+      if alpha.pos(ch)==0 & digit.pos(ch)==0 then leave
+      pos=pos+1
+    end
+    return isTrue()
+
+  -- Advances past any spaces at the current position.
+  method skipWs() private
+    loop while pos<=len & src.substr(pos,1)==" "
+      pos=pos+1
+    end
+
+  -- Named boolean constants to make parser return values self-documenting.
+  method isTrue() private returns boolean
+    return 1
+
+  method isFalse() private returns boolean
+    return 0
+

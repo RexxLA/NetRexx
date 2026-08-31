@@ -35,6 +35,7 @@
 /* 2025.03.27 fix exception when single # on line 1  -- MRE           */
 /* 2025.03.30 support for multi-line text """ strings  -- MRE         */
 /* 2026.01.26 LspDocumentSymbol after pass 0 on -asLspServer --MRE    */
+/* 2026.08.31 do not generate RxToken.AT when -noannotations --MRE    */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -591,12 +592,13 @@ class RxClauser
         end;
       end;
 	
-	if cchar='@' then /* annotation start - NETREXX-122 */ do
-          nextpos=linelen+1
-          tok.type=RxToken.AT
-	  tok.value = line
-	  if rxt.superflag.diag then say '#RxClauser ' tok.value 'found for passthrough as annotation'
-          leave collect; end
+	    if cchar='@' then if rxt.program.flag.annotations then do /* annotation start - NETREXX-122 */
+        nextpos=linelen+1
+        tok.type=RxToken.AT
+	      tok.value = line
+	      if rxt.superflag.diag then say '#RxClauser ' tok.value 'found for passthrough as annotation'
+        leave collect
+       end
 	  if cchar='/' then if c2='*' then /* nest comment start */ do
         if rxt.program.flag.model=2 then cmt="/*"
             pos=pos+1; nest=1

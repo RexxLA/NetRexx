@@ -39,6 +39,7 @@
 /* 2014.04.13 Allow Java 8+ default and static methods in interfaces  */
 /* --	KK -- issue 108                                                 */
 /* 2021.01.15 Add curaddress, last known ADDRESS --MRE                */
+/* 2026.08.31 Add annotations support --MRE                           */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -91,7 +92,7 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   classer=RxClasser                -- class manager
   tokens =RxToken[]                -- local reference
 
-  methodAnnotation   = Rexx ''
+  appliedAnnotations = HashMap           --
   methodtoken        =RxToken      -- Token at start of method
   methodfields       =RxField[]    -- RxField objects for this method
   methodnative       =boolean 0    -- method is native (system-supplied)
@@ -787,7 +788,8 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
   
   -- suppress jdk warnings about generics etc, except when not wanted
   -- due to broker annotation processors etc
-  if rxt.program.flag.annotations then rxt.program.streamer.out('@SuppressWarnings("unchecked") ')
+  suppressedWarnings=AddSuppressWarnings('unchecked')
+  rxt.program.streamer.out(suppressedWarnings)
 
   /* Now generate the method(s): optional first, then the full arguments
      version, which may be followed by the real body.
@@ -1094,8 +1096,6 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
      parser.indention=2                       -- cosmetic
      rxt.program.streamer.out(close, 1)
      parser.indention=1                       -- ..
-     /* write the method level annotations here */
-     if rxt.program.flag.annotations then rxt.program.streamer.out(this.methodAnnotation)
    end
 
   /* --- Add super() call, if needed --- */
@@ -1470,8 +1470,54 @@ class RxMethod implements RxClauseParser uses RxCode, RxField
       end
     end
 
-  method setAnnotation(a)
-    this.methodAnnotation = this.methodAnnotation a' '
+  method setAnnotation(a, typeName=String, repeatable=boolean, values=String[] null, put=boolean 1) returns boolean
+    if appliedAnnotations=null then appliedAnnotations=HashMap()
+    if appliedAnnotations.containsKey(typeName) then do
+      if \repeatable then
+        return 0
+    end
+    else
+      if put then appliedAnnotations.put(typeName, values)
+    return 1
+
+  method AddSuppressWarnings(value=String) returns String
+    if \rxt.program.flag.annotations then
+      return ''
+
+    quoted='"'value'"'
+
+    sw=String[] null
+    if appliedAnnotations\==null then
+      sw=String[] appliedAnnotations.get('java.lang.SuppressWarnings')
+
+    if sw==null then
+      return '@SuppressWarnings('quoted') '        -- nothing on the method: emit the auto default
+
+    hasValue=0
+    loop i=0 to sw.length-1
+      if sw[i]==quoted then hasValue=1
+    end
+
+    if hasValue then n=sw.length
+    else n=sw.length+1
+
+    parts=String[n]
+    loop i=0 to sw.length-1
+      parts[i]=sw[i]
+    end
+    if \hasValue then parts[sw.length]=quoted
+
+    if n==1 then
+      return '@SuppressWarnings('parts[0]') '
+
+    merged='@SuppressWarnings({'
+    loop i=0 to n-1
+      if i>0 then merged=merged','
+      merged=merged parts[i]
+    end
+    merged=merged'}) '
+    return merged
+
 
   -- return method visibility and modifier for crossref2
   method getVisibMod
