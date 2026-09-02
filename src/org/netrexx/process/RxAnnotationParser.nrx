@@ -22,9 +22,10 @@ class RxAnnotationParser
   properties private
     semantics    =RxAnnotationParser.Semantics
 
+
   -- Create a parser for the given source line and set up the semantic checker.
-  method RxAnnotationParser(line) public
-    semantics = RxAnnotationParser.Semantics(line)
+  method RxAnnotationParser(line, rxt =RxTranslator, tok = RxToken) public
+    semantics = RxAnnotationParser.Semantics(line, rxt, tok)
 
   -- Delegates validation to the semantic checker.
   method validate() public returns RxAnnotationParser.Result
@@ -58,16 +59,19 @@ class RxAnnotationParser.Semantics
     syntaxChecker=RxAnnotationParser.Syntax
     resolvedClass=Class
     valueElement=RxAnnotationParser.ParsedValue
-
-
+    rxt = RxTranslator
+    tok = RxToken
   -- Public API
 
     -- Normalize the input line and prepare the syntax checker.
-  method Semantics(line) public
+  method Semantics(line, rxt_ = RxTranslator, tok_ = RxToken) public
       src=line.strip()
       len=src.length()
       pos=1
       syntaxChecker=RxAnnotationParser.Syntax(src)
+      currentClassPath = System.getProperty("java.class.path")
+      rxt          = rxt_
+      tok          = tok_
 
   -- Runs syntax checking followed by semantic (annotation-model) validation.
   method validate() public returns RxAnnotationParser.Result
@@ -147,7 +151,8 @@ class RxAnnotationParser.Semantics
     if annotationClass=null then
       return fail("Annotation type not found: "annotation.typeName)
 
-    resolvedClass=annotationClass                        -- store it
+    if resolvedClass=null then                            -- only remember the outermost annotation;
+      resolvedClass=annotationClass
 
     if \annotationClass.isAnnotation() then
       return fail("Type is not an annotation: "annotation.typeName)
@@ -401,6 +406,11 @@ class RxAnnotationParser.Semantics
     clazz=tryLoadClass("java.lang.reflect."name)
     if clazz\=null then
       return clazz
+
+    info = rxt.classer.findanyclass(rxt.program.parser.cursor, Rexx name, tok)
+    if info\=null then
+      return tryLoadClass(info.type.classname)
+
     return null
 
   -- Attempts to load a class by name, returning null instead of throwing on failure.
