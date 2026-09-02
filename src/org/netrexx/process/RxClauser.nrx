@@ -172,6 +172,19 @@ class RxClauser
            cclasses = cclasses + 1
 --           say 'MRE Likely a class definition : class 'cl.tokens[ttt].value
 --           say '------ 'cl.showtokens()
+                        -- Build full class name including potential dot-qualified minor classes
+           fullClassName = cl.tokens[ttt].value
+
+           loop k = ttt + 1 by 1 while k < cl.tokens.length
+             if cl.tokens[k].type = RxToken.DOT then do
+               if k + 1 < cl.tokens.length then if cl.tokens[k+1].type = RxToken.SYM then do
+                 fullClassName = fullClassName'.'cl.tokens[k+1].value
+                 k = k + 1
+                 iterate
+               end
+             end
+             leave
+           end
 
            if classname \== '' then do
               LSP['class', classname, 'range', 'end'] = '"line" : 'tok.line-1' , "character" : 'tok.pos-1
@@ -183,7 +196,7 @@ class RxClauser
               methodname = ''
               cmethods = 0
            end
-           classname = cl.tokens[ttt].value
+           classname = fullClassName
   
            LSP['class', classname] = 1
 
@@ -225,9 +238,8 @@ class RxClauser
    -- no JSON lib here, generate plaintext
    msg = Rexx ''
    loop classname over LSP['class']
---     say '=== 'classname 
-
-     msg = msg',{ "name":"'classname'", "kind":5, '-
+--     say '=== 'classname
+     msg = '{ "name":"'classname'", "kind":5, '-
      '"range":{ "start": { 'LSP['class', classname, 'range', 'start']'},'-
                  '"end": { 'LSP['class', classname, 'range', 'end']'}},'-
      '"selectionRange":{ "start": { 'LSP['class', classname, 'selection', 'start']'},'-
@@ -247,13 +259,8 @@ class RxClauser
         msg = msg',"children":['children.substr(2)']'
      end
      msg = msg'}'
+     rxt.say(msg)
    end
-   msg = msg.substr(2)
---   'echo MSG: 'msg' >&2'
-
-
-   rxt.say(msg)
-
    return
 
 --MRE LSP end
