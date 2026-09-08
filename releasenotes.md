@@ -1,3 +1,10 @@
+# NetRexx 5.20 beta
+
+- Improved Annotations handling
+- Added the awfy benchmark suite to examples/benchmarks
+- Improved LSP handling of minor classes
+
+
 # NetRexx 5.10-GA [20 Mar 2026]
 
 ## Language
