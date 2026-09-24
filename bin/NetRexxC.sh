@@ -31,14 +31,15 @@
 #  2011.09.29 -- add error message for -run with .nrx case
 #  2023.03.03 -- set CLASSPATH relative to bin, if not set
 #  2026.09.24 -- exit with the translator's return code when it fails
+#  2026.09.24 -- quote arguments, so names with spaces survive
 
 if test "$(echo $CLASSPATH | grep 'NetRexx.\.jar')" = ""; then
-  thisdir=$(dirname $0)
+  thisdir=$(dirname "$0")
   export CLASSPATH="$thisdir/../lib/NetRexxF.jar:.:$CLASSPATH"
 fi  
 
 if test $# -eq 0; then
-  echo 'Usage:' $0 '[-run] [other options] filename'
+  echo 'Usage:' "$0" '[-run] [other options] filename'
   echo ' '
   # Drop through to display flags list
 fi
@@ -48,7 +49,7 @@ if test "$1"  = "-run"; then
   netrexx_run=yes
 fi
 
-java org.netrexx.process.NetRexxC $*
+java org.netrexx.process.NetRexxC "$@"
 rc=$?
 if test $rc -ne 0; then
   exit $rc
@@ -56,9 +57,9 @@ fi
 
 if test "$netrexx_run" = "yes"; then
   echo "Running $1..."
-  if [ ! -f $1".class" ]; then
+  if [ ! -f "$1.class" ]; then
     echo "-run error: class file not found - do not add .nrx to name"
     exit 1
   fi
-  java $1
+  java "$1"
 fi
