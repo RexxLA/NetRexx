@@ -1,0 +1,73 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexxDapServer DAP for NetRexx                                   */
+/* ------------------------------------------------------------------ */
+/* Entrypoint org.netrexx.lsp.NetRexxDapServer                        */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.08.03 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+package org.netrexx.lsp
+options strictcase
+
+class NetRexxDapServer
+  properties public
+     transport     = LspTransport
+     onChangeTimer = 1000          -- ms
+
+  method NetRexxDapServer()
+
+  method main(args = String[]) static
+     dap4nrx = NetRexxDapServer()
+     dap4nrx.start(args)
+
+
+  method start(args = String[])
+  do
+      transport = LspTransportStdio()
+      expose    = 0
+      break     = 0
+
+      loop arg over args
+        parse arg '--' option '=' value
+        select
+          when option = 'sock' then do
+            transport = LspTransportSocket(int 5006)
+          end
+          when option = 'stdio' then do
+            nop                             -- default
+          end
+          when option = 'log' then do
+            transport.logLsp = 1
+          end
+          when option = 'rx' then do
+            expose = 1
+          end
+          when option = 'cl' then do
+            break = 1
+          end
+          otherwise do
+            transport.log('Invalid option 'arg)
+            transport.log('Usage : --sock            connect over Socket\n'-
+                          '       --rx              expose interpreter, for the adventurous\n'-
+                          '       --cl              pause per clause (default breakpoint per line)\n')
+          end
+        end
+      end
+
+      handler = DapHandler(transport)
+      handler.exposeInterpreter = expose
+      handler.session.breakPerLine = break
+
+      loop forever
+        if transport.logLsp then transport.log("Reading message")
+        msg = transport.readMessage()
+        if msg = null then leave
+--        if transport.logLsp then transport.log("Processing message" msg)
+        handler.processMessage(msg)
+      end
+    end
