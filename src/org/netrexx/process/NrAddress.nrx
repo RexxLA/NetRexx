@@ -21,6 +21,7 @@
 /* 2022.03.07 exit(9) removed, user must check RC for exceptions      */
 /* 2022.09.28 resolve SYSTEM at runtime, issue #38                    */
 /* 2026.09.28 Make interpret re-entrant, issue #93              --MRE */
+/* 2026.09.28 detect trailing dot after stem, issue #88         --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
@@ -327,7 +328,7 @@ method scanWITH(nexttoken)
   end
 
   scanWithWhat(nexttoken+next, t, append)  
-  
+
   if tokens[nexttoken+next+3].type \= RxToken.END then do
      scanWITH(nexttoken+next+4)
   end 
@@ -354,6 +355,9 @@ method scanWithWhat(nexttoken, with_, append)
       end
       if rxvar.vartype \= RxType.REXX_TYPE then do 
         signal RxQuit(rxt, tokens[nexttoken], 'address.not.a.stem')  
+      end
+      if tokens[nexttoken+1].type \= RxToken.END then do
+        signal RxQuit(rxt, tokens[nexttoken+1], 'bad.expression.syntax')
       end
       if with[with_].exists('stream') then do
         signal RxQuit(rxt, tokens[nexttoken-2], 'address.with.duplicate', with_, 'STREAM' )  
