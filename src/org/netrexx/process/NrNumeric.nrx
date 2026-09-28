@@ -22,6 +22,7 @@
 /* 2000.02.07 Check for junk after FORM setting word                  */
 /* 2000.02.11 Ensure generate has no sideeffects                      */
 /* 2000.02.28 Ensure multiple static objects in prologue              */
+/* 2026.09.28 Make interpret re-entrant, , issue #93            --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -221,11 +222,12 @@ class NrNumeric implements RxClauseParser uses RxCode, RexxSet, RxExpr
  method numupdate(cursor=RxCursor)
   -- We could save and directly use int values, here, at least for
   -- FORM which does not require runtime checking
+  icode = code
   if form then
-    cursor.curnumer.setForm(String code.value)
+    cursor.curnumer.setForm(String icode.value)
    else /* digits */ do
     if expr=null then nop     -- use the code value as is (default)
-     else code=expr.evaluate(cursor)    -- re-evaluate as needed
-    cursor.curnumer.setDigits(Rexx((Integer code.value).intValue()))
+     else icode=expr.evaluate(cursor)    -- re-evaluate as needed
+    cursor.curnumer.setDigits(Rexx((Integer icode.value).intValue()))
     end
   return

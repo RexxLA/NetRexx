@@ -20,6 +20,8 @@
 /* 2022.03.05 exit(9) upon RexAddress exception                       */
 /* 2022.03.07 exit(9) removed, user must check RC for exceptions      */
 /* 2022.09.28 resolve SYSTEM at runtime, issue #38                    */
+/* 2026.09.28 Make interpret re-entrant, issue #93              --MRE */
+/* 2026.09.28 detect trailing dot after stem, issue #88         --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
@@ -326,7 +328,7 @@ method scanWITH(nexttoken)
   end
 
   scanWithWhat(nexttoken+next, t, append)  
-  
+
   if tokens[nexttoken+next+3].type \= RxToken.END then do
      scanWITH(nexttoken+next+4)
   end 
@@ -353,6 +355,9 @@ method scanWithWhat(nexttoken, with_, append)
       end
       if rxvar.vartype \= RxType.REXX_TYPE then do 
         signal RxQuit(rxt, tokens[nexttoken], 'address.not.a.stem')  
+      end
+      if tokens[nexttoken+1].type \= RxToken.END then do
+        signal RxQuit(rxt, tokens[nexttoken+1], 'bad.expression.syntax')
       end
       if with[with_].exists('stream') then do
         signal RxQuit(rxt, tokens[nexttoken-2], 'address.with.duplicate', with_, 'STREAM' )  
@@ -479,7 +484,8 @@ method scanWithWhat(nexttoken, with_, append)
  method interpret(cursor=RxCursor null) 
   if expr\==null then do
 
-    code=expr.evaluate(cursor)          -- re-evaluate as needed
+    icode=expr.evaluate(cursor)          -- re-evaluate as needed
+    iwith=with
     addressee = addr
  
     istem=Rexx null
@@ -497,51 +503,51 @@ method scanWithWhat(nexttoken, with_, append)
     eappend=0
 
     if addr.exists('with') then do  -- use with stored on address if existing
-      with=addr['with']
+      iwith=addr['with']
     end
 
-    if with['input'].exists('stem') then do
-      st = Rexx with['input','stem']
+    if iwith['input'].exists('stem') then do
+      st = Rexx iwith['input','stem']
       rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
       istem = Rexx rxvar.varvalue
       i = Object istem
     end
-    else if with['input'].exists('stream') then do
-      istream = String with['input','stream']
+    else if iwith['input'].exists('stream') then do
+      istream = String iwith['input','stream']
       i = Object istream
     end
 
-    if with['output'].exists('stem') then do
-      st = Rexx with['output','stem']
+    if iwith['output'].exists('stem') then do
+      st = Rexx iwith['output','stem']
       rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
       ostem = Rexx rxvar.varvalue
       o = Object ostem
     end
-    else if with['output'].exists('stream') then do
-      ostream = String with['output','stream']
+    else if iwith['output'].exists('stream') then do
+      ostream = String iwith['output','stream']
       o = Object ostream
     end
-    if with['output'].exists('append') then 
+    if iwith['output'].exists('append') then
       oappend=1
  
-    if with['error'].exists('stem') then do
-      st = Rexx with['error','stem']
+    if iwith['error'].exists('stem') then do
+      st = Rexx iwith['error','stem']
       rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
       estem = Rexx rxvar.varvalue
       e = Object estem
     end
-    else if with['error'].exists('stream') then do
-      estream = String with['error','stream']
+    else if iwith['error'].exists('stream') then do
+      estream = String iwith['error','stream']
       e = Object estream
     end
-    if with['error'].exists('append') then 
+    if iwith['error'].exists('append') then
       eappend=1
 
 --#MRE we agreed not to throw exceptions and not to exit upon error
 --     user must check RC, when '' an exception occurred
 
     do     
-      netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(code), i, o, oappend, e, eappend)
+      netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(icode), i, o, oappend, e, eappend)
     catch iox=IOException         -- this also catches FileNotFound
 --      signal RxQuit(rxt, null, 'address.exception', 'IOException', iox.getMessage() )
       say '     +++ Error: IOException '''iox.getMessage()''' occurred during ADDRESS invocation'
@@ -554,9 +560,9 @@ method scanWithWhat(nexttoken, with_, append)
 --      signal InterruptedException()
     end
   end
-  if addr.exists('with') then do
-    with=''
-  end
+--  if addr.exists('with') then do
+--    with=''
+--  end
 
   return
 

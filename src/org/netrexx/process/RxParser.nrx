@@ -44,6 +44,7 @@
 /* 2024.09.29 support for INTERPRET instruction --MRE                 */
 /* 2024.12.28 Fix issue #69 INTERPRET updating methodclauses          */
 /* 2025.10.07 support for GO instruction --MRE                        */
+/* 2026.08.31 fix annotation parsing --MRE                            */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -176,12 +177,12 @@ class RxParser uses RxCode
           end
         iterate; end
       when tok.type=RxToken.AT then do
-      	if rxt.pass1 then do
-      	  this.classAnnotation = this.classAnnotation tok.value
-	  cursor.curclause.lookaside=NrAnnotate(rxt)
-	  --	  --cursor.curclass.setAnnotation(tok.value)
-  	end
-      iterate; end
+      	if rxt.pass2 then do
+          cursor.curclause.lookaside=NrAnnotate(rxt, clausenum)
+          item=cursor.curclause.lookaside
+      	  item.generate()
+      	end
+        iterate; end
       when iskey(tok.value,'CLASS') then do
         if level>=1 then cursor.curclass.endclass() -- end previous class
         if rxt.pass0 then do
@@ -316,12 +317,15 @@ class RxParser uses RxCode
       end
 
     /* process an annotation */
-    if rxt.pass2 then do
-      if tok.type=RxToken.AT then do
-	--rxt.program.streamer.out(tok.value)
-	iterate mainloop
+   if tok.type=RxToken.AT then do
+      if rxt.pass2 then do
+        cursor.curclause.lookaside=NrAnnotate(rxt, clausenum)
+        item=cursor.curclause.lookaside
+        item.generate()
       end
+      iterate mainloop
     end
+
 
     /* --- Here only for pass1 and pass2 --- */
    if tok.type\=RxToken.SYM then if tok.type\=RxToken.AT then signal RxQuit(rxt, tok, 'property.or.keyword.expected')
@@ -841,9 +845,7 @@ class RxParser uses RxCode
         end
 	      when tok.type=RxToken.AT then
 	      do
-	        item=NrAnnotate(rxt)
-	        cursor.curmethod.setAnnotation(tok.value)
-	       --leave constructkeyword
+          signal RxError(rxt, tok, 'bad.clause.start')  -- no annotations in method body #MRE
       	end
  	
         /* The remainder are constructed for better error messages */

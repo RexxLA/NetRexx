@@ -1,0 +1,64 @@
+
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* DapOutputStream                                                    */
+/* ------------------------------------------------------------------ */
+/* NetRexxC messages are streamed here                                */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.08.03 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* DapOutputStream                                                    */
+/* ------------------------------------------------------------------ */
+/* OutputStream that forwards written bytes to the DAP client as      */
+/* 'output' events (stdout/stderr category), instead of writing to    */
+/* the real process stream. Used to capture debuggee output that is   */
+/* redirected via RexxIO.setOutputStream() / System.setErr().         */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.lsp
+options strictcase
+import org.json.JSONObject
+import java.io.OutputStream
+
+class DapOutputStream extends OutputStream
+  properties private
+    handler  = DapHandler
+    category = String
+
+  method DapOutputStream(h = DapHandler, cat = Rexx)
+    super()
+    handler  = h
+    category = cat.toString()
+
+  -- OutputStream requires this one; PrintWriter/PrintStream callers
+  -- normally go through the array form below, but implement it
+  -- properly anyway since something could call it directly.
+  method write(b = int)
+    ba = byte[1]
+    ba[0] = byte b
+    write(ba, 0, 1)
+    return
+
+  method write(b = byte[], off = int, len = int)
+    if len <= 0 then return
+    text = String(b, off, len, java.nio.charset.StandardCharsets.UTF_8)
+
+    body = JSONObject()
+    body.put('category', category)
+    body.put('output', text)
+    handler.sendEvent('output', body)
+    return
+
+  -- nothing buffered on our side; each write() already sent its event
+  method flush()
+    return
+
+  method close()
+    return

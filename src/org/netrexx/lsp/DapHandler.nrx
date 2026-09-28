@@ -1,0 +1,897 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* DapHandler                                                         */
+/* ------------------------------------------------------------------ */
+/* dispatches DAP requests                                            */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.08.03 MRE Initial                                             */
+/* 2026.08.05 MRE Reworked on org.json.JSONObject/JSONArray           */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.lsp
+options strictcase
+import org.json.JSONObject
+import org.json.JSONArray
+import org.netrexx.process.RxVariable
+import org.netrexx.process.RxCursor
+import org.netrexx.process.RxTranslator
+import org.netrexx.process.RxProgram
+import org.netrexx.process.RxToken
+import org.netrexx.process.RxType
+
+
+class DapHandler
+  properties public
+    transport = LspTransport
+    -- running sequence number for server-initiated messages
+    seq = int 0
+
+    breakpoints = Rexx
+    session = DapSession
+
+    program = Rexx
+    progargs   = Rexx
+    cwd     = Rexx
+    exposeInterpreter = boolean 0
+
+properties private
+    -- cached reflective method handles, resolved once at construction
+    mGetCurlpool  = java.lang.reflect.Method
+    mGetCurcpool  = java.lang.reflect.Method
+    mIslocal      = java.lang.reflect.Method
+    mIsargument   = java.lang.reflect.Method
+    mIsproperty   = java.lang.reflect.Method
+
+    mGetCurprogram  = java.lang.reflect.Method
+    mGetInterpreter = java.lang.reflect.Method
+    mGetVar         = java.lang.reflect.Method
+    mSetVar         = java.lang.reflect.Method
+
+
+  method DapHandler(t = LspTransport)
+    transport = t
+    breakpoints = ''
+    session = DapSession(this)
+    initReflection()
+
+  -- ------------------------------------------------------------
+  -- Dispatch. Everything past the wire is JSONObject/JSONArray --
+  -- nested structure like setBreakpoints' "arguments.breakpoints"
+  -- array falls straight out of org.json, no separate parser needed.
+  -- ------------------------------------------------------------
+  method processMessage(payload = String)
+    json = JSONObject(payload)
+    type = json.optString('type')
+
+    if transport.logLsp then transport.log('-- 'type' ->' json.toString(3))
+
+    select
+      when type = 'request' then handleRequest(json)
+      -- 'response' / 'event' cases are extension points for
+      -- reverse requests (e.g. runInTerminal) -- not needed yet.
+      otherwise nop
+    end
+    return
+
+  method handleRequest(json = JSONObject)
+    command = json.optString('command')
+    reqSeq  = json.optInt('seq')
+    select
+      when command = 'initialize'        then onInitialize(reqSeq, json)
+      when command = 'launch'            then onLaunch(reqSeq, json)
+      when command = 'attach'            then onAttach(reqSeq, json)
+      when command = 'setBreakpoints'    then onSetBreakpoints(reqSeq, json)
+      when command = 'configurationDone' then onConfigurationDone(reqSeq, json)
+      when command = 'threads'           then onThreads(reqSeq, json)
+      when command = 'stackTrace'        then onStackTrace(reqSeq, json)
+      when command = 'scopes'            then onScopes(reqSeq, json)
+      when command = 'variables'         then onVariables(reqSeq, json)
+      when command = 'setVariable'       then onSetVariable(reqSeq, json)
+      when command = 'continue'          then onContinue(reqSeq, json)
+      when command = 'next'              then onNext(reqSeq, json)
+      when command = 'stepIn'            then onStepIn(reqSeq, json)
+      when command = 'stepOut'           then onStepOut(reqSeq, json)
+      when command = 'disconnect'        then onDisconnect(reqSeq, json)
+      otherwise
+        sendErrorResponse(reqSeq, command, 'unrecognized command: ' || command)
+    end
+    return
+
+  -- ------------------------------------------------------------
+  -- Request handlers. Each stub currently sends the minimal
+  -- well-formed response DAP requires; fill in real behaviour as
+  -- the adapter grows (breakpoint bookkeeping, frame/variable
+  -- inspection, driving org.netrexx.process to step the program).
+  -- ------------------------------------------------------------
+  method onInitialize(reqSeq = int, json = JSONObject)
+    caps = JSONObject()
+    caps.put('supportsConfigurationDoneRequest', boolean 1)
+    caps.put('supportsFunctionBreakpoints',      boolean 1)
+    caps.put('supportsConditionalBreakpoints',   boolean 0)
+    caps.put('supportsEvaluateForHovers',        boolean 0)
+    caps.put('supportsSetVariable',              boolean 1)
+    caps.put('supportsInvalidatedEvent',         boolean 1)
+    sendResponse(reqSeq, 'initialize', caps)
+    sendEvent('initialized', JSONObject())
+    return
+
+  method onLaunch(reqSeq = int, json = JSONObject)
+    args   = json.optJSONObject('arguments')
+
+    if args.has('configurations') then do      -- lsp4ij.debug debug adapter
+      conf = args.optJSONArray('configurations')
+      options = conf.getJSONObject(0)
+    end
+    else
+      options = args                           -- vscode, and other
+
+    program  = options.optString('program')   -- path client wants debugged
+    progargs = options.optString('args')
+    cwd      = options.optString('cwd')
+
+    sendResponse(reqSeq, 'launch', JSONObject())
+    return
+
+  method onAttach(reqSeq = int, json = JSONObject)
+    args   = json.optJSONObject('arguments')
+    conf    = args.optJSONArray('configurations')
+    options = conf.getJSONObject(0)
+
+    program  = options.optString('program')   -- path client wants debugged
+    progargs = options.optString('args')
+    cwd      = options.optString('cwd')
+
+    sendResponse(reqSeq, 'attach', JSONObject())
+    return
+
+  method onSetBreakpoints(reqSeq = int, json = JSONObject)
+
+    args   = json.optJSONObject('arguments')
+    source = args.optJSONObject('source')
+    path   = source.optString('path')
+
+    session.clearBreakpoints(path)
+
+    rawBps = args.optJSONArray('breakpoints')
+    if rawBps = null then rawBps = JSONArray()   -- client may send none
+
+    -- Build our own bookkeeping array, and in parallel the JSON body
+    -- DAP expects back: one verified breakpoint per input, same order.
+    accepted    = JSONArray()
+    verifiedBps = JSONArray()
+
+    i = int 0
+    loop while i < rawBps.length()
+      bp   = rawBps.getJSONObject(i)
+      line = int bp.getInt('line')
+      cond = bp.optString('condition', null)   -- may be null; that's fine
+
+      id = session.addBreakpoint(path, line,cond)
+
+      rec = JSONObject()
+      rec.put('line', line)
+      if cond \= null then rec.put('condition', cond)
+      accepted.put(rec)
+
+      -- TODO: once org.netrexx.process is wired in, resolve `line`
+      -- against the compiled/interpreted source's statement table
+      -- here and set verified = false for lines with no code on them.
+      vb = JSONObject()
+      vb.put('verified', boolean 1)
+      vb.put('line', line)
+      vb.put('id', id)
+      verifiedBps.put(vb)
+
+      i = i + 1
+    end
+
+    body = JSONObject()
+    body.put('breakpoints', verifiedBps)
+--    session.setBreakpoints(path, accepted)
+
+    sendResponse(reqSeq, 'setBreakpoints', body)
+    return
+
+  method onConfigurationDone(reqSeq = int, json = JSONObject)
+
+    session.connect(program, progargs, cwd)
+
+
+    sendResponse(reqSeq, 'configurationDone', JSONObject())
+    -- Nothing else to do here: the interpreter thread (started in
+    -- onLaunch) is already running independently, and will call back
+    -- through session.pauseAndWait() -- which sends "stopped" itself
+    -- -- the first time it hits a breakpoint.
+    return
+
+  method onThreads(reqSeq = int, json = JSONObject)
+    thread = JSONObject()
+    thread.put('id', 1)
+    thread.put('name', 'main')
+    threads = JSONArray()
+    threads.put(thread)
+
+    body = JSONObject()
+    body.put('threads', threads)
+    sendResponse(reqSeq, 'threads', body)
+    return
+
+  method onStackTrace(reqSeq = int, json = JSONObject)
+    if session.isPaused() then do
+      line = session.getCurrentLine()
+      src  = session.getCurrentSource()
+      frame = JSONObject()
+      frame.put('id', 1)
+      frame.put('name', 'main')
+      frame.put('line', line)
+      frame.put('column', 1)
+      frame.put('source', JSONObject().put('path', src))
+      frames = JSONArray()
+      frames.put(frame)
+      body = JSONObject()
+      body.put('stackFrames', frames)
+      body.put('totalFrames', 1)
+      sendResponse(reqSeq, 'stackTrace', body)
+    end
+    else do
+      body = JSONObject()
+      body.put('stackFrames', JSONArray())
+      body.put('totalFrames', 0)
+      sendResponse(reqSeq, 'stackTrace', body)
+    end
+    return
+
+  method onScopes(reqSeq = int, json = JSONObject)
+    scopes = JSONArray()
+
+    locals = JSONObject()
+    locals.put('name', 'Local variables')
+    locals.put('variablesReference', 1001)
+    locals.put('expensive', boolean 0)
+    scopes.put(locals)
+
+    args = JSONObject()
+    args.put('name', 'Method arguments')
+    args.put('variablesReference', 1002)
+    args.put('expensive', boolean 0)
+    scopes.put(args)
+
+    props = JSONObject()
+    props.put('name', 'Class properties')
+    props.put('variablesReference', 1003)
+    props.put('expensive', boolean 0)
+    scopes.put(props)
+
+    body = JSONObject()
+    body.put('scopes', scopes)
+    sendResponse(reqSeq, 'scopes', body)
+    return
+
+  method onVariables(reqSeq = int, json = JSONObject)
+    args    = json.optJSONObject('arguments')
+    varRef  = args.getInt('variablesReference')
+
+    cursor  = session.getCurrentCursor()   -- stashed at checkLine()
+    vars    = JSONArray()
+
+    cursor  = session.getCurrentCursor()
+    emptyArgs = Object[0]
+    do
+      select
+        when varRef = 1001 then do
+          lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)
+          vars = variablesFromPool(lpool, 'local', cursor)
+        end
+        when varRef = 1002 then do
+          lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)
+          vars = variablesFromPool(lpool, 'argument', cursor)
+        end
+        when varRef = 1003 then do
+--          rxclass = mGetCurclass.invoke(cursor, emptyArgs)
+          cpool = Hashtable mGetCurcpool.invoke(cursor, emptyArgs)
+          vars = variablesFromPool(cpool, 'property', cursor)
+        end
+        when varRef >= 2000 then do
+          target = session.resolveVarRef(varRef)
+          select
+            when target = null then
+              vars = JSONArray()
+            when target.getClass().isArray() then
+              vars = variableFromArrayRef(varRef, args, cursor)
+            when target.getClass().getName() = 'netrexx.lang.Rexx' then
+              vars = variableFromStemRef(varRef, args, cursor)
+            otherwise
+              vars = variableFromObjectRef(varRef, args,cursor)
+          end
+        end
+        otherwise nop
+      end
+      catch e = Exception                 -- will not occur
+        say e
+      end
+
+      body = JSONObject()
+      body.put('variables', vars)
+      sendResponse(reqSeq, 'variables', body)
+      return
+
+    -- Walk a variable pool (Hashtable of RxVariable), keeping only the
+    -- kind requested, and produce DAP variable entries with live values
+     method variablesFromPool(pool = Hashtable, kind = Rexx, cursor = Object) private returns JSONArray
+       result = JSONArray()
+       emptyArgs = Object[0]
+
+       keys = pool.keys()
+       loop while keys.hasMoreElements()
+         key = String keys.nextElement()
+         rv  = pool.get(key)
+
+         keep = boolean 0
+         do
+           select
+             when kind = 'local'    then keep = (Boolean mIslocal.invoke(rv, emptyArgs)).booleanValue()
+             when kind = 'argument' then keep = (Boolean mIsargument.invoke(rv, emptyArgs)).booleanValue()
+             when kind = 'property' then keep = (Boolean mIsproperty.invoke(rv, emptyArgs)).booleanValue()
+             otherwise nop
+           end
+         catch e = Exception            -- will not occur
+           say e
+         end
+
+         if keep then do
+           v = JSONObject()
+
+--           say '## setting 'key '::'(RxVariable rv).varvalue '::' (RxVariable rv).vartype
+           v.put('name', key)   -- pool keys are already the variable names
+           value = getLiveValue(cursor,rv)
+           describeValue(v, value)
+           result.put(v)
+         catch e = Exception            -- will not occur
+           say e
+         end
+       end
+       return result
+
+  method variableFromObjectRef(varRef = int, args = JSONObject, cursor = Object) private returns JSONArray
+    result = JSONArray()
+    target = session.resolveVarRef(varRef)
+    if target = null then return result
+
+    do
+      fields = target.getClass().getDeclaredFields()
+      loop i = 0 for fields.length
+        f = fields[i]
+        if f.isSynthetic() then iterate i
+        f.setAccessible(boolean 1)
+        fv = f.get(target)
+
+        v = JSONObject()
+        name = f.getName()
+        v.put('name', name)
+
+        describeValue(v, fv)
+
+        hide = 0
+        if name = '$0' then
+          if  fv.getClass().getName() = 'org.netrexx.process.RxInterpreter' then
+            if exposeInterpreter = 0 then
+              hide = 1              -- hide RxInterpreter, unless asked for by option
+        if hide = 0 then
+          result.put(v)
+      end
+
+    catch e = Exception
+      say 'DapHandler: variableFromObjectRef failed: 'e
+    end
+
+    return result
+
+  method variableFromStemRef(varRef = int, args = JSONObject, cursor = Object) private returns JSONArray
+    result = JSONArray()
+
+    target = session.resolveVarRef(varRef)
+    if target = null then do
+      say 'DapHandler: unknown stem variablesReference 'varRef
+      return result
+      end
+    do
+      rexxVal = Rexx target
+      entries = rexxVal.entrySet()
+      it = entries.iterator()
+
+      loop while it.hasNext()
+        entry = Map.Entry it.next()
+        idx   = entry.getKey()
+        leaf  = entry.getValue()
+
+        v = JSONObject()
+        v.put('name', idx)
+        describeValue(v, leaf)
+        result.put(v)
+      end
+    catch e = Exception
+                         -- not a netrexx.lang.rexx
+      say 'DapHandler: variableFromStemRef failed: 'e
+      return JSONArray()
+    end
+
+    return result
+
+
+
+
+
+  method variableFromArrayRef(varRef = int, args = JSONObject, cursor = Object) private returns JSONArray
+    result = JSONArray()
+
+    target = session.resolveVarRef(varRef)
+    if target = null then do
+      say 'DapHandler: unknown variablesReference 'varRef
+      return result
+    end
+
+    do
+      len = java.lang.reflect.Array.getLength(target)
+
+      start = args.optInt('start', 0)
+      count = args.optInt('count', 0)
+      if count = 0 then count = len       -- 0/absent means "all"
+      stop = start + count
+      if stop > len then stop = len
+
+      loop i = start to stop - 1
+        elem = java.lang.reflect.Array.get(target, i)
+        v = JSONObject()
+        v.put('name', '['i']')
+        describeValue(v, elem)
+        result.put(v)
+      end
+    catch e = Exception
+      say 'DapHandler: variableFromArrayRef failed: 'e
+    end
+
+    return result
+
+    -- Inspects a live runtime value and fills in the DAP Variable fields
+    -- (value/variablesReference/indexedVariables) on v accordingly.
+    -- Used uniformly by variablesFromPool, variableFromArrayRef, and
+    -- variableFromStemRef so arrays-of-stems and stems-of-arrays both work.
+    method describeValue(v = JSONObject, value = Object) private
+      do
+        if value = null then do
+          v.put('value', 'null')
+          v.put('variablesReference', 0)
+          return
+        end
+
+        isStem = boolean 0
+        if value.getClass().getName() = 'netrexx.lang.Rexx' then
+          isStem = (Rexx value).isindexed()
+
+        select
+          when isStem then do
+            childRef = session.registerVarRef(value)
+            v.put('variablesReference', childRef)
+            v.put('value', 'indexed[]')
+          end
+          when value.getClass().isArray() then do
+            len = java.lang.reflect.Array.getLength(value)
+            childRef = session.registerVarRef(value)
+            v.put('variablesReference', childRef)
+            v.put('indexedVariables', len)
+            v.put('value', value.getClass().getComponentType().getName()'['len']')
+          end
+          when isUserObject(value) then do
+            childRef = session.registerVarRef(value)
+            v.put('variablesReference', childRef)
+            v.put('value', value.getClass().getSimpleName())
+          end
+          otherwise do
+            v.put('value', String.valueOf(value))
+            v.put('variablesReference', 0)
+            end
+          end
+      catch e = Exception
+        say 'DapHandler: describeValue failed: 'e
+        v.put('value', '<error>')
+        v.put('variablesReference', 0)
+        end
+      return
+
+ method isUserObject(value = Object) private returns boolean
+    cls = value.getClass()
+    if cls.isPrimitive() then return boolean 0
+    name = cls.getName()
+    if name.startsWith('java.lang.') then return boolean 0
+    if name = 'netrexx.lang.Rexx' then return boolean 0
+--    if name.startsWith('org.netrexx.process.RxInterpreter') then return boolean 0
+--    if name.startsWith('java.lang.') then return boolean 0
+
+    return boolean 1
+
+  -- preload all reflection class method once
+  method initReflection() private
+    do
+      noArgs = Class[0]
+      cursorClass = Class.forName(String "org.netrexx.process.RxCursor")
+      mGetCurlpool   = cursorClass.getMethod(String "getCurlPool", noArgs)
+      mGetCurcpool   = cursorClass.getMethod(String "getCurcPool", noArgs)
+      mGetCurprogram = cursorClass.getMethod(String "getCurProgram", noArgs)
+
+      varClass    = Class.forName(String "org.netrexx.process.RxVariable")
+      mIslocal    = varClass.getMethod(String "islocal", noArgs)
+      mIsargument = varClass.getMethod(String "isargument", noArgs)
+      mIsproperty = varClass.getMethod(String "isproperty", noArgs)
+--      mIsarray    = varClass.getMethod(String "isarray", noArgs)
+
+      translatorClass = Class.forName(String "org.netrexx.process.RxTranslator")
+      mGetInterpreter = translatorClass.getMethod(String "getInterpreter", noArgs)
+
+      interpClass     = Class.forName(String "org.netrexx.process.RxInterpreter")
+      tokenClass      = Class.forName(String "org.netrexx.process.RxToken")
+
+      getVarArgTypes = Class[3]
+      getVarArgTypes[0] = cursorClass
+      getVarArgTypes[1] = varClass
+      getVarArgTypes[2] = tokenClass
+      mGetVar = interpClass.getMethod(String "getVar", getVarArgTypes)
+
+      setVarArgTypes = Class[4]
+      setVarArgTypes[0] = cursorClass
+      setVarArgTypes[1] = varClass
+      setVarArgTypes[2] = tokenClass
+      setVarArgTypes[3] = Object.class
+      mSetVar = interpClass.getMethod(String "setVar", setVarArgTypes)
+    catch e = Exception
+      say 'DapHandler: reflection init failed: 'e
+    end
+    return
+
+  -- resolves the live runtime value for a variable, via cursor -> program
+  -- -> translator (public field, direct) -> interpreter -> getVar (reflective)
+  method getLiveValue(cursor = Object, rv = Object) returns Object private
+    do
+      emptyArgs  = Object[0]
+      rxprogram  = RxProgram mGetCurprogram.invoke(cursor, emptyArgs)
+      translator = RxTranslator rxprogram.translator        -- direct, public field
+      interp     = mGetInterpreter.invoke(translator, emptyArgs)
+
+      getVarArgs = Object[3]
+      getVarArgs[0] = cursor
+      getVarArgs[1] = rv
+      getVarArgs[2] = RxToken null
+      return mGetVar.invoke(interp, getVarArgs)
+    catch e = Exception                  -- will not occur
+      say e
+    end
+    return null
+
+  method setLiveValue(cursor = Object, rv = Object, newValue = Object) private signals IllegalAccessException,InvocationTargetException
+--  trace results
+    do
+      emptyArgs  = Object[0]
+      rxprogram  = RxProgram mGetCurprogram.invoke(cursor, emptyArgs)
+      translator = RxTranslator rxprogram.translator
+      interp     = mGetInterpreter.invoke(translator, emptyArgs)
+
+      setVarArgs = Object[4]
+      setVarArgs[0] = cursor
+      setVarArgs[1] = rv
+      setVarArgs[2] = RxToken null
+      setVarArgs[3] = newValue
+      mSetVar.invoke(interp, setVarArgs)
+--    catch e = Exception
+--      say 'DapHandler: setLiveValue failed: 'e
+    end
+    return
+
+  method coerceRawValue(rawValue=String, rv=RxVariable) private returns Object signals Exception
+--  trace results
+    cname = String rv.vartype.classname.toString()
+    if rv.vartype.dimension \= 0 then
+      signal Exception('Editing array-typed variables is not supported')
+
+--    say '### MRE rv to set is 'cname
+    do
+      select
+        when cname = 'int'     then return Integer.valueOf(rawValue)
+        when cname = 'long'    then return Long.valueOf(rawValue)
+        when cname = 'double'  then return Double.valueOf(rawValue)
+        when cname = 'byte'    then return Integer.valueOf(rawValue)  -- code2ref narrows Integer->Byte
+        when cname = 'short'   then return Integer.valueOf(rawValue)  -- code2ref narrows Integer->Short
+        when cname = 'float'   then return Double.valueOf(rawValue)   -- code2ref narrows Number->Float
+        when cname = 'boolean' then do
+          b = int 9
+          if rawValue.strip().equalsIgnoreCase('true') | rawValue.strip() = '1' then b = 1
+          if rawValue.strip().equalsIgnoreCase('false') | rawValue.strip() = '0' then b = 0
+          if b = 9 then
+            signal Exception('Editing variable of type 'cname)
+          else
+            return Integer.valueOf(b)
+        end
+        when cname = 'char'    then return Rexx(rawValue)
+        when cname = 'netrexx.lang.Rexx' then return Rexx(rawValue)
+        when cname = 'java.lang.String' then return rawValue
+        otherwise
+          signal Exception('Editing variable of type 'cname)
+      end
+    end
+ --   catch e = Exception
+
+
+  -- Class-based counterpart to coerceRawValue, used for everything below
+  -- the top level scope pools: array elements, stem entries, object
+  -- fields. There is no RxVariable/vartype available at that depth, only
+  -- a java.lang.Class (component type, field type, or the runtime class
+  -- of the existing leaf value), so the type switch is done on that.
+  method coerceRawValueForType(rawValue = String, cls = Class) private returns Object signals Exception
+    select
+      when cls = Integer.TYPE   | cls = Integer.class   then return Integer.valueOf(rawValue)
+      when cls = Long.TYPE      | cls = Long.class      then return Long.valueOf(rawValue)
+      when cls = Double.TYPE    | cls = Double.class    then return Double.valueOf(rawValue)
+      when cls = Float.TYPE     | cls = Float.class     then return Double.valueOf(rawValue)   -- narrowed by Field/Array.set
+      when cls = Byte.TYPE      | cls = Byte.class      then return Integer.valueOf(rawValue)  -- narrowed by Field/Array.set
+      when cls = Short.TYPE     | cls = Short.class     then return Integer.valueOf(rawValue)  -- narrowed by Field/Array.set
+      when cls = Boolean.TYPE   | cls = Boolean.class then do
+        b = int 9
+        if rawValue.strip().equalsIgnoreCase('true') | rawValue.strip() = '1' then b = 1
+        if rawValue.strip().equalsIgnoreCase('false') | rawValue.strip() = '0' then b = 0
+        if b = 9 then
+          signal Exception('Editing variable of type 'cls.getName())
+        else
+          return Integer.valueOf(b)
+        end
+      when cls = Character.TYPE | cls = Character.class then
+        return Character.valueOf(rawValue.charAt(0))
+      when cls.getName() = 'netrexx.lang.Rexx' then return Rexx(rawValue)
+      when cls = String.class then return rawValue
+      otherwise
+        signal Exception('Editing variable of type 'cls.getName())
+    end
+
+  -- Wraps a resolved leaf value into the same {value, variablesReference,
+  -- indexedVariables} shape onVariables/describeValue already use, so a
+  -- freshly-set stem/array/object value is immediately re-expandable in
+  -- the client without a separate code path.
+  method respondWithValue(reqSeq = int, value = Object) private
+    v = JSONObject()
+    describeValue(v, value)
+    sendResponse(reqSeq, 'setVariable', v)
+    return
+
+  method setArrayElement(reqSeq = int, target = Object, varName = String, newValStr = String) private signals Exception
+    -- name arrives back exactly as produced in variableFromArrayRef: '['i']'
+    idxStr = varName
+    if idxStr.startsWith('[') then idxStr = idxStr.substring(1)
+    if idxStr.endsWith(']')   then idxStr = idxStr.substring(0, idxStr.length() - 1)
+    idx = int Integer.parseInt(idxStr.strip())
+
+    compType = target.getClass().getComponentType()
+    newValue = coerceRawValueForType(newValStr, compType)
+    java.lang.reflect.Array.set(target, idx, newValue)
+
+    respondWithValue(reqSeq, java.lang.reflect.Array.get(target, idx))
+    return
+
+  method setStemEntry(reqSeq = int, target = Rexx, varName = String, newValStr = String) private signals Exception
+    -- locate the existing leaf first: confirms the index is real and
+    -- gives us its runtime class to coerce the new value against
+    it    = target.entrySet().iterator()
+    leaf  = Object null
+    found = boolean 0
+    loop while it.hasNext() & \found
+      entry = Map.Entry it.next()
+      if String entry.getKey().toString() = varName then do
+        leaf  = entry.getValue()
+        found = boolean 1
+      end
+    end
+    if \found then do
+      sendErrorResponse(reqSeq, 'setVariable', 'stem index not found: 'varName)
+      return
+    end
+
+    cls = Rexx.class
+    if leaf \= null then cls = leaf.getClass()
+    newValue = coerceRawValueForType(newValStr, cls)
+
+    -- write via the same path RxInterpreter.setStemElementValue uses:
+    --   val.getnode(rindex).leaf = setvalue
+    -- entrySet() is only used above to read/validate; the actual
+    -- mutation goes through Rexx's own node, not the entry view.
+    target.getnode(Rexx(varName)).leaf = Rexx newValue
+
+    respondWithValue(reqSeq, newValue)
+    return
+
+  method setObjectField(reqSeq = int, target = Object, varName = String, newValStr = String) private signals -
+                                                                NoSuchFieldException, IllegalAccessException, Exception
+    field = target.getClass().getDeclaredField(varName)
+    field.setAccessible(boolean 1)
+
+    newValue = coerceRawValueForType(newValStr, field.getType())
+    field.set(target, newValue)
+
+    respondWithValue(reqSeq, field.get(target))
+    return
+
+  -- Dispatches on the resolved target's runtime shape, mirroring the
+  -- select in onVariables for varRef >= 2000.
+  method setDeepVariable(reqSeq = int, varRef = int, varName = String, newValStr = String) private
+    target = session.resolveVarRef(varRef)
+    if target = null then do
+      sendErrorResponse(reqSeq, 'setVariable', 'unknown variablesReference: 'varRef)
+      return
+    end
+    do
+      select
+        when target.getClass().isArray() then
+          setArrayElement(reqSeq, target, varName, newValStr)
+        when target.getClass().getName() = 'netrexx.lang.Rexx' then
+          setStemEntry(reqSeq, Rexx target, varName, newValStr)
+        otherwise
+          setObjectField(reqSeq, target, varName, newValStr)
+      end
+    catch e = Exception
+      sendErrorResponse(reqSeq, 'setVariable', 'Error setting new value:\n'e.toString(), 1)
+    end
+    return
+
+  method setScopeVariable(reqSeq = int, varRef = int, varName = String, newValStr = String, cursor = Object) private
+    emptyArgs = Object[0]
+    rv        = Object null
+    newValue  = Object
+
+    do
+      select
+        when varRef = 1001 | varRef = 1002 then do
+          lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)     -- local pool, holds method arguments and variables
+          rv = lpool.get(varName)
+          end
+        when varRef = 1003 then do
+          cpool = Hashtable mGetCurcpool.invoke(cursor, emptyArgs)     -- class pool, holds class properties
+          rv = cpool.get(varName)
+          end
+        otherwise nop
+        end
+    catch e = Exception
+      say 'DapHandler: onSetVariable lookup failed: 'e
+    end
+
+    if rv = null then do
+      sendErrorResponse(reqSeq, 'setVariable', 'variable not found: 'varName)
+      return
+    end
+    do
+      newValue = coerceRawValue(newValStr, RxVariable rv)
+      setLiveValue(cursor, rv, newValue)
+    catch e = Exception
+      sendErrorResponse(reqSeq, 'setVariable', 'Error setting new value:\n'e.toString(), 1)
+      return
+    end
+
+    liveValue = getLiveValue(cursor, rv)
+    respondWithValue(reqSeq, liveValue)
+    return
+
+  method onSetVariable(reqSeq = int, json = JSONObject)
+    args      = json.optJSONObject('arguments')
+    varRef    = args.getInt('variablesReference')
+    varName   = args.optString('name')
+    newValStr = args.optString('value')
+
+    cursor = session.getCurrentCursor()
+
+    select
+      when varRef = 1001 | varRef = 1002 | varRef = 1003 then
+        setScopeVariable(reqSeq, varRef, varName, newValStr, cursor)
+      when varRef >= 2000 then
+        setDeepVariable(reqSeq, varRef, varName, newValStr)
+      otherwise
+        sendErrorResponse(reqSeq, 'setVariable', 'unsupported variablesReference: 'varRef)
+    end
+    return
+
+  method onContinue(reqSeq = int, json = JSONObject)
+--    threadid = json.getInt('threadId')
+    session.resume('continue')
+    body = JSONObject()
+    body.put('allThreadsContinued', boolean 1)
+    sendResponse(reqSeq, 'continue', body)
+    return
+
+  method onNext(reqSeq = int, json = JSONObject)
+--    threadid = json.getInt('threadId')
+    session.resume('next')
+    sendResponse(reqSeq, 'next', JSONObject())
+    return
+
+  method onStepIn(reqSeq = int, json = JSONObject)
+--    threadid = json.getInt('threadId')
+    session.resume('stepIn')
+    sendResponse(reqSeq, 'stepIn', JSONObject())
+    return
+
+  method onStepOut(reqSeq = int, json = JSONObject)
+--    threadid = json.getInt('threadId')
+    session.resume('stepOut')
+    sendResponse(reqSeq, 'stepOut', JSONObject())
+    return
+
+  method onDisconnect(reqSeq = int, json = JSONObject)
+  --  restart           = json.optBoolean('restart', boolean 0)
+  --  terminateDebuggee = json.optBoolean('terminateDebuggee', boolean 0)
+    session.resume('terminate')
+    sendResponse(reqSeq, 'disconnect', JSONObject())
+    sendEvent('terminated', JSONObject())
+    return
+
+  -- ------------------------------------------------------------
+  -- Response / event framing helpers
+  -- ------------------------------------------------------------
+  method sendResponse(reqSeq = int, command = String, body = JSONObject)
+    msg = JSONObject()
+    msg.put('seq', nextSeq())
+    msg.put('type', 'response')
+    msg.put('request_seq', reqSeq)
+    msg.put('success', boolean 1)
+    msg.put('command', command)
+    msg.put('body', body)
+    if transport.logLsp then transport.log('-- Response ->' msg.toString(3))
+    transport.sendResponse(msg.toString())
+    return
+
+  method sendErrorResponse(reqSeq = int, command = String, message = String, showUser = boolean 0)
+    msg = JSONObject()
+    msg.put('seq', nextSeq())
+    msg.put('type', 'response')
+    msg.put('request_seq', reqSeq)
+    msg.put('success', boolean 0)
+    msg.put('command', command)
+    msg.put('message', message)
+
+    if showUser then do
+      errMsg = JSONObject()
+      errMsg.put('id', int 1)
+      errMsg.put('format', message)
+      errMsg.put('showUser', showUser)
+
+      body = JSONObject()
+      body.put('error', errMsg)
+      msg.put('body', body)
+    end
+
+    if transport.logLsp then transport.log('-- Error ->' msg.toString(3))
+    transport.sendResponse(msg.toString())
+    return
+
+  method sendEvent(eventName = String, body = JSONObject)
+    msg = JSONObject()
+    msg.put('seq', nextSeq())
+    msg.put('type', 'event')
+    msg.put('event', eventName)
+    msg.put('body', body)
+    if transport.logLsp then transport.log('-- Event ->' msg.toString(3))
+    transport.sendResponse(msg.toString())
+    return
+
+  method sendEvent(eventName = String, bodyas = String)
+    body = JSONObject(bodyas)
+
+    msg = JSONObject()
+    msg.put('seq', nextSeq())
+    msg.put('type', 'event')
+    msg.put('event', eventName)
+    msg.put('body', body)
+    if transport.logLsp then transport.log('-- Event ->' msg.toString(3))
+    transport.sendResponse(msg.toString())
+    return
+
+  method nextSeq() returns int
+    seq = seq + 1
+    return seq

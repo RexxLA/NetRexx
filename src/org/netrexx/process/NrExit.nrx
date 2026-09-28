@@ -18,6 +18,7 @@
 /* 2000.03.09 Implement interpretation                                */
 /* 2024.09.30 fix issue #67, return exitcode when interpreting --MRE  */
 /* 2025.03.03 exit not terminal when INTERPRET, we'll exit anyway MRE */
+/* 2026.09.26 fix issue #91, exit fails if exitcode not literal--MRE  */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -82,5 +83,11 @@ class NrExit implements RxClauseParser
    --MRE fix issue #67,
    -- no signal as this does not expose exitcode
    -- instead, immediately exit with given exitcode
-   System.exit(int exitjavacode)
+   if tokens[1].type==RxToken.END then do   -- bare exit
+     System.exit(0)
+   end
+   else do
+     code = rxt.eparser.parseexpr(cursor, 0, 1, null, null)  -- parse the expression
+     System.exit((code.value).toString())                    -- and exit with it
+   end
    -- signal RxSignal(cursor, null, tokens[0]) -- null exception indicates Exit

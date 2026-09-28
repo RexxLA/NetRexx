@@ -1,3 +1,23 @@
+# NetRexx 5.20 beta
+
+## Language
+- Improved Annotations handling
+- Improved LSP handling of minor classes
+
+## Fixes
+- Fixed GO arguments when interpreting
+- Improved argument handling in the POSIX bin scripts
+- NetRexxC.sh now exits non-zero when translation fails
+- NetRexx-91 exit fails if exitcode not literal
+
+## Examples
+- Added the awfy benchmark suite to examples/benchmarks
+
+## Documentation
+
+
+
+
 # NetRexx 5.10-GA [20 Mar 2026]
 
 ## Language

@@ -1,0 +1,364 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* DapSession                                        */
+/* ------------------------------------------------------------------ */
+/* DAP NetRexxC glue                                                  */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* 2026.08.03 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+
+/* DapSession.nrx
+   ------------------------------------------------------------------
+   The hand-off point between two threads:
+
+     - DapServer.run()          -- reads DAP requests from stdin, one
+                                    at a time, and dispatches them
+     - InterpreterThread.run()  -- executes the debuggee, statement
+                                    by statement
+
+   The interpreter thread calls checkLine() at each statement (or
+   whatever granularity you want breakpoints/stepping to have). If
+   that line is a breakpoint, or the session is in single-step mode,
+   checkLine() sends a "stopped" event to the client and BLOCKS the
+   interpreter thread on a one-slot queue.
+
+   The DAP server thread, on receiving continue/next/stepIn/stepOut/
+   disconnect from the client, calls resume() -- which drops a
+   command into that same queue. Whichever thread is waiting wakes
+   up. No polling, and -- important -- resume() never blocks, so the
+   DAP thread can never be stuck waiting on the interpreter thread
+   (that pairing, blocking-on-both-sides, is how you'd deadlock this).
+
+   Field access that crosses threads (paused/currentLine/etc,
+   terminated) goes through small synchronized accessor methods.
+   The blocking take()/offer() calls on resumeQueue deliberately sit
+   OUTSIDE any synchronized block -- ArrayBlockingQueue has its own
+   internal locking, and wrapping a blocking call in `this`'s
+   monitor would let one thread hold the lock while parked, freezing
+   the other thread out permanently.
+   ------------------------------------------------------------------ */
+
+package org.netrexx.lsp
+
+import java.util.
+import java.util.concurrent.
+import org.netrexx.process
+
+options nobinary
+
+class DapSession extends org.netrexx.process.NetRexxC implements Runnable public
+
+properties public
+
+  handler = DapHandler
+
+
+  breakpointId = 0
+  breakpoints = Rexx ''
+  -- source, line -> 1
+
+  -- single-slot rendezvous: interpreter thread take()s, DAP thread offer()s
+  resumeQueue = BlockingQueue
+
+  paused     = boolean
+  singleStep = boolean   -- only ever touched by the interpreter thread
+  terminated = boolean
+
+  -- snapshot of where we're paused, read by onStackTrace/onScopes/onVariables
+  currentSource = Rexx
+  currentLine   = int
+  currentFrame  = Object
+
+  -- args built by connect(), consumed by run() on the interpreter thread
+  interpArgs = String[]
+
+  varRefMap    = Hashtable     -- refNum (Integer, boxed as Rexx or int key) -> object
+  nextVarRef   = int 2000      -- fixed scopes use 1001-1003, dynamic refs start clear above that
+
+  prevBreakpointLine   = int           -- previous line that stop at breakpoint
+  breakPerLine         = int 0
+  prevStepLine         = int
+
+
+method DapSession(handler_ = DapHandler)
+  handler = handler_
+--    breakpointsBySource = LinkedHashMap()
+  resumeQueue = ArrayBlockingQueue(1)
+  paused     = boolean 0
+  singleStep = boolean 0
+  terminated = boolean 0
+  varRefMap  = Hashtable()
+  nextVarRef = int 2000
+  prevBreakpointLine = 0
+  prevStepLine       = 0
+  return
+
+
+  -- ------------------------------------------------------------
+  -- DAP-thread side
+  -- ------------------------------------------------------------
+
+  -- Builds the nrc argument vector, stashes it, and hands off to a
+  -- dedicated InterpreterThread so the caller (the DAP thread reading
+  -- stdin) never blocks on the debuggee's execution. Actual startup
+  -- happens in run(), below, on that new thread.
+  method connect(prog = Rexx, progargs = Rexx, cwd = Rexx)
+    nrcArgs = Rexx '-nocolor -arg 'progargs
+    c = nrcArgs.words()
+    -- Split 'prog' into one or more program-name tokens.
+    -- A name containing a blank or a quote must be wrapped in ' ' (single quotes);
+    -- a literal quote inside such a name is written as '' (doubled).
+    progNames = ''
+    n = 0
+    s = prog.strip()
+    loop while s.length() > 0
+      s = s.strip('L')
+      if s.length() = 0 then leave
+      if s.substr(1,1) = "'" then do
+        -- quoted token
+        token = ''
+        s = s.substr(2)
+        loop forever
+          p = s.pos("'")
+          if p = 0 then do
+            -- unterminated quote: take the rest as-is
+            token = token || s
+            s = ''
+            leave
+          end
+          token = token || s.substr(1, p - 1)
+          s = s.substr(p + 1)
+          if s.substr(1,1) = "'" then do
+            -- doubled quote -> literal quote char, keep scanning
+            token = token || "'"
+            s = s.substr(2)
+          end
+          else leave                    -- real closing quote found
+        end
+      end
+      else do
+        -- plain token up to the next blank
+        p = s.pos(' ')
+        if p = 0 then do
+          token = s
+          s = ''
+        end
+        else do
+          token = s.substr(1, p - 1)
+          s = s.substr(p + 1)
+        end
+      end
+      n = n + 1
+      progNames[n] = token
+    end
+
+    args = String[n + c]
+    loop i = 1 to n
+      args[i - 1] = String(progNames[i])
+    end
+    loop i = 1 to c
+      args[n + i - 1] = String(nrcArgs.word(i))
+    end
+/*
+    w = prog.words()          -- could be multiple
+    if w > 1 then do
+      prog = progw[1]
+      progargs = progargs || ' ' || w[2]
+    end
+
+    args = String[c+1]
+    args[0] = prog
+    loop i = 1 to c
+    	args[i] = String(nrcArgs.word(i))
+    end
+*/
+    interpArgs = args
+
+    interpreterThread = Thread(this)
+    interpreterThread.setName('InterpreterThread')
+    interpreterThread.setDaemon(boolean 1)
+    interpreterThread.start()
+    return
+
+  -- Runs on InterpreterThread. Loads NetRexxC and invokes main3(),
+  -- which drives the debuggee and calls back into checkLine() as it
+  -- executes -- that's what may block this thread on resumeQueue.take(),
+  -- and it's fine for it to block here since it's off the DAP thread.
+  method run()
+
+    do
+
+      RexxIO.setOutputStream(DapOutputStream(handler, Rexx 'console'))
+
+      clss =  Class.forName(String "org.netrexx.process.NetRexxC")
+
+      paramTypes = Class[2]
+      paramTypes[0] = String[].class
+      paramTypes[1] = org.netrexx.lsp.DapSession.class
+      m = clss.getMethod("main3", paramTypes)               -- get a handle on main3 for reflection call
+                                                            -- pass it the parameters
+      params = Object[2]
+      params[0] = interpArgs
+      params[1] = this   -- Pass 'this' DapSession instance
+
+      say "== Invoking NetRexxC"
+      result = m.invoke(null, params)                       -- and invoke main3
+      say '== NetRexxC returned: ' result
+
+    catch e=Exception
+      do
+        say 'NetRexxC exception: ' e
+      end
+    finally
+      RexxIO.popOutputStream()
+    end
+
+    -- interpreter has returned (finished or errored) -- make sure the
+    -- DAP side doesn't stay parked thinking it might still get resumed
+    setTerminated(boolean 1)
+    return
+
+
+  method registerVarRef(obj = Object) returns int
+    ref = nextVarRef
+    nextVarRef = nextVarRef + 1
+--    Integer.valueOf(int)
+--    varRefMap.put(Integer(ref), obj)
+    varRefMap.put(Integer.valueOf(ref), obj)
+    return ref
+
+  method resolveVarRef(ref = int) returns Object
+--    return varRefMap.get(Integer(ref))
+    return varRefMap.get(Integer.valueOf(ref))
+
+  method clearVarRefs()
+    varRefMap = Hashtable()
+    nextVarRef = 2000
+    return
+
+
+  method clearBreakpoints(path)
+    breakpoints[path] = null
+
+  method addBreakpoint(path = Rexx, line = Rexx, cond = String null)
+    breakpointId = breakpointId + 1
+    if \breakpoints.exists(path) then breakpoints[path] = 1
+    breakpoints[path, line] = breakpointId
+    return breakpointId
+
+
+-- a line can have multiple clauses
+-- we pause once per (possibly multi clause) line, unless option --cl where we pause per clause (so possibly multiple 'steps' per line)
+  method isBreakpoint(path = Rexx, line = Rexx)
+    if breakpoints.exists(path) then
+      if breakpoints[path].exists(line) then do
+        if prevBreakpointLine = line then do   -- if same line
+          if breakPerLine = 1 then do
+            return breakpoints[path, line]     -- pause per clause
+          end
+          else return ''                       -- don't pause, no --cl option
+        end
+        prevBreakpointLine = line              -- new breakpoint line
+        return breakpoints[path, line]         -- pause per line
+      end
+    return ''                                   -- not a breakpoint
+
+
+  -- called from onContinue / onNext / onStepIn / onStepOut / onDisconnect
+  method resume(command = Rexx)
+    if command = 'terminate' then setTerminated(boolean 1)
+    -- non-blocking: at most one item is ever pending, and only while
+    -- the interpreter thread is at (or about to be at) take().
+    resumeQueue.offer(command)
+    return
+
+  -- ------------------------------------------------------------
+  -- interpreter-thread side
+  -- ------------------------------------------------------------
+
+  -- Called once per statement/line. Returns the command that let
+  -- execution continue ('run' if it never stopped), so the caller
+  -- can react to 'terminate' by exiting its loop.
+  method checkLine(path = Rexx, line = int, frame = Object) returns Rexx
+
+    if isTerminated() then return 'terminate'
+
+    bp      = isBreakpoint(path, line)
+    stepHit = singleStep & (breakPerLine = 1 | line \=  prevStepLine )
+
+    if stepHit | bp \= '' then
+      return pauseAndWait(path, line, frame)
+    return 'run'
+
+
+  method getCurrentCursor() returns RxCursor
+    return RxCursor currentFrame
+
+
+  method pauseAndWait(path = Rexx, line = int, frame = Object) returns Rexx
+    setPausedSnapshot(path, line, frame, boolean 1)
+
+    handler.sendEvent('stopped', -
+      '{"reason": "breakpoint", "threadId": 1, "allThreadsStopped": true, "hitBreakpointIds": ['breakpoints[path, line]']}')
+
+    do
+      cmd = Rexx resumeQueue.take()     -- blocks here until resume() fires
+    catch InterruptedException
+      nop
+    end
+
+    select
+      when cmd = 'next' | cmd = 'stepIn' | cmd = 'stepOut' then do
+        singleStep = boolean 1
+        prevStepLine = line
+      -- TODO: 'next' and 'stepOut' should compare call-stack depth
+      -- against the depth at the pause point, so they don't stop one
+      -- level too deep or too shallow. This flat singleStep flag
+      -- treats all three as "stop at the very next line" (closer to
+      -- stepIn semantics) -- fine for a skeleton, worth tightening
+      -- once you're tracking a real call stack.
+      end
+      otherwise singleStep = boolean 0
+    end
+    setPausedSnapshot(path, line, frame, boolean 0)
+    return cmd
+
+
+--  method getBreakpoints(sourcePath = Rexx) returns List synchronized
+--    return List breakpointsBySource.get(sourcePath)
+
+  -- ------------------------------------------------------------
+  -- small synchronized accessors -- cheap, never block
+  -- ------------------------------------------------------------
+  method setPausedSnapshot(sourcePath = Rexx, line = int, frame = Object, isPaused = boolean)
+    currentSource = sourcePath
+    currentLine   = line
+    currentFrame  = frame
+    paused        = isPaused
+    return
+
+  method setTerminated(isSet = boolean)
+    terminated = isSet
+    return
+
+  method isTerminated() returns boolean
+    return terminated
+
+  method isPaused() returns boolean
+    return paused
+
+  method getCurrentLine() returns int
+    return currentLine
+
+  method getCurrentSource() returns Rexx
+    return currentSource
+
+  method getCurrentFrame() returns Object
+    return currentFrame
+

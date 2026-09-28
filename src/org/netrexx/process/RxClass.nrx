@@ -32,6 +32,7 @@
 /* 2022.03.24 Use RexxStream, RexxDate in scripting mode --MRE        */
 /* 2022.04.01 Use RexxRexx in scripting mode --RVJ                    */
 /* 2022.11.03 Implicit uses of RexxDate, RexxStream and RexxRexx --MRE*/
+/* 2026.08.31 Add annotations support --MRE                           */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -116,7 +117,7 @@ class RxClass implements RxClauseParser
   dummies  =Vector(5)         -- list of plain methods to generate [RxField]
   implerror=Vector(5)         -- list of errors to defer [RxField[]]
 
-  classAnnotation = Rexx ''
+  appliedAnnotations = HashMap           --
 
   
  /** Construct a class environment from the current clause */
@@ -850,8 +851,7 @@ class RxClass implements RxClauseParser
     if classinfo.isdeprecated then rxt.program.streamer.out('/** @deprecated */')
     end
   rxt.program.streamer.out(null)             -- cosmetic empty line
-  /* stream the class level annotations here */
-  rxt.program.streamer.out(this.classAnnotation)
+
   rxt.program.streamer.out(statement)
 
   /* remember where constants will go */
@@ -1385,9 +1385,21 @@ class RxClass implements RxClauseParser
    end
   return info
 
-  method setAnnotation(a)
-    this.classAnnotation = this.classAnnotation a' '
-    
+  method setAnnotation(a, typeName=String, repeatable=boolean, values=String[] null,  put=boolean 1) returns boolean
+    if appliedAnnotations=null then appliedAnnotations=HashMap()
+    if appliedAnnotations.containsKey(typeName) then do
+      if \repeatable then
+        return 0
+    end
+    else
+      if put then appliedAnnotations.put(typeName, values)
+    return 1
+
+  method getAnnotationValues(typeName=String) public returns String[]
+    if appliedAnnotations=null then
+      return null
+    return String[] appliedAnnotations.get(typeName)
+
  /** Interpretation */
  method interpret(cursor=RxCursor null)
   signal RxQuit(rxt, tokens[0], 'internal.error', 'RxClass: interpret')

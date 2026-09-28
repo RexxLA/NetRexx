@@ -9,20 +9,99 @@
 /* ------------------------------------------------------------------ */
 /* Change list                                                        */
 /* 2017.04.26 Initial                                                 */
+/* 2026.08.31 Complete annotation support  --MRE                      */
 /* ------------------------------------------------------------------ */
+
+-- Note that only class and method annotations are supported
+
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
+
+import java.lang.reflect.Method
+import java.util.ArrayList
+import java.util.HashMap
 
 /**   An object that represents a parsed Annotation clause            */
 class NrAnnotate implements RxClauseParser
   properties private
-  rxt    =RxTranslator                            -- root
-  tokens =RxToken[]                               -- local reference
+  rxt       =RxTranslator                -- the boss
+  tokens    =RxToken[]                   -- local reference
+  anno      =Rexx                        -- the annotation
+  clausenum =int                         -- the clause number of the annotation
   
   /** Construct an object from the current clause */
-  method NrAnnotate(newrxt=RxTranslator)
+  method NrAnnotate(newrxt=RxTranslator, clausenum_=int)
     rxt    =newrxt
+    clausenum = clausenum_
     tokens =rxt.program.parser.cursor.curclause.tokens
+    anno = Rexx tokens[0].value
+    anno = anno.translate('"', '''')
+
+                        -- first check if class or method (or other annotation) declaration follows
+                        -- if not OK, blank anno and signal error
+    n = clausenum
+    OK = 0
+    do forever
+      n = n + 1
+      cl = rxt.program.clauser.clause(n)
+      if cl = null        then leave
+--      say cl.showtokens()
+      if cl.lookaside <= NrAnnotate then iterate
+      if cl.lookaside = null then iterate
+      if cl.lookaside <= RxClass | cl.lookaside <= NrMethod then do
+        OK = 1
+        leave
+      end
+      leave
+    end
+    if OK = 0 then do
+      anno = ''
+      signal RxError(rxt, tokens[0], 'bad.clause.start')
+    end
+                        -- next parse the annotation for syntax and semantics
+                        -- if not OK, blank anno and signal error
+    parser = RxAnnotationParser(anno, rxt, tokens[0])
+    validationResult = parser.validate()
+    if \validationResult.isValid then do
+      anno = ''
+      signal RxError(rxt, tokens[0], 'annotation.invalid', validationResult.message)
+    end
+    annoType   = parser.getAnnotationClass().getName()
+    repeatable = parser.isRepeatable()
+    values     = parser.getStringValues()
+
+                          -- next check if annotation is applicable to the target
+                          -- and if there's no duplicate when non-repeatable
+                          -- if not OK, blank anno and signal error
+    if cl.lookaside <= NrMethod then do
+      nrM = NrMethod cl.lookaside
+      if \parser.isApplicableTo('METHOD') then do
+        anno = ''
+        signal RxError(rxt, tokens[0], 'annotation.wrong.target', annoType, 'method')
+      end
+
+      if \nrM.setAnnotation(anno, annoType, repeatable, values) then do
+        anno = ''
+        signal RxError(rxt, tokens[0], 'annotation.not.repeatable', annoType)
+      end
+
+      if annoType=='java.lang.SuppressWarnings' then anno=''    -- RxMethod's will generate
+    end
+    else do
+      nrC = RxClass cl.lookaside
+      if \parser.isApplicableTo('TYPE') then do
+        anno = ''
+        signal RxError(rxt, tokens[0], 'annotation.wrong.target', annoType, 'class')
+      end
+
+      if \nrC.setAnnotation(anno, annoType, repeatable, values) then do
+        anno = ''
+        signal RxError(rxt, tokens[0], 'annotation.not.repeatable', annoType)
+      end
+    end
+    return
+
+
     
   /** Pass processing */
   method scan(pass=int)
@@ -33,16 +112,13 @@ class NrAnnotate implements RxClauseParser
     return null
     
   /** Code generation [only] */
+                                                -- output only when valid annotation
   method generate
-    -- we do no generate here because the annotation must be the last line
-    -- generated before the new method definition
-    -- the streaming is handled in RxParser already
-    nop
-    return
-    
+   if anno \== '' then rxt.program.streamer.out(anno)
+   return
+
   /** Interpretation */
   method interpret(cursor=RxCursor null)
     -- we do not handle interpreted annotations
     RxMessage(rxt.program, RxMessage.WARN, tokens[0], 'annotation.not.interpreted', 'NrAnnotate')
     return                                          -- no point in this.
-    

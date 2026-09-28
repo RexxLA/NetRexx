@@ -67,10 +67,15 @@
 /* 2024.11.19 add option to specify targetvm class version -- MRE     */
 /* 2025.02.17 targetvm default and minimum class version 52 -- MRE    */
 /* 2026.01.24 aslspserver for quick outline structure --MRE           */
+/* 2026.08.29 add option for annotations, set flag accordingly --MRE  */
+/* 2026.09.26 Dap support --MRE                                       */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
 import javax.tools.
+
+import org.netrexx.lsp.DapSession
+import org.netrexx.lsp.DapOutputStream
 
 class NetRexxC
   
@@ -114,6 +119,7 @@ class NetRexxC
   targetvm     = Rexx minversion         -- allows target vm class version to be passed as argument
                                          -- minversion and default is 1.8                
   aslspserver  = boolean 0
+  annotations  = boolean 1
 
   properties private static
   programstrings = String[]                  --	allows programs to be passed in memory strings
@@ -231,22 +237,33 @@ class NetRexxC
     rc = int it.process(arg, logfile)
     if it.warnexit0 then if rc=1 then return 0
     return rc
-    
-    
+
+  method main3(arg=String[], dapSession = DapSession null) constant returns int
+    it=NetRexxC() -- make private object
+
+    rc = int it.process(arg, null, dapSession)
+    if it.warnexit0 then if rc=1 then return 0
+    return rc
+
   /** actual processing is done here, with a private copy of flags, etc. */
   -- arguments as main2
-  method process(arg=String[], logfile=PrintWriter null) private returns int
+  method process(arg=String[], logfile=PrintWriter null, dapSession = DapSession null) private returns int
     rt=Runtime.getRuntime()                         -- runtime instance
     
     translator=RxTranslator()                       -- construct translator
     
     parseline(arg)    -- collect initial flags and file specification
-    
+
+    if dapSession \= null then do
+      translator.setDapSession(dapSession)
+    end
+
     translator.setkeeps(keep,keepasjava,classlist,javac,ecj)
     translator.setaddress(address)
     translator.setimplicituses(implicituses)
     translator.setdeps(deps)
     translator.setaslspserver(aslspserver)
+    translator.program.flag.annotations = annotations
 
     if ecj then
       maxversion = '15'                                            -- ecj version
@@ -328,7 +345,11 @@ class NetRexxC
       
       if console then outfile=System.out
       else outfile=null
-      
+
+      if translator.dapSession \= null then do
+        outfile = PrintStream(DapOutputStream(dapSession.handler, Rexx 'console'))
+      end
+
       -- copy translator flags & files into arrays
       filearray=Rexx[filecount]    -- set up array of file specifications
       files.copyInto(filearray)    -- ..
@@ -593,7 +614,11 @@ class NetRexxC
 	when arglow=='javac' then do;javac=1;ecj=0;end	-- can't prefer both javac and ecj compiler KK
 	when arglow=='ecj' then do;javac=0;ecj=1;end	-- can't prefer both javac and ecj compiler KK
 	when arglow=='noaddress' then do; address=0; end  -- explicitely set address flag to change parser MRE
-	when arglow=='address' then do; address=1; end    
+	when arglow=='address' then do; address=1; end
+
+	when arglow=='noannotations' then do; annotations=0; end
+	when arglow=='annotations' then do; annotations=1; end
+
 	when arglow=='noimplicituses' then do; implicituses=0; end  -- no implicit uses MRE
 	when arglow=='implicituses' then do; implicituses=1; end  
 	when arglow=='nodeps' then do; deps=0; end  -- no deps listing RVJ

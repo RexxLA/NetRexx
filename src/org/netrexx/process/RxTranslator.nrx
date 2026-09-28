@@ -69,6 +69,7 @@
 /* 2025.01.11 always specify -target and -source, default 1.8   --MRE */
 /* 2025.02.23 Abstract jsr223Engine                             --MRE */
 /* 2026.01.24 LspDocumentSymbol after pass 0, fast return       --MRE */
+/* 2026.09.26 Dap support                                       --MRE */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -84,6 +85,7 @@ options binary decimal strictcase strictargs
 import javax.tools.             --      2015.05.02 switch javac use to jsr199 java compiler api -- KK
 import org.netrexx.jsr223            -- MRE
 import javax.script.
+import org.netrexx.lsp.DapSession
 
 class RxTranslator
 
@@ -160,6 +162,7 @@ class RxTranslator
   -- [entry[0] is language-specific, no longer set by RxBabel]
   imports     =String[]       -- array of package names, e.g., 'java.lang'
                               -- [these will have hierarchies imported]
+  dapSession = DapSession null
 
   
   properties constant shared   -- constants, visible within the package
@@ -173,7 +176,7 @@ class RxTranslator
   badjavac        =boolean 0       -- 1 if javac compile failed
 --MRE 
   aslspserver = boolean 0
-  
+
  /** RXTRANSLATOR -- constructor, makes a new Translator instance
     */
  method RxTranslator()
@@ -224,6 +227,10 @@ class RxTranslator
   method setaddress(address1)
     address=address1
 
+  method setDapSession(dapSession_= DapSession)
+    dapSession=dapSession_
+    say 'Session 'dapSession ' set'
+
   method setimplicituses(implicituses1)
     program.flag.implicituses = implicituses1
 
@@ -236,6 +243,9 @@ class RxTranslator
   method setaslspserver(lsp)
     aslspserver=lsp
 
+-- MRE for org.netrexx.lsp.DapHandler
+ method getInterpreter returns RxInterpreter
+  return interpreter
 
   /** -------------------------------------------------------------- */
     /* SETLANGUAGES -- set language-specific constants                */
@@ -428,7 +438,7 @@ class RxTranslator
 
   /* -------------------------------------------------------------- */
   /* Pass 0                                                         */
-  /* -------------------------------------------------------------- */
+  /* -----------------------------------------------------outfile--------- */
   pass=0; pass0=1
   loop f=0 for programs
     program=programlist[f]              -- set current program
