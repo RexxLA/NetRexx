@@ -9,6 +9,9 @@
 - Improved argument handling in the POSIX bin scripts
 - NetRexxC.sh now exits non-zero when translation fails
 - NetRexx-91 exit fails if exitcode not literal
+- NetRexx-88 fix ADDRESS WITH stem parsing
+- NetRexx-89 make interpreted assignment clause re-entrant
+- NetRexx-93 make interpreted clauses re-entrant
 
 ## Examples
 - Added the awfy benchmark suite to examples/benchmarks

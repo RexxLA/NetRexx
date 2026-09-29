@@ -24,6 +24,7 @@
 /* 1999.08.07 Optimize int=int+1 and int=int-1                        */
 /* 2000.02.24 Implement interpret complete                            */
 /* 2024.09.29 INTERPRET support, handle rxt.interpreting flag --MRE   */
+/* 2026.09.28 Make interpret re-entrant, update only local vars --MR  */
 /* ------------------------------------------------------------------ */
 -- Could use RxExpr for the RHS, later
 package org.netrexx.process
@@ -354,73 +355,79 @@ end
   -- for prologue (property) assignments, we only get here if we have
   -- the right staticality
 
+  -- use local variables, do not update the properties
+  ilhs = lhs
+  irhs = rhs
+
   if cursor.curprogram.flag.diag then
-    say '#=' lhs.group lhs.type.toSig() ':' cursor.curclause.toString()
+    say '#=' ilhs.group ilhs.type.toSig() ':' cursor.curclause.toString()
 
   -- get value for the right-hand-side
-  if rhs=null then do
+  if irhs=null then do
     -- set default value for right-hand-side [needed for bare properties only]
-    rhs=RxCode(S_TYPE, lhs.type, null)
+    irhs=RxCode(S_TYPE, ilhs.type, null)
     end
-   else if \rhs.constant, cursor.curtrace\=null then do -- re-evaluation needed
+   else if \irhs.constant, cursor.curtrace\=null then do -- re-evaluation needed
     -- re-evaluation needed
-    rhs=rxt.eparser.evalexpr(cursor, 1, rhs.begoff, null, null, tracetag,-
+    irhs=rxt.eparser.evalexpr(cursor, 1, irhs.begoff, null, null, tracetag,-
                              tracename)
     -- if we used litexpr before, we must re-apply it now
     -- [later separate out litexpr so we can set conv appropriately?]
     if rhslitexpr then do
-      rhs.group=S_LIT                   -- setup
-      converter.litexpr(cursor, rhs)
+      irhs.group=S_LIT                   -- setup
+      converter.litexpr(cursor, irhs)
       end
     if conv\=null then do
-      tok=cursor.curclause.tokens[rhs.begoff]
-      converter.convertcode(cursor, lhs.type, conv.proc, rhs, tok)
+      tok=cursor.curclause.tokens[irhs.begoff]
+      converter.convertcode(cursor, ilhs.type, conv.proc, irhs, tok)
       end
     end
   -- just-a-type is OK, in which case it has initial value
-  if rhs.group=S_TYPE then rhs.value=rxt.interpreter.initvalue(rhs.type)
-
+  if irhs.group=S_TYPE then do
+    if irhs == rhs then irhs=irhs.copy()
+    irhs.value=rxt.interpreter.initvalue(irhs.type)
+  end
 
   /* now effect the assignment */
-  lhstok=cursor.curclause.tokens[0]     -- local reference
+  ilhstok=cursor.curclause.tokens[0]     -- local reference
 
   -- Compound properties on the LHS need careful treatment...
-  if lhs.group=S_PROP then do label props
+  if ilhs.group=S_PROP then do label props
     -- re-evaluate the LHS term, so we get the correct last-value
     -- context object set in the LHS code object
-    lhs=rxt.tparser.evalterm(cursor, 0, 0)
+    ilhs=rxt.tparser.evalterm(cursor, 0, 0)
 
     -- could be indexed...
-    if lhs.array\=null then do
+    if ilhs.array\=null then do
       -- we just reevaluated the LHS; the value of the LHS should be the array
       -- or string to index
-      if lhs.isstem then                -- indexed string
-        rxt.interpreter.setStemElementValue(cursor, Rexx lhs.value, lhs.array,-
-                                            lhstok, Rexx rhs.value)
+      if ilhs.isstem then                -- indexed string
+        rxt.interpreter.setStemElementValue(cursor, Rexx ilhs.value, ilhs.array,-
+                                            ilhstok, Rexx irhs.value)
        else
-        rxt.interpreter.setArrayElementValue(cursor, lhs.value, lhs.type,-
-                                             lhs.array, lhstok, rhs.value)
+        rxt.interpreter.setArrayElementValue(cursor, ilhs.value, ilhs.type,-
+                                             ilhs.array, ilhstok, irhs.value)
       end
      else -- simple property
-      rxt.interpreter.setProperty(lhs.penvalue, lhs.field, lhstok, rhs.value)
+      rxt.interpreter.setProperty(ilhs.penvalue, ilhs.field, ilhstok, irhs.value)
     end props
 
    else /* simple variable or indexed assignment */ do
     -- could be indexed...
-    if lhs.array\=null then do
-      lhs=rxt.tparser.evalterm(cursor, 0, 0)
+    if ilhs.array\=null then do
+      ilhs=rxt.tparser.evalterm(cursor, 0, 0)
       -- LHS value will be the array
-      -- say '# LV:' lhs.isstem lhs.value rhs.value lhs.array
-      if lhs.isstem then                -- indexed string
-        rxt.interpreter.setStemElementValue(cursor, Rexx lhs.value, lhs.array,-
-                                            lhstok, Rexx rhs.value)
+      -- say '# LV:' ilhs.isstem ilhs.value irhs.value ilhs.array
+      if ilhs.isstem then                -- indexed string
+        rxt.interpreter.setStemElementValue(cursor, Rexx ilhs.value, ilhs.array,-
+                                            ilhstok, Rexx irhs.value)
        else
-        rxt.interpreter.setArrayElementValue(cursor, lhs.value, lhs.type,-
-                                             lhs.array, lhstok, rhs.value)
+        rxt.interpreter.setArrayElementValue(cursor, ilhs.value, ilhs.type,-
+                                             ilhs.array, ilhstok, irhs.value)
       end
      else do
-      var=pooler.refindvar(cursor, lhstok.value)  -- find the variable
-      rxt.interpreter.setVar(cursor, var, lhstok, rhs.value)  -- set it
+      var=pooler.refindvar(cursor, ilhstok.value)  -- find the variable
+      rxt.interpreter.setVar(cursor, var, ilhstok, irhs.value)  -- set it
       end
     end
 
