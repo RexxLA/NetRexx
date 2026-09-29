@@ -292,11 +292,14 @@ method scanWITH(nexttoken)
   t = Rexx tok.value
 
   append=Rexx null
-  
+
+  if t = null then signal RxQuit(rxt, tok, 'bad.expression.syntax')
+
   if t = 'INPUT' & tokens[nexttoken+1].type \= RxToken.END then do
     next = 2
   end
   else if t = 'OUTPUT' & tokens[nexttoken+1].type \= RxToken.END then do
+    if tokens[nexttoken+2].value = null then signal RxQuit(rxt, tokens[nexttoken+2], 'bad.expression.syntax')
     if Rexx tokens[nexttoken+2].value = 'REPLACE' & tokens[nexttoken+3].type \= RxToken.END then do
       next = 4
     end
@@ -307,7 +310,8 @@ method scanWITH(nexttoken)
     else 
       next = 2
   end   
-  else if t = 'ERROR' & tokens[nexttoken+1].type \= RxToken.END then do     
+  else if t = 'ERROR' & tokens[nexttoken+1].type \= RxToken.END then do
+    if tokens[nexttoken+2].value = null then signal RxQuit(rxt, tokens[nexttoken+2], 'bad.expression.syntax')
     if Rexx tokens[nexttoken+2].value = 'REPLACE' & tokens[nexttoken+3].type \= RxToken.END then do
       next = 4
     end
@@ -339,6 +343,8 @@ method scanWithWhat(nexttoken, with_, append)
   tok = tokens[nexttoken]
   t = Rexx tok.value
 
+  if t = null then signal RxQuit(rxt, tok, 'bad.expression.syntax')
+
   if t = 'STEM' then do
     if tokens[nexttoken+1].type == RxToken.END then 
       signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.stem.expected')
@@ -349,6 +355,9 @@ method scanWithWhat(nexttoken, with_, append)
 --      say 'MRE' scode.javacode
     
       tok = tokens[nexttoken]
+
+      if tokens[nexttoken].value = null then signal RxQuit(rxt, tokens[nexttoken], 'bad.expression.syntax')
+
       rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
       if rxvar == null then do
          signal RxQuit(rxt, tokens[nexttoken], 'variable.name.expected')
@@ -367,12 +376,15 @@ method scanWithWhat(nexttoken, with_, append)
       with[with_, 'append'] = append
     end  
   end
-  else if t = 'STREAM' then do 
+  else if t = 'STREAM' then do
     if tokens[nexttoken+1].type == RxToken.END then 
       signal RxQuit(rxt, tokens[nexttoken+1], 'address.with.stream.expected')
     else do
 
       nexttoken= nexttoken+2
+
+      if tokens[nexttoken].value = null then signal RxQuit(rxt, tok, 'bad.expression.syntax')
+
       endwords = 'INPUT OUTPUT ERROR'
       strcode=rxt.eparser.parseexpr(parser.cursor, 0, nexttoken, null, endwords)
 
