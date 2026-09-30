@@ -32,8 +32,12 @@
 @REM : 2014.05.30 -- default to ecj compiler and add NetRexxF.jar to classpath 
 @REM : 2015.06.30 -- remove operand limit, allow quotes, spaces and parens in classpath, add NetRexxC.jar to classpath if found
 @REM : 2015.08.17 -- document steps contained in this batch file (cannot use %* here due to "-run" parm shift)
+@REM : 2026.09.30 -- setlocal; pass the arguments whole (%* less any -run), so =,; survive;
+@REM :               no echo of the java command; exit with the java status
 
 @echo off
+setlocal
+set nrcrc=0
 @rem copy CLASSPATH environment variable to nrcpath variable
 set nrcpath=%CLASSPATH%;
 @rem map chars batch cmds cannot handle:  " to null, blank to ?, ( to <, ) to >
@@ -78,38 +82,30 @@ set "nrcpath=%nrcpath:^<=(%"
 set "nrcpath=%nrcpath:^>=)%"
 
 @rem check first operand to see if it is "-run". If not, jump to label compile, otherwise set run flag, save name of class to run, remove any trailing ".nrx" from name, erase -run option
-set netrexxc.bat_run=no
-if not '%1'=='-run' goto compile
-  set netrexxc.bat_run=yes
-  set netrexxc.runner=%2
-  set netrexxc.runner=%netrexxc.runner:.nrx=%
-  shift
-  
-:compile
-@rem if no options or files specified, tell user to add "-help" for options syntax list, otherwise go to old label maywanthelp
-if not -%1-==-- goto maywanthelp
-echo "nrc -help" lists options
-goto quit
+@rem if no options or files specified, tell user to add "-help" for options syntax list
+if "%~1"=="" echo "nrc -help" lists options
+if "%~1"=="" goto quit
 
-:maywanthelp
-@rem Since Windows batch files can only access 9 operands at a time, insert a loop that adds the first operand to variable nrcopts and shifts the operands left until no operands are left to add.
-@rem This allows all operands to be passed in variable nrcopts to NetRexxC which does the actual compile.
-set nrcopts=
-:argactionstart
-if -%1-==-- goto argactionend
-set nrcopts=%nrcopts% %1
-shift
-goto argactionstart
-:argactionend
+@rem pass the arguments whole: %1, %2 ... split at = , ; as well as blanks, and %* does not
+set "nrcopts=%*"
+set netrexxc.bat_run=no
+if /i not "%~1"=="-run" goto docompile
+  set netrexxc.bat_run=yes
+  set netrexxc.runner=%~2
+  set netrexxc.runner=%netrexxc.runner:.nrx=%
+  @rem drop the -run: everything up to and including the first argument
+  call set "nrcopts=%%nrcopts:*%1=%%"
 
 :docompile
-echo java -cp "%nrcpath%;." %netrexx_java% org.netrexx.process.NetRexxC %nrcopts%
 @rem use java command to start NetRexxC compiler with adjusted classpath variable, netrexx_java environment variable containing java options and nrcopts variable containing netrexx files and options
 java -cp "%nrcpath%;." %netrexx_java% org.netrexx.process.NetRexxC %nrcopts%
-if errorlevel 2 goto quit
+set nrcrc=%ERRORLEVEL%
+if %nrcrc% GEQ 2 goto quit
 
 @rem if option "-run" was passed and requested class file exists, use java command to start the class with the adjusted classpath hopefully providing netrexx runtime classes 
 if %netrexxc.bat_run%==no goto quit
 echo Running %netrexxc.runner% ...
 IF EXIST %netrexxc.runner%.class (java -cp "%nrcpath%;." %netrexxc.runner%) ELSE echo -run error: class file not found
+set nrcrc=%ERRORLEVEL%
 :quit
+exit /b %nrcrc%
