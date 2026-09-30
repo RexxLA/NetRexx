@@ -584,17 +584,17 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
       (or null, for an empty return or null value)
     */
  method callMethod(obj=Object, field=RxField,-
-                   argcodes=RxCode[], tok=RxToken, supercall=boolean 0) returns Object
+                   argcodes=RxCode[], tok=RxToken, supercontext=Class null) returns Object
   -- we only want the values from the codes
   args=Object[argcodes.length]
   loop i=0 for argcodes.length
     args[i]=argcodes[i].value
     end i
-  return callMethod(obj, field, args, tok, 0, 0, supercall)
+  return callMethod(obj, field, args, tok, 0, 0, supercontext)
 
  method callMethod(obj=Object, field=RxField,-
                    args=Object[], tok=RxToken,-
-                   precall=boolean, proxycall=boolean, supercall=boolean 0) returns Object
+                   precall=boolean, proxycall=boolean, supercontext=Class null) returns Object
 
   -- MRE don't call methods from parsemethodbody when processing INTERPRET instruction
   if rxt.interpreting then return null
@@ -646,16 +646,15 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
         meth.setAccessible(1)      -- we're allowed
         -- call it.
                                       -- issue #92, handle super calls
-        if supercall then do
+        if supercontext \= null then do
           -- Method.invoke() uses invokevirtual semantics, even when
           -- 'meth' was obtained from the superclass.  NetRexx
           -- super.method() requires invokespecial semantics.
-          objclass=obj.getClass()
 
           lookup=java.lang.invoke.MethodHandles.lookup()
-          lookup=java.lang.invoke.MethodHandles.privateLookupIn(objclass, lookup)
+          lookup=java.lang.invoke.MethodHandles.privateLookupIn(supercontext, lookup)
 
-          handle=lookup.unreflectSpecial(meth, objclass)
+          handle=lookup.unreflectSpecial(meth, supercontext)
           handle=handle.bindTo(obj)
 
           value=handle.invokeWithArguments(java.util.Arrays.asList(values))
