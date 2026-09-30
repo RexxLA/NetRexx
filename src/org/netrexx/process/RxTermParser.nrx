@@ -62,6 +62,7 @@
 /* 2024.12.16 Read ASK input from jsr223 engine, when set       --MRE */
 /* 2025.12.19 Immutable lambda variables for GO instructions    --MRE */
 /* 2026.05.13 snapshot method arguments when interpreting GO    --MRE */
+/* 2026.09.30 detect call to super and pass superflag, issue #92--MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -1336,6 +1337,9 @@ end sqstub
     if code.type.isPrimitive() then
       signal RxError(rxt, tok, 'partial.term.is.primitive', code.type.classname)
 
+    supercall=0                                   -- issue #92 super overridden
+    if code.javacode == 'super' then supercall=1
+
     code.javacode=code.javacode'.'
     code.constant=0                -- no longer constant if more to come
     code.isstem=0                  -- no longer a stem if more to come
@@ -1485,7 +1489,7 @@ end sqstub
         if exec then do label doit
           -- this now handles both methods and constructors
           code.value=interpreter.callMethod(code.value, field,-
-                                            argcodes, parttok)
+                                            argcodes, parttok, supercall)   -- issue #92, pass the supercall flag
           end doit
 
         n=next
@@ -1632,7 +1636,7 @@ end sqstub
             if exec then do label doit
               argcodes=RxCode[0]        -- no arguments
               code.value=interpreter.callMethod(code.value, field,-
-                                                argcodes, parttok)
+                                                argcodes, parttok, supercall)  -- issue #92, pass the supercall flag
               end doit
             end
            else do

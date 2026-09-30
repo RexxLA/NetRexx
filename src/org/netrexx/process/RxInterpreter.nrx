@@ -45,6 +45,7 @@
 /* 2024.12.16 Connect trace output to jsr223 engine, when set   --MRE */
 /* 2026.09.26 Debug Adapter Protocol support                    --MRE */
 /* 2026.09.30 fix issue #85 catch skips nested blocks           --MRE */
+/* 2026.09.30 fix methodcalls to super, issue #92               --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -583,17 +584,17 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
       (or null, for an empty return or null value)
     */
  method callMethod(obj=Object, field=RxField,-
-                   argcodes=RxCode[], tok=RxToken) returns Object
+                   argcodes=RxCode[], tok=RxToken, supercall=boolean 0) returns Object
   -- we only want the values from the codes
   args=Object[argcodes.length]
   loop i=0 for argcodes.length
     args[i]=argcodes[i].value
     end i
-  return callMethod(obj, field, args, tok, 0, 0)
+  return callMethod(obj, field, args, tok, 0, 0, supercall)
 
  method callMethod(obj=Object, field=RxField,-
                    args=Object[], tok=RxToken,-
-                   precall=boolean, proxycall=boolean) returns Object
+                   precall=boolean, proxycall=boolean, supercall=boolean 0) returns Object
 
   -- MRE don't call methods from parsemethodbody when processing INTERPRET instruction
   if rxt.interpreting then return null
@@ -644,7 +645,24 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
         meth=infoclass.getDeclaredMethod(field.fieldname, classes)
         meth.setAccessible(1)      -- we're allowed
         -- call it.
-        value=meth.invoke(obj, values)
+                                      -- issue #92, handle super calls
+        if supercall then do
+          -- Method.invoke() uses invokevirtual semantics, even when
+          -- 'meth' was obtained from the superclass.  NetRexx
+          -- super.method() requires invokespecial semantics.
+          objclass=obj.getClass()
+
+          lookup=java.lang.invoke.MethodHandles.lookup()
+          lookup=java.lang.invoke.MethodHandles.privateLookupIn(objclass, lookup)
+
+          handle=lookup.unreflectSpecial(meth, objclass)
+          handle=handle.bindTo(obj)
+
+          value=handle.invokeWithArguments(java.util.Arrays.asList(values))
+          end
+        else
+          value=meth.invoke(obj, values)
+
         value=ref2code(value, field.fieldtype)    -- rewrap if needed
         end
 
@@ -675,6 +693,8 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
         say '     :' classes[ic].getName()
         end ic
       signal RxQuit(rxt, tok, 'internal.error', 'RxInterpreter: mnf')
+      catch t=Throwable
+        signal RxSignalPend(t, tok)    -- supercall can throw
       end try
     return value
     end nonlocalmethod
