@@ -3,14 +3,18 @@
 ## Language
 - Improved Annotations handling
 - Improved LSP handling of minor classes
+- Debug Adapter Protocol implementation
 
 ## Fixes
 - Fixed GO arguments when interpreting
 - Improved argument handling in the POSIX bin scripts
 - NetRexxC.sh now exits non-zero when translation fails
-- NetRexx-91 exit fails if exitcode not literal
-- NetRexx-88 fix ADDRESS WITH stem parsing
+- Windows scripts now report exitcodes
+- time(C) now correctly returns 12am and 12pm after midnight and noon
+- NetRexx-88 fix ADDRESS WITH STEM parsing
 - NetRexx-89 make interpreted assignment clause re-entrant
+- NetRexx-91 exit fails if exitcode not literal
+- NetRexx-92 interpreted super calls to Java class's method calls thrpreted clauses re-entrant
 - NetRexx-93 make interpreted clauses re-entrant
 
 ## Examples
