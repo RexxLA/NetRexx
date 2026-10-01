@@ -70,6 +70,7 @@
 /* 2025.02.23 Abstract jsr223Engine                             --MRE */
 /* 2026.01.24 LspDocumentSymbol after pass 0, fast return       --MRE */
 /* 2026.09.26 Dap support                                       --MRE */
+/* 2026.10.01 exit 2 when exception during exec, issue #95      --MRE */
 /* ------------------------------------------------------------------ */
 /* The translator originally was slightly more general, in that it    */
 /* permitted an output .java to be specified.  We now [1997.04.20]    */
@@ -176,6 +177,7 @@ class RxTranslator
   badjavac        =boolean 0       -- 1 if javac compile failed
 --MRE 
   aslspserver = boolean 0
+  execexcept      =boolean 0       -- exception occurred during execution  --MRE issue #
 
  /** RXTRANSLATOR -- constructor, makes a new Translator instance
     */
@@ -634,6 +636,7 @@ class RxTranslator
     catch s=RxSignal
       signalobj=s.signalobj
       if signalobj=null then leave finals  -- signal was Exit request
+      execexcept = 1
       realexcep=Throwable signalobj
       say('===== Exception running class' thisclass.classinfo.fullname':'-
            realexcep.toString() '=====')
@@ -984,6 +987,11 @@ class RxTranslator
           add=add||NrAnsi.ANSI_RED'javac failed'NrAnsi.ANSI_RESET
           ok=0   -- failed
         end
+	if execexcept then do
+          if add\=='' then add=add', '
+          add=add||NrAnsi.ANSI_RED'exception occurred'NrAnsi.ANSI_RESET
+          ok=0   -- failed
+        end
 	if program.errorcount>0 then do
           if add\=='' then add=add', '
           if program.errorcount=1 then add=NrAnsi.ANSI_RED||add'one error'NrAnsi.ANSI_RESET
@@ -1050,6 +1058,7 @@ class RxTranslator
     programs=programlist.length
     if programs=0 then return EXIT_ERROR       -- failed before programs
     if badjavac   then return EXIT_ERROR       -- hopeless
+    if execexcept then return EXIT_ERROR       -- exception occurred
     warns=0
     loop f=0 for programs
       program=programlist[f]                   -- current program
