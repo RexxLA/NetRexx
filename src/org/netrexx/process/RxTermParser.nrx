@@ -63,6 +63,7 @@
 /* 2025.12.19 Immutable lambda variables for GO instructions    --MRE */
 /* 2026.05.13 snapshot method arguments when interpreting GO    --MRE */
 /* 2026.09.30 detect call to super and pass superflag, issue #92--MRE */
+/* 2026.10.01 fix this/super delegation, issue #86              --MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -2044,7 +2045,19 @@ end sqstub
       end
     end
 
-    converter.convertcode(cursor, lhtypes[i], converts[i].proc, codes[i])
+    if exec & cursor.curprecall then do              -- MRE fix issue #86, this/super delegation
+      convert=converter.assigncost(cursor, lhtypes[i], codes[i].type)
+
+      if cursor.curprogram.flag.diag then
+        say '# Precall convert:' cursor.curprogram.toString(codes[i].type)-
+            'to' cursor.curprogram.toString(lhtypes[i])-
+            'proc' convert.proc
+
+      converter.convertcode(cursor, lhtypes[i], convert.proc, codes[i])
+      end
+    else
+      converter.convertcode(cursor, lhtypes[i], converts[i].proc, codes[i])
+
     if \exec then acc=acc||codes[i].javacode
 
     if cursor.curIsGO then do                                        -- MRE special for GO instruction

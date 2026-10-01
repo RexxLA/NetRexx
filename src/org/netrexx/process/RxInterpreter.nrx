@@ -46,6 +46,7 @@
 /* 2026.09.26 Debug Adapter Protocol support                    --MRE */
 /* 2026.09.30 fix issue #85 catch skips nested blocks           --MRE */
 /* 2026.09.30 fix methodcalls to super, issue #92               --MRE */
+/* 2026.10.01 fix this/super delegation, issue #86              --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -743,20 +744,22 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
     -- if we're starting the body of a constructor (i.e., not the precall)
     -- then it's time to initialize the instance variables
     if \precall then do
-      initializeProperties(localclass, obj)
-      -- also, if we have a this() or super() call in the method then
-      -- set flag so we skip it on this run (the proxy will have done
-      -- the call, possibly after a precall)
+      initprops=1                         -- MRE fix issue #86, this/super delegation
+      if localmeth.methodhadthissuper then do
+        tsfield=field.fieldspecial
+        -- this(...) delegated construction has already initialized
+        -- this class's instance properties
+        if tsfield.fieldinfo == field.fieldinfo then initprops=0
+      end
+
+      if initprops then initializeProperties(localclass, obj)
+
       if localmeth.methodhadthissuper then do
         cursor.curskipone=1
-        -- if we must have had a precall then inhibit tracing until skip
-        -- done, as we will have traced thus far on the precall.
-        -- The 'inhibit trace' is turned off when curskipone is cleared
-        tsfield=field.fieldspecial -- this describes the this/super call
         tsargcount=tsfield.fieldargtypes.length
         if tsargcount>0 then cursor.curskiptrace=1
-        end
       end
+     end
      else do   -- in precall
       -- must be a super(..)/this(..) a-coming
       -- the object is not in fact an instance but the parent
