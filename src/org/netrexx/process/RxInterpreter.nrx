@@ -47,6 +47,7 @@
 /* 2026.09.30 fix issue #85 catch skips nested blocks           --MRE */
 /* 2026.09.30 fix methodcalls to super, issue #92               --MRE */
 /* 2026.10.01 fix this/super delegation, issue #86              --MRE */
+/* 2026.10.02 setAccessible only on non-super exec issue #96    --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -644,7 +645,6 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
         -- find the Method object for the method
         -- this should always succeed
         meth=infoclass.getDeclaredMethod(field.fieldname, classes)
-        meth.setAccessible(1)      -- we're allowed
         -- call it.
                                       -- issue #92, handle super calls
         if supercontext \= null then do
@@ -660,8 +660,11 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
 
           value=handle.invokeWithArguments(java.util.Arrays.asList(values))
           end
-        else
+        else do
+                          -- MRE only call setAccessible(1) on the non-super path,  issue #96
+          meth.setAccessible(1)    -- we're allowed
           value=meth.invoke(obj, values)
+        end
 
         value=ref2code(value, field.fieldtype)    -- rewrap if needed
         end
