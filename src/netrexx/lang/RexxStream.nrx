@@ -6,6 +6,7 @@ import java.nio.channels.
 import java.nio.charset.
 import java.nio.file.Paths
 import java.nio.file.Path
+import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.text.SimpleDateFormat
@@ -22,6 +23,7 @@ import java.text.SimpleDateFormat
  * Practical result is that charout() must be used to successfully charin().  
  * Created on: Thu, 03, Feb 2022 16:40:14 +0100 rvj
  * Updated April 16th 2025  --MRE
+ * Updated October 3rd 2026  issue #97 --MRE make java 8 compatible
  */
 class RexxStream uses RexxDate
   numeric digits 18
@@ -504,10 +506,11 @@ class RexxStream.FileHandle
     byteArray = byte[4]  -- max 4 bytes for a UTF-8 char
 
     -- Read first byte
-    firstByteBuffer.clear()
+--       (Buffer buf).clear
+    (Buffer firstByteBuffer).clear()
     if readChannel.read(firstByteBuffer) < 0 then return -1  -- EOF
 
-    firstByteBuffer.flip()
+    (Buffer firstByteBuffer).flip()
     b = firstByteBuffer.get()
     byteArray[0] = b
     bInt = b & 0xFF  -- Convert signed byte to unsigned int
@@ -541,7 +544,7 @@ class RexxStream.FileHandle
     byteBuffer = ByteBuffer.wrap(byteArray, 0, bytesToRead)
     charBuffer = java.nio.CharBuffer.allocate(1)
     decoder.decode(byteBuffer, charBuffer, 0)
-    charBuffer.flip()
+    (Buffer charBuffer).flip()
 
     s = charBuffer.toString()
   catch IOException
