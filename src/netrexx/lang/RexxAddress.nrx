@@ -20,6 +20,38 @@ import java.util
 package netrexx.lang
 options binary strictargs decimal noformat
 
+/*
+Major changes with issue #94
+Now 'system' command is started by the shell with $shell -c command
+aka $comspec /c command.
+It separates command's input from shell's input.
+Non-system commands still share the same input stream provided by WITH,
+i.e. $environment is started, command is fed into its standard input,
+and command is reading the same standard input.
+
+Note, any unconsumed input to non-system commands is fed into
+$environment itself. The environment and any command it starts may consume
+from the same input stream.
+System commands are protected from this.
+
+RC is threadlocal, i.e. per thread.
+system environment defaults to /bin/sh if no shell found
+Fix deadlocks on large input or heavy stderr: feed stdin and drain stderr
+on separate threads.
+Previously the parent wrote all of stdin before reading stdout. A command
+that streams (e.g. cat) could fill the stdout pipe and block, while the
+parent was still blocked writing stdin.
+Likewise, stderr was read only after stdout reached EOF. A command writing
+more than a pipe buffer to stderr would block, never close stdout, and the
+parent would wait forever.
+A new MalformedStemException is thrown if input stem [0] is not a number.
+Some questions:
+
+OK to introduce the new MalformedStemException? Perhaps MalformedStemIndexException?
+OK to throw MalformedStemIndexException and not catch it?
+Perhaps not catch the IOException and InterruptedException - now just 'said'?
+*/
+
 /**
    This defines the external command utility class for NetRexx.
  */
@@ -28,47 +60,17 @@ class RexxAddress implements Serializable
 
   properties private static
     StdOut = ConcurrentLinkedDeque()
-    command  = String null
-    exitcode = Rexx 'RC'
+    exitcode = ThreadLocal()                  -- RC per thread
     sysaddr  = Rexx ''                        -- look up once
+    isWindows = System.getProperty('os.name').toLowerCase().startsWith('windows')
 
   properties private constant unused
   serialVersionUID=long 2781762092115528702
 
   method RC() static returns Rexx
-    return exitcode
-
-/*
-  The plain code, no WITH handling
-
-  method execAddress(addr=String, command_=String, wait=1) static 
-   addressee=[addr] 
-    do
-      pb = ProcessBuilder(addressee)
-      pid = pb.start()
-      if wait then do
-   	    in = BufferedReader(InputStreamReader(pid.getInputStream()))
-  	    out = BufferedWriter(OutputStreamWriter(pid.getOutputStream()))
-        out.write(command_'\n')          -- add new line to really flush
-        out.flush()
-        out.close()
-	      line = in.readLine()
-	      loop while line <> null
-          Say(line)          
-	        line = in.readLine()
-        end  
-	      pid.waitFor()
-    	  exitcode = pid.exitValue()
-      end
-    catch iox=IOException
-      exitcode=''                 -- set empty
-      say iox.getMessage()
-    catch InterruptedException
-      exitcode=''                 -- set empty
-      say "interrupted"
-    end -- do
-    return
-*/
+    r = exitcode.get()
+    if r = null then return Rexx 'RC'           -- never set: return 'RC'
+    return Rexx r
 
  /** Method to launch an executable and process a command with redirection.
      Arg1 is the executable to launch.
@@ -88,10 +90,10 @@ class RexxAddress implements Serializable
      Returncode is stored on lastrc 
    */
 
-  method execAddress(addr=String, command_=Rexx,   i=Object, o=Object, oappend=int, e=Object, eappend=int) static signals IOException, InterruptedException
-    execAddress(addr,String command_,i,o,oappend,e,eappend)
+  method execAddress(addr=String, command_=Rexx,   i=Object, o=Object, oappend=int, e=Object, eappend=int, srcinfo_=String) static signals IOException, InterruptedException, MalFormedStemException
+    execAddress(addr,String command_,i,o,oappend,e,eappend,srcinfo_)
 
-  method execAddress(addr=String, command_=String, i=Object, o=Object, oappend=int, e=Object, eappend=int) static signals IOException, InterruptedException
+  method execAddress(addr=String, command_=String, i=Object, o=Object, oappend=int, e=Object, eappend=int, srcinfo_=String) static signals IOException, InterruptedException, MalFormedStemException
 --    trace results
     istem=Rexx
     ostem=Rexx
@@ -101,10 +103,12 @@ class RexxAddress implements Serializable
     oWriter=BufferedWriter
     eWriter=BufferedWriter
 
+    isSystemcmd= 0
     if addr == 'SYSTEM' then do
       addr=getSystemAddressee()                            -- OS hard-coded environments, resolve at runtime
+      isSystemcmd=1
     end
-
+--    srcinfo.set(srcinfo_)
     do              -- catching exceptions IOException and InterruptedException 
         
       if i = null then do
@@ -118,7 +122,7 @@ class RexxAddress implements Serializable
         ifile=File(istream)
         iReader=BufferedReader(InputStreamReader(FileInputStream(ifile)))
       end  
- 
+
       if o = null then do
         ostem=Rexx null 
         oWriter=BufferedWriter null
@@ -143,7 +147,14 @@ class RexxAddress implements Serializable
         eWriter=BufferedWriter(OutputStreamWriter(FileOutputStream(efile, eappend)))
       end  
 
-      addressee=[addr] 
+      if isSystemcmd then do
+        if isWindows then
+          addressee=[addr, '/c', command_]
+        else
+          addressee=[addr, '-c', command_]   -- POSIX
+      end
+      else
+        addressee=[addr]
 
       pb = ProcessBuilder(addressee)
       pid = pb.start()
@@ -162,76 +173,54 @@ class RexxAddress implements Serializable
         end
       end
 
-      out.write(command_'\n')              -- write command, new line and flush
-      out.flush()
-
-      if istem\=null then do               -- feed input stem if present               
-        loop j=1 to istem[0] 
-          out.write(istem[j]'\n')          -- add new line to really flush
-          out.flush()
-        end
-      end
-      else if iReader\=null then do        -- feed input file if present
-   	    line = iReader.readLine()
-	      loop while line <> null
-          out.write(line'\n')            
-          out.flush()
-          line = iReader.readLine()
-        end
-        iReader.close()
+      if \isSystemcmd then do              -- environments read the command from stdin
+        out.write(command_'\n')            -- write command, new line and flush
+        out.flush()
       end
 
-      out.flush()
-      out.close()
+      feedSource = StdinFeeder(out, istem, iReader, srcinfo_)     -- writes stdin, then closes it
+      feeder = Thread(feedSource)
+      feeder.setDaemon(boolean 1)
+      feeder.start()
 
-	    line = in.readLine()
-	    loop while line <> null
-        if ostem\=null then do              -- fill output stem
+      drainSink = StderrDrain(err, estem, eWriter)      -- reads stderr until EOF
+      drain = Thread(drainSink)
+      drain.setDaemon(boolean 1)
+      drain.start()
+
+      line = in.readLine()                 -- main thread: stdout, unchanged
+      loop while line <> null
+        if ostem\=null then do
           j=ostem['0']
           j=j+1
           ostem[j]= line
           ostem['0']=j
         end
-        else if oWriter\=null then do       -- or write to ostream
+        else if oWriter\=null then do
           line=line'\n'
           oWriter.write(line, 0, line.length())
         end
         else do
-          Say(line)                         -- or say it
+          Say(line)
         end
-	      line = in.readLine()
+        line = in.readLine()
       end
-      if oWriter\=null then  
+      if oWriter\=null then
         oWriter.close()
-      
-      eline = err.readLine()
-      loop while eline <> null
-        if estem\=null then do            -- fill error stem if present
-          j=estem['0']
-          j=j+1
-          estem[j]= eline
-          estem['0']=j
-        end  
-        else if eWriter\=null then do     -- or write to estream
-          eline=eline'\n'
-          eWriter.write(eline, 0, eline.length())
-        end
-        else do
-          System.err.println(eline)       -- or say it on stderr
-        end
-        eline = err.readLine()
-      end
-      if eWriter\=null then
-        eWriter.close()
+
+      feeder.join()
+      drain.join()
+      if drainSink.failure\=null then signal drainSink.failure
 
 	    pid.waitFor()
-      exitcode = pid.exitValue()
-    catch iox=IOException         -- this also catches FileNotFound
-      exitcode=''                 -- set empty
+      exitcode.set(Rexx pid.exitValue())
+
+    catch iox=IOException                 -- this also catches FileNotFound
+      exitcode.set(Rexx '')               -- set empty
 --      say iox.getMessage()
       signal IOException(iox.getMessage())
     catch InterruptedException
-      exitcode=''                 -- set empty
+      exitcode.set(Rexx '')               -- set empty
       signal InterruptedException()
     end -- do
     return
@@ -243,13 +232,19 @@ method getSystemAddressee static returns String
     os=Rexx System.getProperty('os.name')
     os=os.lower()
 
-    if      os.pos('linux')   >> 0 then sysaddr=System.getenv('SHELL')
-    else if os.pos('macos')   >> 0 then sysaddr=System.getenv('SHELL')
+    shell = System.getenv('SHELL')
+    if shell == null then shell = '/bin/sh'
+    else if shell == '' then shell = '/bin/sh'
+
+    if      os.pos('linux')   >> 0 then sysaddr=shell
+    else if os.pos('mac os')  >> 0 then sysaddr=shell
     else if os.pos('windows') >> 0 then do 
                                         sysaddr=System.getenv('COMSPEC')
+                                        if sysaddr == null then sysaddr = 'cmd.exe'
+                                        if sysaddr == ''   then sysaddr = 'cmd.exe'
                                         sysaddr=sysaddr.changestr('\\', '/')  -- freaking backslash ..
-    end  
-    else                                sysaddr='/bin/sh'
+    end
+    else                                sysaddr=shell
   end   
   
   return sysaddr
@@ -272,13 +267,16 @@ method getSystemAddressee static returns String
 
 -- Borrowed from RexxIO    
   method Say(aline=char[]) static returns boolean
-    if StdOut.size() == 0 then StdOut.push(PrintWriter(System.out))
+    do protect StdOut
+      if StdOut.isEmpty() then StdOut.push(PrintWriter(System.out))
+    end
+--    if StdOut.size() == 0 then StdOut.push(PrintWriter(System.out))
     i = StdOut.iterator()
     loop while i.hasNext()
       out=PrintWriter i.next()
       if aline=null then out.println()      -- just new line
       else do                                 -- have some data
-	select
+	      select
           when aline.length=0 then out.println()
           when aline[aline.length-1]\=='\-' then out.println(aline)
           otherwise                            -- rarer continuation case
@@ -291,3 +289,100 @@ method getSystemAddressee static returns String
     end -- loop while i
     return 0
 
+/** Feeds stdin of the child from a stem or a file, then closes it.
+    A child that exits without reading everything is not an error,
+    as in a shell pipeline. */
+class RexxAddress.StdinFeeder implements Runnable
+
+  properties private
+    out     = BufferedWriter
+    istem   = Rexx
+    iReader = BufferedReader
+    srcinfo = Rexx
+
+  method StdinFeeder(o=BufferedWriter, s=Rexx, r=BufferedReader, srcinfo_=Rexx)
+    out=o
+    istem=s
+    iReader=r
+    srcinfo=srcinfo_
+
+  method run
+    do
+      if istem\=null then do
+              if \(istem[0]).datatype('D') then do           -- must be digits
+                parse srcinfo stemname '-' info
+                signal MalFormedStemException('ADDRESS INPUT STEM 'stemname'[0] must be a number ('info')')
+              end
+
+        loop j=1 to istem[0]
+          out.write(istem[j]'\n')
+          out.flush()
+        end
+      end
+      else if iReader\=null then do
+        line = iReader.readLine()
+        loop while line <> null
+          out.write(line'\n')
+          out.flush()
+          line = iReader.readLine()
+        end
+      end
+    catch IOException
+      nop                                -- broken pipe
+    finally
+      do
+        out.close()
+      catch IOException
+        nop
+      end
+      if iReader\=null then do
+        do
+          iReader.close()
+        catch IOException
+          nop
+        end
+      end
+    end
+
+
+/** Reads stderr of the child until EOF into a stem, a stream, or System.err.
+    A failure is kept for the caller to rethrow after join(). */
+class RexxAddress.StderrDrain implements Runnable
+
+  properties private
+    err     = BufferedReader
+    estem   = Rexx
+    eWriter = BufferedWriter
+
+  properties public
+    failure = IOException null
+
+  method StderrDrain(e=BufferedReader, s=Rexx, w=BufferedWriter)
+    err=e
+    estem=s
+    eWriter=w
+
+  method run
+    do
+      eline = err.readLine()
+      loop while eline <> null
+        if estem\=null then do
+          j=estem['0']
+          j=j+1
+          estem[j]= eline
+          estem['0']=j
+        end
+        else if eWriter\=null then do
+          eline=eline'\n'
+          eWriter.write(eline, 0, eline.length())
+        end
+        else do
+          System.err.println(eline)
+        end
+        eline = err.readLine()
+      end
+      if eWriter\=null then
+        eWriter.close()
+    catch iox=IOException
+      failure=iox
+    end
