@@ -48,6 +48,8 @@
 /* 2026.09.30 fix methodcalls to super, issue #92               --MRE */
 /* 2026.10.01 fix this/super delegation, issue #86              --MRE */
 /* 2026.10.02 setAccessible only on non-super exec issue #96    --MRE */
+/* 2026.10.05 correct dispatch through a minor interface              */
+/*            or minor abstract class, issue #87                --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -608,7 +610,22 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
   -- execute it.  Also, construction must be handled by the 'real' proxy
   -- class always, so when called during interpretation, convert a
   -- constructor call to a non-local call
-  if localmeth=null, constructor & \proxycall then do label nonlocalmethod
+    -- MRE issue #87 dispatch through a minor interface or minor abstract class silently returns null
+    -- Local method resolution is static, but ordinary instance calls
+    -- require JVM virtual dispatch when the receiver's runtime class
+    -- differs from the class in which the resolved field was declared.
+    -- Route such calls through the proxy using reflection.  A proxy
+    -- re-entry must execute the selected local method directly.
+  virtual=boolean 0
+  if localmeth \= null then
+    if \proxycall & \constructor & obj \= null & supercontext = null then
+      if \localmeth.methodstatic then
+        if obj.getClass() \= field.fieldinfo.getClassObject(rxt.loader) then
+          virtual=1
+
+  -- External methods, interpreted constructor calls, and local virtual
+  -- calls requiring runtime dispatch are executed through the JVM.
+  if localmeth=null, constructor & \proxycall, virtual then do label nonlocalmethod
     -- method belongs to an external class, or is a constructor
     infoclass=field.fieldinfo.getClassObject(rxt.loader)
     do label try
