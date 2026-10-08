@@ -15,6 +15,7 @@
 /* 2022.03.02 MRE ooRexx-like ADDRESS WITH stream implementation      */
 /* 2022.03.05 MRE signal exceptions to caller                         */
 /* 2022.09.28 MRE resolve SYSTEM at runtime, issue #38                */
+/* 2026.10.08 MRE major rework, issue #94fix                          */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
@@ -38,18 +39,8 @@ RC is threadlocal, i.e. per thread.
 system environment defaults to /bin/sh if no shell found
 Fix deadlocks on large input or heavy stderr: feed stdin and drain stderr
 on separate threads.
-Previously the parent wrote all of stdin before reading stdout. A command
-that streams (e.g. cat) could fill the stdout pipe and block, while the
-parent was still blocked writing stdin.
-Likewise, stderr was read only after stdout reached EOF. A command writing
-more than a pipe buffer to stderr would block, never close stdout, and the
-parent would wait forever.
-A new MalformedStemException is thrown if input stem [0] is not a number.
-Some questions:
-
-OK to introduce the new MalformedStemException? Perhaps MalformedStemIndexException?
-OK to throw MalformedStemIndexException and not catch it?
-Perhaps not catch the IOException and InterruptedException - now just 'said'?
+A BadArgumentException is thrown and shown on stdout when input stem[0]
+is not a number.
 */
 
 /**
@@ -90,10 +81,10 @@ class RexxAddress implements Serializable
      Returncode is stored on lastrc 
    */
 
-  method execAddress(addr=String, command_=Rexx,   i=Object, o=Object, oappend=int, e=Object, eappend=int, srcinfo_=String) static signals IOException, InterruptedException, MalFormedStemException
+  method execAddress(addr=String, command_=Rexx,   i=Object, o=Object, oappend=int, e=Object, eappend=int, srcinfo_=String) static signals IOException, InterruptedException, BadArgumentException
     execAddress(addr,String command_,i,o,oappend,e,eappend,srcinfo_)
 
-  method execAddress(addr=String, command_=String, i=Object, o=Object, oappend=int, e=Object, eappend=int, srcinfo_=String) static signals IOException, InterruptedException, MalFormedStemException
+  method execAddress(addr=String, command_=String, i=Object, o=Object, oappend=int, e=Object, eappend=int, srcinfo_=String) static signals IOException, InterruptedException, BadArgumentException
 --    trace results
     istem=Rexx
     ostem=Rexx
@@ -210,14 +201,25 @@ class RexxAddress implements Serializable
 
       feeder.join()
       drain.join()
-      if drainSink.failure\=null then signal drainSink.failure
 
 	    pid.waitFor()
       exitcode.set(Rexx pid.exitValue())
 
+      if feedSource.iofailure\=null then do
+        exitcode.set(Rexx '')               -- set empty
+        signal feedSource.iofailure
+      end
+      else if feedSource.argfailure\=null then do
+        exitcode.set(Rexx '')               -- set empty
+        signal feedSource.argfailure
+      end
+      if drainSink.iofailure\=null then do
+        exitcode.set(Rexx '')               -- set empty
+        signal IOException(drainSink.iofailure)
+      end
+
     catch iox=IOException                 -- this also catches FileNotFound
       exitcode.set(Rexx '')               -- set empty
---      say iox.getMessage()
       signal IOException(iox.getMessage())
     catch InterruptedException
       exitcode.set(Rexx '')               -- set empty
@@ -294,6 +296,10 @@ method getSystemAddressee static returns String
     as in a shell pipeline. */
 class RexxAddress.StdinFeeder implements Runnable
 
+  properties public
+    iofailure = IOException null
+    argfailure = BadArgumentException null
+
   properties private
     out     = BufferedWriter
     istem   = Rexx
@@ -309,10 +315,10 @@ class RexxAddress.StdinFeeder implements Runnable
   method run
     do
       if istem\=null then do
-              if \(istem[0]).datatype('D') then do           -- must be digits
-                parse srcinfo stemname '-' info
-                signal MalFormedStemException('ADDRESS INPUT STEM 'stemname'[0] must be a number ('info')')
-              end
+        if \(istem[0]).datatype('D') then do           -- must be digits
+          parse srcinfo stemname '-' info
+          signal BadArgumentException(stemname'[0] must be a number for ADDRESS INPUT STEM ('info')')
+        end
 
         loop j=1 to istem[0]
           out.write(istem[j]'\n')
@@ -327,19 +333,21 @@ class RexxAddress.StdinFeeder implements Runnable
           line = iReader.readLine()
         end
       end
-    catch IOException
-      nop                                -- broken pipe
+    catch iox = IOException
+      iofailure = iox                    -- broken pipe
+    catch bae = BadArgumentException
+      argfailure = bae
     finally
       do
         out.close()
-      catch IOException
-        nop
+      catch iox = IOException
+        iofailure = iox
       end
       if iReader\=null then do
         do
           iReader.close()
-        catch IOException
-          nop
+        catch iox = IOException
+          iofailure = iox
         end
       end
     end
@@ -349,13 +357,13 @@ class RexxAddress.StdinFeeder implements Runnable
     A failure is kept for the caller to rethrow after join(). */
 class RexxAddress.StderrDrain implements Runnable
 
+  properties public
+    iofailure = IOException null
+
   properties private
     err     = BufferedReader
     estem   = Rexx
     eWriter = BufferedWriter
-
-  properties public
-    failure = IOException null
 
   method StderrDrain(e=BufferedReader, s=Rexx, w=BufferedWriter)
     err=e
@@ -383,6 +391,6 @@ class RexxAddress.StderrDrain implements Runnable
       end
       if eWriter\=null then
         eWriter.close()
-    catch iox=IOException
-      failure=iox
+    catch iox = IOException
+      iofailure=iox
     end
