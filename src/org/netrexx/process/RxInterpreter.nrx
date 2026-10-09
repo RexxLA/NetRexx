@@ -50,6 +50,7 @@
 /* 2026.10.02 setAccessible only on non-super exec issue #96    --MRE */
 /* 2026.10.05 correct dispatch through a minor interface              */
 /*            or minor abstract class, issue #87                --MRE */
+/* 2026.10.09 throw real exception, issue #100                  --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -555,7 +556,7 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
      parent object is in the 'this$n' field of the instance (referred
      to by curthis).
    */
-  method callMethod(obj=Object, fieldId=int, args=Object[]) returns Object
+  method callMethod(obj=Object, fieldId=int, args=Object[]) returns Object signals Throwable
     if fieldId<0 then do
      precall=boolean 1
      fieldId=-fieldId
@@ -564,14 +565,32 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
    -- say '# callMethod:' field.toConciseString(field.fieldprogram, 0)-
    --                     '[precall='precall']'
    /* Do real callmethod */
-   if field.fieldtype=RxType.VOID_TYPE then do
-     result=callMethod(obj, field, args, null, precall, 1)
-     return result
-    catch sig=RxSignal
-     if sig.signalobj=null then return null  -- had Exit request
-     signal sig                              -- rethrow
+--   if field.fieldtype=RxType.VOID_TYPE then do
+--     result=callMethod(obj, field, args, null, precall, 1)
+--     return result
+--    catch sig=RxSignal
+--     if sig.signalobj=null then return null  -- had Exit request
+--     signal sig                              -- rethrow
+--    end
+--   return callMethod(obj, field, args, null, precall, 1)
+   do
+    if field.fieldtype=RxType.VOID_TYPE then do
+      result=callMethod(obj, field, args, null, precall, 1)
+      return result
+      end
+    return callMethod(obj, field, args, null, precall, 1)
+   catch sig=RxSignal
+    if field.fieldtype=RxType.VOID_TYPE then if sig.signalobj=null then return null  -- had Exit request
+    -- issue #100: this is the entry from a proxy, i.e. the caller is Java code.
+    -- Pass on the real exception, not our RxSignal wrapper (which holds
+    -- interpreter frames, is not serializable, and is not what a Java
+    -- caller, e.g. RMI, expects to catch).
+    if sig.signalobj<=Throwable then do
+      thrown=Throwable sig.signalobj
+      signal thrown
     end
-   return callMethod(obj, field, args, null, precall, 1)
+    signal sig                              -- rethrow
+   end
 
  /** CALLMETHOD -- general call of a method or constructor
     Arg1 is the context object (null for a function or simple
