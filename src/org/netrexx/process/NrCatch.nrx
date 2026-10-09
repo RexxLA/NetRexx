@@ -15,6 +15,7 @@
 /* 1996.06.10 Initial                                                 */
 /* 1996.08.30 Exceptions processing                                   */
 /* 2000.02.24 Add interpretation                                      */
+/* 2026.10.09 catch inner class exception, issue #98            --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -205,6 +206,11 @@ class NrCatch implements RxClauseParser uses RxCode, NrLevel, RxCursor
     returns 1 if this CATCH can accept it
     */
  method canCatch(cursor=RxCursor, sig=RxSignal) returns boolean
-   if sig.signalinfo=null then return 0      -- cannot catch Exit
-   return rxt.classer.issubclass(cursor, sig.signalinfo, catinfo, null)
-
+--   if sig.signalinfo=null then return 0      -- cannot catch Exit
+--   return rxt.classer.issubclass(cursor, sig.signalinfo, catinfo, null)
+                                                      -- issue #98 --MRE
+   if sig.signalobj=null then return 0       -- Exit
+   if sig.signalinfo\=null then
+     return rxt.classer.issubclass(cursor, sig.signalinfo, catinfo, null)
+       -- signalinfo unresolved (e.g. minor class, binary name outer$inner)
+   return catinfo.getClassObject(rxt.loader).isInstance(sig.signalobj)

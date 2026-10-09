@@ -31,6 +31,7 @@
 /* 2000.03.09 Add null signal object, for Exit                        */
 /* 2000.03.29 Add Object[] signal object, for precall return          */
 /* 2000.04.14 Construct using cursor as base                          */
+/* 2026.10.09 catch inner class exception, issue #98            --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -69,8 +70,16 @@ class RxSignal extends RuntimeException
       if oldsignal.signaltoken\=null then newtok=oldsignal.signaltoken
       end
 
-    rxt=cursor.curprogram.translator
-    signalinfo=rxt.classer.findclass(cursor, signalobj.getClass().getName(), null, 0)
+--    rxt=cursor.curprogram.translator
+--    signalinfo=rxt.classer.findclass(cursor, signalobj.getClass().getName(), null, 0)
+                                                      -- issue #98 --MRE
+      rxt=cursor.curprogram.translator
+      signame=signalobj.getClass().getName()
+      signalinfo=rxt.classer.findclass(cursor, signame, null, 0)
+      if signalinfo=null then if signame.indexOf('$')>=0 then do
+        -- minor class: JVM binary name outer$inner is registered as outer.inner
+        signalinfo=rxt.classer.findclass(cursor, Rexx(signame).changestr('$', '.').toString(), null, 0)
+        end
     end
   signaltoken=newtok
 
