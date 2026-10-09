@@ -15,7 +15,8 @@
 /* 2022.03.02 MRE ooRexx-like ADDRESS WITH stream implementation      */
 /* 2022.03.05 MRE signal exceptions to caller                         */
 /* 2022.09.28 MRE resolve SYSTEM at runtime, issue #38                */
-/* 2026.10.08 MRE major rework, issue #94fix                          */
+/* 2026.10.08 MRE major rework, issue #94                             */
+/* 2026.10.09 discard remaining INPUT, issue #94             --MRE    */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
@@ -207,11 +208,11 @@ class RexxAddress implements Serializable
 
       if feedSource.iofailure\=null then do
         exitcode.set(Rexx '')               -- set empty
-        signal feedSource.iofailure
+        signal feedSource.iofailure         -- real IOException
       end
       else if feedSource.argfailure\=null then do
         exitcode.set(Rexx '')               -- set empty
-        signal feedSource.argfailure
+        signal feedSource.argfailure        -- real BadArgumentException
       end
       if drainSink.iofailure\=null then do
         exitcode.set(Rexx '')               -- set empty
@@ -305,12 +306,23 @@ class RexxAddress.StdinFeeder implements Runnable
     istem   = Rexx
     iReader = BufferedReader
     srcinfo = Rexx
+    pipeopen = boolean 1
 
   method StdinFeeder(o=BufferedWriter, s=Rexx, r=BufferedReader, srcinfo_=Rexx)
     out=o
     istem=s
     iReader=r
     srcinfo=srcinfo_
+
+  method put(s=Rexx) private
+    if pipeopen then do
+      do
+        out.write(s'\n')
+        out.flush()
+      catch IOException
+        pipeopen = boolean 0               -- child exited without reading: not an error
+      end
+    end
 
   method run
     do
@@ -320,38 +332,35 @@ class RexxAddress.StdinFeeder implements Runnable
           signal BadArgumentException(stemname'[0] must be a number for ADDRESS INPUT STEM ('info')')
         end
 
-        loop j=1 to istem[0]
-          out.write(istem[j]'\n')
-          out.flush()
+        loop j=1 to istem[0] while pipeopen
+          put(istem[j])
         end
       end
       else if iReader\=null then do
         line = iReader.readLine()
-        loop while line <> null
-          out.write(line'\n')
-          out.flush()
+        loop while line <> null & pipeopen
+          put(Rexx line)
           line = iReader.readLine()
         end
       end
     catch iox = IOException
-      iofailure = iox                    -- broken pipe
+      if iofailure = null then iofailure = iox     -- broken pipe
     catch bae = BadArgumentException
       argfailure = bae
     finally
       do
         out.close()
       catch iox = IOException
-        iofailure = iox
+        nop                                        -- pipe already dead
       end
       if iReader\=null then do
         do
           iReader.close()
         catch iox = IOException
-          iofailure = iox
+          if iofailure = null then iofailure = iox
         end
       end
     end
-
 
 /** Reads stderr of the child until EOF into a stem, a stream, or System.err.
     A failure is kept for the caller to rethrow after join(). */
