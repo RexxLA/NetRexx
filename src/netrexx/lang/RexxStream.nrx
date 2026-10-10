@@ -25,6 +25,8 @@ import java.text.SimpleDateFormat
  * Updated April 16th 2025  --MRE
  * Updated October 3rd 2026  issue #97 --MRE make java 8 compatible
  * Updated October 8th 2026  issue #99 --MRE return '' for null pull()
+ * Updated October 10th 2026  issue #101 --MRE start position charout not honoured
+                              and more corrections for Classic Rexx compatibility
  */
 class RexxStream uses RexxDate
   numeric digits 18
@@ -60,6 +62,8 @@ class RexxStream uses RexxDate
    length  is number of characters to read
    */
   method charin(name, start=-1, length=1) static
+    if start \== -1 then if start < 1 then return ''  -- must be positive
+
     fh = FileHandle fileHandles.get(name)
     if fh = null then do
       fh = RexxStream.FileHandle(name, 'r')
@@ -79,6 +83,8 @@ class RexxStream uses RexxDate
     charnum is the character write position in the file, must be positive
   */
   method charout(name, str, charnum=-1) static
+    if charnum \== -1 then if charnum < 1 then return 1  -- must be positive
+
     -- special names for std file handles
     if name='stdout' then do
       System.out.print(str)
@@ -213,6 +219,7 @@ class RexxStream uses RexxDate
  option1  STATE, DESCRIPTION or COMMAND         default STATE
  option2
    COMMAND OPEN [READ | WRITE | BOTH | APPEND]  default BOTH
+                  (WRITE and APPEND append, BOTH writes from the start)
    COMMAND CLOSE
    COMMAND SEEK [READ | WRITE]                  default read
    COMMAND QUERY EXISTS
@@ -267,7 +274,9 @@ class RexxStream uses RexxDate
               if fh = null then do
                 return 'ERROR'
               end
-              if option2.word(2) \= 'APPEND' then do
+              -- WRITE and APPEND write at the end of the file;
+              -- BOTH (default) starts writing at the beginning
+              if option2.word(2) = 'BOTH' | option2.word(2) = '' then do
                 fh.setSeekPosition('w', 0)
               end
               fileHandles.put(name, fh)
@@ -320,9 +329,8 @@ class RexxStream uses RexxDate
           end
 
           when option2='QUERY SIZE' then do
-            size = Rexx File(name).length()
-            if size == 0 then return ''
-            else return size
+            if \File(name).exists() then return ''
+            return Rexx File(name).length()
           end
 
           when option2='QUERY DATETIME' then do
@@ -405,6 +413,9 @@ class RexxStream.FileHandle
     writepos  = Rexx      -- write position (offset in file)
     charwrite = Rexx      -- char write position
     linewrite = Rexx      -- line write position
+    scanpos   = Rexx      -- result of scanFrom: byte offset
+    scanchars = Rexx      -- characters before scanpos
+    scanlines = Rexx      -- newlines before scanpos
 
 
   method FileHandle(fileName=String, fmode=String) public
@@ -412,6 +423,9 @@ class RexxStream.FileHandle
 
     mode = fmode
     state = UNKNOWN
+    writepos  = -1              -- not set: append when opened for writing
+    charwrite = -1
+    linewrite = -1
     do
       tpath = Paths.get(fileName, [''])
 
@@ -461,11 +475,12 @@ class RexxStream.FileHandle
     do
       writeChannel = FileChannel.open(tpath, -
           [StandardOpenOption.WRITE, StandardOpenOption.CREATE])
-      charwrite = -1            -- set to -1 as we don't yet known chars written
-      linewrite = -1            -- nor lines written
       isWritable  = 1
-
-      writepos = writeChannel.position()
+      if writepos < 0 then do   -- no SEEK WRITE yet: append
+        writepos  = writeChannel.size()
+        charwrite = -1          -- set to -1 as we don't yet known chars written
+        linewrite = -1          -- nor lines written
+      end
 
     catch IOException
 --      say '::makeWritable: IOException'
@@ -476,16 +491,41 @@ class RexxStream.FileHandle
     return 0
 
   method setSeekPosition(rw, pos) public
-    if      rw = 'r' then readpos = pos
-    else if rw = 'r' then writepos = pos
-    else do
-      readpos  = pos
+    if rw \= 'w' then do                  -- read side (or both): recount
+      readpos = pos
+      if pos = 0 then do
+        charread = 0
+        lineread = 0
+      end
+      else do
+        rc = scanFrom(0, 0, 0, -1, pos, -1)
+        if rc = 0 then do
+          charread = scanchars
+          lineread = scanlines
+        end
+      end
+    end
+    if rw \= 'r' then do                  -- write side (or both): counts unknown
       writepos = pos
+      if pos = 0 then do
+        charwrite = 0
+        linewrite = 0
+      end
+      else do
+        charwrite = -1
+        linewrite = -1
+      end
+    end
+    do                                    -- a seek beyond the end is out of bounds
+      if pos > readChannel.size() then state = NOTREADY
+      else if state = NOTREADY then state = READY
+    catch IOException
+      state = ERROR
     end
 
   method available() public
     do
-      available = readChannel.size() - readChannel.position()
+      available = readChannel.size() - readpos
       if available > 0 then
         return 1
     catch IOException
@@ -493,6 +533,150 @@ class RexxStream.FileHandle
     end
     return 0
 
+  /**
+   * Count UTF-8 characters and newlines forward from a known point.
+   * fromPos, fromChars, fromLines: a byte offset and the characters and
+   *   newlines that precede it
+   * wantChars: stop where this many characters precede (-1 = ignore)
+   * limitPos:  stop at this byte offset (-1 = ignore)
+   * Uses absolute reads in 64K blocks (the channel positions are not touched)
+   * and counts lead bytes instead of decoding each character.
+   * Result in scanpos, scanchars, scanlines.
+   * Returns 0 = found, 1 = EOF before wantChars, 2 = I/O error.
+   */
+  method scanFrom(fromPos, fromChars, fromLines, wantChars, limitPos, wantLines) private
+    bpos = long 0
+    have = long 0
+    nl   = long 0
+    want = long 0
+    lim  = long 0
+    wl   = long 0
+    hit  = long 0
+    bpos = fromPos
+    have = fromChars
+    nl   = fromLines
+    want = wantChars
+    lim  = limitPos
+    wl   = wantLines
+    buf   = ByteBuffer.allocate(65536)
+    found = boolean 0
+    if (wl >= 0) & (nl = wl) then do            -- already at the wanted line start
+      hit   = bpos
+      found = 1
+    end
+    do
+      loop while \found
+        (Buffer buf).clear()
+        n = readChannel.read(buf, bpos)
+        if n <= 0 then leave                    -- end of file
+        loop i = 0 for n
+          if (lim >= 0) & (bpos + i >= lim) then do
+            hit   = bpos + i
+            found = 1
+            leave i
+          end
+          bi = buf.get(i) & 0xFF
+          if (bi < 0x80) | ((bi >= 0xC0) & (bi < 0xF8)) then do  -- first byte of a character
+            if have = want then do
+              hit   = bpos + i
+              found = 1
+              leave i
+            end
+            have = have + 1
+            if bi = 10 then do
+              nl = nl + 1
+              if nl = wl then do                -- the next byte starts the wanted line
+                hit   = bpos + i + 1
+                found = 1
+                leave i
+              end
+            end
+          end
+        end i
+        bpos = bpos + n
+      end
+    catch IOException
+      return 2
+    end
+    if \found then do                           -- stopped at end of file
+      if wl >= 0 then return 1                  -- fewer lines than wanted
+      if (want >= 0) & (have < want) then return 1
+      hit = bpos
+    end
+    scanpos   = hit
+    scanchars = have
+    scanlines = nl
+    return 0
+
+  /**
+   * Find where character number charnum (1 = first) starts, beginning at the
+   * nearest known position not past it: start of file, read pointer or
+   * write pointer. Result in scanpos, scanchars, scanlines.
+   */
+  method locateChar(charnum) private
+    before = charnum - 1
+    ap = 0
+    ac = 0
+    al = 0
+    if (charread >= 0) & (charread <= before) then do
+      ap = readpos
+      ac = charread
+      al = lineread
+    end
+    if (charwrite > ac) & (charwrite <= before) then do
+      ap = writepos
+      ac = charwrite
+      al = linewrite
+    end
+    return scanFrom(ap, ac, al, before, -1, -1)
+
+  /**
+   * Find where line number linenum (1 = first) starts, beginning at the
+   * nearest known position that is safely before it. A known position can
+   * only be used if it is before the line start by at least one newline, or
+   * is itself the start of a line. Result in scanpos, scanchars, scanlines.
+   * Returns 0 = found (the position after the last newline is valid),
+   * 1 = fewer lines than wanted, 2 = I/O error.
+   */
+  method locateLine(linenum) private
+    if linenum <= 1 then do
+      scanpos   = 0
+      scanchars = 0
+      scanlines = 0
+      return 0
+    end
+    before = linenum - 1                  -- newlines to pass
+    ap = 0
+    ac = 0
+    al = 0
+    if lineread >= 0 then do
+      if (lineread < before) | ((lineread = before) & (atLineStart(readpos) = 1)) then do
+        ap = readpos
+        ac = charread
+        al = lineread
+      end
+    end
+    if linewrite > al then do
+      if (linewrite < before) | ((linewrite = before) & (atLineStart(writepos) = 1)) then do
+        ap = writepos
+        ac = charwrite
+        al = linewrite
+      end
+    end
+    return scanFrom(ap, ac, al, -1, -1, before)
+
+  -- 1 if byte offset p is the start of the file or follows a newline, else 0
+  method atLineStart(p) private
+    if p = 0 then return 1
+    do
+      b1 = ByteBuffer.allocate(1)
+      n = readChannel.read(b1, p - 1)
+      if n < 1 then return 0
+      if (b1.get(0) & 0xFF) = 10 then return 1
+    catch IOException
+      return 0
+    end
+    return 0
 
   method readUTF8Char() returns Rexx
 --trace results
@@ -545,7 +729,7 @@ class RexxStream.FileHandle
 
     -- Decode bytes into a single character
     byteBuffer = ByteBuffer.wrap(byteArray, 0, bytesToRead)
-    charBuffer = java.nio.CharBuffer.allocate(1)
+    charBuffer = java.nio.CharBuffer.allocate(2)   -- room for a surrogate pair
     decoder.decode(byteBuffer, charBuffer, 0)
     (Buffer charBuffer).flip()
 
@@ -568,36 +752,19 @@ class RexxStream.FileHandle
       readpos  = 0
     end
     else if charnum > 1 then do           -- position in file
---    trace results
-      if charread > charnum then do       -- count from begin of file
-
-        lineread = 0
-        charread = 1
-        readpos  = 0
+      -- begin at the nearest known position, not always at byte 0
+      rc = locateChar(charnum)
+      if rc = 1 then do
+        state = NOTREADY
+        return ''                         -- EOF
       end
-      do
-        ch = ''
-        readChannel.position(readpos)
-        loop while charread < charnum - 1
-          ch = readUTF8Char()
-          if ch = null then leave
-          if ch = -1 then leave
-          charread = charread + 1
-          if ch = '\n' then lineread = lineread + 1  -- newline
-        end
-        readpos  = readChannel.position()
-        if ch = null then do
-          state = UNKNOWN
-          return ''                    -- not UTF-8
-        end
-        if ch = -1  then do
-          state = NOTREADY
-          return ''                    -- EOF
-        end
-      catch IOException
-  --      say '::readChar: IOException'
+      if rc = 2 then do
         state = ERROR
+        return ''
       end
+      readpos  = scanpos
+      charread = scanchars
+      lineread = scanlines
     end
 
     str = ''
@@ -632,29 +799,19 @@ class RexxStream.FileHandle
       readpos  = 0
     end
     else if linenum > 1 then do                -- position in file
-      if lineread > linenum then do      -- count from begin of file
-        lineread = 0
-        charread = 0
-        readpos  = 0
+      -- begin at the nearest known line start, not always at byte 0
+      rc = locateLine(linenum)
+      if rc = 1 then do
+        state = NOTREADY
+        return ''                    -- EOF
       end
-      do
-        ch = ''
-        readChannel.position(readpos)
-        loop while lineread < linenum -1
-          ch = readUTF8Char()
-          if ch = -1 then leave
-          charread = charread + 1
-          if ch = '\n' then lineread = lineread + 1  -- newline
-        end
-        readpos  = readChannel.position()
-        if ch = -1 then do
-          state = NOTREADY
-          return ''                    -- EOF
-        end
-      catch IOException
---        say '::readLine: IOException'
+      if rc = 2 then do
         state = ERROR
+        return ''
       end
+      readpos  = scanpos
+      charread = scanchars
+      lineread = scanlines
     end
 
     if count = 0 then return ''
@@ -684,41 +841,29 @@ class RexxStream.FileHandle
 
 
   method writeChar(str, charnum=-1) public
---  trace results
     if charnum = 1 then do                -- position at start of file
-      linewrite = 0                        -- set counters
+      linewrite = 0                       -- set counters
       charwrite = 0
       writepos  = 0
     end
     else if charnum > 1 then do           -- position in file
-      if charwrite > charnum then do       -- count from begin of file
-
-        linewrite = 0
-        charwrite = 1
-        writepos  = 0
+      -- begin at the nearest known position, not always at byte 0
+      rc = locateChar(charnum)
+      if rc = 1 then do
+        state = NOTREADY
+        return 1                          -- beyond EOF
       end
-      do
-        ch = ''
-        readChannel.position(readpos)
-        loop while charwrite < charnum
-          ch = readUTF8Char()
-          if ch = -1 then leave
-          charwrite = charwrite + 1
-          if ch = '\n' then linewrite = linewrite + 1  -- newline
-        end
-        readChannel.position(readpos)
-        writepos  = readChannel.position()
-        if ch = -1 then do
-          state = NOTREADY
-          return 1                        -- EOF
-        end
-      catch IOException
---        say '::writeChar: IOException'
+      if rc = 2 then do
         state = ERROR
+        return 1
       end
+      writepos  = scanpos
+      charwrite = scanchars
+      linewrite = scanlines
     end
 
     do
+      wstart = writepos
       writeChannel.position(writepos)
 
       encoder = StandardCharsets.UTF_8.newEncoder()
@@ -729,15 +874,25 @@ class RexxStream.FileHandle
         writeChannel.write(byteBuffer)
       end
       writepos = writeChannel.position()
-      charwrite = charwrite + str.length()
+      s = String str.toString()
+      if charwrite >= 0 then do
+        charwrite = charwrite + s.codePointCount(0, s.length())
+        linewrite = linewrite + str.countstr('\n')
+      end
       writeChannel.force(1)
       state = READY
+      -- the read pointer's counts are stale if this write started before it
+      if wstart < readpos then do
+        rc = scanFrom(0, 0, 0, -1, readpos, -1)
+        if rc = 0 then do
+          charread = scanchars
+          lineread = scanlines
+        end
+      end
     catch CharacterCodingException
---      say '::CharacterCodingException: writeChar'
       state = ERROR
       return 1
     catch IOException
---      say '::writeChar: IOException'
       state = ERROR
       return 1
     end
@@ -752,33 +907,20 @@ class RexxStream.FileHandle
       writepos  = 0
     end
     else if linenum > 1 then do            -- position in file
-      if linewrite > linenum then do       -- count from begin of file
-
-        linewrite = 0
-        charwrite = 0
-        writepos  = 0
+      -- begin at the nearest known line start, not always at byte 0
+      rc = locateLine(linenum)
+      if rc = 1 then do
+        state = NOTREADY
+        return 1                    -- beyond EOF
       end
-      do
-        ch = ''
-        writeChannel.position(writepos)
-        loop while linewrite < linenum
-          ch = readUTF8Char()
-          if ch = -1 then leave
-          charwrite = charwrite + 1
-          if ch = '\n' then linewrite = linewrite + 1  -- newline
-        end
---        readChannel.position(readpos)
-        writepos  = readChannel.position()
-        if ch = -1 then do
-          state = NOTREADY
-          return 1                    -- EOF
-        end
-      catch IOException
---        say '::writeLine: IOException'
+      if rc = 2 then do
         state = ERROR
+        return 1
       end
+      writepos  = scanpos
+      charwrite = scanchars
+      linewrite = scanlines
     end
-
 
     rc = writeChar(line'\n')
     return rc
