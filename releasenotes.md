@@ -4,6 +4,7 @@
 - Improved Annotations handling
 - Improved LSP handling of minor classes
 - Debug Adapter Protocol implementation
+- PULL and PARSE PULL return '' at end of input, previously NullPointerException
 
 ## Fixes
 - Fixed GO arguments when interpreting
@@ -11,11 +12,24 @@
 - NetRexxC.sh now exits non-zero when translation fails
 - Windows scripts now report exitcodes
 - time(C) now correctly returns 12am and 12pm after midnight and noon
+- NetRexx-86 fix this/super delegation
+- NetRexx-87 correct dispatch through minor interface or abstract class
 - NetRexx-88 fix ADDRESS WITH STEM parsing
 - NetRexx-89 make interpreted assignment clause re-entrant
 - NetRexx-91 exit fails if exitcode not literal
 - NetRexx-92 interpreted super calls to Java class's method calls thrpreted clauses re-entrant
 - NetRexx-93 make interpreted clauses re-entrant
+- NetRexx-95 exit 2 when uncaught exception during exec
+- NetRexx-96 setAccessible only on non-super exec
+- NetRexx-97 make linein, charin Java 8 compatible
+- NetRexx-98 catch a minor class exception
+- NetRexx-99 parse pull at end of input returns '' instead of NullPointerException
+- NetRexx-100 load class from super if visible
+- NetRexx-101 better UTF-8 support with updated RexxStream
+- NetRexx-102 fresh indexed string assignment during exec
+- NetRexx-103 better UTF-8 support with updated RexxStream
+- NetRexx-104 avoid starting a constructor with GO
+
 
 ## Examples
 - Added the awfy benchmark suite to examples/benchmarks
