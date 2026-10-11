@@ -22,6 +22,7 @@
 /* 2022.09.28 resolve SYSTEM at runtime, issue #38                    */
 /* 2026.09.28 Make interpret re-entrant, issue #93              --MRE */
 /* 2026.09.28 detect trailing dot after stem, issue #88         --MRE */
+/* 2026.10.08 BadArgumentException added                       -- MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary decimal strictcase strictargs
@@ -88,13 +89,15 @@ class NrAddress implements RxClauseParser uses RxCode, RxExpr
   -- with['error','stream'] = stream (not yet)
   -- with['output','append'] = 'APPEND' ('replace' is default)
   -- with['error','append'] = 'APPEND'  ('replace' is default)
-  
+
+  srcinfo = String ''
 
  /** Construct an object from the current clause */
  method NrAddress(newrxt=RxTranslator)
-  rxt    =newrxt                                  -- the boss
+  rxt    =newrxt                                 -- the boss
   parser =rxt.program.parser
   tokens =parser.cursor.curclause.tokens
+  srcinfo = rxt.program.source.getName()',line 'tokens[0].line
 
 
  /** Pass processing */
@@ -358,7 +361,7 @@ method scanWithWhat(nexttoken, with_, append)
 
       if tokens[nexttoken].value = null then signal RxQuit(rxt, tokens[nexttoken], 'bad.expression.syntax')
 
-      rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 0, 0, 0)
+      rxvar=rxt.program.pooler.findvar(parser.cursor, tok.value, tok, 1, 0, 0)
       if rxvar == null then do
          signal RxQuit(rxt, tokens[nexttoken], 'variable.name.expected')
       end
@@ -421,6 +424,7 @@ method scanWithWhat(nexttoken, with_, append)
     if with['input'].exists('stem') then do
       istem = Rexx with['input','stem']
       with_arg='(Object)'istem','
+      srcinfo = istem'-'srcinfo
     end
     else if with['input'].exists('stream') then do
       istream = String with['input','stream']
@@ -473,7 +477,7 @@ method scanWithWhat(nexttoken, with_, append)
 
 
     rxt.program.streamer.out('{try{')
-    rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg');')
+    rxt.program.streamer.out(RxType.REXXADDRESS_CLASS'.execAddress("'addressee'",'jcode', 'with_arg', \"'srcinfo'\");')
     rxt.program.streamer.out('}catch (java.io.IOException $01){')
     rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: IOException \'"+$01.getMessage()+"\' occurred during ADDRESS invocation");')
 --    rxt.program.streamer.out('throw new java.io.IOException($1);')  
@@ -482,6 +486,8 @@ method scanWithWhat(nexttoken, with_, append)
     rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: InterruptedException occurred during ADDRESS invocation");')
 --    rxt.program.streamer.out('throw new java.lang.InterruptedException();')
 --    rxt.program.streamer.out('java.lang.System.exit(9);')
+    rxt.program.streamer.out('}catch (netrexx.lang.BadArgumentException $01){')
+    rxt.program.streamer.out('netrexx.lang.RexxIO.Say("     +++ Error: BadArgumentException \'"+$01.getMessage()+"\'");')
     rxt.program.streamer.out('}}')
 
   end 
@@ -520,9 +526,10 @@ method scanWithWhat(nexttoken, with_, append)
 
     if iwith['input'].exists('stem') then do
       st = Rexx iwith['input','stem']
-      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 1, 0, 0)
       istem = Rexx rxvar.varvalue
       i = Object istem
+      srcinfo = rxvar.varname'-'srcinfo
     end
     else if iwith['input'].exists('stream') then do
       istream = String iwith['input','stream']
@@ -531,7 +538,7 @@ method scanWithWhat(nexttoken, with_, append)
 
     if iwith['output'].exists('stem') then do
       st = Rexx iwith['output','stem']
-      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 1, 0, 0)
       ostem = Rexx rxvar.varvalue
       o = Object ostem
     end
@@ -544,7 +551,7 @@ method scanWithWhat(nexttoken, with_, append)
  
     if iwith['error'].exists('stem') then do
       st = Rexx iwith['error','stem']
-      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 0, 0, 0)
+      rxvar=rxt.program.pooler.findvar(cursor, st, RxToken null, 1, 0, 0)
       estem = Rexx rxvar.varvalue
       e = Object estem
     end
@@ -559,7 +566,7 @@ method scanWithWhat(nexttoken, with_, append)
 --     user must check RC, when '' an exception occurred
 
     do     
-      netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(icode), i, o, oappend, e, eappend)
+      netrexx.lang.RexxAddress.execAddress(String addressee, String rxt.interpreter.stringvalue(icode), i, o, oappend, e, eappend, srcinfo)
     catch iox=IOException         -- this also catches FileNotFound
 --      signal RxQuit(rxt, null, 'address.exception', 'IOException', iox.getMessage() )
       say '     +++ Error: IOException '''iox.getMessage()''' occurred during ADDRESS invocation'
@@ -570,6 +577,9 @@ method scanWithWhat(nexttoken, with_, append)
       say '     +++ Error: InterruptedException occurred during ADDRESS invocation'
 --      System.exit(9)
 --      signal InterruptedException()
+    catch bae=BadArgumentException
+--      signal RxQuit(rxt, null, 'address.exception', 'InterruptedException', '' )
+      say '     +++ Error: BadArgumentException '''bae.getMessage()''''
     end
   end
 --  if addr.exists('with') then do
