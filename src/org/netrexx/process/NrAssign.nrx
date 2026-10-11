@@ -25,6 +25,7 @@
 /* 2000.02.24 Implement interpret complete                            */
 /* 2024.09.29 INTERPRET support, handle rxt.interpreting flag --MRE   */
 /* 2026.09.28 Make interpret re-entrant, update only local vars --MR  */
+/* 2026.10.10 fresh indexed string, issue #102                  --MRE */
 /* ------------------------------------------------------------------ */
 -- Could use RxExpr for the RHS, later
 package org.netrexx.process
@@ -386,6 +387,12 @@ end
   if irhs.group=S_TYPE then do
     if irhs == rhs then irhs=irhs.copy()
     irhs.value=rxt.interpreter.initvalue(irhs.type)
+  end
+  -- a constant's value is shared by every execution of this clause, but a
+  -- Rexx can gain indexes, so each assignment needs its own copy
+  if irhs.constant & irhs.group\=S_TYPE & irhs.value<=Rexx then do
+    if irhs == rhs then irhs=irhs.copy()
+    irhs.value=Rexx(irhs.value.toString())
   end
 
   /* now effect the assignment */
