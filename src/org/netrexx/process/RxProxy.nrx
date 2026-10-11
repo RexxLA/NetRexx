@@ -20,6 +20,7 @@
 /* Change list (see RxLanguage for master change list)                */
 /* 2000.03.14 Initial                                                 */
 /* 2000.04.10 Add this$n field handling in dependent classes          */
+/* 2026.10.10 fix exception from minor class, issue #98         --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -432,6 +433,23 @@ class RxProxy uses RuntimeConstants, RxField
    return offset+4
 
 
+  /* minorType -- map a dotted name that may be a minor class (a.b.c) to the
+      RxType the class pool knows, trying a.b.c, a.b$c, a$b$c in that order */
+   method minorType(type=RxType) returns RxType
+    if type.dimension>0 then return type
+    name=type.classname
+    dots=name.countstr('.').toint()
+    loop k=0 to dots                          -- k = number of dots to dollar
+      cand=name
+      loop k2=1 to k
+        p=cand.lastpos('.').toint()
+        cand=cand.left(p-1)'$'cand.substr(p+1)
+        end k2
+      kinfo=rxt.classer.findknownclass(cand)
+      if kinfo\=null then return kinfo.type
+      end k
+    return type
+
  /* ---------------------------------------------------------------- */
  /* The remainder are methods for adding constants, etc. to the      */
  /* various pools.                                                   */
@@ -691,7 +709,8 @@ class RxProxy.AttribEC dependent extends RxProxy.Attrib
   super.length=2+2*types.length
   exids=int[types.length]          -- may be 0
   loop i=0 for types.length
-    exids[i]=parent.conClass(types[i])
+--    exids[i]=parent.conClass(types[i])
+    exids[i]=parent.conClass(parent.minorType(types[i]))
     end i
 
  -- writeBytes .. copy ourself to the byte array starting at offset
