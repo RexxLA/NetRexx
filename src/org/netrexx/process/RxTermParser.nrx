@@ -64,6 +64,7 @@
 /* 2026.05.13 snapshot method arguments when interpreting GO    --MRE */
 /* 2026.09.30 detect call to super and pass superflag, issue #92--MRE */
 /* 2026.10.01 fix this/super delegation, issue #86              --MRE */
+/* 2026.10.10 avoid GOing constructors, issue #104              --MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -735,6 +736,9 @@ end sqstub
             gofinals[0] = ''
             termargs=convertargs(cursor, tokstart, field, argcodes, onrhs, exec, gofinals)
             if field.isConstructor() then do
+              /* GO may not run a method that contains a constructor */
+              if cursor.curIsGO then
+                signal RxError(rxt, tokstart, 'go.constructor')
               if classinfo.isabstract then   -- unlikely
                 signal RxError(rxt, tokstart,-
                               'abstract.class.cannot.be.constructed')
@@ -970,6 +974,9 @@ end sqstub
         if special then what=termbit.lower()
                    else what='new' shortestname(cursor, info)
 --say 'conv 3'
+        /* GO may not run a method that contains a constructor */
+        if cursor.curIsGO then
+          signal RxError(rxt, tokstart, 'go.constructor')
         code.javacode=what-
           ||convertargs(cursor, tokstart, field, argcodes, onrhs, exec)
         /* remember it's a short reference */
@@ -1458,6 +1465,9 @@ end sqstub
 
           end nofield
         if field.isConstructor() then do
+          /* GO may not run a method that contains a constructor */
+          if cursor.curIsGO then
+            signal RxError(rxt, parttok, 'go.constructor')
           if depinfo=null then
             signal RxError(rxt, parttok, 'constructor.cannot.be.qualified',-
                            field.toString(cursor.curprogram))
