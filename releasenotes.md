@@ -29,6 +29,7 @@
 - NetRexx-102 fresh indexed string assignment during exec
 - NetRexx-103 better UTF-8 support with updated RexxStream
 - NetRexx-104 avoid starting a constructor with GO
+- NetRexx-106 literal decimal looses precision when interpreting
 
 
 ## Examples
