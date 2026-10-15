@@ -2657,6 +2657,8 @@ end sqstub
   -- Detect token layout:
   --   Unqualified:  GO method(args)      tokens[n]=name  tokens[n+1]='('
   --   Qualified:    GO obj.method(args)  tokens[n]=obj   tokens[n+1]='.'  tokens[n+2]=name  tokens[n+3]='('
+  -- or
+      GO method
 
   targetObj = Object null
   field     = RxField null
@@ -2674,7 +2676,11 @@ end sqstub
     argsN     = n+3                           -- index of '('
     terminfo  = classer.findanyclass(cursor, objtype.classname, tokstart)
 
-    argcodes = parsemethargs(cursor, argsN)
+    if tokens[argsN].type = RxToken.LPAR then   -- could be called without ()
+      argcodes = parsemethargs(cursor, argsN)
+    else
+      argcodes = RxCode[0]
+
     argtypes = codetypes(argcodes)
 
     field = classer.findfield(cursor, 0, 1, 0, 0, terminfo,-
@@ -2690,7 +2696,11 @@ end sqstub
     tokstart  = tokens[n]              -- method-name token
     methname  = tokstart.value         -- method name as spelled
 
-    argcodes = parsemethargs(cursor, n+1)    -- n+1 = '(' token
+    if tokens[n+1].type = RxToken.LPAR then   -- could be called without ()
+      argcodes = parsemethargs(cursor, n+1)    -- n+1 = '(' token
+    else
+     argcodes = RxCode[0]
+
     argtypes = codetypes(argcodes)
 
     field = RxField null
