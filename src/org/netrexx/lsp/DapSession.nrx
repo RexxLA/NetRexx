@@ -10,6 +10,7 @@
 /*                                                                    */
 /* ------------------------------------------------------------------ */
 /* 2026.08.03 MRE Initial                                             */
+/* 2026.10.16 breakpoints update                                --MRE */
 /* ------------------------------------------------------------------ */
 
 
@@ -58,10 +59,8 @@ properties public
 
   handler = DapHandler
 
-
   breakpointId = 0
   breakpoints = Rexx ''
-  -- source, line -> 1
 
   -- single-slot rendezvous: interpreter thread take()s, DAP thread offer()s
   resumeQueue = BlockingQueue
@@ -81,9 +80,13 @@ properties public
   varRefMap    = Hashtable     -- refNum (Integer, boxed as Rexx or int key) -> object
   nextVarRef   = int 2000      -- fixed scopes use 1001-1003, dynamic refs start clear above that
 
-  prevBreakpointLine   = int           -- previous line that stop at breakpoint
-  breakPerLine         = int 0
-  prevStepLine         = int
+  breakPerLine = int 0
+  prevStepLine = int
+
+properties private
+  prevPath = ''
+  prevLine = ''
+
 
 
 method DapSession(handler_ = DapHandler)
@@ -95,8 +98,10 @@ method DapSession(handler_ = DapHandler)
   terminated = boolean 0
   varRefMap  = Hashtable()
   nextVarRef = int 2000
-  prevBreakpointLine = 0
   prevStepLine       = 0
+  prevPath = ''
+  prevLine = ''
+
   return
 
 
@@ -165,19 +170,7 @@ method DapSession(handler_ = DapHandler)
     loop i = 1 to c
       args[n + i - 1] = String(nrcArgs.word(i))
     end
-/*
-    w = prog.words()          -- could be multiple
-    if w > 1 then do
-      prog = progw[1]
-      progargs = progargs || ' ' || w[2]
-    end
 
-    args = String[c+1]
-    args[0] = prog
-    loop i = 1 to c
-    	args[i] = String(nrcArgs.word(i))
-    end
-*/
     interpArgs = args
 
     interpreterThread = Thread(this)
@@ -245,6 +238,9 @@ method DapSession(handler_ = DapHandler)
 
   method clearBreakpoints(path)
     breakpoints[path] = null
+    prevPath = ''
+    prevLine = ''
+
 
   method addBreakpoint(path = Rexx, line = Rexx, cond = String null)
     breakpointId = breakpointId + 1
@@ -256,18 +252,17 @@ method DapSession(handler_ = DapHandler)
 -- a line can have multiple clauses
 -- we pause once per (possibly multi clause) line, unless option --cl where we pause per clause (so possibly multiple 'steps' per line)
   method isBreakpoint(path = Rexx, line = Rexx)
-    if breakpoints.exists(path) then
-      if breakpoints[path].exists(line) then do
-        if prevBreakpointLine = line then do   -- if same line
-          if breakPerLine = 1 then do
-            return breakpoints[path, line]     -- pause per clause
-          end
-          else return ''                       -- don't pause, no --cl option
-        end
-        prevBreakpointLine = line              -- new breakpoint line
-        return breakpoints[path, line]         -- pause per line
-      end
-    return ''                                   -- not a breakpoint
+  --trace results
+    sameLine = (path == prevPath) & (line == prevLine)
+    prevPath = path                        -- always update, so leaving the line resets it
+    prevLine = line
+
+    if \breakpoints.exists(path) then return ''
+    if \breakpoints[path].exists(line) then return ''
+
+    if sameLine & breakPerLine \= 1 then return ''   -- same line, no --cl option
+
+    return breakpoints[path, line]
 
 
   -- called from onContinue / onNext / onStepIn / onStepOut / onDisconnect
