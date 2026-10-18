@@ -250,9 +250,11 @@ do
     n=n+1;o[n]= 'doy = dayOfYear(day, month, year)'
   end
 
-  if 'USA RE RO PIPE_SHORT EUR_SHORT JULIAN_SHORT'.wordpos(typeo) > 0 then do  -- 2 digit year
+  -- !!! AS 2026-10-16 : fix 4-digit year in USA, FULLDATE formats
+  if 'USA_SHORT RE RO PIPE_SHORT EUR_SHORT JULIAN_SHORT'.wordpos(typeo) > 0 then do  -- 2 digit year
     n=n+1;o[n]= '  year = year.right(2)'
   end
+  -- !!! AS 2026-10-16 : fix 4-digit year in USA, FULLDATE formats
 
   if typeo = 'RB' then do
     n=n+1;o[n]= '  basedays = gregDayNumber(day, month, year)'
@@ -469,14 +471,24 @@ method getInFormat(name) --signals ThreadQ
 method getOutFormat(name)
   type = name.upper
   select case type
-    when 'SHORTDATE', 'SHORTDAT', 'SHORTDA', 'SHORTD', 'SHORT', 'SHOR', 'SHO', 'USA_SHORT', 'REXX_DATE_U', 'REXXU', 'RU', 'FULLDATE', 'USA'
+    -- !!! AS 2026-10-16 : fix 4-digit year in USA, FULLDATE formats
+    when 'FULLDATE', 'USA'
+      then do
+        if timeout then
+          p = "month'/'day'/'year hour':'min':'sec"  -- mm/dd/yyyyyyy hh:mm:ss.uuuuuu
+        else
+          p = "month'/'day'/'year"  -- mm/dd/yyyyyyy hh:mm:ss.uuuuuu
+        type = 'USA'
+      end
+    when 'SHORTDATE', 'SHORTDAT', 'SHORTDA', 'SHORTD', 'SHORT', 'SHOR', 'SHO', 'USA_SHORT', 'REXX_DATE_U', 'REXXU', 'RU'
       then do
         if timeout then
           p = "month'/'day'/'year hour':'min':'sec"  -- mm/dd/yy hh:mm:ss.uuuuuu
         else
           p = "month'/'day'/'year"  -- mm/dd/yy hh:mm:ss.uuuuuu
-        type = 'USA'
+        type = 'USA_SHORT'
       end
+    -- !!! AS 2026-10-16 : fix 4-digit year in USA, FULLDATE formats
     when 'ISO_SHORT'
       then if timeout then
         p = "year'-'month'-'day hour':'min':'sec"  --  yyyyyyy-mm-dd hh:mm:ss.uuuuuu
