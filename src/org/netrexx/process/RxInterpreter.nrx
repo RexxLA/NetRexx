@@ -692,7 +692,15 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
           -- super.method() requires invokespecial semantics.
 
           lookup=java.lang.invoke.MethodHandles.lookup()
-          lookup=java.lang.invoke.MethodHandles.privateLookupIn(supercontext, lookup)
+          do
+            lookup=java.lang.invoke.MethodHandles.privateLookupIn(supercontext, lookup)
+          catch NoSuchMethodError                 -- Java 8 has no privateLookupIn;
+            ctor=java.lang.invoke.MethodHandles.Lookup.class.getDeclaredConstructor(-
+                   [Class.class, Integer.TYPE])     -- this gives the same Lookup there
+            ctor.setAccessible(1)
+            lookup=java.lang.invoke.MethodHandles.Lookup ctor.newInstance(-
+                   [Object supercontext, Object Integer(15)])  -- 15: all access modes
+          end
 
           handle=lookup.unreflectSpecial(meth, supercontext)
           handle=handle.bindTo(obj)
