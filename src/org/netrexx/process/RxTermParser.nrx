@@ -65,6 +65,8 @@
 /* 2026.09.30 detect call to super and pass superflag, issue #92--MRE */
 /* 2026.10.01 fix this/super delegation, issue #86              --MRE */
 /* 2026.10.10 avoid GOing constructors, issue #104              --MRE */
+/* 2026.10.27 import if obscured, qualname/qualtype to avoid          */
+/*                                        collision, issue #111 --MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -553,7 +555,7 @@ class RxTermParser uses RxCode
           next=stem.arraynext
           code.type=field.fieldtype          -- dimensions vanish
 					     --              code.type=RxType.REXX_TYPE          -- dimensions vanish
-          code.javacode=classusei[u].type.classname'.'field.fieldname||stem.arraygen
+          code.javacode=rxt.classer.qualtype(classusei[u])'.'field.fieldname||stem.arraygen
           code.array=stem      -- [gets cleared below if not last in term]
 	  
           if exec then do label doit
@@ -583,7 +585,7 @@ class RxTermParser uses RxCode
         if vardim<array.arraydim then /* over-dimensioned */
           signal RxError(rxt, tokstart, 'too.many.indexes')
           code.type=field.fieldtype.basetype(vardim-array.arraydim)
-          code.javacode=classusei[u].type.classname'.'field.fieldname||array.arraygen
+          code.javacode=rxt.classer.qualtype(classusei[u])'.'field.fieldname||array.arraygen
           if exec then do label doit
             -- get the array object
             code.value=interpreter.getProperty(null, field, tokstart)
@@ -795,7 +797,7 @@ end sqstub
               if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
               -- [convertargs checks for ambiguity and void result]
 --say 'conv 2'
-              code.javacode=classusei[u].type.classname'.'field.fieldname
+              code.javacode=rxt.classer.qualtype(classusei[u])'.'field.fieldname
               gofinals[0] = ''
               termargs = convertargs(cursor, tokstart, field, argcodes, onrhs, exec, gofinals)
               code.javacode=gofinals[0]''code.javacode''termargs     -- MRE mix in final GO variables, if any
@@ -1084,7 +1086,7 @@ end sqstub
                                      field.toString(cursor.curprogram))
                 end
               if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
-              code.javacode=classusei[u].type.classname'.'field.fieldname
+              code.javacode=rxt.classer.qualtype(classusei[u])'.'field.fieldname
               if field.isMethod() then do
                 field.fieldref2=rxt.pass2
                 code.javacode=code.javacode'()'
@@ -1228,7 +1230,7 @@ end sqstub
                                      field.toString(cursor.curprogram))
                 end
               if field.fieldexcep\=null then accexcep(code, field.fieldexcep)
-              code.javacode=classusei[u].type.classname'.'field.fieldname
+              code.javacode=rxt.classer.qualtype(classusei[u])'.'field.fieldname
               if field.isMethod() then do
                 field.fieldref2=rxt.pass2
                 code.javacode=code.javacode'()'
@@ -2121,7 +2123,7 @@ end sqstub
       code.group=S_LIT
       end
     when name=='ask'     then do
-      code.javacode=RxType.REXXIO_CLASS'.Ask()'
+      code.javacode=rxt.classer.qualname(RxType.REXXIO_CLASS)'.Ask()'
       code.type=RxType.REXX_TYPE
       if exec then do
         if rxt.jsr223Engine \= null then do               -- running as a JSR223 script
@@ -2131,7 +2133,7 @@ end sqstub
       end
     end
     when name=='asknoecho'     then do
-      code.javacode=RxType.REXXIO_CLASS'.AskDark()'
+      code.javacode=rxt.classer.qualname(RxType.REXXIO_CLASS)'.AskDark()'
       code.type=RxType.REXX_TYPE
       if exec then do
         if rxt.jsr223Engine \= null then do               -- running as a JSR223 script
@@ -2615,6 +2617,19 @@ end sqstub
   key=info.type.classname.toString()
   if cursor.curprogram.javaimports.containsKey(key)
    then return info.fullname  -- short name [with parents, no package]
+  -- #111: a field spelled like the package root would hide the package in
+  -- the Java; import the class (imports are added at the end of pass 2) and
+  -- use the short name instead
+  dot=key.indexOf('.')
+  if dot>0 then if classer.obscured(cursor, key.substring(0, dot)) then do
+    pkg=info.type.getPackageName()
+    if pkg\=='' then do                 -- [no package: nothing to import from]
+      okey=key
+      op=info.fullname.indexOf('.')      -- short name has parents [Outer.Inner]?
+      if op>0 then okey=pkg'.'info.fullname.substring(0, op)  -- import outermost
+      if classer.shortimport(cursor, okey) then return info.fullname
+      end
+    end
   return info.type.classname  -- fully qualified name
 
 -- ============================================================
