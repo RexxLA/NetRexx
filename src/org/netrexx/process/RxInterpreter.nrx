@@ -53,6 +53,7 @@
 /* 2026.10.09 throw real exception, issue #100                  --MRE */
 /* 2026.10.17 Fix signvalue NumberFormatException for String-typed    */
 /*            LOOP control variable in interpreter              --MRE */
+/* 2026.10.28 CATCH in LOOP must not loop back, issue #113      --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -1300,7 +1301,11 @@ end interactive
        if cursor.curclause.skipend then        -- would normally skip
        if cursor.curlevel.trystate\=TRY_FINAL then do    -- not already finalizing
         -- setup jump to FINALLY/END, or go back up to LOOP
-        endBody(cursor)
+        --issue #113                        
+         if cursor.curlevel.trystate=TRY_CATCH then
+           endblock(cursor)                     -- fell out of a CATCH body: leave the block
+         else
+           endBody(cursor)                      -- end of main body: loop back / finish block
         cursor.curclause=cursor.curjump
         cursor.curjump=nojump                -- clear
         end
