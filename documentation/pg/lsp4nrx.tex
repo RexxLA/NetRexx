@@ -1,6 +1,10 @@
-\section{Language Server Protocol for \nr{}}
+\section{Language Server Protocol and Debug Adapter Protocol for \nr{}}
 \index{Language Server Protocol}
 \index{LSP}
+\index{Debug Adapter Protocol}
+\index{DAP}
+
+\subsection{Language Server Protocol}
 
 The Language Server Protocol (LSP) is an open standard which most modern editors and 
 integrated development environments (IDEs) use to assist programmers with syntax assist 
@@ -11,7 +15,7 @@ in the JSON-RPC (JavaScript Object Notation-Remote Procedure Call) protocol.
 
 The full protocol is published at \\ \url{https://microsoft.github.io/language-server-protocol/}.
 
-The \nr{} LSP server is written in \nr{} and implemented as \\ org.netrexx.lsp.NetRexxLspServer. 
+The \nr{} LSP server is written in \nr{} and is started as \\ 'java org.netrexx.lsp.NetRexxLspServer'.
 
 The following arguments are accepted:
 
@@ -19,7 +23,7 @@ The following arguments are accepted:
 -\/-onChange=nnnn & wait nnnn milliseconds after typing to run diagnostics \\
 -\/-onChange=off & run diagnostics on save only \\
 -\/-log & log JSON-RPC messages on stderr \\
--\/-stdio & communicate over stdin/stdout \\
+-\/-stdio & communicate over stdin/stdout (default) \\
 -\/-sock  & communicate over socket (development) \\
 \end{tabular}
 
@@ -57,31 +61,95 @@ The IDE also sends a \emph{textDocument/documentSymbol} request when an .nrx fil
  the server's response describes the hierarchy of class(es) and method(s) in the 
 source file.
 
-The tools/ide-plugins directory of the package contains plugins for the \nr{} Language Server Protocol support.
+\subsection{Debug Adapter Protocol}
 
-\begin{itemize}
-\item \textbf{lsp4nrx-\emph{Major.Minor.Patch}.vsix} is the plugin for Microsoft's Visual Studio Code. 
-Install from \emph{View\~{}Extensions\~{}three dots\~{}Install from VSIX}.
-\item \textbf{lsp4nrx-\emph{Major.Minor.Patch}.zip} is the plugin for JetBrains' IntelliJ IDEA.
-\item \textbf{\nr{}-UpdateSite.zip} is the plugin for the Eclipse IDE for Java Developers of the
- Eclipse Foundation.
-\end{itemize}
+The Debug Adapter Protocol (DAP) is an open standard which most modern editors and
+integrated development environments (IDEs) use to assist programmers with debugging.
 
-All plugins start the language server when any .nrx file is opened.
+DAP servers are language agnostic and communicate over stdin/stdout with any client
+in the JSON-RPC (JavaScript Object Notation-Remote Procedure Call) protocol.
+
+The full protocol is published at \\ \url{https://microsoft.github.io/debug-adapter-protocol/}.
+
+The \nr{} DAP server is written in \nr{} and is started as \\ 'java org.netrexx.lsp.NetRexxDapServer'.
+
+The following arguments are accepted:
+
+\begin{tabular}{ l l }
+ -\/-log & log JSON-RPC messages on stderr \\
+ -\/-stdio & communicate over stdin/stdout (default) \\
+ -\/-sock  & communicate over socket (development) \\
+ -\/-cl & pause per clause (default breakpoint per line) \\
+ -\/-rx & expose RxInterpreter in class instances (use with care) \\
+\end{tabular}
+
+Communication between IDE and DAP server is similar to the LSP communication. Upon initialization of the debug session,
+the IDE sends an \emph{initialize} JSON-RPC request upon which the server responds which features it supports.
+
+The \nr{} debug server responds on the \emph{initialize} request with the following DAP capabilities:
+
+\begin{tabular} { |p{8cm}|p{8cm}|  }
+ \hline
+ supportsConfigurationDoneRequest & The debug adapter supports the `configurationDone` request \\
+ \hline
+ supportsFunctionBreakpoints & The debug adapter supports function breakpoints \\
+ \hline
+ supportsSetVariable & The debug adapter supports setting a variable to a value.\\
+ \hline
+\end{tabular}
+
+
+The DAP server supports program(s) to be \emph{launch}ed - this is the default - or running program(s) to be
+\emph{attach}ed to.
+The \emph{setBreakpoints} requests sets line breakpoints.
+Upon reception of the \emph{configurationDone} request, the DAP server starts the program(s) with argument(s) in
+\textbf{interpreted mode} from a separate thread. The current working directory is the workspace directory, or
+can be specified in the IDE \emph{Settings}.
+
+When the program is interrupted by a breakpoint, the \emph{continue}, \emph{next}, \emph{stepIn}, \emph{stepOut}
+requests control the flow of the running program. The \emph{scopes} and \emph{variables} requests
+load the IDE \textbf{properties}, \textbf{arguments} and \textbf{local variables} values,
+which can be updated by the \emph{setVariables} request.
+
+The \emph{disconnect} request terminates the debug session.
+
+Currently, debugging multi-threaded programs is not supported and results in undefined behavior.
+
+\subsection{Plugins}
+
+Plugins have been developed for Microsoft's Visual Studio Code, JetBrains' IntelliJ IDEA and are installable from their
+respective marketplaces.
+
+The plugins start the LSP server when any .nrx file is opened.
 The language server is started by command \\
-'java -cp \emph{dir}/NetRexxC.jar org.netrexx.lsp.NetRexxLspServer', 
+'java -cp \emph{dir}/lib/NetRexxC.jar org.netrexx.lsp.NetRexxLspServer',
 where \emph{dir} is the relative path into the plugin to the self-contained current NetRexxC.jar.
 This process is terminated by the plugin when the last .nrx file is closed.
 
+The DAP server is started when a debug session is initiated in the IDE, with command \\
+’java ‑cp \emph{dir}/lib/NetRexxC.jar org.netrexx.lsp.NetRexxDapServer’,
+
 All plugins expose the following settings/preferences:
 \begin{itemize}
-\item \textbf{onChange} controls the compilation delay after typing. When set, the --onChange 
-argument is added to the command. 
-\item \textbf{log stderr} displays raw JSON-RPC traffic on stderr. When set, the --log argument
+ \item \textbf{log stderr} displays raw JSON-RPC traffic on stderr. When set, the --log argument
  is added to the command.
-\item \textbf{classpath} allows to adjust the classpath to find dependent classes. When set, 
-its contents is pre-pended on the java -cp classpath command argument.
+ \item \textbf{classpath} allows to adjust the classpath to find dependent classes. When set,
+ its contents is pre-pended on the java -cp classpath command argument.
+ \item \textbf{cwd} sets the current working directory when starting the LSP and DAP servers. If absent,
+ current working directory is the workspace directory.
+ \item \textbf{onChange} controls the compilation delay after typing. When set, the --onChange
+ argument is added to the command. This is LSP-only
+ \item \textbf{cl} specifies to single step per clause instead of the default per line. This is DAP-only.
+ \item \textbf{rx} exposes the hidden RxInterpreter instance on class instances, This is DAP-only, use with care.
 \end{itemize}
+
+The DAP server additionally allows to set debug configurations:
+\begin{itemize}
+ \item \textbf{program} one or more programs to be debugged. If empty, the currently selected \nr{} program is
+ debugged.
+ \item \textbf{arguments} arguments to present to the debugged program
+\end{itemize}
+
 
 Any LSP compatible IDE has its own specific manner to interface with the language server.
 Here we document how to connect the \nr{} language server to Bare Bones Software's BBedit for macOS.
