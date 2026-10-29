@@ -54,6 +54,8 @@
 /* 2026.10.17 Fix signvalue NumberFormatException for String-typed    */
 /*            LOOP control variable in interpreter              --MRE */
 /* 2026.10.28 CATCH in LOOP must not loop back, issue #113      --MRE */
+/* 2026.10.29 don't assign interface constants that the proxy         */
+/*                             already initialized, issue #114  --MRE */
 /* ------------------------------------------------------------------ */
 -- Most of this is language-independent.  See RUNFREE for the NetRexx-
 -- specific code; this could be moved out.
@@ -499,6 +501,9 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
     -- now set or get it
     if set then do
       setvalue=code2ref(setvalue, field.fieldtype) /* rewrap if needed */
+      --MRE, issue #114
+      -- interface constants were initialized by the proxy's ConstantValue attribute
+      if infoclass.isInterface() then if field.fieldvalue\=null then return Object null
 
       prop.set(obj, setvalue)
       value=Object null

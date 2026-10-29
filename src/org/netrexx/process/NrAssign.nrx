@@ -26,6 +26,8 @@
 /* 2024.09.29 INTERPRET support, handle rxt.interpreting flag --MRE   */
 /* 2026.09.28 Make interpret re-entrant, update only local vars --MR  */
 /* 2026.10.10 fresh indexed string, issue #102                  --MRE */
+/* 2026.10.29 keep the literal of an interface constant in            */
+/*                               RxField.fieldvalue, issue #114 --MRE */
 /* ------------------------------------------------------------------ */
 -- Could use RxExpr for the RHS, later
 package org.netrexx.process
@@ -239,6 +241,13 @@ class NrAssign implements RxClauseParser uses RxCode, RxVariable
 
     if rhs.constant then do
       newvar.varvalue=rhs.value
+      --MRE, issue #114
+      -- remember an interface constant's literal for the proxy's ConstantValue
+      if newvar.isproperty() & newvar.isconstant() & newvar.varfield\=null then
+        if newvar.varfield.fieldinfo.isinterface then
+          if newvar.vartype.isPrimitive() | newvar.vartype=RxType.STRING_TYPE then
+            newvar.varfield.fieldvalue=rhs.value
+
       if newvar.isconstant() then
        if (newvar.vartype.isPrimitive() | newvar.vartype=RxType.STRING_TYPE) then
         newvar.setlit()

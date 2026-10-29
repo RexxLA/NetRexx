@@ -34,10 +34,11 @@ options binary nodecimal strictcase strictargs
 -- 2015.06.09 switch RuntimeConstants to local copy so tools.jar is not needed for NetRexx build -- issue #131 -- KK
 /* 2022.08.06 no final flag for constant properties, fix issue #33    */
 /* 2026.10.03 interface properties must be FINAL                --MRE */
+/* 2026.10.29 implement ConstantValue attribute, emit it for          */
+/*                              interface constants, issue #114 --MRE */
 /* ------------------------------------------------------------------ */
 
 -- +++ should check for limits overflows
--- +++ constantValue code not complete, as it's unused
 
 import org.netrexx.process.RuntimeConstants		-- 2015.06.09 switch RuntimeConstants to local copy so tools.jar is not needed for NetRexx build -- issue #131 -- KK
 --import sun.tools.java.RuntimeConstants
@@ -171,8 +172,15 @@ class RxProxy uses RuntimeConstants, RxField
     if info.isinterface then propflags[f]=propflags[f]|ACC_FINAL
     propnameid[f]=addutf8(field.fieldname)
     proptypeid[f]=addSig(field.fieldtype)
-    if field.fieldvalue\=null then do   -- need ConstantValue
-      atcv=AttribCV(field.fieldvalue)
+    --MRE, issue #114
+    -- an interface property is final static, and the interpreter cannot assign
+    -- it: Field.set always refuses.  Give such a field its value in a
+    -- ConstantValue attribute, so the JVM initializes it.  Classes are
+    -- unaffected (their properties are not final in the proxy, issue #33).
+    if info.isinterface then
+     if field.fieldvalue\=null then
+      if hasConstSig(field.fieldtype) then do   -- need ConstantValue
+      atcv=AttribCV(field.fieldvalue, field.fieldtype)
       attrvect=Vector(1)
       attrvect.addElement(atcv)
       propatts[f]=attrvect
@@ -432,6 +440,35 @@ class RxProxy uses RuntimeConstants, RxField
    array[offset+0]=byte(data&0xff)
    return offset+4
 
+  --MRE, issue #114
+  /* hasConstSig -- can a field of this type carry a ConstantValue attribute?
+      (JVMS 4.7.2: primitives and String only) */
+ method hasConstSig(type=RxType) returns boolean
+  if type.dimension>0 then return 0
+  return type.isPrimitive() | type=RxType.STRING_TYPE
+
+  /* conValue -- constant pool index for the value of a ConstantValue
+      attribute.  boolean, byte, char, short and int all use CONSTANT_Integer */
+ method conValue(value=Object, type=RxType) returns int
+  s=Rexx(value.toString())
+  select
+    when type=RxType.BOOL_TYPE then do
+      if s=='1' | s.upper()=='TRUE' then return conInt(1)
+      return conInt(0)
+      end
+    when type=RxType.CHAR_TYPE then do
+      if value<=Character then return conInt(int (Character value).charValue())
+      str=value.toString()
+      if str.length()==1 then return conInt(int str.charAt(0))
+      return conInt(s.toint())
+      end
+    when type=RxType.BYTE_TYPE, type=RxType.SHORT_TYPE, type=RxType.INT_TYPE then
+      return conInt(s.toint())
+    when type=RxType.LONG_TYPE   then return conLong(s.tolong())
+    when type=RxType.FLOAT_TYPE  then return conFloat(s.tofloat())
+    when type=RxType.DOUBLE_TYPE then return conDouble(s.todouble())
+    otherwise return conString(s.toString())    -- String
+    end
 
   /* minorType -- map a dotted name that may be a minor class (a.b.c) to the
       RxType the class pool knows, trying a.b.c, a.b$c, a$b$c in that order */
@@ -661,11 +698,12 @@ class RxProxy.AttribCV dependent extends RxProxy.Attrib
  properties shared
   valueid=int            -- constant pool index for the value
 
+ --MRE, issue #114
  -- always need a value...
- method AttribCV(value=Object)
+ method AttribCV(value=Object, type=RxType)
   parent.super("ConstantValue")
   super.length=2
-  signal RxQuit(parent.rxt, null, 'not.yet.implemented', 'ConstantValue')
+  valueid=parent.conValue(value, type)
 
  -- writeBytes .. copy ourself to the byte array starting at offset
  method writeBytes(array=byte[], offset=int) returns int
