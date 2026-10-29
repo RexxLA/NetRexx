@@ -30,13 +30,19 @@
 - NetRexx-103 better UTF-8 support with updated RexxStream
 - NetRexx-104 avoid starting a constructor with GO
 - NetRexx-106 literal decimal looses precision when interpreting
-
+- NetRexx-108 Pipelines dateconvert stage, correct USA and FULLDATE output formats
+- NetRexx-109 interpreted, a cast to the wrong class is not checked, next method fails with internal error
+- NetRexx-111 a variable or property named like a package makes the generated Java fail to compile
+- NetRexx-112 on Java 8, an interpreted super.method() call fails with NoSuchMethodError
+- NetRexx-113 interpreted, a catched exception in a loop is rethrown
+- NetRexx-114 interpreted, initializing a constant property of an interface fails with an exception
 
 ## Examples
 - Added the awfy benchmark suite to examples/benchmarks
 
 ## Documentation
-
+- pull method documented in NetRexx Language Reference
+- Debug Adapter Protocol server documented in Programming Guide
 
 
 
