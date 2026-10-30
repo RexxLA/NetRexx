@@ -65,6 +65,7 @@
 /* 2026.09.30 detect call to super and pass superflag, issue #92--MRE */
 /* 2026.10.01 fix this/super delegation, issue #86              --MRE */
 /* 2026.10.10 avoid GOing constructors, issue #104              --MRE */
+/* 2026.10.30 Raw-cast generic receivers in chains, issue #115  --MRE */
 /* ------------------------------------------------------------------ */
 -- Needs analysis to reduce duplication of code.
 
@@ -1353,6 +1354,17 @@ end sqstub
     if code.javacode == 'super' then
       if exec then
         supercontext=classinfo.type.getClassObject(rxt.loader)
+
+    --MRE issue #115: javac sees the result of a generic method as parameterized
+    -- (Map<String,String>), but NetRexx only knows the erased signature (Map),
+    -- so make the receiver raw: ((java.util.Map)pb.environment()).put(...)
+    if code.group==S_METHOD then if \exec then do label rawrecv
+      rclass=code.type.getClassObject(rxt.loader)
+      if rclass=null then leave rawrecv
+      if rclass.getTypeParameters().length==0 then leave rawrecv
+      if code.javacode.substr(1,1)==';' then leave rawrecv   -- GO prefix
+      code.javacode='(('code.type.toJava()')'code.javacode')'
+    end rawrecv
 
     code.javacode=code.javacode'.'
     code.constant=0                -- no longer constant if more to come
