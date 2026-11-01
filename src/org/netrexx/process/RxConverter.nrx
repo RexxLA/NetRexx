@@ -37,6 +37,7 @@
 /* add auto conversion Rexx=>Map for collections support --kk	   -- */ 	
 /* 2015.05.24 issue #92 = cannot compile interface with negative      */
 /*                                                      constants     */
+/* 2026.10.27 qualname to avoid collision, issue #111           --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -449,7 +450,7 @@ class RxConverter uses RxCode
         if jcode\=null then code.javacode='"'jcode'"'
         -- we don't want true/false for boolean...
         if rhtype=RxType.BOOL_TYPE then code.javacode='('code.javacode'?"1":"0")'
-                               else code.javacode=RxType.STRING_CLASS'.valueOf('code.javacode')'
+                               else code.javacode=rxt.classer.qualname(RxType.STRING_CLASS)'.valueOf('code.javacode')'
         code.wrapped=1                       -- it's atomic
         end java
       if code.value\=null then do label doit
@@ -583,7 +584,7 @@ class RxConverter uses RxCode
       end
     when CONVERT_SR then do                  -- String -> Rexx
       if code.javacode\=null then do label java
-        code.javacode=RxType.REXX_CLASS'.toRexx('code.javacode')'
+        code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.toRexx('code.javacode')'
         code.wrapped=1                       -- it's atomic
         end
       if code.value\=null then
@@ -598,7 +599,7 @@ end
       end
    when CONVERT_CSQR then do                  -- CharSequence -> Rexx
       if code.javacode\=null then do label java
-        code.javacode=RxType.REXX_CLASS'.toRexx('code.javacode'.toString())'
+        code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.toRexx('code.javacode'.toString())'
         code.wrapped=1                       -- it's atomic
         end
       if code.value\=null then code.value=Rexx(String code.value.toString())
@@ -612,14 +613,14 @@ end
       end       
     when CONVERT_RS then do                  -- Rexx -> String
       if code.javacode\=null then do label java
-        code.javacode=RxType.REXX_CLASS'.toString('code.javacode')'
+        code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.toString('code.javacode')'
         code.wrapped=1                       -- it's atomic
         end
       if code.value\=null then code.value=(Rexx code.value).toString()
       end
     when CONVERT_RCSQ then do                  -- Rexx -> CharSequence
       if code.javacode\=null then do label java
-        code.javacode=RxType.REXX_CLASS'.toString('code.javacode')'
+        code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.toString('code.javacode')'
         code.wrapped=1                       -- it's atomic
         end
       if code.value\=null then code.value=(Rexx code.value).toString()
@@ -728,7 +729,7 @@ end
     when CONVERT_OR then do                  -- class -> Rexx
       -- construct Rexx from general object's string value
       if code.javacode\=null then do label java
-        code.javacode='new' RxType.REXX_CLASS'('RxType.STRING_CLASS'.valueOf('code.javacode'))'
+        code.javacode='new' RxType.REXX_CLASS'('rxt.classer.qualname(RxType.STRING_CLASS)'.valueOf('code.javacode'))'
         code.wrapped=1                       -- it's atomic
         end java
       if code.value\=null then code.value=Rexx(code.value.toString())
@@ -742,7 +743,7 @@ end
       end
     when CONVERT_CAR then do                 -- char[] -> Rexx
       if code.javacode\=null then do label java
-        code.javacode=RxType.REXX_CLASS'.toRexx('code.javacode')'
+        code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.toRexx('code.javacode')'
         code.wrapped=1                       -- it's atomic
         end java
 
@@ -767,14 +768,14 @@ end
       end
     when CONVERT_RCA then do                 -- Rexx -> char[]
       if code.javacode\=null then do label java
-        code.javacode=RxType.REXX_CLASS'.tochararray('code.javacode')'
+        code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.tochararray('code.javacode')'
         code.wrapped=1                       -- it's atomic
         end java
       if code.value\=null then code.value=(Rexx code.value).toCharArray()
       end
     when CONVERT_CCA then do                 -- char -> char[]
       if code.javacode\=null then do label java
-        code.javacode=RxType.REXX_CLASS'.tochararray('code.javacode')' -- use helper function
+        code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.tochararray('code.javacode')' -- use helper function
         code.wrapped=1                       -- it's atomic
         end
       if code.value\=null then code.value=(Rexx code.value).toCharArray()
@@ -843,7 +844,7 @@ end
     otherwise           explen=4
     end
   if code.javacode.length()\==explen then do    -- complicated case
-    code.javacode=RxType.STRING_CLASS'.valueOf('code.javacode')' -- [fails if CA is null]
+    code.javacode=rxt.classer.qualname(RxType.STRING_CLASS)'.valueOf('code.javacode')' -- [fails if CA is null]
     end
    else /* single-character literal */ do
     code.javacode='"'code.javacode.substr(2, code.javacode.length().toint()-2)'"'
@@ -877,7 +878,7 @@ end
       code.javacode=code.javacode'.tochar()'
       end
      else /* String or char[] */
-      code.javacode=RxType.REXX_CLASS'.tochar('code.javacode')'
+      code.javacode=rxt.classer.qualname(RxType.REXX_CLASS)'.tochar('code.javacode')'
     end
    else /* single-character literal */ do
     parse code.javacode '"'c1'"'

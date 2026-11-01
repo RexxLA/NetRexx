@@ -77,6 +77,8 @@
 /* 2022.01.28 -- MRE -- added support for --[upgrade-]module-path     */
 /* 2023.01.10 -- MRE -- packdirfind again using File, faster          */
 /* 2023.01.10 -- rvj -- limit home dir restriction macOS to ./Library */
+/* 2026.10.27 obscure possible variable and property collisions       */
+/*                                                   issue #111 --MRE */
 /* ------------------------------------------------------------------ */
 -- may still have minor NetRexxisms (search order, etc.)
 
@@ -2367,6 +2369,112 @@ end exact
     javakeytable.put('while'       , item)
     end
   return javakeytable.get(word)\=null
+
+ /** JAVAROOT -- test if a name could capture a package qualifier (#111)
+    Arg1 is the word to test [exact case]
+    returns 1 if the word is the first segment of a known package, or of
+    the package being compiled.  Generated Java qualifies class names with
+    package names, and a variable of the same name would hide the package
+    (JLS 6.4.2), so such variable names get a '$' prefix in the Java. */
+ method javaroot(word=String) returns boolean
+  if ispackage(word) then return 1             -- root of a package with classes
+  if rxt.program.packagename=null then return 0
+  pn=Rexx rxt.program.packagename              -- own package may have no classes yet
+  if pn==word then return 1
+  return pn.left(word.length()+1)==word'.'
+
+ /** OBSCURED -- test if a field in scope would hide a package name (#111)
+    Arg1 is the context
+    Arg2 is the first segment of a package name [exact case]
+
+    returns 1 if the current class has a field (property) of that name: its
+    own, one inherited from a superclass or an interface, or one belonging to
+    an enclosing class (the generated Java nests minor classes).  In Java a
+    field hides a package (JLS 6.4.2), so a name qualified with the package
+    would not compile.  Access is not checked: a false hit only costs an
+    import, but a miss makes javac fail. */
+ method obscured(cursor=RxCursor, root=String) returns boolean
+  var=cursor.curprogram.pooler.refindvar(cursor, root)
+  if var\=null then if var.varspell==root then return 1
+  if cursor.curclass=null then return 0
+  ci=cursor.curclass.classinfo
+  loop while ci\=null
+    fld=findfield(cursor, 0, 0, 1, 0, ci, root, RxType[] null, null, 0)
+    if fld\=null then if fld.fieldname==root then return 1
+    ci=ci.parentinfo
+    end
+  return 0
+
+ /** SHORTIMPORT -- make sure a class is imported, so its short name is usable
+    Arg1 is the context
+    Arg2 is the full class name, with package
+
+    returns 1 if the class is (now) in the Java imports; 0 if that cannot be
+    done because another imported class has the same short name.  The import
+    statements are written at the end of pass 2. */
+ method shortimport(cursor=RxCursor, key=String) returns boolean
+  imports=cursor.curprogram.javaimports
+  if imports.containsKey(key) then return 1
+  suffix=String '.'key.substring(key.lastIndexOf(int(char '.'))+1)
+  e=imports.keys()
+  loop while e.hasMoreElements()
+    k=String e.nextElement()
+    if k.endsWith(suffix) then return 0         -- a different class, same name
+    end
+  imports.put(key, key)
+  return 1
+
+ /** QUALNAME -- class name to use as the qualifier of a static member in
+    generated Java (#111)
+    Arg1 is the full class name, with package [e.g., netrexx.lang.RexxIO]
+
+    returns the full name, unless a field in scope would hide the first
+    segment of its package.  Then the name is returned as a cast of null to the
+    class, [e.g., ((netrexx.lang.RexxIO)null)]: a cast names the class in a
+    type context, where no field can hide it, and a static member may be
+    selected from it.  Uses the parsing cursor; for generated code only. */
+ method qualname(name=Rexx) returns Rexx
+  key=String name
+  dp=int key.indexOf(int(char '.'))
+  if dp<1 then return name                        -- no package
+  if rxt.program=null then return name
+  if rxt.program.parser=null then return name
+  cursor=rxt.program.parser.cursor
+  if cursor=null then return name
+  if \obscured(cursor, key.substring(0, dp)) then return name
+  return '(('key')null)'
+
+ /** QUALTYPE -- class name to use as the qualifier of a static member in
+    generated Java, for a class known by its class information (#111)
+    Arg1 is the class [e.g., from a USES list]
+
+    returns the class name, unless a field in scope would hide the first
+    segment of its package.  Then, as for QUALNAME, a cast of null to the class
+    is returned.  An interface cannot be used that way (its static methods may
+    not be called through an expression), so for an interface the outermost
+    class is imported and the name without its package is returned. */
+ method qualtype(info=RxClassInfo) returns Rexx
+  type=info.type
+  if type.getPackageName()=null then return type.classname
+  key=String type.classname
+  pkg=String type.getPackageName()
+  if pkg.length()=0 then return type.classname    -- no package: nothing to hide
+  if \key.startsWith(pkg'.') then return type.classname
+  if rxt.program=null then return type.classname
+  if rxt.program.parser=null then return type.classname
+  cursor=rxt.program.parser.cursor
+  if cursor=null then return type.classname
+  dp=int pkg.indexOf(int(char '.'))
+  if dp<0 then root=pkg
+          else root=pkg.substring(0, dp)
+  if \obscured(cursor, root) then return type.classname
+  if \info.isinterface then return '(('key')null)'
+  short=key.substring(pkg.length()+1)             -- may have parents [Outer.Inner]
+  op=int short.indexOf(int(char '.'))
+  if op>0 then okey=pkg'.'short.substring(0, op)   -- the outermost class
+          else okey=key
+  if \shortimport(cursor, okey) then return type.classname
+  return short
 
   method add2ImportedClasses(loadedClass=java.lang.Class)
     lastdot = loadedClass.getName().lastIndexOf('.')
