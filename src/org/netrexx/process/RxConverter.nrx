@@ -38,6 +38,7 @@
 /* 2015.05.24 issue #92 = cannot compile interface with negative      */
 /*                                                      constants     */
 /* 2026.10.27 qualname to avoid collision, issue #111           --MRE */
+/* 2026.11.03 preserve binary negative decimal literal,issue #120--MRE*/
 /* ------------------------------------------------------------------ */
 package org.netrexx.process
 options binary nodecimal strictcase strictargs
@@ -1095,8 +1096,32 @@ end
   if \code.type.isPrimitive() then return null
   if code.group\=S_LIT then return null      -- compound
   if code.begclause=null then return null    -- no associated clause
-  if code.javacode.pos('(')\=='0' then return null -- has been wrapped for trace
-  return Rexx code.begclause.tokens[code.begoff].value
+  -- preserve negative decimal literal when options binary, issue #120 --MRE
+  -- javacode with parentheses means it was wrapped/cast ((byte)-3), except a plain
+  -- sign-led fold such as -(-2.50F) in binary mode, which the token check below verifies
+  if code.javacode.pos('(')\=='0' then do
+    if code.javacode.left(1)\=='-' & code.javacode.left(1)\=='+' then return null
+  end
+   if code.endclause\=code.begclause then return null
+   tokens=code.begclause.tokens
+    sgn=Rexx ''
+    -- leading tokens may only be blanks and unary + or - operators
+    loop i=code.begoff to code.endoff-1
+      tok=tokens[i]
+      if tok.type==RxToken.SP then iterate i
+      if tok.type\==RxToken.OP then return null     -- e.g. parenthesis
+      opc=Rexx(tok.value)
+      if opc=='-' then do
+        if sgn=='' then sgn='-'
+                   else sgn=''                      -- double negative
+        end
+      else if opc\=='+' then return null
+      end i
+
+    -- the last token must be the numeric literal itself
+    numtok=tokens[code.endoff]
+    if numtok.type\==RxToken.NUM then return null
+    return sgn||Rexx(numtok.value)
 
  /** JAVAWRAP -- wrap Java code in parentheses if necessary
     Arg1 is code object to check javacode and wrap
