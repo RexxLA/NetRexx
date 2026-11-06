@@ -40,6 +40,8 @@
 /* 2021.01.19 Add RC special name parsing as pseudo local variable    */
 /* 2022.04.05 Added termtok as 8th argument to parseexpr --MRE        */
 /* 2026.10.27 qualname to avoid collision, issue #111           --MRE */
+/* 2026.11.06 avoid NPE with variables by and to when looping,        */
+/*                                                   issue #116 --MRE */
 /* ------------------------------------------------------------------ */
 /* To-do .. remove redundant sub-expression code                      */
 -- Currently   foo=boolean \bar    will fail with dyadic.not; raise
@@ -201,8 +203,8 @@ class RxExprParser uses RxCode
         uvalue=Rexx(tok.value).upper()
         -- if -exec then we know the term word is known a keyword, so no
         -- need for the iskey check
-        if utermwords.wordpos(uvalue)\==0 then
-         if rxt.exec, cursor.curprogram.parser.iskey(uvalue, uvalue), termtok\=null & cursor.curprogram.parser.istok(termtok, tok) then do
+        if utermwords.wordpos(uvalue)\==0 then  --MRE issue #116
+         if rxt.exec, cursor.curprogram.parser.iskey(uvalue, uvalue), termtok=null, cursor.curprogram.parser.istok(termtok, tok) then do
           /* Match!  Drop blank to left, if any, then terminate with END */
           if i>0 then if tokens[i-1].type=RxToken.SP then do
             i=i-1
