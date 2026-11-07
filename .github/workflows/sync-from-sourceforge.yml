@@ -1,0 +1,69 @@
+# Keeps the GitHub copy of NetRexx in step with SourceForge, where
+# development happens. Every hour it fetches SourceForge master and
+# fast-forwards GitHub master to it, then copies any new tags.
+#
+# It never force-pushes. If GitHub master has a commit that SourceForge
+# does not, the push is refused and the run fails, so nothing on GitHub
+# is ever overwritten.
+#
+# It uses only the repository's own token. That token cannot push a
+# commit that adds or changes a file under .github/workflows, so a
+# change to this file on SourceForge has to be pushed to GitHub by hand,
+# once; the hourly runs then carry on.
+#
+# A copy of the repository (a test fork, say) can point it elsewhere
+# with repository variables: SYNC_SOURCE (a git URL) and SYNC_BRANCH.
+# Without them it runs only in RexxLA/NetRexx.
+
+name: Sync from SourceForge
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-from-sourceforge
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'RexxLA/NetRexx' || vars.SYNC_SOURCE != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE: ${{ vars.SYNC_SOURCE || 'https://git.code.sf.net/p/netrexx/code' }}
+      BRANCH: ${{ vars.SYNC_BRANCH || 'master' }}
+    steps:
+      - name: Check out GitHub master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Fetch SourceForge
+        run: |
+          git fetch --no-tags "$SOURCE" "+refs/heads/$BRANCH:refs/remotes/sourceforge/$BRANCH"
+          git fetch "$SOURCE" 'refs/tags/*:refs/tags/*'
+
+      - name: Fast-forward GitHub master
+        run: |
+          new=$(git rev-parse "refs/remotes/sourceforge/$BRANCH")
+          old=$(git rev-parse HEAD)
+          if [ "$new" = "$old" ]; then
+            echo "Already in step at ${old:0:8}."
+          elif git merge-base --is-ancestor "$old" "$new"; then
+            echo "Moving master ${old:0:8} -> ${new:0:8}:"
+            git log --oneline "$old..$new"
+            git push origin "$new:refs/heads/master"
+          else
+            echo "::error::GitHub master has commits that SourceForge $BRANCH does not; not pushing."
+            git log --oneline "$new..$old"
+            exit 1
+          fi
+
+      - name: Copy new tags
+        run: git push origin --tags
