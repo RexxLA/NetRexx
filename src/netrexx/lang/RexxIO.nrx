@@ -21,6 +21,7 @@
 /* 2018.03.14 RVJ add one liner linehandler                           */
 /* 2022.03.21 RVJ say null should not output but just return          */
 /* 2025.10.04 MRE avoid race for Stdout                               */
+/* 2026.11.05 AskDark fallback when no console, issue #119      --MRE */
 /* ------------------------------------------------------------------ */
 import java.util
 package netrexx.lang
@@ -60,16 +61,38 @@ class RexxIO implements Serializable
   /** Function to return a line read from the standard input stream without echo.
    *  e.g. for passwords 
      If the stream is closed or otherwise unavailable, null is returned.
+     If the JVM has no access to the console, a NoConsoleException is
+     signalled, unless the -askstdin option is present.
    */
-  method AskDark() static returns Rexx
-    -- do
-      line=System.console().readPassword()
-      if line=null then return Rexx null
-    -- catch IOException
-    --   return null
-    -- end
-    return Rexx(line)
-    
+
+  method AskDark(fallback=boolean 0) static returns Rexx
+    con = System.console()
+    if isTerminal(con) then do
+      line = con.readPassword()
+      if line == null then return null
+      return Rexx(line)
+    end
+    -- MRE issue #119: no terminal, read like Ask()
+    if fallback then do
+      line = StdIn.readLine()
+      if line = null then return null
+      return Rexx(line)
+    catch IOException
+      return null
+    end
+    signal NoConsoleException
+
+
+    method isTerminal(con=Console) static returns boolean
+      if con == null then return 0
+      do
+        m = Console.class.getMethod('isTerminal', Class[0])
+        return Boolean.TRUE.equals(m.invoke(con, Object[0]))
+      catch NoSuchMethodException
+        return 1            -- Java < 22: non-null console means terminal
+      catch Exception
+        return 1
+      end
 
   /** Function to return a character read from the standard input stream.
      If the stream is closed or otherwise unavailable, null is returned.
