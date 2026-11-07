@@ -9,6 +9,7 @@
  */
 
 /*
+ 26/11/ 7 No ':' or '-' before records without NUMBERS. Maksim Abuajamieh
  23/02/22 Documentation; givehelp(). Jeff Hennick
  21/ 2/ 4 Output to type Rexx. Jeff Hennick
  20/ 8/ 3 Changed to Dstring for regex string. Add COUNT option. Jeff Hennick
@@ -124,6 +125,12 @@ method run()
     Emsg(11, 'No output is connected.')
 
   li = Rexx ''  -- line number
+  colon = Rexx ''  -- ':' after a number, '-' after a context line's number,
+  dash = Rexx ''   -- both only with NUMBERS
+  if numbers then do
+    colon = ':'
+    dash = '-'
+  end
   aftercount = 0
 
   matchcount = 0
@@ -154,7 +161,7 @@ method run()
         loop j = st for before_count_set
           if before_ring[j] <> one then do
             if numbers then lim = lim.right(10)
-            output(lim'-'before_ring[j])
+            output(lim||dash||before_ring[j])
           end
           if j = before_count_set then j = -1
           if numbers then lim = lim + 1
@@ -163,7 +170,7 @@ method run()
       if countopt then
         matchcount = matchcount + 1
       else
-        output(li':'line)
+        output(li||colon||line)
       if tri then do
         selectOutput(2)
         output(Rexx line)
@@ -176,13 +183,13 @@ method run()
     end -- match
     else do -- no match
        if aftercount > 0 then do
-         output(li'-'line)
+         output(li||dash||line)
          aftercount = aftercount - 1
        end
        if sec then
          do
            selectOutput(1)
-           output(li':'line)
+           output(li||colon||line)
          catch StageError
            sec = 0
          finally
