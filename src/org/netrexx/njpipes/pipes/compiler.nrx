@@ -12,6 +12,7 @@ package org.netrexx.njpipes.pipes
 import org.netrexx.njpipes.stages.
 import org.netrexx.process.
 /*
+   2026-10-08 (classname) must be specified first, issue #122 --MRE
    2025-03-16 make strictcase because in Java 24 private java.lang.System.Out class is found --MRE
    2025-02-23 stg name to lowercase. Jeff Hennick
    2024-12-22 rewrite alias processing to avoid secondary changes;
@@ -990,7 +991,13 @@ class compiler extends Object public
     -- when it is 1, there is no need to check for precious .nrx,
     -- because the name is a random one
 
-    parse a . '(' name compopts ')' text
+    parse a before '(' name compopts ')' text
+    if name.strip() \= '' then do           --MRE (classname) must be specified first, issue #122
+      if before.strip() \= '' then do
+        say "pipc048e: (classname) must be specified at start"
+        exit
+      end
+    end
 
     /* protect potentially precious .nrx source here */
     if name <> '' then do
@@ -1004,16 +1011,16 @@ class compiler extends Object public
       if ext='' then ext='njp'
       ext=ext.upper()
       select
-	when ext <> 'NRX' then do
-	  f=File null
-	  f=java.io.File(String fn'.nrx')
-	  if f.exists() then do
-	    say "pipc047e: A '"fn".nrx' file exists. Please move it out of the way"
-	    exit
-	  end
-	end
-	otherwise
-	  nop
+      when ext <> 'NRX' then do
+        f=File null
+        f=java.io.File(String fn'.nrx')
+        if f.exists() then do
+          say "pipc047e: A '"fn".nrx' file exists. Please move it out of the way"
+          exit
+        end
+      end
+      otherwise
+        nop
       end
     end
 
