@@ -80,6 +80,16 @@ class runner
       if arg = '' then do
         if textline.strip().substr(1, 2) = '--' then iterate
       end
+      -- a line ending with '|' is left untouched
+      if textline.strip().right(1) \= '|' then do
+        -- comment: '--' right after the last '|' (blanks ignored)
+        p = textline.lastpos('|')
+        if p > 0 then do
+          if textline.substr(p + 1).strip('l').substr(1, 2) = '--' then
+            textline = textline.substr(1, p)   -- keep the '|', drop the comment
+        end
+      end
+
       arg = arg''textline
     end
     inFile.close()
@@ -103,7 +113,7 @@ class runner
     parse arg before '(' className_ ')'
     if before.strip() \= '' then do
       if before.strip() = 'pipe' then do
-        arg = arg.substr(5)
+        arg = arg.substr(arg.pos('pipe') + 4)
       end
       else do
         className_ = ''         --MRE (classname) must be specified first, issue #122
