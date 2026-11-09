@@ -75,8 +75,15 @@ class runner
     end  
     arg = ''
     loop forever
-      textline = inFile.readLine()
+      textline = Rexx inFile.readLine()
       if textline = null then leave
+      if arg = '' then do
+        if textline.word(1) \= 'pipe' then do
+          say "pipe001e: .njp must start with 'pipe'"
+          exit 1
+        end
+        textline = textline.substr(5)
+      end
       arg = arg''textline
     end
     inFile.close()
@@ -98,7 +105,14 @@ class runner
   method normaliseArgument(arg=Rexx) static returns Rexx
 
     parse arg before '(' className_ ')'
-    if before.strip() \= '' then className_ = ''   --MRE (classname) must be specified first, issue #122
+    if before.strip() \= '' then do
+      if before.strip() = 'pipe' then do
+        arg = arg.substr(5)
+      end
+      else do
+        className_ = ''         --MRE (classname) must be specified first, issue #122
+      end
+    end
     -- prepend a classname when absent and compile it
     if className_<>'' then
       do
