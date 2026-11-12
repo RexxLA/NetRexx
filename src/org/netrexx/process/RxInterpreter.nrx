@@ -936,12 +936,18 @@ class RxInterpreter uses NrLevel, RxCursor, RxVariable
   pushlevel(cursor)                          -- clause must be null, here
   cursor.curclause=localmeth.methodclauses   -- first clause of body, please
 
-  if \localmeth.methodprotected then runfree(cursor)
-   else do
-    if \localmeth.methodstatic then lock=cursor.curthis
-                               else lock=localclass.classinfo.getClassObject()
-    runprotected(cursor, lock)
-    end
+  -- debugger: give the calling thread a call-stack frame for this invocation
+  if rxt.dapSession \= null then rxt.dapSession.enterMethod(cursor, localmeth.methodname, cursor.curprogram.source.getPath()''cursor.curprogram.source.getName())
+  do
+    if \localmeth.methodprotected then runfree(cursor)
+     else do
+      if \localmeth.methodstatic then lock=cursor.curthis
+                                 else lock=localclass.classinfo.getClassObject()
+      runprotected(cursor, lock)
+      end
+  finally
+    if rxt.dapSession \= null then rxt.dapSession.exitMethod(cursor)
+  end
   
   -- here iff run off end, or RETURN seen, or exception raised
   if cursor.curreturn\=null then do

@@ -11,44 +11,54 @@
 /* ------------------------------------------------------------------ */
 /* 2026.08.03 MRE Initial                                             */
 /* 2026.10.16 breakpoints update                                --MRE */
+/* 2026.11.11 multi-threaded debuggee support (all-stop)        --MRE */
 /* ------------------------------------------------------------------ */
 
 
 /* DapSession.nrx
    ------------------------------------------------------------------
-   The hand-off point between two threads:
+   The hand-off point between the DAP server thread and the threads
+   that run the debuggee:
 
      - DapServer.run()          -- reads DAP requests from stdin, one
                                     at a time, and dispatches them
-     - InterpreterThread.run()  -- executes the debuggee, statement
-                                    by statement
+     - InterpreterThread.run()  -- executes the debuggee's main program
+     - any thread the debuggee starts (GO, java.lang.Thread)
 
-   The interpreter thread calls checkLine() at each statement (or
+   Every debuggee thread calls checkLine() at each statement (or
    whatever granularity you want breakpoints/stepping to have). If
-   that line is a breakpoint, or the session is in single-step mode,
-   checkLine() sends a "stopped" event to the client and BLOCKS the
-   interpreter thread on a one-slot queue.
+   that line is a breakpoint, or the thread is stepping, or a pause was
+   requested, checkLine() sends a "stopped" event to the client and
+   BLOCKS that thread on its own one-slot queue (DapThreadState).
 
-   The DAP server thread, on receiving continue/next/stepIn/stepOut/
-   disconnect from the client, calls resume() -- which drops a
-   command into that same queue. Whichever thread is waiting wakes
-   up. No polling, and -- important -- resume() never blocks, so the
-   DAP thread can never be stuck waiting on the interpreter thread
-   (that pairing, blocking-on-both-sides, is how you'd deadlock this).
+   Stop policy: ALL-STOP. The first thread to stop announces the stop
+   (allThreadsStopped=true) and sets allStop. Every other debuggee
+   thread parks at its next statement, silently, so the client can
+   inspect all of them. Stopping is cooperative: a thread blocked in
+   sleep/IO/wait stops when it wakes up and reaches its next statement.
 
-   Field access that crosses threads (paused/currentLine/etc,
-   terminated) goes through small synchronized accessor methods.
-   The blocking take()/offer() calls on resumeQueue deliberately sit
-   OUTSIDE any synchronized block -- ArrayBlockingQueue has its own
-   internal locking, and wrapping a blocking call in `this`'s
-   monitor would let one thread hold the lock while parked, freezing
-   the other thread out permanently.
+   continue/next/stepIn/stepOut for thread T wakes every parked thread.
+   T gets the real command; the others always get 'continue', so only
+   T steps while the rest run (the same as gdb with scheduler-locking
+   off).
+
+   Locking:
+     - resume() never blocks, so the DAP thread cannot be stuck waiting
+       on a debuggee thread.
+     - 'gate' only makes "decide to park" and "release everyone" atomic
+       (otherwise a thread could park just after resume() looked at it
+       and sleep forever). It is never held across a blocking call; the
+       take() on the per-thread queue happens outside it.
+     - breakpoints are guarded by the session monitor (synchronized
+       methods); they are short and never block.
    ------------------------------------------------------------------ */
 
 package org.netrexx.lsp
 
 import java.util.
 import java.util.concurrent.
+import java.util.concurrent.atomic.
+import java.util.concurrent.locks.
 import org.netrexx.process
 
 options nobinary
@@ -62,45 +72,42 @@ properties public
   breakpointId = 0
   breakpoints = Rexx ''
 
-  -- single-slot rendezvous: interpreter thread take()s, DAP thread offer()s
-  resumeQueue = BlockingQueue
+  breakPerLine = int 0
 
-  paused     = boolean
-  singleStep = boolean   -- only ever touched by the interpreter thread
-  terminated = boolean
+  -- one DapThreadState per debuggee thread
+  threadStates  = ConcurrentHashMap     -- Thread  -> DapThreadState
+  idStates      = ConcurrentHashMap     -- Integer threadId -> DapThreadState
+  nextThreadId  = AtomicInteger
+  debuggeeGroup = ThreadGroup           -- every debuggee thread lives in here
 
-  -- snapshot of where we're paused, read by onStackTrace/onScopes/onVariables
-  currentSource = Rexx
-  currentLine   = int
-  currentFrame  = Object
+  allStop  = AtomicBoolean              -- true while the debuggee is stopped
+  pauseReq = AtomicBoolean              -- set by a DAP 'pause' request
+  gate     = ReentrantLock
 
   -- args built by connect(), consumed by run() on the interpreter thread
   interpArgs = String[]
 
-  varRefMap    = Hashtable     -- refNum (Integer, boxed as Rexx or int key) -> object
-  nextVarRef   = int 2000      -- fixed scopes use 1001-1003, dynamic refs start clear above that
+  -- frameId/variablesReference -> object (DapRef, or a value being expanded)
+  varRefMap  = ConcurrentHashMap
+  nextVarRef = AtomicInteger            -- 1001-1003 are no longer fixed: scopes are registered per frame
 
-  breakPerLine = int 0
-  prevStepLine = int
-
-properties private
-  prevPath = ''
-  prevLine = ''
+properties public volatile
+  terminated = boolean 0
 
 
 
 method DapSession(handler_ = DapHandler)
-  handler = handler_
---    breakpointsBySource = LinkedHashMap()
-  resumeQueue = ArrayBlockingQueue(1)
-  paused     = boolean 0
-  singleStep = boolean 0
-  terminated = boolean 0
-  varRefMap  = Hashtable()
-  nextVarRef = int 2000
-  prevStepLine       = 0
-  prevPath = ''
-  prevLine = ''
+  handler       = handler_
+  threadStates  = ConcurrentHashMap()
+  idStates      = ConcurrentHashMap()
+  nextThreadId  = AtomicInteger(1)
+  debuggeeGroup = ThreadGroup('debuggee')
+  allStop       = AtomicBoolean(boolean 0)
+  pauseReq      = AtomicBoolean(boolean 0)
+  gate          = ReentrantLock()
+  terminated    = boolean 0
+  varRefMap     = ConcurrentHashMap()
+  nextVarRef    = AtomicInteger(2000)
 
   return
 
@@ -173,17 +180,21 @@ method DapSession(handler_ = DapHandler)
 
     interpArgs = args
 
-    interpreterThread = Thread(this)
-    interpreterThread.setName('InterpreterThread')
+    -- the debuggee's threads all inherit this group, which is how
+    -- liveStates() finds threads that have not reached a statement yet
+    interpreterThread = Thread(debuggeeGroup, this)
+    interpreterThread.setName('main')
     interpreterThread.setDaemon(boolean 1)
     interpreterThread.start()
     return
 
   -- Runs on InterpreterThread. Loads NetRexxC and invokes main3(),
   -- which drives the debuggee and calls back into checkLine() as it
-  -- executes -- that's what may block this thread on resumeQueue.take(),
+  -- executes -- that's what may block this thread on its resume queue,
   -- and it's fine for it to block here since it's off the DAP thread.
   method run()
+
+    register(Thread.currentThread())      -- first registrant gets threadId 1
 
     do
 
@@ -212,37 +223,94 @@ method DapSession(handler_ = DapHandler)
       RexxIO.popOutputStream()
     end
 
-    -- interpreter has returned (finished or errored) -- make sure the
-    -- DAP side doesn't stay parked thinking it might still get resumed
-    setTerminated(boolean 1)
+    -- The program is over when its last thread ends, not when the main
+    -- one does: threads started by GO may still be running, and they
+    -- must stay debuggable.
+    if debuggeeGroup.activeCount() <= 1 then setTerminated(boolean 1)
     return
 
 
+  -- ------------------------------------------------------------
+  -- thread registry
+  -- ------------------------------------------------------------
+
+  -- Idempotent: returns the existing state if the thread is known.
+  -- Safe to race (the thread itself vs. the DAP thread listing threads).
+  method register(t = Thread) returns DapThreadState
+    fresh = DapThreadState(nextThreadId.getAndIncrement(), t)
+    old   = DapThreadState threadStates.putIfAbsent(t, fresh)
+    if old \= null then return old
+    idStates.put(Integer.valueOf(fresh.id), fresh)
+    handler.sendEvent('thread', '{"reason": "started", "threadId": 'fresh.id'}')
+    return fresh
+
+  -- state of the calling thread, registering it on first use
+  method stateFor() returns DapThreadState
+    st = DapThreadState threadStates.get(Thread.currentThread())
+    if st = null then st = register(Thread.currentThread())
+    return st
+
+  method stateById(threadId = int) returns DapThreadState
+    return DapThreadState idStates.get(Integer.valueOf(threadId))
+
+  -- DAP thread: the live debuggee threads, newest registrations
+  -- included; threads that have died are reported once as exited.
+  method liveStates() returns ArrayList
+    grp = debuggeeGroup
+    arr = Thread[grp.activeCount() + 8]
+    n   = grp.enumerate(arr, boolean 1)
+    loop i = int 0 for n
+      register(arr[i])
+    end
+
+    result = ArrayList()
+    it = threadStates.values().iterator()
+    loop while it.hasNext()
+      st = DapThreadState it.next()
+      if st.jthread.isAlive() then result.add(st)
+       else if \st.exited then do
+        st.exited = boolean 1
+        threadStates.remove(st.jthread)
+        idStates.remove(Integer.valueOf(st.id))
+        handler.sendEvent('thread', '{"reason": "exited", "threadId": 'st.id'}')
+      end
+    end
+    return result
+
+
+  -- ------------------------------------------------------------
+  -- variable references (frames, scopes, expandable values)
+  -- ------------------------------------------------------------
+
   method registerVarRef(obj = Object) returns int
-    ref = nextVarRef
-    nextVarRef = nextVarRef + 1
---    Integer.valueOf(int)
---    varRefMap.put(Integer(ref), obj)
+    ref = nextVarRef.getAndIncrement()
     varRefMap.put(Integer.valueOf(ref), obj)
     return ref
 
   method resolveVarRef(ref = int) returns Object
---    return varRefMap.get(Integer(ref))
     return varRefMap.get(Integer.valueOf(ref))
 
   method clearVarRefs()
-    varRefMap = Hashtable()
-    nextVarRef = 2000
+    varRefMap.clear()
+    nextVarRef.set(2000)
     return
 
 
-  method clearBreakpoints(path)
+  -- ------------------------------------------------------------
+  -- breakpoints: written by the DAP thread, read by every debuggee thread
+  -- ------------------------------------------------------------
+
+  method clearBreakpoints(path) protect
     breakpoints[path] = null
-    prevPath = ''
-    prevLine = ''
+    it = threadStates.values().iterator()      -- re-arm the same-line check
+    loop while it.hasNext()
+      st = DapThreadState it.next()
+      st.prevPath = ''
+      st.prevLine = ''
+    end
 
 
-  method addBreakpoint(path = Rexx, line = Rexx, cond = String null)
+  method addBreakpoint(path = Rexx, line = Rexx, cond = String null) protect
     breakpointId = breakpointId + 1
     if \breakpoints.exists(path) then breakpoints[path] = 1
     breakpoints[path, line] = breakpointId
@@ -251,11 +319,11 @@ method DapSession(handler_ = DapHandler)
 
 -- a line can have multiple clauses
 -- we pause once per (possibly multi clause) line, unless option --cl where we pause per clause (so possibly multiple 'steps' per line)
-  method isBreakpoint(path = Rexx, line = Rexx)
+  method isBreakpoint(st = DapThreadState, path = Rexx, line = Rexx) protect
   --trace results
-    sameLine = (path == prevPath) & (line == prevLine)
-    prevPath = path                        -- always update, so leaving the line resets it
-    prevLine = line
+    sameLine = (path == st.prevPath) & (line == st.prevLine)
+    st.prevPath = path                     -- always update, so leaving the line resets it
+    st.prevLine = line
 
     if \breakpoints.exists(path) then return ''
     if \breakpoints[path].exists(line) then return ''
@@ -265,95 +333,187 @@ method DapSession(handler_ = DapHandler)
     return breakpoints[path, line]
 
 
-  -- called from onContinue / onNext / onStepIn / onStepOut / onDisconnect
-  method resume(command = Rexx)
+  -- ------------------------------------------------------------
+  -- DAP-thread side: resuming
+  -- ------------------------------------------------------------
+
+  -- called from onContinue / onNext / onStepIn / onStepOut / onDisconnect.
+  -- Wakes every parked thread; threadId gets 'command', all others 'continue'.
+  -- Never blocks.
+  method resume(command = Rexx, threadId = int)
     if command = 'terminate' then setTerminated(boolean 1)
-    -- non-blocking: at most one item is ever pending, and only while
-    -- the interpreter thread is at (or about to be at) take().
-    resumeQueue.offer(command)
+
+    clearVarRefs()                         -- before releasing anyone, or we'd wipe refs they register next
+
+    gate.lock()
+    do
+      allStop.set(boolean 0)
+      it = threadStates.values().iterator()
+      loop while it.hasNext()
+        st = DapThreadState it.next()
+        if \st.paused then iterate
+        st.paused = boolean 0              -- cleared here, so a second resume() cannot double-offer
+        -- offer Rexx objects: a bare literal would go in as a java.lang.String
+        if command = 'terminate' then st.resumeQueue.offer(Rexx 'terminate')
+         else if st.id = threadId then st.resumeQueue.offer(Rexx command)
+         else st.resumeQueue.offer(Rexx 'continue')
+      end
+    finally
+      gate.unlock()
+    end
     return
+
+  -- DAP 'pause': the first debuggee thread to reach a statement stops
+  -- (and, being all-stop, takes the others with it)
+  method requestPause()
+    pauseReq.set(boolean 1)
+    return
+
 
   -- ------------------------------------------------------------
   -- interpreter-thread side
   -- ------------------------------------------------------------
 
-  -- Called once per statement/line. Returns the command that let
-  -- execution continue ('run' if it never stopped), so the caller
-  -- can react to 'terminate' by exiting its loop.
+  -- Called by RxInterpreter.callMethod around a method body, so each
+  -- thread has a real call stack (stackTrace, next/stepOut depth).
+  method enterMethod(cursor = Object, methodName = String, path = String)
+    stateFor().frames.add(DapFrame(cursor, methodName, path, 0))
+    return
+
+  method exitMethod(cursor = Object)
+    fr = stateFor().frames
+    n  = fr.size()
+    if n > 0 then do
+      idx = int
+      idx = n - 1
+      fr.remove(idx)
+    end
+    return
+
+  -- Called once per statement/line, on the debuggee thread that executes it.
+  -- Returns the command that let execution continue ('run' if it never
+  -- stopped), so the caller can react to 'terminate'.
   method checkLine(path = Rexx, line = int, frame = Object) returns Rexx
 
     if isTerminated() then return 'terminate'
 
-    bp      = isBreakpoint(path, line)
-    stepHit = singleStep & (breakPerLine = 1 | line \=  prevStepLine )
+    st = stateFor()
+    st.noteLine(frame, line)
 
-    if stepHit | bp \= '' then
-      return pauseAndWait(path, line, frame)
+    bp       = isBreakpoint(st, path, line)
+    pauseHit = pauseReq.compareAndSet(boolean 1, boolean 0)
+
+    stepHit = boolean 0
+    if st.singleStep then do
+      depth = st.frames.size()
+      select
+        when st.stepMode = 'in'   then stepHit = boolean 1
+        when st.stepMode = 'over' then stepHit = (depth <= st.stepDepth)
+        when st.stepMode = 'out'  then stepHit = (depth <  st.stepDepth)
+        otherwise nop
+      end
+      -- several clauses on one line: stay quiet on the same line at the
+      -- same depth, unless --cl asked for a stop per clause
+      if stepHit & breakPerLine \= 1 & depth = st.stepDepth & line = st.prevStepLine then stepHit = boolean 0
+    end
+
+    reason = ''
+    if bp \= '' then reason = 'breakpoint'
+     else if pauseHit then reason = 'pause'
+     else if stepHit then reason = 'step'
+
+    -- stop for our own reason, or because another thread already stopped the world
+    if reason \= '' | allStop.get() then return pauseAndWait(st, path, line, frame, bp, reason)
     return 'run'
 
 
-  method getCurrentCursor() returns RxCursor
-    return RxCursor currentFrame
+  method pauseAndWait(st = DapThreadState, path = Rexx, line = int, frame = Object, bp = Rexx, reason = Rexx) returns Rexx
 
+    cmd = Rexx 'continue'
 
-  method pauseAndWait(path = Rexx, line = int, frame = Object) returns Rexx
-    setPausedSnapshot(path, line, frame, boolean 1)
+    loop forever
+      announce = boolean 0
+      parked   = boolean 0
 
-    handler.sendEvent('stopped', -
-      '{"reason": "breakpoint", "threadId": 1, "allThreadsStopped": true, "hitBreakpointIds": ['breakpoints[path, line]']}')
+      -- decide atomically with resume(): either we park and resume() sees
+      -- us, or resume() already ran and we do not park at all
+      gate.lock()
+      do
+        if reason = '' & \allStop.get() then nop       -- the stop ended while we were getting here
+         else do
+          announce = allStop.compareAndSet(boolean 0, boolean 1)   -- only the first stopper announces
+          st.snapshot(frame, path, line)
+          st.paused = boolean 1
+          parked = boolean 1
+        end
+      finally
+        gate.unlock()
+      end
 
-    do
-      cmd = Rexx resumeQueue.take()     -- blocks here until resume() fires
-    catch InterruptedException
-      nop
+      if \parked then return 'run'
+
+      if announce then do
+        body = '{"reason": "'reason'", "threadId": 'st.id', "allThreadsStopped": true'
+        if bp \= '' then body = body', "hitBreakpointIds": ['bp']'
+        body = body'}'
+        handler.sendEvent('stopped', String body)
+      end
+
+      do
+        cmd = Rexx(st.resumeQueue.take().toString())   -- blocks here until resume() fires, outside any lock
+      catch InterruptedException
+        cmd = 'terminate'
+      end
+
+      -- We parked silently behind another thread's stop but had hit a
+      -- breakpoint of our own: once released, report it instead of
+      -- swallowing it.
+      if \announce & bp \= '' & cmd = 'continue' then iterate
+      leave
     end
+
+    st.paused = boolean 0
 
     select
       when cmd = 'next' | cmd = 'stepIn' | cmd = 'stepOut' then do
-        singleStep = boolean 1
-        prevStepLine = line
-      -- TODO: 'next' and 'stepOut' should compare call-stack depth
-      -- against the depth at the pause point, so they don't stop one
-      -- level too deep or too shallow. This flat singleStep flag
-      -- treats all three as "stop at the very next line" (closer to
-      -- stepIn semantics) -- fine for a skeleton, worth tightening
-      -- once you're tracking a real call stack.
+        st.singleStep   = boolean 1
+        st.prevStepLine = line
+        st.stepDepth    = st.frames.size()
+        if cmd = 'next' then st.stepMode = 'over'
+         else if cmd = 'stepOut' then st.stepMode = 'out'
+         else st.stepMode = 'in'
       end
-      otherwise singleStep = boolean 0
+      otherwise st.singleStep = boolean 0
     end
-    setPausedSnapshot(path, line, frame, boolean 0)
     return cmd
 
 
---  method getBreakpoints(sourcePath = Rexx) returns List synchronized
---    return List breakpointsBySource.get(sourcePath)
+  -- cursor of some stopped thread. Only used to reach the interpreter
+  -- when expanding objects, arrays and stems, so any stopped thread will do.
+  -- Scopes carry their own exact cursor (DapRef).
+  method getCurrentCursor() returns RxCursor
+    it = threadStates.values().iterator()
+    loop while it.hasNext()
+      st = DapThreadState it.next()
+      if st.paused then do
+        snap = st.frameSnap
+        if snap \= null then if snap.length > 0 then do
+          idx = int
+          idx = snap.length - 1
+          return RxCursor snap[idx].cursor
+        end
+      end
+    end
+    return RxCursor null
+
 
   -- ------------------------------------------------------------
-  -- small synchronized accessors -- cheap, never block
+  -- accessors
   -- ------------------------------------------------------------
-  method setPausedSnapshot(sourcePath = Rexx, line = int, frame = Object, isPaused = boolean)
-    currentSource = sourcePath
-    currentLine   = line
-    currentFrame  = frame
-    paused        = isPaused
-    return
-
   method setTerminated(isSet = boolean)
     terminated = isSet
     return
 
   method isTerminated() returns boolean
     return terminated
-
-  method isPaused() returns boolean
-    return paused
-
-  method getCurrentLine() returns int
-    return currentLine
-
-  method getCurrentSource() returns Rexx
-    return currentSource
-
-  method getCurrentFrame() returns Object
-    return currentFrame
 

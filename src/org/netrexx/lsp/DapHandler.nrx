@@ -87,6 +87,7 @@ properties private
       when command = 'attach'            then onAttach(reqSeq, json)
       when command = 'setBreakpoints'    then onSetBreakpoints(reqSeq, json)
       when command = 'configurationDone' then onConfigurationDone(reqSeq, json)
+      when command = 'pause'             then onPause(reqSeq, json)
       when command = 'threads'           then onThreads(reqSeq, json)
       when command = 'stackTrace'        then onStackTrace(reqSeq, json)
       when command = 'scopes'            then onScopes(reqSeq, json)
@@ -210,62 +211,89 @@ properties private
     return
 
   method onThreads(reqSeq = int, json = JSONObject)
-    thread = JSONObject()
-    thread.put('id', 1)
-    thread.put('name', 'main')
     threads = JSONArray()
-    threads.put(thread)
+
+    session.liveStates()                       -- registers new threads, reports dead ones
+    last = session.nextThreadId.get() - 1
+    loop id = 1 to last                        -- ids are handed out in order
+      st = session.stateById(id)
+      if st = null then iterate                -- exited
+      thread = JSONObject()
+      thread.put('id', st.id)
+      thread.put('name', st.name)
+      threads.put(thread)
+    end
 
     body = JSONObject()
     body.put('threads', threads)
     sendResponse(reqSeq, 'threads', body)
     return
 
+  -- The request names the thread. Each frame gets a frameId that
+  -- remembers its thread and cursor, because the scopes request that
+  -- follows only carries the frameId.
   method onStackTrace(reqSeq = int, json = JSONObject)
-    if session.isPaused() then do
-      line = session.getCurrentLine()
-      src  = session.getCurrentSource()
-      frame = JSONObject()
-      frame.put('id', 1)
-      frame.put('name', 'main')
-      frame.put('line', line)
-      frame.put('column', 1)
-      frame.put('source', JSONObject().put('path', src))
-      frames = JSONArray()
-      frames.put(frame)
-      body = JSONObject()
-      body.put('stackFrames', frames)
-      body.put('totalFrames', 1)
-      sendResponse(reqSeq, 'stackTrace', body)
+    args = json.optJSONObject('arguments')
+    tid  = int 1
+    if args \= null then tid = args.optInt('threadId', 1)
+    st = session.stateById(tid)
+
+    frames = JSONArray()
+    total  = int 0
+    if st \= null then if st.paused then do
+      snap = st.frameSnap
+      if snap \= null then do
+        total = snap.length
+        loop k = 0 for snap.length
+          idx = int
+          idx = snap.length - 1 - k            -- innermost frame first
+          f = snap[idx]
+          frame = JSONObject()
+          frame.put('id', session.registerVarRef(DapRef('frame', st, f.cursor)))
+          frame.put('name', f.name)
+          frame.put('line', f.line)
+          frame.put('column', 1)
+          frame.put('source', JSONObject().put('path', f.path))
+          frames.put(frame)
+        end
+      end
     end
-    else do
-      body = JSONObject()
-      body.put('stackFrames', JSONArray())
-      body.put('totalFrames', 0)
-      sendResponse(reqSeq, 'stackTrace', body)
-    end
+
+    body = JSONObject()
+    body.put('stackFrames', frames)
+    body.put('totalFrames', total)
+    sendResponse(reqSeq, 'stackTrace', body)
     return
 
+  -- Scopes are registered per frame (no more fixed 1001-1003), so
+  -- variables/setVariable know which thread and frame they belong to.
   method onScopes(reqSeq = int, json = JSONObject)
+    args    = json.optJSONObject('arguments')
+    frameId = args.getInt('frameId')
+    target  = session.resolveVarRef(frameId)
+
     scopes = JSONArray()
+    if target \= null then if target <= DapRef then do
+      fr = DapRef target
 
-    locals = JSONObject()
-    locals.put('name', 'Local variables')
-    locals.put('variablesReference', 1001)
-    locals.put('expensive', boolean 0)
-    scopes.put(locals)
+      locals = JSONObject()
+      locals.put('name', 'Local variables')
+      locals.put('variablesReference', session.registerVarRef(DapRef('local', fr.state, fr.cursor)))
+      locals.put('expensive', boolean 0)
+      scopes.put(locals)
 
-    args = JSONObject()
-    args.put('name', 'Method arguments')
-    args.put('variablesReference', 1002)
-    args.put('expensive', boolean 0)
-    scopes.put(args)
+      argScope = JSONObject()
+      argScope.put('name', 'Method arguments')
+      argScope.put('variablesReference', session.registerVarRef(DapRef('argument', fr.state, fr.cursor)))
+      argScope.put('expensive', boolean 0)
+      scopes.put(argScope)
 
-    props = JSONObject()
-    props.put('name', 'Class properties')
-    props.put('variablesReference', 1003)
-    props.put('expensive', boolean 0)
-    scopes.put(props)
+      props = JSONObject()
+      props.put('name', 'Class properties')
+      props.put('variablesReference', session.registerVarRef(DapRef('property', fr.state, fr.cursor)))
+      props.put('expensive', boolean 0)
+      scopes.put(props)
+    end
 
     body = JSONObject()
     body.put('scopes', scopes)
@@ -276,25 +304,37 @@ properties private
     args    = json.optJSONObject('arguments')
     varRef  = args.getInt('variablesReference')
 
-    cursor  = session.getCurrentCursor()   -- stashed at checkLine()
     vars    = JSONArray()
-
-    cursor  = session.getCurrentCursor()
     emptyArgs = Object[0]
+
+    -- a scope knows its thread and cursor; anything else being expanded
+    -- (object, array, stem) only needs some stopped cursor to reach the interpreter
+    target = session.resolveVarRef(varRef)
+    scope  = DapRef null
+    if target \= null then if target <= DapRef then scope = DapRef target
+
+    cursor = Object
+    if scope \= null then cursor = scope.cursor
+     else cursor = session.getCurrentCursor()
+
     do
       select
-        when varRef = 1001 then do
-          lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)
-          vars = variablesFromPool(lpool, 'local', cursor)
-        end
-        when varRef = 1002 then do
-          lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)
-          vars = variablesFromPool(lpool, 'argument', cursor)
-        end
-        when varRef = 1003 then do
---          rxclass = mGetCurclass.invoke(cursor, emptyArgs)
-          cpool = Hashtable mGetCurcpool.invoke(cursor, emptyArgs)
-          vars = variablesFromPool(cpool, 'property', cursor)
+        when scope \= null then do
+          select
+            when scope.kind = 'local' then do
+              lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)
+              vars = variablesFromPool(lpool, 'local', cursor)
+            end
+            when scope.kind = 'argument' then do
+              lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)
+              vars = variablesFromPool(lpool, 'argument', cursor)
+            end
+            when scope.kind = 'property' then do
+              cpool = Hashtable mGetCurcpool.invoke(cursor, emptyArgs)
+              vars = variablesFromPool(cpool, 'property', cursor)
+            end
+            otherwise nop
+          end
         end
         when varRef >= 2000 then do
           target = session.resolveVarRef(varRef)
@@ -742,18 +782,18 @@ properties private
     end
     return
 
-  method setScopeVariable(reqSeq = int, varRef = int, varName = String, newValStr = String, cursor = Object) private
+  method setScopeVariable(reqSeq = int, kind = Rexx, varName = String, newValStr = String, cursor = Object) private
     emptyArgs = Object[0]
     rv        = Object null
     newValue  = Object
 
     do
       select
-        when varRef = 1001 | varRef = 1002 then do
+        when kind = 'local' | kind = 'argument' then do
           lpool = Hashtable mGetCurlpool.invoke(cursor, emptyArgs)     -- local pool, holds method arguments and variables
           rv = lpool.get(varName)
           end
-        when varRef = 1003 then do
+        when kind = 'property' then do
           cpool = Hashtable mGetCurcpool.invoke(cursor, emptyArgs)     -- class pool, holds class properties
           rv = cpool.get(varName)
           end
@@ -785,11 +825,13 @@ properties private
     varName   = args.optString('name')
     newValStr = args.optString('value')
 
-    cursor = session.getCurrentCursor()
+    target = session.resolveVarRef(varRef)
+    scope  = DapRef null
+    if target \= null then if target <= DapRef then scope = DapRef target
 
     select
-      when varRef = 1001 | varRef = 1002 | varRef = 1003 then
-        setScopeVariable(reqSeq, varRef, varName, newValStr, cursor)
+      when scope \= null then
+        setScopeVariable(reqSeq, scope.kind, varName, newValStr, scope.cursor)
       when varRef >= 2000 then
         setDeepVariable(reqSeq, varRef, varName, newValStr)
       otherwise
@@ -799,7 +841,7 @@ properties private
 
   method onContinue(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('continue')
+    session.resume('continue', threadIdOf(json))
     body = JSONObject()
     body.put('allThreadsContinued', boolean 1)
     sendResponse(reqSeq, 'continue', body)
@@ -807,26 +849,38 @@ properties private
 
   method onNext(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('next')
+    session.resume('next', threadIdOf(json))
     sendResponse(reqSeq, 'next', JSONObject())
     return
 
   method onStepIn(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('stepIn')
+    session.resume('stepIn', threadIdOf(json))
     sendResponse(reqSeq, 'stepIn', JSONObject())
     return
 
   method onStepOut(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('stepOut')
+    session.resume('stepOut', threadIdOf(json))
     sendResponse(reqSeq, 'stepOut', JSONObject())
     return
+
+  -- all-stop: the first debuggee thread to reach a statement stops, the rest follow
+  method onPause(reqSeq = int, json = JSONObject)
+    session.requestPause()
+    sendResponse(reqSeq, 'pause', JSONObject())
+    return
+
+  -- continue/next/stepIn/stepOut say which thread they are about
+  method threadIdOf(json = JSONObject) private returns int
+    args = json.optJSONObject('arguments')
+    if args = null then return 1
+    return args.optInt('threadId', 1)
 
   method onDisconnect(reqSeq = int, json = JSONObject)
   --  restart           = json.optBoolean('restart', boolean 0)
   --  terminateDebuggee = json.optBoolean('terminateDebuggee', boolean 0)
-    session.resume('terminate')
+    session.resume('terminate', 1)
     sendResponse(reqSeq, 'disconnect', JSONObject())
     sendEvent('terminated', JSONObject())
     return
@@ -834,7 +888,7 @@ properties private
   -- ------------------------------------------------------------
   -- Response / event framing helpers
   -- ------------------------------------------------------------
-  method sendResponse(reqSeq = int, command = String, body = JSONObject)
+  method sendResponse(reqSeq = int, command = String, body = JSONObject) protect
     msg = JSONObject()
     msg.put('seq', nextSeq())
     msg.put('type', 'response')
@@ -846,7 +900,7 @@ properties private
     transport.sendResponse(msg.toString())
     return
 
-  method sendErrorResponse(reqSeq = int, command = String, message = String, showUser = boolean 0)
+  method sendErrorResponse(reqSeq = int, command = String, message = String, showUser = boolean 0) protect
     msg = JSONObject()
     msg.put('seq', nextSeq())
     msg.put('type', 'response')
@@ -870,7 +924,7 @@ properties private
     transport.sendResponse(msg.toString())
     return
 
-  method sendEvent(eventName = String, body = JSONObject)
+  method sendEvent(eventName = String, body = JSONObject) protect
     msg = JSONObject()
     msg.put('seq', nextSeq())
     msg.put('type', 'event')
@@ -880,7 +934,7 @@ properties private
     transport.sendResponse(msg.toString())
     return
 
-  method sendEvent(eventName = String, bodyas = String)
+  method sendEvent(eventName = String, bodyas = String) protect
     body = JSONObject(bodyas)
 
     msg = JSONObject()
