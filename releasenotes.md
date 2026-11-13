@@ -5,6 +5,7 @@
 - Improved LSP handling of minor classes
 - Debug Adapter Protocol implementation
 - PULL and PARSE PULL return '' at end of input, previously NullPointerException
+- new -askstdin option enables ASKNOECHO to fall back to read stdin when console is not available
 
 ## Fixes
 - Fixed GO arguments when interpreting
@@ -17,14 +18,14 @@
 - NetRexx-88 fix ADDRESS WITH STEM parsing
 - NetRexx-89 make interpreted assignment clause re-entrant
 - NetRexx-91 exit fails if exitcode not literal
-- NetRexx-92 interpreted super calls to Java class's method calls thrpreted clauses re-entrant
+- NetRexx-92 interpreted super calls in an override of a Java class's method calls the override again
 - NetRexx-93 make interpreted clauses re-entrant
 - NetRexx-95 exit 2 when uncaught exception during exec
 - NetRexx-96 setAccessible only on non-super exec
 - NetRexx-97 make linein, charin Java 8 compatible
-- NetRexx-98 catch a minor class exception
-- NetRexx-99 parse pull at end of input returns '' instead of NullPointerException
-- NetRexx-100 load class from super if visible
+- NetRexx-98 a minor class exception is not catched
+- NetRexx-99 parse pull at end of input now returns '' instead of NullPointerException
+- NetRexx-100 interpreted, a pre-compiled class in the same package as the program is loaded twice by different classloaders causing an internal error 
 - NetRexx-101 better UTF-8 support with updated RexxStream
 - NetRexx-102 fresh indexed string assignment during exec
 - NetRexx-103 better UTF-8 support with updated RexxStream
@@ -32,10 +33,20 @@
 - NetRexx-106 literal decimal looses precision when interpreting
 - NetRexx-108 Pipelines dateconvert stage, correct USA and FULLDATE output formats
 - NetRexx-109 interpreted, a cast to the wrong class is not checked, next method fails with internal error
+- NetRexx-110 nrws fails to recognise EOF 
 - NetRexx-111 a variable or property named like a package makes the generated Java fail to compile
 - NetRexx-112 on Java 8, an interpreted super.method() call fails with NoSuchMethodError
 - NetRexx-113 interpreted, a catched exception in a loop is rethrown
 - NetRexx-114 interpreted, initializing a constant property of an interface fails with an exception
+- NetRexx-115 compilation fails on chained calls to generic method results
+- NetRexx-116 a loop generates an exception when a variable named 'to' or 'by' exists
+- NetRexx-117 interpreted, accessing a forward referenced superclass from a constructor generates an internal error
+- NetRexx-118 interpreted, a StackOverflowError exception is not catched
+- NetRexx-119 asknoecho throws exception when console was unavailable, new option -askstdin allows fallback tp stdin
+- NetRexx-120 negative decimal literal is incorrectly parsed when options binary
+- NetRexx-121 more robust error checking during ant's diagnostic tests
+- NetRexx-122 a stage option in parentheses breaks the pipeline
+ 
 
 ## Examples
 - Added the awfy benchmark suite to examples/benchmarks
