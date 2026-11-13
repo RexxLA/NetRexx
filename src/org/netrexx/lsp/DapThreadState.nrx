@@ -1,0 +1,134 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* DapThreadState                                                     */
+/* ------------------------------------------------------------------ */
+/* Per-thread debugger state for DapSession.                          */
+/*                                                                    */
+/* One DapThreadState exists for every thread that executes debuggee  */
+/* statements (the interpreter thread plus any thread started by GO   */
+/* or java.lang.Thread).  Everything that used to be a single field   */
+/* on DapSession -- resume queue, pause snapshot, step mode -- lives  */
+/* here so that threads cannot trample each other.                    */
+/*                                                                    */
+/* Threading rules:                                                   */
+/*   - fields in the plain block are touched only by the owning       */
+/*     thread (frames, step state)                                    */
+/*   - fields in the volatile block are written by the owning thread  */
+/*     when it pauses and read by the DAP thread while it is paused   */
+/* ------------------------------------------------------------------ */
+/* 2026.11.13 MRE Initial                                             */
+/* ------------------------------------------------------------------ */
+
+package org.netrexx.lsp
+
+import java.util.
+import java.util.concurrent.
+
+options nobinary
+
+class DapThreadState public
+
+properties public
+  id           = int
+  name         = String
+  jthread      = Thread
+  resumeQueue  = BlockingQueue       -- one-slot rendezvous, offered by resume()
+
+  frames       = ArrayList           -- DapFrame stack, innermost last (owner thread only)
+
+  singleStep   = boolean 0           -- owner thread only
+  stepMode     = Rexx ''             -- 'in', 'over' or 'out'
+  stepDepth    = int 0               -- frames.size() at the pause the step started from
+  prevStepLine = int 0
+
+properties public volatile
+  paused       = boolean 0           -- true from the moment the thread parks until resume() releases it
+  exited       = boolean 0           -- exit event already sent
+  frameSnap    = DapFrame[]          -- copy of frames taken at the pause, innermost last
+  prevPath     = Rexx ''             -- same-line suppression for multi-clause lines
+  prevLine     = Rexx ''
+
+method DapThreadState(id_ = int, t = Thread)
+  id          = id_
+  jthread     = t
+  name        = t.getName()
+  resumeQueue = ArrayBlockingQueue(1)
+  frames      = ArrayList()
+  return
+
+/* Record the line the thread is on in its innermost frame, so that
+   caller frames keep the line of the call when we later pause deeper. */
+method noteLine(frame = Object, line = int)
+  n = frames.size()
+  if n = 0 then return
+  idx = int
+  idx = n - 1
+  top = DapFrame frames.get(idx)
+  if System.identityHashCode(top.cursor) = System.identityHashCode(frame) then top.line = line
+  return
+
+/* Publish a snapshot of the call stack.  Called by the owning thread
+   just before it parks.  Not every path into checkLine goes through
+   the enterMethod hook (property initialisation, for one), so when
+   the top frame is not the cursor we were called with, a synthetic
+   frame is added so there is always something to show. */
+method snapshot(frame = Object, path = Rexx, line = int)
+  n = frames.size()
+  needSynthetic = boolean 1
+  if n > 0 then do
+    idx = int
+    idx = n - 1
+    top = DapFrame frames.get(idx)
+    if System.identityHashCode(top.cursor) = System.identityHashCode(frame) then needSynthetic = boolean 0
+  end
+
+  total = int
+  total = n
+  if needSynthetic then total = n + 1
+
+  arr = DapFrame[total]
+  loop i = int 0 for n
+    arr[i] = DapFrame frames.get(i)
+  end
+  if needSynthetic then arr[n] = DapFrame(frame, '<native>', String path, line)
+  frameSnap = arr
+  return
+
+
+/* One entry on a thread's call stack. */
+class DapFrame
+
+properties public
+  cursor = Object                    -- the RxCursor of this invocation
+  name   = String                    -- method name
+  path   = String                    -- source file
+  line   = int                       -- last line executed in this frame
+
+method DapFrame(c = Object, n = String, p = String, l = int)
+  cursor = c
+  name   = n
+  path   = p
+  line   = l
+  return
+
+
+/* What a variablesReference or frameId stands for.  Registered in
+   DapSession's varRefMap, so frames and scopes carry the thread and
+   the exact cursor they belong to (the DAP scopes/variables requests
+   do not say which thread they are about). */
+class DapRef
+
+properties public
+  kind   = Rexx                      -- 'frame', 'local', 'argument' or 'property'
+  state  = DapThreadState
+  cursor = Object
+
+method DapRef(k = Rexx, s = DapThreadState, c = Object)
+  kind   = k
+  state  = s
+  cursor = c
+  return
