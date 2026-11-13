@@ -12,6 +12,7 @@
 /* 2026.08.03 MRE Initial                                             */
 /* 2026.10.16 breakpoints update                                --MRE */
 /* 2026.11.11 multi-threaded debuggee support (all-stop)        --MRE */
+/* 2026.11.13 per-thread stop mode, selected by --pt option     --MRE */
 /* ------------------------------------------------------------------ */
 
 
@@ -31,7 +32,16 @@
    requested, checkLine() sends a "stopped" event to the client and
    BLOCKS that thread on its own one-slot queue (DapThreadState).
 
-   Stop policy: ALL-STOP. The first thread to stop announces the stop
+   Stop policy is chosen from Settings, option -pt:
+     'all'    (default) ALL-STOP, described below
+     'thread' PER-THREAD: a thread that hits a breakpoint, finishes a
+              step or is paused stops ALONE (allThreadsStopped=false);
+              every other thread keeps running, and may stop on its
+              own, so several threads can be stopped at the same time.
+              continue/next/stepIn/stepOut then resume only the thread
+              named in the request. 'pause' stops only the named thread.
+
+   ALL-STOP: The first thread to stop announces the stop
    (allThreadsStopped=true) and sets allStop. Every other debuggee
    thread parks at its next statement, silently, so the client can
    inspect all of them. Stopping is cooperative: a thread blocked in
@@ -73,6 +83,7 @@ properties public
   breakpoints = Rexx ''
 
   breakPerLine = int 0
+  breakPerThread = int 0
 
   -- one DapThreadState per debuggee thread
   threadStates  = ConcurrentHashMap     -- Thread  -> DapThreadState
@@ -81,7 +92,8 @@ properties public
   debuggeeGroup = ThreadGroup           -- every debuggee thread lives in here
 
   allStop  = AtomicBoolean              -- true while the debuggee is stopped
-  pauseReq = AtomicBoolean              -- set by a DAP 'pause' request
+  pauseReq = AtomicBoolean              -- set by a DAP 'pause' request (all-stop, or no usable threadId)
+  pauseIds = ConcurrentHashMap          -- Integer threadId -> pause requested for that thread (per-thread mode)
   gate     = ReentrantLock
 
   -- args built by connect(), consumed by run() on the interpreter thread
@@ -93,6 +105,7 @@ properties public
 
 properties public volatile
   terminated = boolean 0
+  liveErrors = int 0                    -- getLiveValue failures seen so far (diagnostics)
 
 
 
@@ -104,8 +117,10 @@ method DapSession(handler_ = DapHandler)
   debuggeeGroup = ThreadGroup('debuggee')
   allStop       = AtomicBoolean(boolean 0)
   pauseReq      = AtomicBoolean(boolean 0)
+  pauseIds      = ConcurrentHashMap()
   gate          = ReentrantLock()
   terminated    = boolean 0
+  perThread     = boolean 0
   varRefMap     = ConcurrentHashMap()
   nextVarRef    = AtomicInteger(2000)
 
@@ -184,7 +199,7 @@ method DapSession(handler_ = DapHandler)
     -- liveStates() finds threads that have not reached a statement yet
     interpreterThread = Thread(debuggeeGroup, this)
     interpreterThread.setName('main')
-    interpreterThread.setDaemon(boolean 1)
+    interpreterThread.setDaemon(boolean 0)
     interpreterThread.start()
     return
 
@@ -229,7 +244,6 @@ method DapSession(handler_ = DapHandler)
     if debuggeeGroup.activeCount() <= 1 then setTerminated(boolean 1)
     return
 
-
   -- ------------------------------------------------------------
   -- thread registry
   -- ------------------------------------------------------------
@@ -249,6 +263,16 @@ method DapSession(handler_ = DapHandler)
     st = DapThreadState threadStates.get(Thread.currentThread())
     if st = null then st = register(Thread.currentThread())
     return st
+
+  -- diagnostics: debuggee threads that are registered and not stopped right now
+  method runningThreads() returns int
+    n  = int 0
+    it = threadStates.values().iterator()
+    loop while it.hasNext()
+      o = DapThreadState it.next()
+      if \o.paused then n = n + 1
+    end
+    return n
 
   method stateById(threadId = int) returns DapThreadState
     return DapThreadState idStates.get(Integer.valueOf(threadId))
@@ -295,6 +319,20 @@ method DapSession(handler_ = DapHandler)
     nextVarRef.set(2000)
     return
 
+  -- per-thread mode: drop only the frame/scope refs of the thread being
+  -- resumed. Other threads are still stopped and the client still holds
+  -- their frameIds and variablesReferences.
+  method clearVarRefsFor(st = DapThreadState)
+    it = varRefMap.values().iterator()
+    loop while it.hasNext()
+      v = Object it.next()
+      if v <= DapRef then do
+        fr = DapRef v
+        if fr.state = st then it.remove()
+      end
+    end
+    return
+
 
   -- ------------------------------------------------------------
   -- breakpoints: written by the DAP thread, read by every debuggee thread
@@ -320,7 +358,7 @@ method DapSession(handler_ = DapHandler)
 -- a line can have multiple clauses
 -- we pause once per (possibly multi clause) line, unless option --cl where we pause per clause (so possibly multiple 'steps' per line)
   method isBreakpoint(st = DapThreadState, path = Rexx, line = Rexx) protect
-  --trace results
+
     sameLine = (path == st.prevPath) & (line == st.prevLine)
     st.prevPath = path                     -- always update, so leaving the line resets it
     st.prevLine = line
@@ -340,8 +378,13 @@ method DapSession(handler_ = DapHandler)
   -- called from onContinue / onNext / onStepIn / onStepOut / onDisconnect.
   -- Wakes every parked thread; threadId gets 'command', all others 'continue'.
   -- Never blocks.
-  method resume(command = Rexx, threadId = int)
+  method resume(command = Rexx, threadId = int, singleOnly = boolean 0)
     if command = 'terminate' then setTerminated(boolean 1)
+
+    if breakPerThread & singleOnly & command \= 'terminate' then do
+      resumeOne(command, threadId)         -- only the named thread moves
+      return
+    end
 
     clearVarRefs()                         -- before releasing anyone, or we'd wipe refs they register next
 
@@ -363,12 +406,50 @@ method DapSession(handler_ = DapHandler)
     end
     return
 
-  -- DAP 'pause': the first debuggee thread to reach a statement stops
-  -- (and, being all-stop, takes the others with it)
-  method requestPause()
+  -- per-thread mode: release one thread, leave every other stopped thread alone.
+  -- Never blocks.
+  method resumeOne(command = Rexx, threadId = int)
+    st = stateById(threadId)
+    if st = null then return
+
+    gate.lock()
+    do
+      if st.paused then do
+        -- if other threads are still stopped, keep the refs the client
+        -- still uses for them; only the last one to go wipes everything
+        othersPaused = boolean 0
+        it = threadStates.values().iterator()
+        loop while it.hasNext()
+          o = DapThreadState it.next()
+          if o \= st & o.paused then othersPaused = boolean 1
+        end
+        if othersPaused then clearVarRefsFor(st)
+         else clearVarRefs()
+
+        st.paused = boolean 0
+        st.resumeQueue.offer(Rexx command)
+      end
+    finally
+      gate.unlock()
+    end
+    return
+
+  -- DAP 'pause'.
+  -- All-stop: the first debuggee thread to reach a statement stops
+  -- (and, being all-stop, takes the others with it).
+  -- Per-thread: the named thread stops at its next statement, alone.
+  -- Without a usable threadId, the first thread to reach a statement stops.
+  method requestPause(threadId = int)
+    if breakPerThread & threadId > 0 then
+      if stateById(threadId) \= null then do
+        pauseIds.put(Integer.valueOf(threadId), Boolean.TRUE)
+        return
+      end
     pauseReq.set(boolean 1)
     return
 
+  method isbreakPerThread() returns boolean
+    return boolean breakPerThread
 
   -- ------------------------------------------------------------
   -- interpreter-thread side
@@ -402,6 +483,8 @@ method DapSession(handler_ = DapHandler)
 
     bp       = isBreakpoint(st, path, line)
     pauseHit = pauseReq.compareAndSet(boolean 1, boolean 0)
+    if \pauseIds.isEmpty() then                        -- cheap guard, this runs for every statement
+      if pauseIds.remove(Integer.valueOf(st.id)) \= null then pauseHit = boolean 1
 
     stepHit = boolean 0
     if st.singleStep then do
@@ -439,12 +522,20 @@ method DapSession(handler_ = DapHandler)
       -- us, or resume() already ran and we do not park at all
       gate.lock()
       do
-        if reason = '' & \allStop.get() then nop       -- the stop ended while we were getting here
-         else do
-          announce = allStop.compareAndSet(boolean 0, boolean 1)   -- only the first stopper announces
-          st.snapshot(frame, path, line)
-          st.paused = boolean 1
-          parked = boolean 1
+        select
+          when breakPerThread then do                         -- this thread stops alone and announces itself
+            announce = boolean 1
+            st.snapshot(frame, path, line)
+            st.paused = boolean 1
+            parked = boolean 1
+          end
+          when reason = '' & \allStop.get() then nop     -- the stop ended while we were getting here
+          otherwise do
+            announce = allStop.compareAndSet(boolean 0, boolean 1)   -- only the first stopper announces
+            st.snapshot(frame, path, line)
+            st.paused = boolean 1
+            parked = boolean 1
+          end
         end
       finally
         gate.unlock()
@@ -453,7 +544,9 @@ method DapSession(handler_ = DapHandler)
       if \parked then return 'run'
 
       if announce then do
-        body = '{"reason": "'reason'", "threadId": 'st.id', "allThreadsStopped": true'
+        allFlag = 'true'
+        if breakPerThread then allFlag = 'false'
+        body = '{"reason": "'reason'", "threadId": 'st.id', "allThreadsStopped": 'allFlag
         if bp \= '' then body = body', "hitBreakpointIds": ['bp']'
         body = body'}'
         handler.sendEvent('stopped', String body)

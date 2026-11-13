@@ -11,6 +11,8 @@
 /* ------------------------------------------------------------------ */
 /* 2026.08.03 MRE Initial                                             */
 /* 2026.08.05 MRE Reworked on org.json.JSONObject/JSONArray           */
+/* 2026.11.11 multi-threaded debuggee support (all-stop)        --MRE */
+/* 2026.11.13 per-thread stop mode, selected by -pt option      --MRE */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.lsp
@@ -51,6 +53,10 @@ properties private
     mGetInterpreter = java.lang.reflect.Method
     mGetVar         = java.lang.reflect.Method
     mSetVar         = java.lang.reflect.Method
+
+    -- set by getLiveValue when an instance property was asked for but the
+    -- frame has no instance (static method): the variable is then not shown
+    liveNoInstance  = boolean 0
 
 
   method DapHandler(t = LspTransport)
@@ -117,6 +123,8 @@ properties private
     caps.put('supportsEvaluateForHovers',        boolean 0)
     caps.put('supportsSetVariable',              boolean 1)
     caps.put('supportsInvalidatedEvent',         boolean 1)
+    if session.breakPerThread then
+      caps.put('supportsSingleThreadExecutionRequests', boolean 1)
     sendResponse(reqSeq, 'initialize', caps)
     sendEvent('initialized', JSONObject())
     return
@@ -352,7 +360,7 @@ properties private
         otherwise nop
       end
       catch e = Exception                 -- will not occur
-        say e
+        say e 'onVariables'
       end
 
       body = JSONObject()
@@ -380,19 +388,21 @@ properties private
              otherwise nop
            end
          catch e = Exception            -- will not occur
-           say e
+           say e 'variableFormPool get 'kind
          end
-
          if keep then do
            v = JSONObject()
 
 --           say '## setting 'key '::'(RxVariable rv).varvalue '::' (RxVariable rv).vartype
            v.put('name', key)   -- pool keys are already the variable names
            value = getLiveValue(cursor,rv)
-           describeValue(v, value)
-           result.put(v)
+           if liveNoInstance then nop          -- instance property, static frame: nothing to show
+           else do
+             describeValue(v, value)
+             result.put(v)
+           end
          catch e = Exception            -- will not occur
-           say e
+           say e 'variableFromPool put 'kind
          end
        end
        return result
@@ -595,6 +605,7 @@ properties private
   -- resolves the live runtime value for a variable, via cursor -> program
   -- -> translator (public field, direct) -> interpreter -> getVar (reflective)
   method getLiveValue(cursor = Object, rv = Object) returns Object private
+    liveNoInstance = boolean 0
     do
       emptyArgs  = Object[0]
       rxprogram  = RxProgram mGetCurprogram.invoke(cursor, emptyArgs)
@@ -606,13 +617,32 @@ properties private
       getVarArgs[1] = rv
       getVarArgs[2] = RxToken null
       return mGetVar.invoke(interp, getVarArgs)
+    catch ite = InvocationTargetException   -- the interpreter's getVar itself threw: show why
+--      say ite
+      cause = ite.getCause()
+      if cause \= null then if cause <= NullPointerException then do
+        -- RxInterpreter.doProperty did Field.get(null): an instance property
+        -- in a frame without instance (static method). Not an error.
+        cs = cause.getStackTrace()
+        loop k = 0 for cs.length
+          if cs[k].getMethodName() = 'doProperty' then do
+            liveNoInstance = boolean 1
+            leave k
+          end
+        end
+      end
+      if \liveNoInstance then do
+        session.liveErrors = session.liveErrors + 1
+        msg = 'getLiveValue: 'cause' [threads running: 'session.runningThreads()', breakPerThread: 'session.breakPerThread']'
+        say msg
+      end
     catch e = Exception                  -- will not occur
-      say e
+      say e 'getLiveValue'
     end
     return null
 
   method setLiveValue(cursor = Object, rv = Object, newValue = Object) private signals IllegalAccessException,InvocationTargetException
---  trace results
+
     do
       emptyArgs  = Object[0]
       rxprogram  = RxProgram mGetCurprogram.invoke(cursor, emptyArgs)
@@ -631,7 +661,6 @@ properties private
     return
 
   method coerceRawValue(rawValue=String, rv=RxVariable) private returns Object signals Exception
---  trace results
     cname = String rv.vartype.classname.toString()
     if rv.vartype.dimension \= 0 then
       signal Exception('Editing array-typed variables is not supported')
@@ -814,7 +843,6 @@ properties private
       sendErrorResponse(reqSeq, 'setVariable', 'Error setting new value:\n'e.toString(), 1)
       return
     end
-
     liveValue = getLiveValue(cursor, rv)
     respondWithValue(reqSeq, liveValue)
     return
@@ -839,35 +867,45 @@ properties private
     end
     return
 
+  method singleThreadOf(json = JSONObject) private returns boolean
+    args = json.optJSONObject('arguments')
+    if args = null then return boolean 0
+    return args.optBoolean('singleThread', boolean 0)
+
   method onContinue(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('continue', threadIdOf(json))
+    singleOnly = singleThreadOf(json)
+    session.resume('continue', threadIdOf(json), singleOnly)
     body = JSONObject()
-    body.put('allThreadsContinued', boolean 1)
+    body.put('allThreadsContinued', \singleOnly)   -- per-thread: only the named thread continues
     sendResponse(reqSeq, 'continue', body)
     return
 
   method onNext(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('next', threadIdOf(json))
+    session.resume('next', threadIdOf(json), singleThreadOf(json))
     sendResponse(reqSeq, 'next', JSONObject())
     return
 
   method onStepIn(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('stepIn', threadIdOf(json))
+    session.resume('stepIn', threadIdOf(json), singleThreadOf(json))
     sendResponse(reqSeq, 'stepIn', JSONObject())
     return
 
   method onStepOut(reqSeq = int, json = JSONObject)
 --    threadid = json.getInt('threadId')
-    session.resume('stepOut', threadIdOf(json))
+    session.resume('stepOut', threadIdOf(json), singleThreadOf(json))
     sendResponse(reqSeq, 'stepOut', JSONObject())
     return
 
   -- all-stop: the first debuggee thread to reach a statement stops, the rest follow
+  -- per-thread: the thread named in the request stops, the rest keep running
   method onPause(reqSeq = int, json = JSONObject)
-    session.requestPause()
+    args = json.optJSONObject('arguments')
+    tid  = int 0                               -- 0: client named no thread
+    if args \= null then tid = args.optInt('threadId', 0)
+    session.requestPause(tid)
     sendResponse(reqSeq, 'pause', JSONObject())
     return
 

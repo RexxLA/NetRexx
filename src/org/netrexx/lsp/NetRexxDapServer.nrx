@@ -10,6 +10,7 @@
 /*                                                                    */
 /* ------------------------------------------------------------------ */
 /* 2026.08.03 MRE Initial                                             */
+/* 2026.11.13 add --pt perThread stop option                    --MRE */
 /* ------------------------------------------------------------------ */
 package org.netrexx.lsp
 options strictcase
@@ -31,6 +32,7 @@ class NetRexxDapServer
       transport = LspTransportStdio()
       expose    = 0
       break     = 0
+      perThread = 0
 
       loop arg over args
         parse arg '--' option '=' value
@@ -50,11 +52,15 @@ class NetRexxDapServer
           when option = 'cl' then do
             break = 1
           end
+          when option = 'pt' then do
+            perThread = 1                 -- break per Thread,
+          end
           otherwise do
             transport.log('Invalid option 'arg)
             transport.log('Usage : --sock            connect over Socket\n'-
                           '       --rx              expose interpreter, for the adventurous\n'-
-                          '       --cl              pause per clause (default breakpoint per line)\n')
+                          '       --cl              pause per clause (default breakpoint per line)\n'-
+                          '       --pt              break per thread (default stop all threads)\n')
           end
         end
       end
@@ -62,6 +68,7 @@ class NetRexxDapServer
       handler = DapHandler(transport)
       handler.exposeInterpreter = expose
       handler.session.breakPerLine = break
+      handler.session.breakPerThread = perThread
 
       loop forever
         if transport.logLsp then transport.log("Reading message")
