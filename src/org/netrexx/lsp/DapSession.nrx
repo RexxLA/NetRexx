@@ -13,6 +13,7 @@
 /* 2026.10.16 breakpoints update                                --MRE */
 /* 2026.11.11 multi-threaded debuggee support (all-stop)        --MRE */
 /* 2026.11.13 per-thread stop mode, selected by --pt option     --MRE */
+/* 2026.11.16 breakpoints resolved to breakable lines           --MRE */
 /* ------------------------------------------------------------------ */
 
 
@@ -80,7 +81,11 @@ properties public
   handler = DapHandler
 
   breakpointId = 0
-  breakpoints = Rexx ''
+  breakpoints = Rexx ''                 -- [path, line] = id        (hit-test, resolved lines)
+  bpids       = Rexx ''                 -- [path]       = ids       (blank separated)
+  bpinfo      = Rexx ''                 -- [id, 'path'|'requested'|'line'|'condition']
+  clausers    = ConcurrentHashMap       -- path -> RxClauser, set when pass 1 is done
+  isLineBreakable = java.lang.reflect.Method  -- RxClauser.isLineBreakable(int,int)
 
   breakPerLine = int 0
   breakPerThread = int 0
@@ -118,6 +123,7 @@ method DapSession(handler_ = DapHandler)
   allStop       = AtomicBoolean(boolean 0)
   pauseReq      = AtomicBoolean(boolean 0)
   pauseIds      = ConcurrentHashMap()
+  clausers      = ConcurrentHashMap()
   gate          = ReentrantLock()
   terminated    = boolean 0
   perThread     = boolean 0
@@ -336,9 +342,22 @@ method DapSession(handler_ = DapHandler)
 
   -- ------------------------------------------------------------
   -- breakpoints: written by the DAP thread, read by every debuggee thread
+  --
+  --   breakpoints[path, line] = id    hit-test index, keyed by the RESOLVED line
+  --   bpids[path]             = ids   blank separated list, one per path
+  --   bpinfo[id, 'path' | 'requested' | 'line' | 'condition']
+  --
+  -- 'requested' is the line the client asked for, 'line' is where the
+  -- breakpoint really is (0 = no code on or near it). Re-resolving always
+  -- starts from 'requested', so a breakpoint never drifts.
   -- ------------------------------------------------------------
 
   method clearBreakpoints(path) protect
+    ids = bpids[path]
+    loop w = 1 to ids.words()
+      bpinfo[ids.word(w)] = null
+    end w
+    bpids[path]       = null
     breakpoints[path] = null
     it = threadStates.values().iterator()      -- re-arm the same-line check
     loop while it.hasNext()
@@ -348,11 +367,103 @@ method DapSession(handler_ = DapHandler)
     end
 
 
-  method addBreakpoint(path = Rexx, line = Rexx, cond = String null) protect
+  -- line = the line the client asked for; see lineOf() for where it ended up
+  method addBreakpoint(path = Rexx, line = Rexx, cond = String null) protect returns int
+--  trace results
     breakpointId = breakpointId + 1
-    if \breakpoints.exists(path) then breakpoints[path] = 1
-    breakpoints[path, line] = breakpointId
-    return breakpointId
+    id   = breakpointId
+    real = resolveLine(path, int line)
+
+    bpinfo[id, 'path']      = path
+    bpinfo[id, 'requested'] = line
+    bpinfo[id, 'line']      = real
+    if cond \= null then bpinfo[id, 'condition'] = cond
+    bpids[path] = bpids[path] id
+
+    if real > 0 then do
+      if \breakpoints.exists(path) then breakpoints[path] = 1
+      if \breakpoints[path].exists(real) then breakpoints[path, real] = id
+    end
+    return id
+
+
+  -- resolved line of a breakpoint: 0 = not breakable, -1 = id is gone
+  method lineOf(id = int) protect returns int
+    v = bpinfo[id, 'line']
+    if v = '' then return -1
+    return int v
+
+  method requestedOf(id = int) protect returns int
+    v = bpinfo[id, 'requested']
+    if v = '' then return 0
+    return int v
+
+
+  -- Where does a breakpoint requested on 'line' really go?
+  -- RxClauser.isLineBreakable(int) is called by
+  -- reflection; the Method handles are resolved on first use (every
+  -- source's clauser is the same class). Without a usable clauser
+  -- (program not scanned yet, or the call fails) the line is accepted
+  -- as it is, and reresolve() fixes it up later.
+  -- Only called from synchronized methods, so the lazy init needs no lock.
+  method resolveLine(path = Rexx, line = int) returns int
+    c = clausers.get(path.toString())
+    if c = null then return line           -- no clauser for this source yet
+
+    do
+      if isLineBreakable = null then do
+        cls = c.getClass()
+        pt = Class[1]
+        pt[0] = Integer.TYPE
+        isLineBreakable = cls.getMethod('isLineBreakable', pt)
+        isLineBreakable.setAccessible(boolean 1)
+      end
+
+      args = Object[1]
+      args[0] = Integer.valueOf(line)
+      res = Integer isLineBreakable.invoke(c, args)
+      return res.intValue()
+    catch e=Exception
+      return line                                 -- reflection failed: accept as is
+    end
+
+
+  -- Re-resolve every breakpoint of 'path' from its REQUESTED line and
+  -- rebuild the hit-test index. Returns the (blank separated) ids whose
+  -- line changed.
+  method reresolve(path = Rexx) protect returns Rexx
+    changed = Rexx ''
+    ids = bpids[path]
+    if ids.words() = 0 then return changed
+
+    breakpoints[path] = null
+    breakpoints[path] = 1
+    loop w = 1 to ids.words()
+      id   = ids.word(w)
+      req  = int bpinfo[id, 'requested']
+      old  = int bpinfo[id, 'line']
+      real = resolveLine(path, req)
+      if real \= old then do
+        bpinfo[id, 'line'] = real
+        changed = changed id
+      end
+      if real > 0 then if \breakpoints[path].exists(real) then breakpoints[path, real] = id
+    end w
+    return changed
+
+
+  -- Called (from the interpreter side) once pass 1 has finished for a
+  -- source: from now on breakpoints on that source are verified against
+  -- its clauses, and the ones set earlier are moved or unverified, with
+  -- a 'breakpoint' event for each so the client updates its gutter.
+  -- Not synchronized: events are sent after the breakpoint lock is released.
+  method setClauser(path = String, c = Object)          -- c is an RxClauser
+    clausers.put(path, c)
+    changed = reresolve(Rexx path)
+    loop w = 1 to changed.words()
+      handler.sendBreakpointChanged(int changed.word(w))
+    end w
+    return
 
 
 -- a line can have multiple clauses

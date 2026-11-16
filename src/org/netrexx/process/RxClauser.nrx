@@ -36,6 +36,7 @@
 /* 2025.03.30 support for multi-line text """ strings  -- MRE         */
 /* 2026.01.26 LspDocumentSymbol after pass 0 on -asLspServer --MRE    */
 /* 2026.08.31 do not generate RxToken.AT when -noannotations --MRE    */
+/* 2026.11.16 check for valid DAP breakpoints                   --MRE */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.process
@@ -263,6 +264,51 @@ class RxClauser
    end
    return
 
+   /** ISBREAKABLE: can a debugger stop on this clause? */
+   method isClauseBreakable(cl=RxClause) returns boolean
+    if cl.tokens[0].type = RxToken.END then return 0          -- empty clause
+    if cl.tokens[0].type = RxToken.SP then if cl.tokens[1].type = RxToken.END then return 0  -- comment only
+    obj = cl.lookaside
+    if obj = null then return 1                               -- not parsed: can't tell
+
+    if obj <= RxClass     | -
+       obj <= RxMethod    | -
+       obj <= NrProperties then return 0
+
+    return 1
+
+   /** INMETHODAT: is clause index c inside a method body (or a plain script)? */
+   method inMethodAt(c=int) returns boolean
+     loop k = c to 0 by -1
+      obj = carray[k].lookaside
+      if obj = null then iterate k
+      if obj <= RxMethod then return 1
+      if obj <= RxClass | obj <= NrProperties then return 0
+    end k
+    return 1
+
+   /** ENDLINE: last line of a clause (the END token takes the last real token's line) */
+    method endLine(cl=RxClause) returns int
+    last = cl.tokens[0].line
+    loop t = 0 to cl.tokens.length-1
+      if cl.tokens[t] = null then leave t
+      if cl.tokens[t].line > last then last = cl.tokens[t].line
+    end t
+    return last
+
+   /** ISLINEBREAKABLE: line of the breakable clause containing or continuing,
+       Returns 0 if there is none. */
+   method isLineBreakable(bline=int) returns int
+
+    loop c = 0 to ccount-1
+      cl = carray[c]
+      if cl.tokens[0].line > bline then leave c  -- passed it: no clause on this line
+
+      if endLine(cl) >= bline then
+        if inMethodAt(c) then if isClauseBreakable(cl) then return cl.tokens[0].line
+    end c
+
+    return 0
 --MRE LSP end
 
 

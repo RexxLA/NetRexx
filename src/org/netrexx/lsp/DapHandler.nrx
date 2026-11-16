@@ -13,6 +13,7 @@
 /* 2026.08.05 MRE Reworked on org.json.JSONObject/JSONArray           */
 /* 2026.11.11 multi-threaded debuggee support (all-stop)        --MRE */
 /* 2026.11.13 per-thread stop mode, selected by -pt option      --MRE */
+/* 2026.11.16 setBreakpoints resolves to breakable lines        --MRE */
 /* ------------------------------------------------------------------ */
 
 package org.netrexx.lsp
@@ -169,9 +170,9 @@ properties private
     rawBps = args.optJSONArray('breakpoints')
     if rawBps = null then rawBps = JSONArray()   -- client may send none
 
-    -- Build our own bookkeeping array, and in parallel the JSON body
-    -- DAP expects back: one verified breakpoint per input, same order.
-    accepted    = JSONArray()
+    -- the JSON body DAP expects back: one entry per input breakpoint,
+    -- same order. The session does the bookkeeping and resolves each
+    -- requested line to a line that has code (see DapSession.addBreakpoint).
     verifiedBps = JSONArray()
 
     i = int 0
@@ -180,20 +181,20 @@ properties private
       line = int bp.getInt('line')
       cond = bp.optString('condition', null)   -- may be null; that's fine
 
-      id = session.addBreakpoint(path, line,cond)
+      id   = session.addBreakpoint(path, line, cond)
+      real = session.lineOf(id)                -- 0 = no code on or near the line
 
-      rec = JSONObject()
-      rec.put('line', line)
-      if cond \= null then rec.put('condition', cond)
-      accepted.put(rec)
-
-      -- TODO: once org.netrexx.process is wired in, resolve `line`
-      -- against the compiled/interpreted source's statement table
-      -- here and set verified = false for lines with no code on them.
       vb = JSONObject()
-      vb.put('verified', boolean 1)
-      vb.put('line', line)
       vb.put('id', id)
+      if real > 0 then do
+        vb.put('verified', boolean 1)
+        vb.put('line', real)                   -- may differ from the requested line
+      end
+      else do
+        vb.put('verified', boolean 0)
+        vb.put('line', line)
+        vb.put('message', 'No executable code on this line')
+      end
       verifiedBps.put(vb)
 
       i = i + 1
@@ -201,9 +202,32 @@ properties private
 
     body = JSONObject()
     body.put('breakpoints', verifiedBps)
---    session.setBreakpoints(path, accepted)
 
     sendResponse(reqSeq, 'setBreakpoints', body)
+    return
+
+  -- A breakpoint set before the program was scanned was moved or
+  -- unverified once its clauses became known (DapSession.setClauser).
+  method sendBreakpointChanged(id = int)
+    line = session.lineOf(id)
+    if line < 0 then return                    -- cleared by a newer setBreakpoints
+
+    bp = JSONObject()
+    bp.put('id', id)
+    if line > 0 then do
+      bp.put('verified', boolean 1)
+      bp.put('line', line)
+    end
+    else do
+      bp.put('verified', boolean 0)
+      bp.put('line', session.requestedOf(id))
+      bp.put('message', 'No executable code on this line')
+    end
+
+    body = JSONObject()
+    body.put('reason', 'changed')
+    body.put('breakpoint', bp)
+    sendEvent('breakpoint', body)
     return
 
   method onConfigurationDone(reqSeq = int, json = JSONObject)
