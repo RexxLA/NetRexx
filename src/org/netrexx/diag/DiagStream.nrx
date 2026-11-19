@@ -1,0 +1,295 @@
+/* IBM Materials Licensed under International Components for Unicode  */
+/* Licence version 1.8.1 (ICU Licence) - Property of IBM              */
+/* IBM NetRexx                                                        */
+/* Copyright (c) 1995-2009 IBM Corp.                                  */
+/* Copyright (c) 2011- RexxLA                                         */
+/* ------------------------------------------------------------------ */
+/* NetRexx language processor diagnostics                         mfc */
+/* Copyright (c) IBM Corporation 1996, 1997.  All Rights Reserved.    */
+/* ------------------------------------------------------------------ */
+/* DiagStream                                                         */
+/*                                                                    */
+/*   An object that tests the RexxStream methods                      */
+/*                                                                    */
+/* ------------------------------------------------------------------ */
+/* Change list (see RxLanguage for master change list)                */
+/* 2025.03.06 Initial                                                 */
+/* 2026.11.19 Comprehensive stream and concurrency diagnostics  --MRE */
+/* ------------------------------------------------------------------ */
+package org.netrexx.diag
+
+options nobinary nostrictcase nostrictargs nostrictsignal
+
+class DiagStream uses RexxStream
+
+  /* Construct a set of tests; raise DiagX exception if error */
+  method DiagStream
+    testSequentialIO()
+    testPositionedIO()
+    testStreamCommands()
+    testConcurrentStreams()
+    testSharedRandomAccess()
+    say 'DiagStream: OK'
+
+  method testSequentialIO() static
+    f = 'diagstream_seq.tmp'
+    cleanup(f)
+
+    -- Test initial state of non-existent file
+    s = stream(f, 'S')
+    if s \= 'UNKNOWN' then signal DiagX('DiagStream: initial stream state should be UNKNOWN, got 's)
+
+    -- Write lines
+    if lineout(f, 'Line one') \= 0   then signal DiagX('DiagStream: lineout line 1 failed')
+    if lineout(f, 'Line two') \= 0   then signal DiagX('DiagStream: lineout line 2 failed')
+    if lineout(f, 'Line three') \= 0 then signal DiagX('DiagStream: lineout line 3 failed')
+    lineout(f) -- close
+
+    -- Check size query
+    sz = stream(f, 'C', 'QUERY SIZE')
+    if sz <= 0 then signal DiagX('DiagStream: QUERY SIZE returned 'sz)
+
+    -- Check lines available
+    if lines(f) \= 1 then signal DiagX('DiagStream: lines should return 1')
+
+    -- Read sequential lines
+    l1 = linein(f)
+    if l1 \= 'Line one'   then signal DiagX('DiagStream: linein 1 got <'l1'> want <Line one>')
+    l2 = linein(f)
+    if l2 \= 'Line two'   then signal DiagX('DiagStream: linein 2 got <'l2'> want <Line two>')
+    l3 = linein(f)
+    if l3 \= 'Line three' then signal DiagX('DiagStream: linein 3 got <'l3'> want <Line three>')
+
+    -- End of file
+    if lines(f) \= 0 then signal DiagX('DiagStream: lines at EOF should return 0')
+    eof = linein(f)
+    if eof \= '' then signal DiagX('DiagStream: linein at EOF should return empty string')
+
+    stream(f, 'C', 'CLOSE')
+    cleanup(f)
+
+  method testPositionedIO() static
+    f = 'diagstream_pos.tmp'
+    cleanup(f)
+
+    -- Character-based positioned writes and reads
+    if charout(f, 'abcdefghij') \= 0 then signal DiagX('DiagStream: charout failed')
+    charout(f) -- close
+
+    -- Read with positioning: charin(name, start, length)
+    c1 = charin(f, 1, 4)
+    if c1 \= 'abcd' then signal DiagX('DiagStream: charin pos 1 len 4 got <'c1'>')
+    c2 = charin(f, 5, 3)
+    if c2 \= 'efg'  then signal DiagX('DiagStream: charin pos 5 len 3 got <'c2'>')
+
+    -- Overwrite character position 5 (issue #101)
+    if charout(f, 'ZZ', 5) \= 0 then signal DiagX('DiagStream: charout at pos 5 failed')
+    charout(f) -- close
+
+    c3 = charin(f, 1, 10)
+    if c3 \= 'abcdZZghij' then signal DiagX('DiagStream: charin after overwrite got <'c3'>')
+    charout(f) -- close
+
+    -- Positioned lineout
+    cleanup(f)
+    lineout(f, 'alpha')
+    lineout(f, 'beta')
+    lineout(f, 'gamma')
+    lineout(f) -- close
+
+    -- Replace line 2 with same-length line
+    if lineout(f, 'BETA', 2) \= 0 then signal DiagX('DiagStream: positioned lineout line 2 failed')
+    lineout(f) -- close
+
+    l1 = linein(f, 1)
+    l2 = linein(f, 2)
+    l3 = linein(f, 3)
+    stream(f, 'C', 'CLOSE')
+
+    if l1 \= 'alpha' then signal DiagX('DiagStream: positioned linein 1 got <'l1'>')
+    if l2 \= 'BETA'  then signal DiagX('DiagStream: positioned linein 2 got <'l2'>')
+    if l3 \= 'gamma' then signal DiagX('DiagStream: positioned linein 3 got <'l3'>')
+
+    cleanup(f)
+
+  method testStreamCommands() static
+    f = 'diagstream_cmd.tmp'
+    cleanup(f)
+
+    -- OPEN WRITE command
+    rc = stream(f, 'C', 'OPEN WRITE')
+    if rc \= 'READY' then signal DiagX('DiagStream: OPEN WRITE failed rc='rc)
+    charout(f, '0123456789')
+    rc = stream(f, 'C', 'CLOSE')
+    if rc \= 'READY' then signal DiagX('DiagStream: CLOSE failed rc='rc)
+
+    -- QUERY EXISTS
+    exists = stream(f, 'C', 'QUERY EXISTS')
+    if exists == '' then signal DiagX('DiagStream: QUERY EXISTS should return path')
+
+    -- QUERY SIZE
+    qsize = stream(f, 'C', 'QUERY SIZE')
+    if qsize \= 10 then signal DiagX('DiagStream: QUERY SIZE got 'qsize' want 10')
+
+    -- OPEN BOTH and SEEK READ
+    rc = stream(f, 'C', 'OPEN BOTH')
+    if rc \= 'READY' then signal DiagX('DiagStream: OPEN BOTH failed rc='rc)
+
+    stream(f, 'C', 'SEEK 3 READ')
+    sub = charin(f, -1, 4)
+    if sub \= '3456' then signal DiagX('DiagStream: SEEK 3 READ got <'sub'> want <3456>')
+
+    stream(f, 'C', 'CLOSE')
+    cleanup(f)
+
+  method testConcurrentStreams() static
+    -- Verify Issue #130: multiple threads reading separate files concurrently
+    numThreads = 4
+    numLines = 50
+    files = 'diagstream_th_a.tmp diagstream_th_b.tmp diagstream_th_c.tmp diagstream_th_d.tmp'
+
+    -- Prepare files
+    loop i = 1 to numThreads
+      fname = files.word(i)
+      cleanup(fname)
+      loop j = 1 to numLines
+        lineout(fname, fname j)
+      end
+      lineout(fname)
+    end
+
+    -- Launch threads
+    answers = RexxChannel(numThreads)
+    loop i = 1 to numThreads
+      go countThread(files.word(i), answers)
+    end
+
+    -- Collect results
+    loop for numThreads
+      do
+        res = Rexx answers.read()
+        parse res fname count
+        if count \= numLines then do
+          cleanupAll(files)
+          signal DiagX('DiagStream Issue #130: concurrent read of 'fname' gave 'count' lines, expected 'numLines)
+        end
+      catch IOException
+        cleanupAll(files)
+        signal DiagX('DiagStream: IOException in answers.read()')
+      end
+    end
+
+    cleanupAll(files)
+
+  method countThread(file, answers = RexxChannel) static signals IOException
+    n = 0
+    loop while lines(file) > 0
+      linein(file)
+      n = n + 1
+    end
+    stream(file, 'C', 'CLOSE')
+    answers.write(file n)
+
+  method testSharedRandomAccess() static
+    -- Test concurrent random access to the SAME file from multiple threads:
+    -- one read-only thread, one read/write thread
+    f = 'diagstream_shared_rnd.tmp'
+    cleanup(f)
+
+    -- Initialize file with 20 lines of 12 characters each: 'LINE_01_INIT\n' (13 bytes/line)
+    loop i = 1 to 20
+      lineout(f, 'LINE_' || Rexx(i).right(2, '0') || '_INIT')
+    end
+    lineout(f) -- close to flush
+
+    chan = RexxChannel(2)
+    iterations = 50
+    go sharedReaderThread(f, chan, iterations)
+    go sharedReadWriterThread(f, chan, iterations)
+
+    errors = ''
+    loop for 2
+      do
+        res = Rexx(chan.read().toString())
+        parse res role status msg
+        if status \= 'OK' then errors = errors || role || ': ' || msg || '; '
+      catch IOException
+        errors = errors || 'IOException reading channel; '
+      end
+    end
+
+    cleanup(f)
+
+    if errors \= '' then signal DiagX('DiagStream testSharedRandomAccess failed: ' || errors)
+
+  method sharedReaderThread(f, chan = RexxChannel, iterations = int) static signals IOException
+    -- Reader does random access positioned reads across lines 1 to 10
+    loop it = 1 to iterations
+      ln = (it // 10) + 1
+      line = linein(f, ln)
+      expectedPrefix = 'LINE_' || Rexx(ln).right(2, '0')
+      if \line.abbrev(expectedPrefix) then do
+        chan.write(Rexx('READER FAIL unexpected line: ' || line || ' at ' || ln))
+        return
+      end
+      -- character-level positioned read: each line is 13 chars ("LINE_xx_INIT\n")
+      pos = (ln - 1) * 13 + 1
+      charsRead = charin(f, pos, 4)
+      if charsRead \= 'LINE' then do
+        chan.write(Rexx('READER FAIL charin expected LINE got ' || charsRead || ' at pos ' || pos))
+        return
+      end
+    end
+    chan.write(Rexx('READER OK finished'))
+
+  method sharedReadWriterThread(f, chan = RexxChannel, iterations = int) static signals IOException
+    -- Read/Writer does positioned writes and reads across lines 11 to 20
+    loop it = 1 to iterations
+      ln = 11 + (it // 10)
+      tag = Rexx(it).right(4, '0')
+      newLine = 'LINE_' || Rexx(ln).right(2, '0') || '_' || tag
+      rc = lineout(f, newLine, ln)
+      if rc \= 0 then do
+        chan.write(Rexx('WRITER FAIL lineout rc=' || rc || ' at ' || ln))
+        return
+      end
+      -- read it back with random access
+      readBack = linein(f, ln)
+      if readBack \= newLine then do
+        chan.write(Rexx('WRITER FAIL readBack mismatch: got ' || readBack || ' want ' || newLine))
+        return
+      end
+      -- positioned charout overwrite of the tag portion
+      tagPos = (ln - 1) * 13 + 9
+      newTag = 'W' || Rexx(it).right(3, '0')
+      rc2 = charout(f, newTag, tagPos)
+      if rc2 \= 0 then do
+        chan.write(Rexx('WRITER FAIL charout rc=' || rc2))
+        return
+      end
+      readTag = charin(f, tagPos, 4)
+      if readTag \= newTag then do
+        chan.write(Rexx('WRITER FAIL charin tag mismatch: got ' || readTag || ' want ' || newTag))
+        return
+      end
+    end
+    chan.write(Rexx('WRITER OK finished'))
+
+  method cleanupAll(files) static
+    loop i = 1 to files.words()
+      cleanup(files.word(i))
+    end
+
+  method cleanup(fname) static
+    stream(fname, 'C', 'CLOSE')
+    java.io.File(fname.toString()).delete()
+
+  /* Scaffolding for stand-alone test */
+  method main(s=String[]) static
+    say version '/' source
+    do
+      DiagStream()
+    catch e=DiagX
+      say 'Failed: "'e.getMessage'"'
+      exit 1
+    end
