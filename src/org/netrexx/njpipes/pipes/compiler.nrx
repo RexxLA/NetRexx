@@ -52,6 +52,7 @@ import org.netrexx.process.
 -- 1998-07-20 ensure stage names do not include stage arguments.  ejt
 -- 1998-07-18 set not[i+1] to pInfo[8] after stageExit so not can be controled.  EJT
 -- 1998-07-18 stageArg must be called before stageExit for each stage.  EJT
+-- 2026-11-19 support text after empty {}, issue #126 --MRE
 */
 
 class compiler extends Object public
@@ -873,7 +874,10 @@ class compiler extends Object public
             sargs = sargs.strip('B','"')              -- unquote string
             sargs = sargs.changestr('"','""')         -- escape "
             sargs = sargs.changestr('arg(','"arg(')   -- unquote args(..)
-            sargs = sargs.changestr('}',')"')
+            if sargs.pos('}') > 0 then               -- issue #126 an empty {} --MRE
+              sargs = sargs.changestr('}',')"')
+            else
+              sargs = sargs.changestr(')',')"')
             sargs = '"'sargs'"'                       -- requote
             if sargs.left(2) = '""' then                   -- strip "" s
               sargs = sargs.delstr(1,2)
@@ -885,6 +889,7 @@ class compiler extends Object public
                     sargs = sargs.substr(2)
 		    o[n+1] = '   _s_'i'.setArg('sargs',boolean 1)'
 		    n = n+1
+		    trace off
           end
           otherwise
         end
