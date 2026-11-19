@@ -46,6 +46,9 @@
 - NetRexx-120 negative decimal literal is incorrectly parsed when options binary
 - NetRexx-121 more robust error checking during ant's diagnostic tests
 - NetRexx-122 a stage option in parentheses breaks the pipeline
+- NetRexx-127 changeregex writes 0 when the replacement is empty or only blanks
+- NetRexx-129 interpreted, an indexed string cast to java.util.Map fails with internal error iarge
+- NetRexx-130 RexxStream is now thread-safe
  
 
 ## Examples
