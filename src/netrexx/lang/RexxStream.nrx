@@ -9,6 +9,7 @@ import java.nio.file.Path
 import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
+import java.util.concurrent.ConcurrentSkipListMap
 import java.text.SimpleDateFormat
 
  /*  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.   */   
@@ -27,13 +28,14 @@ import java.text.SimpleDateFormat
  * Updated October 8th 2026  issue #99 --MRE return '' for null pull()
  * Updated October 10th 2026  issue #101 --MRE start position charout not honoured
                               and more corrections for Classic Rexx compatibility
+ * Updated November 19th 2026 issue #130 --MRE thread-safe stream handles
  */
 class RexxStream uses RexxDate
   numeric digits 18
   
   properties private static
 
-  fileHandles     = TreeMap()
+  fileHandles     = ConcurrentSkipListMap()
 
 
   /**
@@ -43,16 +45,45 @@ class RexxStream uses RexxDate
     return this
 
   /**
+   * Helper to retrieve, open, or upgrade a FileHandle thread-safely
+   */
+  method getFileHandle(name, fmode = 'r') static private returns RexxStream.FileHandle
+    fh = FileHandle fileHandles.get(name)
+    if fh == null then do
+      newFh = RexxStream.FileHandle(name, fmode)
+      if \newFh.isReady() then return null
+      existing = FileHandle fileHandles.putIfAbsent(name, newFh)
+      if existing \== null then do
+        newFh.close()
+        fh = existing
+      end
+      else fh = newFh
+    end
+    if fmode = 'rw' then do
+      if \fh.isWritable() then do
+        rc = fh.makeWritable()
+        if rc == 1 then return null
+      end
+    end
+    return fh
+
+  /**
+   * Helper to atomically remove and close a FileHandle
+   */
+  method closeFileHandle(name) static private returns int
+    fh = FileHandle fileHandles.remove(name)
+    if fh \= null then do
+      fh.close()
+    end
+    return 0
+
+  /**
    * Method chars returns the remaining number of characters
    * in a stream, or 1
    */
   method chars(name) static
-    fh = FileHandle fileHandles.get(name)
-    if fh = null then do
-      fh = RexxStream.FileHandle(name, 'r')
-      if \fh.isReady() then return 0
-      fileHandles.put(name, fh)
-    end
+    fh = getFileHandle(name, 'r')
+    if fh == null then return 0
     return fh.available()
 
   /**
@@ -64,12 +95,8 @@ class RexxStream uses RexxDate
   method charin(name, start=-1, length=1) static
     if start \== -1 then if start < 1 then return ''  -- must be positive
 
-    fh = FileHandle fileHandles.get(name)
-    if fh = null then do
-      fh = RexxStream.FileHandle(name, 'r')
-      if \fh.isReady() then return ''           -- cannot open file
-      fileHandles.put(name, fh)
-    end
+    fh = getFileHandle(name, 'r')
+    if fh == null then return ''           -- cannot open file
 
     ch = fh.readChar(start, length)
     return ch
@@ -96,16 +123,8 @@ class RexxStream uses RexxDate
     end
     -- end of special names
 
-    fh = FileHandle fileHandles.get(name)
-    if fh == null then do
-      fh = RexxStream.FileHandle(name, 'rw')
-      if \fh.isReady() then return 1            -- cannot open file
-      fileHandles.put(name, fh)
-    end
-    else if \ fh.isWritable() then do
-      rc = fh.makeWritable()
-      if rc = 1 then return 1
-    end
+    fh = getFileHandle(name, 'rw')
+    if fh == null then return 1            -- cannot open file
 
     rc = fh.writeChar(str, charnum)
     return rc
@@ -117,11 +136,7 @@ class RexxStream uses RexxDate
 
 
   method charout(name) static
-    fh = FileHandle fileHandles.get(name)
-    if fh \= null then do
-      fh.close()
-      fileHandles.remove(name)
-    end
+    closeFileHandle(name)
     return 0
   /**
    * Method lines returns 0 or the lines left in a file
@@ -131,12 +146,8 @@ class RexxStream uses RexxDate
    */
 
   method lines(name) static
-    fh = FileHandle fileHandles.get(name)
-    if fh == null then do
-      fh = RexxStream.FileHandle(name, 'r')
-      if \fh.isReady() then return 0           -- cannot open file
-      fileHandles.put(name, fh)
-    end
+    fh = getFileHandle(name, 'r')
+    if fh == null then return 0           -- cannot open file
     return fh.available()
 
 
@@ -155,12 +166,8 @@ class RexxStream uses RexxDate
   method linein(name, linenum=-1, count=1) static
     if linenum \== -1 then if linenum < 1 then return '' -- must be positive
 
-    fh = FileHandle fileHandles.get(name)
-    if fh == null then do
-      fh = RexxStream.FileHandle(name, 'r')
-      if \fh.isReady() then return ''        -- cannot open file
-      fileHandles.put(name, fh)
-    end
+    fh = getFileHandle(name, 'r')
+    if fh == null then return ''        -- cannot open file
     l = fh.readLine(linenum, count)
     return l
 
@@ -169,11 +176,7 @@ class RexxStream uses RexxDate
    * close a file when only the filename is specified and no output. 
    */
   method lineout(name) static
-    fh = FileHandle fileHandles.get(name)
-    if fh \= null then do
-      fh.close()
-      fileHandles.remove(name)
-    end
+    closeFileHandle(name)
     return 0
 
   /**
@@ -198,16 +201,8 @@ class RexxStream uses RexxDate
       return 0
     end
 
-    fh = FileHandle fileHandles.get(name)
-    if fh == null then do
-       fh = RexxStream.FileHandle(name, 'rw')
-       if \fh.isReady() then return 1           -- cannot open file
-       fileHandles.put(name, fh)
-    end
-    else if \ fh.isWritable() then do
-      rc = fh.makeWritable()
-      if rc == 1 then return 1
-    end
+    fh = getFileHandle(name, 'rw')
+    if fh == null then return 1           -- cannot open file
 
     rc = fh.writeLine(line, linenum)
     return rc
@@ -253,25 +248,18 @@ class RexxStream uses RexxDate
           when option2.word(1) = 'OPEN' then do
 
             if option2.word(2) = 'READ' then do
-              fh = FileHandle fileHandles.get(name)
+              fh = getFileHandle(name, 'r')
               if fh == null then do
-                fh = RexxStream.FileHandle(name, 'r')
-              end
-              if fh = null then do
                 return 'ERROR'
               end
-              fileHandles.put(name, fh)
               return 'READY'
             end
             if option2.word(2) = 'WRITE'  | -
                option2.word(2) = 'APPEND' | -
                option2.word(2) = 'BOTH'   | -
                option2.word(2) = '' then do
-              fh = FileHandle fileHandles.get(name)
+              fh = getFileHandle(name, 'rw')
               if fh == null then do
-                fh = RexxStream.FileHandle(name, 'rw')
-              end
-              if fh = null then do
                 return 'ERROR'
               end
               -- WRITE and APPEND write at the end of the file;
@@ -279,7 +267,6 @@ class RexxStream uses RexxDate
               if option2.word(2) = 'BOTH' | option2.word(2) = '' then do
                 fh.setSeekPosition('w', 0)
               end
-              fileHandles.put(name, fh)
               return 'READY'
             end
             say 'Incorrect call to routine, STREAM C OPEN must be followed by READ, WRITE, APPEND or BOTH, found "'word(2, option2)'"'
@@ -287,11 +274,7 @@ class RexxStream uses RexxDate
           end
 
           when option2='CLOSE' then do
-            fh = FileHandle fileHandles.get(name)
-            if fh \= null then do
-              fh.close()
-              fileHandles.remove(name)
-            end
+            closeFileHandle(name)
             return 'READY'
           end
 
@@ -470,7 +453,8 @@ class RexxStream.FileHandle
   method isWritable()
     return isWritable
 
-  method makeWritable()
+  method makeWritable() protect
+    if isWritable then return 0
     mode = 'rw'
     do
       writeChannel = FileChannel.open(tpath, -
@@ -490,7 +474,7 @@ class RexxStream.FileHandle
     state = READY
     return 0
 
-  method setSeekPosition(rw, pos) public
+  method setSeekPosition(rw, pos) public protect
     if rw \= 'w' then do                  -- read side (or both): recount
       readpos = pos
       if pos = 0 then do
@@ -523,7 +507,7 @@ class RexxStream.FileHandle
       state = ERROR
     end
 
-  method available() public
+  method available() public protect
     do
       available = readChannel.size() - readpos
       if available > 0 then
@@ -744,7 +728,7 @@ class RexxStream.FileHandle
 
 
   -- Read one UTF-8 character
-  method readChar(charnum = -1 , length=1) public returns Rexx
+  method readChar(charnum = -1 , length=1) public protect returns Rexx
 
     if charnum = 1 then do                -- position at start of file
       lineread = 0                        -- set counters
@@ -791,7 +775,7 @@ class RexxStream.FileHandle
     return str
 
   -- Read an UTF-8 string
-  method readLine(linenum = -1, count = 1) public
+  method readLine(linenum = -1, count = 1) public protect
 
     if linenum = 1 then do               -- position at start of file
       lineread = 0                        -- set counters
@@ -840,7 +824,7 @@ class RexxStream.FileHandle
     return line
 
 
-  method writeChar(str, charnum=-1) public
+  method writeChar(str, charnum=-1) public protect
     if charnum = 1 then do                -- position at start of file
       linewrite = 0                       -- set counters
       charwrite = 0
@@ -900,7 +884,7 @@ class RexxStream.FileHandle
 
 
   -- Write a UTF-8 string
-  method writeLine(line, linenum=-1) public
+  method writeLine(line, linenum=-1) public protect
     if linenum = 1 then do                -- position at start of file
       linewrite = 0                        -- set counters
       charwrite = 0
@@ -926,7 +910,7 @@ class RexxStream.FileHandle
     return rc
 
   -- Close all resources
-  method close() public
+  method close() public protect
     do
       if readChannel \== null then do
         readChannel.close()
