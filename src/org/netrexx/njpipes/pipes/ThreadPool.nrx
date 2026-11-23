@@ -13,6 +13,9 @@
 -- 98/09/20 now catches unexpected exceptions from pipes/stages.  ejt
 -- 98/08/13 optimized vector usage.  ejt
 -- 98/07/31 threads pool for objects implementing the RunnablePool interface.  ejt
+-- 26/11/22 issue #128, 30 secs linger, daemonize the threads, interrupt when done --MRE
+-- 26/11/23 avoid race starting and stopping threads
+
 
 package org.netrexx.njpipes.pipes
 
@@ -45,11 +48,13 @@ method ThreadPool(a=RunnablePool,p=int)
    pri  = p
    run  = 1
    T = Thread(group,this)
+   T.setDaemon(1)          -- issue #128, set daemon
    T.start()
+
 
 method run()
 
-   loop protect this until data=null
+   loop until \run
       if T.getPriority()<>pri then
          T.setPriority(pri)
       do
@@ -73,42 +78,70 @@ method run()
             signal e
          end
       end
-      data = null
-      pool.addElement(this)
-   -- say this linger
-      wait(linger)
-      if data=null then
-         run = 0
+
+      do protect this
+         data = null
+         pool.addElement(this)
+         if data = null & run then do
+            do
+              wait(linger)
+            catch InterruptedException
+              nop                          -- an interrupt only wakes us; decide from data
+            end
+            if data = null then
+               run = 0
+         end
+         if \run | data <> null then
+            pool.removeElement(this)
+      end
    catch InterruptedException
       pool.removeElement(this)
+      run = 0
 --    say 'Thread exiting via interrupt 'this
    catch NoSuchElementException
    catch e=Exception
       pool.removeElement(this)
+      run = 0
       say 'Exiting due to uncaught Exception' e.getMessage()
    end
 
 method startThread(a=RunnablePool,p=int java.lang.Thread.NORM_PRIORITY) returns Thread static
    e = ThreadPool
 
-   loop protect pool until e.run
-      e = ThreadPool pool.lastElement()
-      pool.removeElementAt(pool.size()-1)
+   loop forever
+      e = null
+      do protect pool
+         if pool.size() > 0 then do
+            e = ThreadPool pool.lastElement()
+            pool.removeElementAt(pool.size()-1)
+         end
+      end
+
+      if e = null then
+         return ThreadPool(a,p).T
+
       do protect e
-         if e.run then do
+         if e.run & e.data = null then do
             e.pri  = p
             e.data = a
             e.notify()
+            return e.T
          end
       end
-   catch NoSuchElementException
-      e = ThreadPool(a,p)
    end
-   return e.T
+
 
 method stop() static
 
+   e = ThreadPool
+   do protect pool
+      loop while pool.size()>0
+         e = ThreadPool pool.lastElement()
+         pool.removeElementAt(pool.size()-1)
+         e.T.interrupt()      -- issue #128 idle worker wakes in wait(linger) and exits via the InterruptedException catch
+      end
+   end
 --MRE ThreadGroup.stop() is removed in latest Java
 --   group.stop()
-   pool.removeAllElements()
+--   pool.removeAllElements()
 
