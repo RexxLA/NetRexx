@@ -11,6 +11,8 @@
  20/ 9/12 Fixed NOW. Jeff Hennick
  20/ 8/22 Added NOW. Jeff Hennick
  20/ 6/26 Added NOON & MIDNIGHT options. Jeff Hennick
+ 26/11/23 Added REXX_DATE_W output format --MRE
+ 26/11/23 Intercept invalid REXX_DATE_NORMAL input --MRE
 */
 
 options nostrictcase nostrictargs nostrictsignal nobinary
@@ -116,7 +118,7 @@ do
                                                          /* INPUT and OUTPUT DATE FORMATS */
   parse args inF outf .
   parse getInFormat(inF) inFormat ',' typei
-  parse getOutFormat(outf) outFormat ',' typeo
+  parse getOutFormat(outf) outFormat '%' typeo
 
   if 'JULIAN JULIAN_SHORT RB RC RD'.wordpos(typeo) > 0 | 'JULIAN JULIAN_SHORT RB RC RD'.wordpos(typei) > 0 then procJul = 1
   else procJul = 0
@@ -221,7 +223,11 @@ do
 
   if typei = 'RN' then do
     n=n+1;o[n]= "  month = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.wordpos(mname)"
-  end
+    n=n+1;o[n]= "  if month = 0 then do"
+    n=n+1;o[n]= '    unknown(aobj)'
+    n=n+1;o[n]= '    iterate'
+    n=n+1;o[n]= '  end'
+   end
 
   if typeo = 'RN' then do
     n=n+1;o[n]= "  mname = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.word(month)"
@@ -287,15 +293,15 @@ do
   n=n+1;o[n]= 'exit(rc*(rc<>12))'
 
   n=n+1;o[n]= 'method unknown(aobj = java.lang.Object) signals ThreadQ'
-  n=n+1;o[n]= '  do'
-  n=n+1;o[n]= '    selectOutput(1)'
-  n=n+1;o[n]= '    output(aobj)'
-  n=n+1;o[n]= '    selectOutput(0)'
-  n=n+1;o[n]= '    readto()'
-  n=n+1;o[n]= '  catch stageError'
-  n=n+1;o[n]= '    say "Could not convert date:" "aobj" " to" inF"."'
-  n=n+1;o[n]= '    exit 11'
-  n=n+1;o[n]= '  end'
+    n=n+1;o[n]= '  do'
+    n=n+1;o[n]= '    selectOutput(1)'
+    n=n+1;o[n]= '    output(aobj)'
+    n=n+1;o[n]= '    selectOutput(0)'
+    n=n+1;o[n]= '    readto()'
+    n=n+1;o[n]= '  catch stageError'
+    n=n+1;o[n]= '    say "Could not convert date:" "aobj" " to" inF"."'
+    n=n+1;o[n]= '    exit 11'
+    n=n+1;o[n]= '  end'
 
   if isRange then do
     /* this method should/will be incorporated into IRange, but for now has to be here */
@@ -584,6 +590,11 @@ method getOutFormat(name)
         else
           p = "year''month''day" -- yy . '/' mm . '/' dd hh . ':' mm . ':' ss.uuuuuu
       end
+    when 'REXX_DATE_W', 'REXXW', 'RW'
+      then do
+        p = "left(date('w', year''month''day, 's'), 9)"
+        type = 'RW'
+      end
     when 'EUR', 'EUR_SHORT'
       then do
         if timeout then
@@ -602,7 +613,7 @@ method getOutFormat(name)
       say 'DateConvert Output format' name 'is not recognized.'
       exit 11
     end
-  return p',' type
+  return p'%' type
 
 method givehelp() static
 return -
@@ -662,7 +673,7 @@ return -
 "PIPE_SHORT        yymmddhhmmssuuuuuu\n" -
 "PIPE          }   yyyymmddhhmmssuuuuuu\n" -
 "REXX_DATE_S   }\n" -
-"EURSHORT          dd.mm.yy hh:mm:ss.uuuuuu\n" -
+"EUR_SHORT         dd.mm.yy hh:mm:ss.uuuuuu\n" -
 "EUR               dd.mm.yyyyyyy hh:mm:ss.uuuuuu\n" -
 "JULIAN_SHORT      yy.ddd hh:mm:ss.uuuuuu\n" -
 "JULIAN            yyyyyyy.ddd hh:mm:ss.uuuuuu\n" -
