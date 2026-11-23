@@ -48,6 +48,7 @@
 -- 1998/08/02 commit logic fixed.  ejt
 -- 1998/08/01 handle poolable stages.  ejt
 -- 1998/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
+-- 2026/11/23 avoid NullPointException at exit when severing input/output
 
 /* Futures 98/11/30 ejt.
 
@@ -1313,19 +1314,23 @@ if severed<>-99 then
       say 'Preparing to stop' _name p c p._active
 
     loop while super.in<>null         -- sever inputs
-      do
-        inn = findin(super.in.sout)
-        sin = super.in.sout
-        severInput()
+      do protect p
+        if super.in<>null then do
+          inn = findin(super.in.sout)
+          sin = super.in.sout
+          severInput()
+        end
       catch StageError
       end
     end
 
     loop while super.out<>null       -- sever outputs
-      do
-        outn = findout(super.out.sin)
-        sout = super.out.sin
-        severOutput()
+      do protect p
+        if super.out<>null then do
+           outn = findout(super.out.sin)
+          sout = super.out.sin
+          severOutput()
+        end
       catch StageError
       end
     end
