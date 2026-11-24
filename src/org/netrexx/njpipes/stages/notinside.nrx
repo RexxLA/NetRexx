@@ -12,6 +12,7 @@
  20/ 5/ 3  Fix CASEANY logic to > 0 for NetRexx update; documentation. JHennick
  99/05/09  use mrc() instead of rc().  ejt
  98/06/22  aobj; binary; outside New; derived from BETWEEN.  JHennick
+ 26/11/24  fix occasional hang, don't skip readto()
 */
 
 options nostrictcase nostrictargs nostrictsignal
@@ -102,18 +103,18 @@ method run()
                      leave
                   end
                else
-                  do
-                     /*selectOutput(1)  -- \(outside notinside) */
-                     selectOutput(0)  -- outside -- notinside
-                     output(aobj)
-                     readto()
-                  catch StageError
-                     do
-                        eofReport('ANY')
-                     catch StageError
-                        leave
-                     end
-                  end
+                 do
+                    selectOutput(0)
+                    output(aobj)
+                 catch StageError
+                    do
+                       eofReport('ANY')
+                    catch StageError
+                       leave
+                    end
+                 finally
+                    readto()
+                 end
             catch StageError                 -- errors (or end of datastream)
             end
        when _Label_len <> 0 then                                    -- real label \anycase
@@ -155,16 +156,16 @@ method run()
                   end
                else
                   do
-                     /*selectOutput(1)  -- \(outside notinside) */
-                     selectOutput(0)  -- outside -- notinside
+                     selectOutput(0)
                      output(aobj)
-                     readto()
                   catch StageError
                      do
                         eofReport('ANY')
                      catch StageError
                         leave
                      end
+                  finally
+                     readto()
                   end
             catch StageError                 -- errors (or end of datastream)
             end
