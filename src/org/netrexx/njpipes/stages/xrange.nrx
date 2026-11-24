@@ -8,6 +8,7 @@
 
 
 /*
+  26/11/24 One-word forms read hex or characters through getXRange (#107). Maksim Abuajamieh
   23/02/26 Documentation; givehelp(). Jeff Hennick
   20/ 6/10 New. Jeff Hennick
  */
@@ -35,24 +36,19 @@ class xrange extends stage uses java.lang.System
     catch BadArgumentException
       Emsg(11,'Error - 'getName()' Bad hexadecimal:' ar)
     end
-    else do              -- one word
-      parse fw fp '.' len
-      if len = '' then do
-        parse fw fp '-' lp
-        fc = fp.d2c()
-        lc = lp.d2c()
-      end
-    else do
-      fc = fp.d2c()
-      lc = (fp + len -1).d2c()
-    catch NumberFormatException
-      Emsg(11,'Error - 'getName()' Bad decimal number:' ar)
-    end
+    else do              -- one word: xorc-xorc or xorc.number, as chop and split read it
+      o = getXRange(fw)
+      if o == '' then
+        Emsg(11,'Error - 'getName()' Bad xrange:' ar)
+    catch BadArgumentException
+      Emsg(11,'Error - 'getName()' Bad xrange:' ar)
     end
 
-    o = Rexx ''
-    loop i = fc.c2d() for (lc.c2d() - fc.c2d() + 1)
-      o = o''i.d2c()
+    if sw \= '' then do
+      o = Rexx ''
+      loop i = fc.c2d() for (lc.c2d() - fc.c2d() + 1)
+        o = o''i.d2c()
+      end
     end
 
     do
