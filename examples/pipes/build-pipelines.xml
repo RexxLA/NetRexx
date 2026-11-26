@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="NetRexxPipelinesTests" default="build" basedir=".">
+    <description>
+        Clean, compile, and run working NetRexx Pipelines (.njp) tests.
+    </description>
+
+    <!-- Adjust this path if NetRexxF.jar is located elsewhere on your system -->
+    <property name="netrexx.jar" value="../../build/lib/NetRexxF.jar"/>
+<!--    <property name="netrexx.jar" value="/home/remesm/nrx-51.GA/lib/NetRexxF.jar"/>-->
+
+    <path id="netrexx.classpath">
+        <pathelement location="."/>
+        <pathelement location="${netrexx.jar}"/>
+    </path>
+
+    <!-- Reusable FileSet of all .njp files that compile and pass cleanly -->
+    <fileset id="working.njp.files" dir="." includes="*.njp">
+        <!-- 1. Windows-only tests -->
+        <exclude name="hostnametest3.njp"/>
+        <exclude name="commandtest_win.njp"/>
+
+        <!-- 2. Browser / GUI display tests (attempt to execute /tmpPipeDisp.html) -->
+        <exclude name="display*.njp"/>
+
+        <!-- 3. Network, local server, & outdated live-DNS tests -->
+        <exclude name="dictt1.njp"/>
+        <exclude name="tcp*.njp"/>
+        <exclude name="hostby*.njp"/>
+        <exclude name="hbntest*.njp"/>
+        <exclude name="query.njp"/>
+
+        <!-- 4. Ambiguous class conflict with query.class -->
+        <exclude name="query_tests1.njp"/>
+
+        <!-- 5. Missing helper files / standalone stubs -->
+        <exclude name="length1.njp"/>
+        <exclude name="ilinkpipe.njp"/>
+        <exclude name="combine_tests01.njp"/>
+        <exclude name="length11.njp"/>
+        <exclude name="sp.njp"/>
+        <exclude name="buffer_tests.njp"/>
+        <exclude name="comment_tests01.njp"/>
+        <exclude name="dateconvert_tests07.njp"/>
+        <exclude name="dateconvert_tests08.njp"/>
+        <exclude name="dateconvert_tests13.njp"/>
+        <exclude name="getkeyword_tests01.njp"/>
+        <exclude name="mylist-unix.njp"/>
+        <exclude name="serialize_tests01.njp"/>
+        <exclude name="addpipetest1.njp"/>
+        <exclude name="addpipetest2.njp"/>
+        <exclude name="addpipetest3.njp"/>
+        <exclude name="addpipetest4.njp"/>
+        <exclude name="addpipetest5.njp"/>
+        <exclude name="addpipetest6.njp"/>
+        <exclude name="addpipetest7.njp"/>
+        <exclude name="addpipetest8.njp"/>
+        <exclude name="addpipe_tests01.njp"/>
+        <exclude name="addtest.njp"/>
+        <exclude name="add_tests01.njp"/>
+        <exclude name="aggrc_tests1.njp"/>
+        <exclude name="buffertest.njp"/>
+        <exclude name="buildtests.njp"/>
+        <exclude name="calltest*.njp"/>
+        <exclude name="deadlock.njp"/>
+        <exclude name="deblocktest.njp"/>
+        <exclude name="dirtest.njp"/>
+        <exclude name="findtext.njp"/>
+        <exclude name="gatetest.njp"/>
+        <exclude name="getstemtest.njp"/>
+        <exclude name="hostidtest*.njp"/>
+        <exclude name="hostnametest1.njp"/>
+        <exclude name="hostnametest2.njp"/>
+        <exclude name="juxtaposetest.njp"/>
+        <exclude name="linkpipe.njp"/>
+        <exclude name="lookuptests.njp"/>
+        <exclude name="mylist.njp"/>
+        <exclude name="siptest.njp"/>
+        <exclude name="snake_tests01.njp"/>
+        <exclude name="spawntest.njp"/>
+        <exclude name="sql*.njp"/>
+        <exclude name="tasktest.njp"/>
+        <exclude name="varovertest.njp"/>
+        <exclude name="var_tests01.njp"/>
+        <exclude name="whilelock_tests*.njp"/>
+        <exclude name="zips.njp"/>
+    </fileset>
+
+    <!-- =================================================================== -->
+    <!-- Target: clean                                                       -->
+    <!-- Removes generated .nrx and .class files (keeps runtests.nrx)        -->
+    <!-- =================================================================== -->
+    <target name="clean" description="Delete generated .nrx and .class files">
+        <delete verbose="true">
+            <fileset dir=".">
+                <include name="*.class"/>
+                <include name="*.nrx"/>
+                <exclude name="runtests.nrx"/>
+                <exclude name="getkeyword_tester.nrx"/>
+                <exclude name="length.nrx"/>
+            </fileset>
+        </delete>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Target: build (Default)                                             -->
+    <!-- Compiles all working .njp files via pipc, one file per invocation                            -->
+    <!-- =================================================================== -->
+    <target name="build" depends="clean" description="Compile all working .njp pipelines">
+        <echo message="Compiling working pipelines with pipc, one file at a time..."/>
+        <apply executable="java" failonerror="true" parallel="false" force="true" dir="." relative="true">
+            <arg value="-cp"/>
+            <arg pathref="netrexx.classpath"/>
+            <arg value="org.netrexx.njpipes.pipes.compiler"/>
+            <fileset refid="working.njp.files"/>
+            <srcfile/>
+        </apply>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Target: test                                                        -->
+    <!-- Runs each compiled test class (class name without .njp) and fails the build on any non-zero RC-->
+    <!-- =================================================================== -->
+    <target name="test" description="Execute all compiled working tests">
+        <apply executable="sh" failonerror="true" parallel="false" force="true" dir="." relative="true">
+            <arg value="-c"/>
+            <arg value='echo "==== Running $2"; exec java -cp "$1" "$2"'/>
+            <arg value="sh"/>
+            <arg pathref="netrexx.classpath"/>
+            <fileset refid="working.njp.files"/>
+            <mapper type="glob" from="*.njp" to="*"/>
+            <targetfile/>
+        </apply>
+        <echo message="All working pipeline tests completed successfully!"/>
+    </target>
+
+</project>
+ 
