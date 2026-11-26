@@ -5,6 +5,8 @@
  *  Distributed under the ICU 1.8.1 Licence with NO WARRANTIES of ANY kind.
  *  See LICENSE for the licence and information on using, copying, modifying,
  *  and distributing this program.
+
+  2026-11-26 correct handling continuation character, issue #125 --MRE
  */
 
 package org.vpad.extra.workpad
@@ -308,9 +310,9 @@ else
     rightprompt = ANSI_BLUE||currentFrame.getName() currentFrame.getStep()
     if settings['timer'] = 'on' then
       do
-	stoptime = System.nanoTime()
-	duration=(stoptime-starttime)/1000000000 -- seconds
-	rightprompt = ANSI_BLUE||(Rexx(duration)).left(5)' s'.toString()
+      	stoptime = System.nanoTime()
+      	duration=(stoptime-starttime)/1000000000 -- seconds
+	      rightprompt = ANSI_BLUE||(Rexx(duration)).left(5)' s'.toString()
       end
     prompt = ANSI_BLUE||settings['prompt'].toString()
     do
@@ -325,22 +327,25 @@ else
       exit
     end -- do
 
+    l = line
+
     /* handle continuations here */
     loop while parser.stripTrailingComment(line).right(1) = '-'
       do
-	rightprompt=''
-	line = Rexx(this.reader.readLine(prompt,-
+	      rightprompt=''
+      	line = Rexx(this.reader.readLine(prompt,-
 		    rightprompt,-
 		    null,null))
       catch ux = UserInterruptException
-	nop
+	      nop
       catch eofx = EndOfFileException
-	say
-	System.out.flush()
-	exit
+	      say
+	      System.out.flush()
+	      exit
       end -- do
+      l  = l.substring(0, l.length() - 1)' 'line  -- issue #128, replace hyphen with blank and join line --MRE
     end
-    l  = l || line
+
     currentFrame.log(l)
     return l
 
@@ -1579,7 +1584,7 @@ else
       loop i = 1 for path.words()
         do
           -- pas exactement, en ce sens que la recherche n'est pas ici
-          -- r‚cursive dans la hierarchie.
+          -- recursive dans la hierarchie.
           obj = Class.forName(path.word(i)name)
         catch ClassNotFoundException
         end
