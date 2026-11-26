@@ -6,7 +6,8 @@
  *  and distributing this program.
  *
  */
-
+-- 2026/11/26 fix issue 132, don't resend a record the consumer already took --MRE
+-- 2026/11/23 avoid NullPointerException at exit when severing input/output --MRE
 -- 2023/03/31 givehelp() was giveHelp.  Jeff Hennick
 -- 2023/02/10 add static help() method
 -- 2020/05/23 added isFirstStage(). Jeff Hennick
@@ -48,7 +49,6 @@
 -- 1998/08/02 commit logic fixed.  ejt
 -- 1998/08/01 handle poolable stages.  ejt
 -- 1998/07/31 now uses ThreadPool, ThreadQ.  stop() removed.  ejt
--- 2026/11/23 avoid NullPointException at exit when severing input/output
 
 /* Futures 98/11/30 ejt.
 
@@ -936,6 +936,9 @@ method shortStreams signals StageError, ThreadQ
 -- own current input and output streams (maybe)...
 
 method output(d=Object) signals StageError, ThreadQ
+                                -- MRE issue #132
+   pn = outn                    -- pnode this record is handed to (used only after an NPE)
+   published = boolean 0
    do
 --     say 'output 'this' 'd.getClass().getName() d
       do
@@ -946,6 +949,7 @@ method output(d=Object) signals StageError, ThreadQ
 
             outn.data = d
             outn.holding = 1
+            published = 1
             outn.peeked  = 0
 
             outn.outs.notifyAll()
@@ -979,7 +983,11 @@ method output(d=Object) signals StageError, ThreadQ
       end
 
    catch NullPointerException
-
+                                                 -- MRE issue #132
+      if published then if \pn.holding then do   -- consumer already took the record: never resend it
+         flag = flag&CLEAR_SEVER
+         return
+      end
       if sout=-99 then
          _rc = 4                              -- just set rc=4 ????
       else do
@@ -1196,7 +1204,8 @@ do protect this
                      end
                   end
                   work.outs = null
-                  work.ins.outn = null
+                                                                      -- MRE  issue #132
+                  if work.ins.outn == work then work.ins.outn = null  -- only if it is the severed stream's pnode
 		  severed = work.ins.sout
                   work.ins.notifyAll()
                   if n<>null & n<>this then do protect n
