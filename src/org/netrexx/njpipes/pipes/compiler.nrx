@@ -102,6 +102,12 @@ class compiler extends Object public
     o[1] = '/* 'pInfo NrVersion().getPipesVersion()' */'
     n	 = 2
 
+    -- issue #80, new --- option
+    -- disregard -- as comment, remove the option, handled in filterNjp
+    i	   = opts.wordpos('---')
+    if i>0 then do
+      opts = opts.delword(i)
+    end
     -- set gen/nogen status for file
     i	   = opts.wordpos('-gen')
     if i>0 then do
@@ -1034,6 +1040,10 @@ class compiler extends Object public
 
     if name<>'' then                      -- from command line
       do
+        i = compopts.wordpos('---')       -- issue #80
+        if i>0 then do
+          compopts = compopts.delword(i)  -- remove the option
+        end
         i = compopts.wordpos('-gen')
         if i>0 then
           compopts = compopts.delword(i)
@@ -1056,7 +1066,7 @@ class compiler extends Object public
           xref	 = ''
 	
         if verb	 = '' then say 'pipc044i: Building pipe 'name
-	
+
         rc = compile('( 'name' 'compopts' ) 'text, squelch, pipeClassName, shouldExit)
 	if squelch then return
         if rc = 0 then do
@@ -1120,7 +1130,7 @@ class compiler extends Object public
           do
             savekeep   = keep
             if verb    = w then say 'pipc045i: Processing 'w'.njp'
-	
+
             aa	       = Rexx ''
             aa['fin']  = w'.njp'
             aa['xout'] = w

@@ -63,7 +63,7 @@ method peekto() returns object Protect signals StageError
     parse arg() root '.'
     
     do
-      
+
       l = rexx peekto()
       select
         when l.left(2)='--' then do
@@ -263,8 +263,14 @@ method peekto() returns object Protect signals StageError
             cont = ','
 	  
           parse parms 'cache' cache .
-	  
-          parse l w ' --' .
+
+                                 -- MRE, issue #80
+                                 -- if option ---, do not regards -- as a comment
+          if parms.pos('---') = 0 then
+            parse l w ' --' .
+	        else
+            w = l
+
           w = w.strip('B')
           loop while w=''              -- ensure we have data
             readto()
@@ -272,7 +278,7 @@ method peekto() returns object Protect signals StageError
             parse l w ' --' .
             w = w.strip('B')
           end
-	  
+
           pp = pp+1                    -- count this pipe
           loop until we<>pep & we<>sep & we<>cont & be<>pep & be<>sep
             wp = wp' 'w.strip('T',cont)
@@ -406,7 +412,7 @@ method peekto() returns object Protect signals StageError
                 end
                 parse work '{' a '}' work
               end
-	      
+
             end
 	    
             pn = 'p$njp'pp               -- create the pipe
